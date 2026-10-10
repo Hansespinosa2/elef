@@ -1,4 +1,17 @@
 import { application } from "../controllers/application.js";
+import appearanceController from "../controllers/appearance_controller.js";
+import documentLinkPaletteController from "../controllers/document_link_palette_controller.js";
+import documentPagesController from "../controllers/document_pages_controller.js";
+import editorController from "../controllers/editor_controller.js";
+import mathShortcutPaletteController from "../controllers/math_shortcut_palette_controller.js";
+import mathShorthandController from "../controllers/math_shorthand_controller.js";
+import mediaController from "../controllers/media_controller.js";
+import mermaidAssistController from "../controllers/mermaid_assist_controller.js";
+import mermaidDiagramsController from "../controllers/mermaid_diagrams_controller.js";
+import previewController from "../controllers/preview_controller.js";
+import slideOverviewController from "../controllers/slide_overview_controller.js";
+import snippetPaletteController from "../controllers/snippet_palette_controller.js";
+import visualEditorController from "../controllers/visual_editor_controller.js";
 if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
   const handleError = application.handleError.bind(application);
   application.handleError = (error, message, detail) => {
@@ -17,57 +30,23 @@ if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
     handleError(error, message, detail);
   };
 }
-let editorRuntime;
+let editorRuntimeRegistered = false;
 function registerEditorRuntime() {
-  if (!editorRuntime) {
-    editorRuntime = Promise.all([
-      import("../controllers/editor_controller.js"),
-      import("../controllers/appearance_controller.js"),
-      import("../controllers/document_link_palette_controller.js"),
-      import("../controllers/math_shortcut_palette_controller.js"),
-      import("../controllers/math_shorthand_controller.js"),
-      import("../controllers/mermaid_assist_controller.js"),
-      import("../controllers/media_controller.js"),
-      import("../controllers/preview_controller.js"),
-      import("../controllers/visual_editor_controller.js"),
-      import("../controllers/slide_overview_controller.js"),
-      import("../controllers/document_pages_controller.js"),
-      import("../controllers/mermaid_diagrams_controller.js"),
-      import("../controllers/snippet_palette_controller.js")
-    ]).then(([
-      editor,
-      appearance,
-      documentLinks,
-      mathPalette,
-      mathShorthand,
-      mermaidAssist,
-      media,
-      preview,
-      visualEditor,
-      slideOverview,
-      documentPages,
-      mermaidDiagrams,
-      snippetPalette
-    ]) => {
-      register("editor", editor.default);
-      register("appearance", appearance.default);
-      register("document-link-palette", documentLinks.default);
-      register("math-shortcut-palette", mathPalette.default);
-      register("math-shorthand", mathShorthand.default);
-      register("mermaid-assist", mermaidAssist.default);
-      register("media", media.default);
-      register("preview", preview.default);
-      register("visual-editor", visualEditor.default);
-      register("slide-overview", slideOverview.default);
-      register("document-pages", documentPages.default);
-      register("mermaid-diagrams", mermaidDiagrams.default);
-      register("snippet-palette", snippetPalette.default);
-    }).catch((error) => {
-      editorRuntime = null;
-      throw error;
-    });
-  }
-  return editorRuntime;
+  if (editorRuntimeRegistered) return;
+  editorRuntimeRegistered = true;
+  register("editor", editorController);
+  register("appearance", appearanceController);
+  register("document-link-palette", documentLinkPaletteController);
+  register("math-shortcut-palette", mathShortcutPaletteController);
+  register("math-shorthand", mathShorthandController);
+  register("mermaid-assist", mermaidAssistController);
+  register("media", mediaController);
+  register("preview", previewController);
+  register("visual-editor", visualEditorController);
+  register("slide-overview", slideOverviewController);
+  register("document-pages", documentPagesController);
+  register("mermaid-diagrams", mermaidDiagramsController);
+  register("snippet-palette", snippetPaletteController);
 }
 function register(identifier, controller) {
   application.register(identifier, controller);

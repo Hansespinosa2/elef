@@ -218,6 +218,11 @@ export class DocumentEditor {
     this.documentPaginatedHandler = () => {
       if (!this.focusTitle) return
       if (this.initialTitleFocusSettled) return
+      // Pagination captures and restores the caret in descended (text, offset)
+      // form, so a title focus from editor-ready does not survive it. Refocus
+      // after the first pagination (one-shot via settled below): at this point
+      // the page just loaded, so there is no user caret to steal.
+      this.initialTitleFocused = false
       this.focusNewDocumentTitle()
       if (this.projectionTarget?.querySelector(".document-editor-block h1")) this.initialTitleFocusSettled = true
     }

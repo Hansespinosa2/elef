@@ -240,14 +240,16 @@ test("both hosts render the graph through the shared client module, never Stimul
   assert.doesNotMatch(graphPartial, /data-controller/)
 })
 
-test("the Rails-owned application loads shared editor controllers on demand; the graph lives in the client", () => {
+test("the Rails-owned application registers shared editor controllers synchronously from the bundle; the graph lives in the client", () => {
   assert.match(application, /registerEditorRuntime\(\)/)
   assert.doesNotMatch(application, /loadLibraryRuntime\(\)/)
   assert.match(bootstrap, /from "@elef\/editor-runtime"/)
-  assert.match(editorRuntime, /import\("\.\.\/controllers\/editor_controller\.js"\)/)
+  assert.match(editorRuntime, /^import editorController from "\.\.\/controllers\/editor_controller\.js"$/m)
+  assert.match(editorRuntime, /register\("editor", editorController\)/)
+  assert.match(editorRuntime, /export function registerEditorRuntime\(\): void/)
+  assert.doesNotMatch(editorRuntime, /import\("\.\.\/controllers\//)
   assert.doesNotMatch(editorRuntime, /document_graph_controller/)
   assert.doesNotMatch(editorRuntime, /loadLibraryRuntime/)
-  assert.doesNotMatch(editorRuntime, /^import\s+\w+Controller\s+from\s+["']/m)
   assert.match(build, /splitting:\s*true/)
 })
 

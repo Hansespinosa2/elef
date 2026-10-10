@@ -497,7 +497,15 @@ assert '"controllers/presentation_canvas_controller"' not in editor_runtime, (
     "the retired Stimulus presentation canvas controller must not load on demand"
 )
 assert "splitting: true" in build, "desktop must emit lazy ESM chunks instead of parsing every editor controller at launch"
-assert 'import("../controllers/editor_controller.js")' in editor_runtime, "the heavy shared editor controller must load on demand"
+assert 'import editorController from "../controllers/editor_controller.js"' in editor_runtime, (
+    "shared editor controllers register synchronously from the bundle"
+)
+assert 'register("editor", editorController)' in editor_runtime, (
+    "shared editor controllers register synchronously from the bundle"
+)
+assert 'import("../controllers/' not in editor_runtime, (
+    "dynamic controller imports race the host lazy loader and 404 as undigested siblings under Propshaft"
+)
 assert 'import("controllers/document_graph_controller")' not in editor_runtime, "the retired Stimulus graph controller must not load on demand"
 assert "loadLibraryRuntime" not in editor_runtime, "no host may keep the retired graph controller loader"
 assert "renderGraphView" in desktop_application and "GraphController" in desktop_application, (
@@ -611,6 +619,18 @@ for bridge_function in (
     "withFrontMatterValue", "replaceFirstHeading", "sourceAnchorLines",
 ):
     assert bridge_function in bundle_entry, f"the bundle must export the work-model bridge function {bridge_function}"
+# Propshaft serves only digested URLs, so a browser bundle's imports must all
+# be importmap pins: relative siblings 404 (Phase 12 system-test proof). The
+# editor-runtime build fails closed on relative imports; here every surviving
+# bare import must resolve to a pin.
+runtime_bundle_imports = set()
+for runtime_entry in ("packages/editor-runtime/dist/index.js", "packages/editor-runtime/dist/preview_chrome.js"):
+    runtime_bundle_imports |= set(re.findall(r'(?:from\s*|import\()\s*"([^"./][^"]*)"', (ROOT / runtime_entry).read_text()))
+rails_all_pins = set(re.findall(r'^pin "([^"]+)"', importmap, re.MULTILINE))
+unpinned_runtime = sorted(runtime_bundle_imports - rails_all_pins)
+assert not unpinned_runtime, (
+    "every editor-runtime browser import must be pinned in the Rails importmap: " + ", ".join(unpinned_runtime)
+)
 desktop_sources = ROOT / "apps/desktop/frontend/src"
 desktop_source_reasons = {
     "authoring-registry-loader.js": "loads the library's native authoring-registry commands",
