@@ -44,6 +44,14 @@ Changing PR bases does not require reinstalling the GitHub App or recreating rep
 
 Wait for #136. Then integrate #147 once against the refactor as merged into `dev`, using a merge-based operation rather than replaying the release commits. After review and owner approval in `dev`, promote `dev` to `main` with an owner-approved merge-commit PR. Stable publication remains gated on the exact main promotion SHA and full post-merge Gate A.
 
+## Addendum — direct branch-topology preview (2026-10-10)
+
+Read-only refs fetched for this preview: current `dev` `769cc79028813d0d4fd0651952739d9008626847`, current `main` `41d89fa92a34274d1f2c155d7ae560d728c87fca`, #136 head `b3190433ef30bec2c6f989794a92a959a038417c`, and #147 head `23f772c758c7ff175f8ed00573d67ec2ceda471d`. No branch was checked out or changed.
+
+Current `dev` and `main` share base `2dc9ba70746e` and have 63 and 5 commits respectively beyond it. #147 shares that base with `dev` and has 172 commits beyond it versus `dev`'s 63. A read-only `git merge-tree` preview of current `dev` into #147 reports 9 content conflicts (`ci.yml`, `preview_sanitizer.js`, desktop E2E runner/specs, Tauri `lib.rs`, build-hook tests, and two CI ownership/test files). The current #136 head versus `dev` has 310/130 commits on its sides and previews 98 conflict records, many caused by moved paths and the refactor's unfinished reconciliation. Those #136 counts are for its current dirty head, not for a future owner-approved merged result.
+
+Do not merge current `dev` into #147 now. That would add an integration pass with known conflicts, then require another pass for #136. A single merge of the actual resulting `dev` after #136 lands incorporates today's `dev` history and the refactor together. Recheck the exact final refs then. Because `main` has 5 commits not present in today's `dev` and #147 started from `main`, also inspect the Dev-targeted PR diff after integration; if those main-only changes create unrelated review noise, create a continuation from the resulting `dev` containing only the release delta. This preview does not predict the exact conflicts against the post-#136 tree.
+
 ## Branch state and size
 
 At the initial review snapshot, #136 was open and draft, with `mergeable=false` / `mergeable_state=dirty`, no review decision, base SHA `26d6ad247e5b55dfa63589d16af9a8f250f2c51c`, and head SHA `509043579cc3f33b716241756f984504816977d9`. Current `dev` was at `769cc79028813d0d4fd0651952739d9008626847`; the shared base was 130 commits behind current `dev`, while #136 had 306 commits beyond that base. Its latest commit at that snapshot reported eight known S1-skew failures. The live recheck is recorded in the addendum above.
