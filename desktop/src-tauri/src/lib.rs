@@ -1051,57 +1051,66 @@ async fn import_elef(
     app: AppHandle,
     state: State<'_, DesktopState>,
 ) -> Result<Option<ImportResult>, CommandError> {
-    let Some(selection) = app
-        .dialog()
-        .file()
-        .set_title("Import Elef deck")
-        .add_filter("Elef deck", &["elef"])
-        .blocking_pick_file()
-    else {
-        return Ok(None);
-    };
-    let archive_path = selection
-        .into_path()
-        .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
-    let library = state.current_library()?;
-    import_archive(&state, &library, archive_path)
+    let result = (|| {
+        let Some(selection) = app
+            .dialog()
+            .file()
+            .set_title("Import Elef deck")
+            .add_filter("Elef deck", &["elef"])
+            .blocking_pick_file()
+        else {
+            return Ok(None);
+        };
+        let archive_path = selection
+            .into_path()
+            .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
+        let library = state.current_library()?;
+        import_archive(&state, &library, archive_path)
+    })();
+    record_command_result(&app, EventCode::Import, &result);
+    result
 }
 
 #[tauri::command]
 fn import_opened_elef(
+    app: AppHandle,
     state: State<'_, DesktopState>,
 ) -> Result<Option<ImportResult>, CommandError> {
-    if state
-        .open_files
-        .lock()
-        .expect("opened file queue poisoned")
-        .is_empty()
-    {
-        return Ok(None);
-    }
-    let library = state.current_library()?;
-    let archive_path = state
-        .open_files
-        .lock()
-        .expect("opened file queue poisoned")
-        .pop_front();
-    let Some(archive_path) = archive_path else {
-        return Ok(None);
-    };
-    if state
-        .pending_import
-        .lock()
-        .expect("pending import lock poisoned")
-        .is_some()
-    {
-        state
+    let result = (|| {
+        if state
             .open_files
             .lock()
             .expect("opened file queue poisoned")
-            .push_front(archive_path);
-        return Ok(None);
-    }
-    import_archive(&state, &library, archive_path)
+            .is_empty()
+        {
+            return Ok(None);
+        }
+        let library = state.current_library()?;
+        let archive_path = state
+            .open_files
+            .lock()
+            .expect("opened file queue poisoned")
+            .pop_front();
+        let Some(archive_path) = archive_path else {
+            return Ok(None);
+        };
+        if state
+            .pending_import
+            .lock()
+            .expect("pending import lock poisoned")
+            .is_some()
+        {
+            state
+                .open_files
+                .lock()
+                .expect("opened file queue poisoned")
+                .push_front(archive_path);
+            return Ok(None);
+        }
+        import_archive(&state, &library, archive_path)
+    })();
+    record_command_result(&app, EventCode::Import, &result);
+    result
 }
 
 #[tauri::command]
@@ -1133,6 +1142,16 @@ fn import_archive(
 
 #[tauri::command]
 async fn resolve_import_conflict(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    resolution: String,
+) -> Result<Option<ImportResult>, CommandError> {
+    let result = resolve_import_conflict_inner(app.clone(), state, resolution).await;
+    record_command_result(&app, EventCode::Import, &result);
+    result
+}
+
+async fn resolve_import_conflict_inner(
     app: AppHandle,
     state: State<'_, DesktopState>,
     resolution: String,
@@ -1312,6 +1331,26 @@ async fn export_diagnostics_fixture_inner(app: &AppHandle) -> Result<bool, Comma
         .app_data_dir()
         .map_err(|_| CommandError::new("io_error", "Diagnostics are unavailable.", true))?
         .join("logs");
+    let hostile_failure: Result<(), CommandError> = Err(CommandError::with_details(
+        "ELF_PRIVACY_EXCEPTION_94A72C",
+        "ELF_PRIVACY_SOURCE_7F1E9B",
+        true,
+        serde_json::json!({
+            "title": "ELF_PRIVACY_TITLE_2D83AC",
+            "filename": "ELF_PRIVACY_FILENAME_9130DE",
+            "path": "/tmp/ELF_PRIVACY_PATH_6C4A20",
+            "token": "ELF_PRIVACY_TOKEN_0B7F11",
+            "secret": "ELF_PRIVACY_SECRET_E35D92",
+            "ipc_payload": "ELF_PRIVACY_IPC_118F05"
+        }),
+    ));
+    record_command_result(app, EventCode::Save, &hostile_failure);
+    let import_failure: Result<(), CommandError> = Err(CommandError::new(
+        "io_error",
+        "The import fixture is unavailable.",
+        true,
+    ));
+    record_command_result(app, EventCode::Import, &import_failure);
     let profile = event_profile();
     let exported = tauri::async_runtime::spawn_blocking(move || -> std::io::Result<()> {
         let sentinels: serde_json::Value = serde_json::from_str(include_str!(

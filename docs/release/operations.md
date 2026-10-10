@@ -14,12 +14,12 @@ The Pages branch accepts ledger updates only from a dedicated `elef-release-stat
 
 After creating and installing the App:
 
-1. Add repository Actions variables `ELEF_RELEASE_STATE_APP_CLIENT_ID` (the App Client ID) and `ELEF_RELEASE_STATE_APP_ID` (the numeric integration ID).
-2. Add the same generated App private key as environment secret `ELEF_RELEASE_STATE_APP_PRIVATE_KEY` in `desktop-release-state`, `desktop-release-signing`, and `desktop-aur-publishing`. Keep all three environments restricted to `main`; their other release secrets remain scoped to their existing environment.
-3. From an authenticated repository-admin checkout, run `node desktop/scripts/configure_release_state_ruleset.mjs <APP_ID> --apply`. This creates or updates a separate active rule that matches only `refs/heads/gh-pages`, blocks ordinary updates, and lets only that App bypass the update rule. It leaves the existing deletion and non-fast-forward protection ruleset unchanged, so the App cannot use its bypass to delete or force-push the branch.
-4. Run `node desktop/scripts/configure_release_state_ruleset.mjs <APP_ID>` without `--apply`; it must report the active matching rule and exactly one App bypass actor. The first successful workflow CAS push is still required to prove the credential path end to end.
+1. Add repository Actions variable `ELEF_RELEASE_STATE_APP_CLIENT_ID` with the App Client ID.
+2. Add the same generated App private key as environment secret `ELEF_RELEASE_STATE_APP_PRIVATE_KEY` in `desktop-release-state`, `desktop-release-signing`, and `desktop-aur-publishing`. Keep all three environments restricted to `main`; their other release secrets remain scoped to their existing environment. Never send or commit the key.
+3. Give the repository maintainer the numeric App ID. The maintainer sets repository variable `ELEF_RELEASE_STATE_APP_ID`, then from an authenticated repository-admin checkout runs `node desktop/scripts/configure_release_state_ruleset.mjs <APP_ID> --apply`. This creates or updates a separate active rule that matches only `refs/heads/gh-pages`, blocks ordinary updates, and lets only that App bypass the update rule. It leaves the existing deletion and non-fast-forward protection ruleset unchanged, so the App cannot use its bypass to delete or force-push the branch.
+4. The maintainer runs `node desktop/scripts/configure_release_state_ruleset.mjs <APP_ID>` without `--apply`; it must report the active matching rule and exactly one App bypass actor. The first successful workflow CAS push is still required to prove the credential path end to end.
 
-The App ID passed to the setup command is its numeric integration ID, not its Client ID. The workflow's repository variable is the Client ID. Until the App is installed, the environment secrets are configured, and the ruleset is verified, GitHub Pages hosting is available but automatic ledger publication remains **BLOCKED_EXTERNAL**. The scripts fail closed when the dedicated push token is missing.
+The App ID passed to the setup command is its numeric integration ID, not its Client ID. Until the App is installed, the Client ID variable and environment secrets are configured, and the update-only ruleset is verified, GitHub Pages hosting is available but automatic ledger publication remains **BLOCKED_EXTERNAL**. The scripts fail closed when the dedicated push token is missing.
 
 ## Emergency block or unblock
 

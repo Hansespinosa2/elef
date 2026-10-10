@@ -62,8 +62,9 @@ export async function verifyDiagnosticsArchive(archivePath, expectedProfile, req
   assert.ok(redactedFailure, "diagnostics ZIP should include a sanitized failure event")
   assert.equal(redactedFailure.profile, expectedProfile)
   for (const eventCode of requiredFailureEvents) {
+    const expectedErrorCategory = eventCode === "import" ? "io" : "internal"
     assert.ok(events.some(event =>
-      event.event_code === eventCode && event.result === "failure" && event.error_category === "internal"
+      event.event_code === eventCode && event.result === "failure" && event.error_category === expectedErrorCategory
     ), `diagnostics ZIP should include a sanitized ${eventCode} failure event`)
   }
 }

@@ -67,7 +67,23 @@ async function createSession(port) {
   })
   const body = await response.json()
   if (!response.ok || body.value?.error) throw new Error(body.value?.message || `WebDriver session failed: ${response.status}`)
+  await setScriptTimeout(port, body.value.sessionId, 2_000)
   return body.value.sessionId
+}
+
+async function setScriptTimeout(port, sessionId, timeoutMs) {
+  const response = await fetch(`http://127.0.0.1:${port}/session/${sessionId}/timeouts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ script: timeoutMs }),
+    signal: AbortSignal.timeout(10_000)
+  })
+  if (!response.ok) throw new Error(`Could not set the packaged WebDriver script timeout: ${response.status}`)
+  const body = await response.text()
+  if (body) {
+    const result = JSON.parse(body)
+    if (result.value?.error) throw new Error(result.value.message || "Could not set the packaged WebDriver script timeout")
+  }
 }
 
 async function execute(port, sessionId, script, ...args) {
@@ -82,10 +98,14 @@ async function execute(port, sessionId, script, ...args) {
   return body.value
 }
 
-export async function confirmAppReady(runScript, timeoutMs = 15_000) {
-  await waitUntil(() => runScript(`return Boolean(window.__TAURI__?.core?.invoke)`),
-    "The packaged app bridge did not become ready", timeoutMs)
-  await runScript(`return window.__TAURI__.core.invoke("confirm_app_ready")`)
+export async function confirmAppReady(runScript, timeoutMs = 65_000) {
+  await waitUntil(() => runScript(`return Boolean(window.__elefPerformanceTestHooks?.nativeReadyAt)`),
+    "The packaged app did not acknowledge native readiness", timeoutMs)
+}
+
+async function confirmSessionReady(port, sessionId) {
+  await confirmAppReady(script => execute(port, sessionId, script))
+  await setScriptTimeout(port, sessionId, 60_000)
 }
 
 async function updaterStats() {
@@ -160,7 +180,7 @@ export async function runPackagedUpdateSmoke(env, { packageMode = "package" } = 
       if (app.exitResult) throw new Error(`N-1 exited during startup: ${JSON.stringify(app.exitResult)}; ${app.output}`)
       try { sessionId = await createSession(app.port); return true } catch (_error) { return false }
     }, "N-1 did not start its isolated WebDriver service", 65_000)
-    await confirmAppReady(script => execute(app.port, sessionId, script))
+    await confirmSessionReady(app.port, sessionId)
     if (env.ELEF_E2E_PRE_RELEASE_STATE) {
       assert.equal(await readFile(env.ELEF_E2E_PRE_RELEASE_STATE, "utf8"), env.ELEF_E2E_EXPECTED_PRE_RELEASE_STATE,
         "Stable's first packaged launch must preserve the previous library-root.json bytes")
@@ -190,7 +210,7 @@ export async function runPackagedUpdateSmoke(env, { packageMode = "package" } = 
       if (app.exitResult) throw new Error(`N-1 did not restart: ${JSON.stringify(app.exitResult)}; ${app.output}`)
       try { sessionId = await createSession(app.port); return true } catch (_error) { return false }
     }, "N-1 did not restart with its staged update", 65_000)
-    await confirmAppReady(script => execute(app.port, sessionId, script))
+    await confirmSessionReady(app.port, sessionId)
     await selectPackageUpdate(packageMode)
     await stageFromUpdateControl(app.port, sessionId)
     assert.equal((await updaterStats()).artifactRequests, 1, "Restart must reuse the verified payload without redownloading")
@@ -212,7 +232,7 @@ export async function runPackagedUpdateSmoke(env, { packageMode = "package" } = 
       if (app.exitResult) throw new Error(`N-1 did not restart after the safe-feed block: ${JSON.stringify(app.exitResult)}; ${app.output}`)
       try { sessionId = await createSession(app.port); return true } catch (_error) { return false }
     }, "N-1 did not restart after the safe-feed block", 65_000)
-    await confirmAppReady(script => execute(app.port, sessionId, script))
+    await confirmSessionReady(app.port, sessionId)
     await selectPackageUpdate(packageMode)
     await stageFromUpdateControl(app.port, sessionId)
     assert.equal((await updaterStats()).artifactRequests, 2, "The safe package should be downloaded after unblocking")
@@ -240,7 +260,7 @@ export async function runPackagedUpdateSmoke(env, { packageMode = "package" } = 
       if (app.exitResult) throw new Error(`N-1 did not restart after the feed outage: ${JSON.stringify(app.exitResult)}; ${app.output}`)
       try { sessionId = await createSession(app.port); return true } catch (_error) { return false }
     }, "N-1 did not restart after the feed outage", 65_000)
-    await confirmAppReady(script => execute(app.port, sessionId, script))
+    await confirmSessionReady(app.port, sessionId)
     await stageFromUpdateControl(app.port, sessionId)
     assert.equal((await updaterStats()).artifactRequests, 2, "Feed recovery should reuse the retained verified archive")
 
@@ -289,7 +309,7 @@ export async function runPackagedUpdateSmoke(env, { packageMode = "package" } = 
       if (app.exitResult) throw new Error(`N-1 did not restart after interrupted installation: ${JSON.stringify(app.exitResult)}; ${app.output}`)
       try { sessionId = await createSession(app.port); return true } catch (_error) { return false }
     }, "N-1 did not restart after interrupted installation", 65_000)
-    await confirmAppReady(script => execute(app.port, sessionId, script))
+    await confirmSessionReady(app.port, sessionId)
     await selectPackageUpdate(packageMode)
     await stageFromUpdateControl(app.port, sessionId)
     assert.equal((await updaterStats()).artifactRequests, 2, "Interrupted installation should retain the verified archive")
@@ -312,7 +332,7 @@ export async function runPackagedUpdateSmoke(env, { packageMode = "package" } = 
     await waitUntil(async () => {
       try { relaunchedSession = await createSession(app.port); return true } catch (_error) { return false }
     }, "The relaunched N application did not start", 65_000)
-    await confirmAppReady(script => execute(app.port, relaunchedSession, script))
+    await confirmSessionReady(app.port, relaunchedSession)
     const relaunchedState = await execute(app.port, relaunchedSession, `
       return {
         version: await window.__TAURI__.core.invoke("plugin:app|version"),

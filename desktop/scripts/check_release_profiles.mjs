@@ -88,7 +88,11 @@ assert.match(stableE2eSource, /document_graph|document-link-palette|visual-edito
 assert.match(stableE2eSource, /sourceInput\.keys\("\[\["\)/, "Stable runtime E2E must type the excluded document-link trigger")
 assert.match(stableE2eSource, /process\.platform === "linux"/, "Linux Stable runtime must exercise its package-manager-only updater boundary")
 assert.match(stableE2eSource, /\["stage_update", "install_update"\]/, "Linux Stable must attempt both updater IPC commands")
-assert.match(stableE2eSource, /\$\{result\.command\}\.\*not found/, "Linux Stable updater checks must assert the commands are unregistered")
+assert.match(stableE2eSource, /notRegistered = new RegExp/, "Linux Stable updater checks must recognize missing commands")
+assert.match(stableE2eSource, /permissionDenied = new RegExp/, "Linux Stable updater checks must recognize Tauri permission denials")
+assert.match(stableE2eSource, /allow-\$\{permission\}/, "Linux Stable updater permission denials must name the exact required capability")
+assert.match(stableE2eSource, /notRegistered\.test\(error\) \|\| permissionDenied\.test\(error\)/,
+  "Linux Stable updater checks must accept only command-specific unregistered or permission-denied outcomes")
 assert.match(await readFile(path.join(frontendRoot, "src/update-runtime-macos.js"), "utf8"), /invoke\("stage_update"/)
 assert.doesNotMatch(await readFile(path.join(frontendRoot, "src/update-runtime-macos.js"), "utf8"), /@tauri-apps\/plugin-updater/)
 assert.doesNotMatch(await readFile(path.join(frontendRoot, "src/main.js"), "utf8"), /@tauri-apps\/(?:plugin-updater|plugin-process)/)

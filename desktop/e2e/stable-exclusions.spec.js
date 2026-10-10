@@ -86,9 +86,13 @@ describe("Stable profile exclusions", () => {
 
     if (process.platform === "linux") {
       const updaterCommands = await browser.executeAsync((commands, done) => {
+        const { invoke, Channel } = window.__TAURI__.core
         Promise.all(commands.map(async command => {
           try {
-            await window.__TAURI__.core.invoke(command)
+            const args = command === "stage_update"
+              ? { onProgress: new Channel() }
+              : { version: "0.2.0" }
+            await invoke(command, args)
             return { command, error: null }
           } catch (error) {
             return { command, error: error?.message || String(error) }
@@ -97,8 +101,14 @@ describe("Stable profile exclusions", () => {
       }, ["stage_update", "install_update"])
       assert.ok(Array.isArray(updaterCommands), updaterCommands.failure || "Updater command checks did not return results")
       for (const result of updaterCommands) {
-        assert.match(result.error || "", new RegExp(`${result.command}.*not found`, "i"),
-          `Linux Stable must not register or grant the ${result.command} command`)
+        const permission = result.command.replaceAll("_", "-")
+        const error = result.error || ""
+        const notRegistered = new RegExp(`\\b${result.command}\\b.*\\bnot found\\b`, "i")
+        const permissionDenied = new RegExp(
+          `\\b${result.command}\\b.*\\bnot allowed\\b.*\\ballow-${permission}\\b`, "i"
+        )
+        assert.ok(notRegistered.test(error) || permissionDenied.test(error),
+          `Linux Stable must reject ${result.command} as unregistered or without ${permission} permission; received ${error}`)
       }
     }
 

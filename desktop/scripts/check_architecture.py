@@ -218,6 +218,7 @@ assert 'recordBootstrapFailure: diagnosticFailures.recordBootstrapFailure' in de
 assert "onFailure()" in preview_transport, "preview failures must invoke their no-payload diagnostics callback"
 assert '"record_preview_failure"' in diagnostic_failures and '"record_bootstrap_failure"' in diagnostic_failures
 assert "recordBootstrapFailure?.()" in desktop_application, "bootstrap failure reporting must be optional and desktop-injected"
+assert app_source.count("record_command_result(&app, EventCode::Import, &result);") == 3, "menu import, OS-open import, and conflict resolution must record allowlisted import outcomes"
 for command in ("record_preview_failure", "record_bootstrap_failure"):
     assert re.search(rf"fn {command}\(app: AppHandle\)", app_source), f"{command} must accept no user-controlled payload"
 assert "allow-export-diagnostics-fixture" not in capability["permissions"] + dev_capability["permissions"], "production Stable and Dev must not expose the WebDriver-only diagnostics fixture command"

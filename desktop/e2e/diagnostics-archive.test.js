@@ -17,20 +17,24 @@ test("diagnostics archive verifier accepts actionable records and rejects every 
     const logDirectory = path.join(directory, "logs")
     await mkdir(logDirectory)
     await writeFile(path.join(directory, "README.txt"), "Allowlisted local diagnostics.\n")
-    await writeFile(path.join(logDirectory, "events.jsonl"), JSON.stringify({
+    const diagnosticEvent = (event_code, error_category) => ({
       timestamp_unix_ms: 1760000000000,
       version: "0.2.0",
       build_sha: "a".repeat(40),
       profile: "stable",
       platform: process.platform === "darwin" ? "macos" : "linux",
       architecture: process.arch === "arm64" ? "aarch64" : "x86_64",
-      event_code: "save",
+      event_code,
       result: "failure",
-      error_category: "unknown"
-    }) + "\n")
+      error_category
+    })
+    await writeFile(path.join(logDirectory, "events.jsonl"), [
+      diagnosticEvent("save", "unknown"),
+      diagnosticEvent("import", "io")
+    ].map(JSON.stringify).join("\n") + "\n")
     const archive = path.join(directory, "diagnostics.zip")
     execFileSync("zip", ["-q", "-r", archive, "README.txt", "logs"], { cwd: directory })
-    await verifyDiagnosticsArchive(archive, "stable")
+    await verifyDiagnosticsArchive(archive, "stable", ["import"])
 
     const hostileArchive = path.join(directory, "hostile-diagnostics.zip")
     for (const sentinel of sentinels) {

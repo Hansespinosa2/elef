@@ -2,18 +2,17 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { confirmAppReady } from "./packaged-update-smoke.js"
 
-test("packaged app readiness retries until the Tauri bridge is available", async () => {
+test("packaged app readiness retries until the frontend acknowledges the native ready command", async () => {
   const scripts = []
-  let bridgeChecks = 0
+  let readinessChecks = 0
   await confirmAppReady(async script => {
     scripts.push(script)
-    if (script.includes("Boolean(window.__TAURI__")) return ++bridgeChecks === 2
-    return "ready"
+    assert.match(script, /nativeReadyAt/)
+    return ++readinessChecks === 2
   }, 1_000)
 
-  assert.equal(bridgeChecks, 2)
-  assert.equal(scripts.length, 3)
-  assert.match(scripts.at(-1), /confirm_app_ready/)
+  assert.equal(readinessChecks, 2)
+  assert.equal(scripts.length, 2)
 })
 
 test("Stable WebDriver config points at the checked-in exclusion scenario", async () => {

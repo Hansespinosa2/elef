@@ -2491,7 +2491,7 @@ describe("desktop binary workflows and native boundaries", () => {
       await invoke("record_preview_failure")
       await invoke("record_bootstrap_failure")
     })
-    await exportAndVerifyDiagnostics(browser, "dev", ["render", "startup"])
+    await exportAndVerifyDiagnostics(browser, "dev", ["render", "startup", "import"])
   })
 })
 
