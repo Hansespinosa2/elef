@@ -769,7 +769,21 @@ class DesktopEditorUi {
     try {
       typeNativeText("$")
       typeNativeText("$")
+      await browser.waitUntil(async () => browser.execute(() =>
+        window.__elefDisplayMathKeys?.events.filter(({ key }) => key === "$").length === 2
+      ), {
+        timeout: 5_000,
+        interval: 50,
+        timeoutMsg: "Both trusted dollar keys must reach the display-math editor before Enter"
+      })
       sendNativeKey("Enter", { activate: false })
+      await browser.waitUntil(async () => browser.execute(() =>
+        window.__elefDisplayMathKeys?.events.some(({ key }) => key === "Enter") === true
+      ), {
+        timeout: 5_000,
+        interval: 50,
+        timeoutMsg: "The trusted Enter key must reach the display-math editor before capture ends"
+      })
     } finally {
       keys = await browser.execute(() => {
         const capture = window.__elefDisplayMathKeys
