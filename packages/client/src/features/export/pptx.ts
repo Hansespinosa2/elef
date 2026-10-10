@@ -5,27 +5,120 @@
 // host-owned in the web export adapter. PPTX byte output must not drift; see
 // apps/web/test/system/pptx_export_test.rb and the engine unit tests.
 
+export type PptxConstructor = new () => any
+
+export interface PptxPosition {
+  horizontal: string
+  vertical: string
+}
+
+export interface PptxRegionBlock {
+  position: PptxPosition | null
+  html: string
+}
+
+export interface PptxSlide {
+  index: number
+  layout: string
+  section: string | null
+  subsection: string | null
+  title_html: string | null
+  title_position: PptxPosition | null
+  regions: Array<Array<PptxRegionBlock>>
+  blocks: Array<PptxRegionBlock>
+  footnote_html: string | null
+}
+
+export interface PptxFonts {
+  technical: string
+  body: string
+  [face: string]: string
+}
+
+export interface PptxPresentation {
+  title: string
+  theme: string
+  typography: string
+  fonts: PptxFonts
+}
+
+export interface PptxMargins {
+  section?: unknown
+  subsection?: unknown
+  footnote?: unknown
+  slide_count?: unknown
+}
+
+export interface PptxModel {
+  version: string | number
+  presentation: PptxPresentation
+  margin_settings: PptxMargins
+  slides: Array<PptxSlide>
+}
+
+export interface PptxMediaAsset {
+  data: string
+  contentType: string
+}
+
+export interface PptxAssets {
+  media: Map<Element, PptxMediaAsset>
+  objectUrls: Array<string>
+}
+
+export interface PptxExportSeams {
+  libraryUrl?: string
+  loadLibrary?: (url: string) => Promise<unknown>
+  PptxGenJS?: PptxConstructor
+  document?: Document
+  prepareMedia?: (stage: HTMLElement) => Promise<PptxAssets>
+  renderSlides?: (pptx: any, stage: HTMLElement, model: PptxModel, assets: PptxAssets) => Promise<unknown>
+}
+
+export interface PixelRect {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
+export interface InchesBox {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+interface PptxGlobals {
+  PptxGenJS?: PptxConstructor | undefined
+}
+
+function installedPptx(): PptxConstructor | undefined {
+  const scope = globalThis as unknown as PptxGlobals & { window?: PptxGlobals | undefined }
+  return scope.window?.PptxGenJS ?? scope.PptxGenJS
+}
+
 const PX_PER_INCH = 96
 const REMOTE_FONT_FALLBACK = "Arial"
-let pptxLibraryPromise
+let pptxLibraryPromise: Promise<void> | undefined
 
 // Orchestrates one model-to-blob export: loads the generator library,
 // builds the deck, renders slides off-screen, and returns the file blob.
 // Seams exist so unit tests drive orchestration without a browser
 // (P07-04): pass a fake PptxGenJS class, a linkedom document, and stub
 // media/render steps.
-export async function exportPptxModel(model, seams = {}) {
+export async function exportPptxModel(model: PptxModel, seams: PptxExportSeams = {}): Promise<any> {
   const loadLibrary = seams.loadLibrary ?? loadPptxLibrary
-  const PptxGenJS = seams.PptxGenJS ?? globalThis.window?.PptxGenJS ?? globalThis.PptxGenJS
+  const PptxGenJS = (seams.PptxGenJS ?? installedPptx()) as PptxConstructor
   const hostDocument = seams.document ?? globalThis.document
   const prepare = seams.prepareMedia ?? prepareMedia
   const renderAll = seams.renderSlides ?? renderSlides
 
-  await loadLibrary(seams.libraryUrl)
+  await loadLibrary(seams.libraryUrl as string)
   const pptx = createPresentation(model, PptxGenJS)
   const stage = createRenderStage(model, hostDocument)
   hostDocument.body.append(stage)
-  let assets
+  let assets: PptxAssets | undefined
   try {
     assets = await prepare(stage)
     await renderAll(pptx, stage, model, assets)
@@ -36,15 +129,15 @@ export async function exportPptxModel(model, seams = {}) {
   return pptx.write({ outputType: "blob" })
 }
 
-export function loadPptxLibrary(url) {
-  if (window.PptxGenJS) return Promise.resolve()
+export function loadPptxLibrary(url: string): Promise<void> {
+  if (installedPptx()) return Promise.resolve()
   if (pptxLibraryPromise) return pptxLibraryPromise
 
-  const loading = new Promise((resolve, reject) => {
+  const loading = new Promise<void>((resolve, reject) => {
     const script = document.createElement("script")
     script.src = url
     script.onload = () => {
-      if (window.PptxGenJS) {
+      if (installedPptx()) {
         resolve()
       } else {
         script.remove()
@@ -65,7 +158,7 @@ export function loadPptxLibrary(url) {
   return pptxLibraryPromise
 }
 
-export function createPresentation(model, PptxGenJS = globalThis.window?.PptxGenJS ?? globalThis.PptxGenJS) {
+export function createPresentation(model: PptxModel, PptxGenJS: PptxConstructor = installedPptx() as PptxConstructor): any {
   const pptx = new PptxGenJS()
   pptx.defineLayout({ name: "ELEF_16_9", width: 40 / 3, height: 7.5 })
   pptx.layout = "ELEF_16_9"
@@ -83,12 +176,12 @@ export function createPresentation(model, PptxGenJS = globalThis.window?.PptxGen
   return pptx
 }
 
-export function primaryFont(stack) {
-  const first = String(stack || REMOTE_FONT_FALLBACK).split(",")[0].trim()
+export function primaryFont(stack: string | undefined): string {
+  const first = String(stack || REMOTE_FONT_FALLBACK).split(",")[0] ?? ""
   return first.replace(/^['"]|['"]$/g, "") || REMOTE_FONT_FALLBACK
 }
 
-export function createRenderStage(model, hostDocument = globalThis.document) {
+export function createRenderStage(model: PptxModel, hostDocument: Document = globalThis.document): HTMLDivElement {
   const stage = hostDocument.createElement("div")
   stage.className = [
     "pptx-render-stage presentation-surface",
@@ -102,7 +195,8 @@ export function createRenderStage(model, hostDocument = globalThis.document) {
   return stage
 }
 
-export function slideMarkup(slide, model) {
+export function slideMarkup(slide: PptxSlide | undefined, model: PptxModel): string {
+  if (!slide) throw new TypeError("slideMarkup requires a slide.")
   const margin = model.margin_settings
   const topMargin = margin.section || margin.subsection
     ? `<div class="slide-margin slide-margin-top" aria-hidden="true">${margin.subsection ? `<span class="slide-margin-subsection">${escapeHtml(slide.subsection || "")}</span>` : ""}${margin.section ? `<span class="slide-margin-section">${escapeHtml(slide.section || "")}</span>` : ""}</div>`
@@ -121,26 +215,28 @@ export function slideMarkup(slide, model) {
   return `<div class="slide-frame" style="height:720px;width:1280px"><section class="slide slide-${escapeHtml(slide.layout)}" aria-label="Slide ${slide.index + 1}">${topMargin}${content}${bottomMargin}</section></div>`
 }
 
-export function blockMarkup(block) {
+export function blockMarkup(block: PptxRegionBlock): string {
   const position = block.position
   const classes = position ? `position-${position.horizontal} position-${position.vertical}` : ""
   return `<div class="slide-block ${classes}">${block.html}</div>`
 }
 
-export function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-  })[character])
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }
 
-export async function prepareMedia(stage) {
-  const media = new Map()
-  const objectUrls = []
-  const fetchedMedia = new Map()
+export function escapeHtml(value: unknown): string {
+  return String(value).replace(/[&<>"']/g, (character) => HTML_ESCAPES[character] ?? character)
+}
+
+export async function prepareMedia(stage: HTMLElement): Promise<PptxAssets> {
+  const media = new Map<Element, PptxMediaAsset>()
+  const objectUrls: Array<string> = []
+  const fetchedMedia = new Map<string, Promise<string>>()
   const elements = [...stage.querySelectorAll("img[src], video[src]")]
   try {
     await Promise.all(elements.map(async (element) => {
-      const source = element.getAttribute("src")
+      const source = element.getAttribute("src") as string
       let pending = fetchedMedia.get(source)
       if (!pending) {
         pending = source.startsWith("data:") ? Promise.resolve(source) : fetchAsDataUri(source)
@@ -150,9 +246,9 @@ export async function prepareMedia(stage) {
       const blob = dataUriToBlob(data)
       const objectUrl = URL.createObjectURL(blob)
       objectUrls.push(objectUrl)
-      element.src = objectUrl
+      ;(element as HTMLImageElement | HTMLVideoElement).src = objectUrl
       media.set(element, { data, contentType: blob.type || (element.tagName === "VIDEO" ? "video/mp4" : "image/png") })
-      if (element.tagName === "IMG") await element.decode()
+      if (element.tagName === "IMG") await (element as HTMLImageElement).decode()
     }))
     await Promise.all([...stage.querySelectorAll(".katex")].map((math) => document.fonts.ready))
     return { media, objectUrls }
@@ -162,33 +258,35 @@ export async function prepareMedia(stage) {
   }
 }
 
-async function fetchAsDataUri(url) {
+async function fetchAsDataUri(url: string): Promise<string> {
   const response = await fetch(url, { credentials: "same-origin" })
   if (!response.ok) throw new Error("A presentation image or video could not be loaded.")
   const blob = await response.blob()
-  return await new Promise((resolve, reject) => {
+  return await new Promise<string>((resolve, reject) => {
     const reader = new FileReader()
-    reader.onload = () => resolve(reader.result)
+    reader.onload = () => resolve(reader.result as string)
     reader.onerror = () => reject(new Error("A presentation image or video could not be read."))
     reader.readAsDataURL(blob)
   })
 }
 
-export function dataUriToBlob(dataUri) {
-  const [metadata, encoded] = dataUri.split(",", 2)
+export function dataUriToBlob(dataUri: string): Blob {
+  const [metadata = "", encoded = ""] = dataUri.split(",", 2)
   const contentType = metadata.match(/^data:([^;]+)/)?.[1] || "application/octet-stream"
   const binary = metadata.includes(";base64") ? atob(encoded) : decodeURIComponent(encoded)
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
   return new Blob([bytes], { type: contentType })
 }
 
-export async function renderSlides(pptx, stage, model, assets) {
+export async function renderSlides(pptx: any, stage: HTMLElement, model: PptxModel, assets: PptxAssets): Promise<void> {
   const frames = [...stage.querySelectorAll(".slide-frame")]
   for (let index = 0; index < frames.length; index += 1) {
     const frame = frames[index]
     const slide = model.slides[index]
+    if (!frame || !slide) continue
     const pptxSlide = pptx.addSlide()
     const root = frame.querySelector(".slide")
+    if (!root) continue
     pptxSlide.addImage({ data: gradientBackground(model.presentation.theme), x: 0, y: 0, w: 40 / 3, h: 7.5 })
     if (slide.title_html) await addBlockElements(pptxSlide, root.querySelector(".slide-title"), root, assets, pptx.ShapeType)
 
@@ -198,7 +296,8 @@ export async function renderSlides(pptx, stage, model, assets) {
   }
 }
 
-async function addBlockElements(slide, block, root, assets, shapeTypes) {
+async function addBlockElements(slide: any, block: Element | null, root: Element, assets: PptxAssets, shapeTypes: any): Promise<void> {
+  if (!block) return
   const content = [...block.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,pre,table,hr,img,video")]
   for (const element of content) {
     if (element.closest("pre") && element.tagName !== "PRE") continue
@@ -213,7 +312,7 @@ async function addBlockElements(slide, block, root, assets, shapeTypes) {
       const media = assets.media.get(element)
       if (!media) continue
       if (element.tagName === "VIDEO") addVideoElement(slide, element, root, media)
-      else addImageElement(slide, element, root, media.data, element.alt || "Presentation image")
+      else addImageElement(slide, element, root, media.data, (element as HTMLImageElement).alt || "Presentation image")
     } else if (element.tagName === "HR") {
       addRule(slide, element, root, shapeTypes)
     } else if (element.tagName === "PRE") {
@@ -224,7 +323,7 @@ async function addBlockElements(slide, block, root, assets, shapeTypes) {
   }
 }
 
-async function addMarginElements(slide, root, assets, shapeTypes) {
+async function addMarginElements(slide: any, root: Element, assets: PptxAssets, shapeTypes: any): Promise<void> {
   const top = root.querySelector(".slide-margin-top")
   const bottom = root.querySelector(".slide-margin-bottom")
   if (top) {
@@ -248,7 +347,7 @@ async function addMarginElements(slide, root, assets, shapeTypes) {
   }
 }
 
-function addMarginText(slide, text, rect, style) {
+function addMarginText(slide: any, text: string | null, rect: PixelRect, style: CSSStyleDeclaration): void {
   const box = pixelRectToInches(rect)
   const displayText = style.textTransform === "uppercase" ? String(text).toLocaleUpperCase() : text
   slide.addText(displayText || " ", {
@@ -260,7 +359,29 @@ function addMarginText(slide, text, rect, style) {
   })
 }
 
-function addTextElement(slide, element, root, { list = false } = {}) {
+interface PptxTextOptions {
+  x: number
+  y: number
+  w: number
+  h: number
+  margin: number
+  valign: string
+  fontFace: string
+  fontSize: number
+  charSpacing: number
+  color: string
+  bold: boolean
+  italic: boolean
+  align: string
+  breakLine: boolean
+  lineSpacingMultiple?: number
+  strike?: string
+  underline?: { style: string }
+  bullet?: unknown
+}
+
+function addTextElement(slide: any, element: Element | null, root: Element, { list = false }: { list?: boolean } = {}): void {
+  if (!element) return
   const rect = relativeRect(element, root)
   if (rect.width < 1 || rect.height < 1) return
   const style = getComputedStyle(element)
@@ -283,10 +404,44 @@ function addTextElement(slide, element, root, { list = false } = {}) {
   slide.addText(text, options)
 }
 
-function richTextRuns(element, { preserveWhitespace = false } = {}) {
-  const runs = []
+interface TextRunStyle {
+  bold: boolean
+  italic: boolean
+  strike: boolean
+  underline: boolean
+  color: string
+  fontFace: string
+  fontSize: number
+  charSpacing: number
+  code: boolean
+  hyperlink?: { url: string } | undefined
+  subscript: boolean
+  superscript: boolean
+}
+
+interface RichTextRunOptions {
+  bold?: boolean
+  italic?: boolean
+  strike?: string
+  underline?: { style: string }
+  color?: string
+  fontFace?: string
+  fontSize?: number
+  charSpacing?: number
+  hyperlink?: { url: string }
+  subscript?: boolean
+  superscript?: boolean
+}
+
+interface RichTextRun {
+  text: string
+  options: RichTextRunOptions
+}
+
+function richTextRuns(element: Element, { preserveWhitespace = false }: { preserveWhitespace?: boolean } = {}): Array<RichTextRun> {
+  const runs: Array<RichTextRun> = []
   const baseStyle = textRunStyle(element)
-  const append = (text, style) => {
+  const append = (text: string | null, style: TextRunStyle): void => {
     const normalized = preserveWhitespace ? String(text) : String(text).replace(/[\t\r\n ]+/g, " ")
     if (!normalized) return
     const options = runOptions(style, baseStyle)
@@ -294,36 +449,39 @@ function richTextRuns(element, { preserveWhitespace = false } = {}) {
     if (previous && JSON.stringify(previous.options) === JSON.stringify(options)) previous.text += normalized
     else runs.push({ text: normalized, options })
   }
-  const visit = (node, inherited) => {
+  const visit = (node: Node, inherited: TextRunStyle): void => {
     if (node.nodeType === Node.TEXT_NODE) {
       append(node.nodeValue, inherited)
       return
     }
     if (node.nodeType !== Node.ELEMENT_NODE) return
-    if (["IMG", "VIDEO", "UL", "OL"].includes(node.tagName) || node.matches(".katex-mathml")) return
-    if (node.tagName === "BR") {
+    const child = node as Element
+    if (["IMG", "VIDEO", "UL", "OL"].includes(child.tagName) || child.matches(".katex-mathml")) return
+    if (child.tagName === "BR") {
       append("\n", inherited)
       return
     }
-    const next = textRunStyle(node, inherited.hyperlink)
-    if (node.matches(".katex")) {
-      const tex = node.querySelector('annotation[encoding="application/x-tex"]')?.textContent
+    const next = textRunStyle(child, inherited.hyperlink)
+    if (child.matches(".katex")) {
+      const tex = child.querySelector('annotation[encoding="application/x-tex"]')?.textContent
       if (tex) append(` ${tex} `, inherited)
       return
     }
-    node.childNodes.forEach((child) => visit(child, next))
+    child.childNodes.forEach((childNode) => visit(childNode, next))
   }
   element.childNodes.forEach((node) => visit(node, baseStyle))
   if (runs.length && !preserveWhitespace) {
-    runs[0].text = runs[0].text.replace(/^ +/, "")
-    runs[runs.length - 1].text = runs[runs.length - 1].text.replace(/ +$/, "")
+    const first = runs[0]
+    if (first) first.text = first.text.replace(/^ +/, "")
+    const last = runs[runs.length - 1]
+    if (last) last.text = last.text.replace(/ +$/, "")
   }
   return runs.filter((run) => run.text)
 }
 
-function textRunStyle(element, inheritedHyperlink) {
+function textRunStyle(element: Element, inheritedHyperlink?: { url: string } | undefined): TextRunStyle {
   const style = getComputedStyle(element)
-  const link = element.tagName === "A" ? element.getAttribute("href") : inheritedHyperlink
+  const link: unknown = element.tagName === "A" ? element.getAttribute("href") : inheritedHyperlink
   return {
     bold: parseInt(style.fontWeight, 10) >= 600,
     italic: style.fontStyle === "italic" || style.fontStyle === "oblique",
@@ -334,16 +492,20 @@ function textRunStyle(element, inheritedHyperlink) {
     fontSize: cssFontSize(style),
     charSpacing: cssCharSpacing(style),
     code: element.tagName === "CODE" || element.tagName === "PRE",
-    hyperlink: link && safeHyperlink(link) ? { url: link } : undefined,
+    hyperlink: typeof link === "string" && safeHyperlink(link) ? { url: link } : undefined,
     subscript: element.tagName === "SUB",
     superscript: element.tagName === "SUP"
   }
 }
 
-function textOptions(style, box) {
+function flowAlign(textAlign: string): string {
+  return textAlign === "start" ? "left" : textAlign === "end" ? "right" : textAlign
+}
+
+function textOptions(style: CSSStyleDeclaration, box: InchesBox): PptxTextOptions {
   const fontSize = cssFontSize(style)
   const lineSpacingMultiple = cssLineSpacingMultiple(style)
-  const options = {
+  const options: PptxTextOptions = {
     ...box,
     margin: 0,
     valign: "top",
@@ -353,7 +515,7 @@ function textOptions(style, box) {
     color: colorHex(style.color),
     bold: parseInt(style.fontWeight, 10) >= 600,
     italic: style.fontStyle === "italic" || style.fontStyle === "oblique",
-    align: { start: "left", end: "right" }[style.textAlign] || style.textAlign,
+    align: flowAlign(style.textAlign),
     breakLine: false
   }
   if (lineSpacingMultiple > 0.6 && lineSpacingMultiple < 3) options.lineSpacingMultiple = lineSpacingMultiple
@@ -362,14 +524,14 @@ function textOptions(style, box) {
   return options
 }
 
-export function cssLineSpacingMultiple(style) {
+export function cssLineSpacingMultiple(style: { lineHeight: string; fontSize: string }): number {
   const lineHeight = parseFloat(style.lineHeight)
   const fontSize = cssFontSize(style)
   return Number.isFinite(lineHeight) && fontSize > 0 ? (lineHeight * 0.75) / fontSize : 1.1
 }
 
-function runOptions(style, baseStyle) {
-  const options = {}
+function runOptions(style: TextRunStyle, baseStyle: TextRunStyle): RichTextRunOptions {
+  const options: RichTextRunOptions = {}
   if (style.bold !== baseStyle.bold) options.bold = style.bold
   if (style.italic !== baseStyle.italic) options.italic = style.italic
   if (style.strike) options.strike = "sngStrike"
@@ -384,7 +546,7 @@ function runOptions(style, baseStyle) {
   return options
 }
 
-function addCodeElement(slide, element, root, shapeTypes) {
+function addCodeElement(slide: any, element: Element, root: Element, shapeTypes: any): void {
   const rect = relativeRect(element, root)
   const box = pixelRectToInches(rect)
   const style = getComputedStyle(element)
@@ -407,7 +569,7 @@ function addCodeElement(slide, element, root, shapeTypes) {
   })
 }
 
-function addTableElement(slide, table, root) {
+function addTableElement(slide: any, table: Element, root: Element): void {
   const rect = relativeRect(table, root)
   const box = pixelRectToInches(rect)
   const tableRows = [...table.querySelectorAll("tr")].map((row) => [...row.children].map((cell) => {
@@ -420,7 +582,7 @@ function addTableElement(slide, table, root) {
         fill: { color: rootThemeColor(table) },
         fontFace: fontFace(style), fontSize: cssFontSize(style),
         charSpacing: cssCharSpacing(style),
-        align: { start: "left", end: "right" }[style.textAlign] || style.textAlign,
+        align: flowAlign(style.textAlign),
         valign: "mid", margin: [4.2, 6, 4.2, 6],
         border: { type: "solid", color: "DDD5C8", pt: 0.75 }
       }
@@ -439,20 +601,21 @@ function addTableElement(slide, table, root) {
   })
 }
 
-function cellTextRuns(cell) {
+function cellTextRuns(cell: Element): Array<RichTextRun> {
   const style = getComputedStyle(cell)
   return richTextRuns(cell).map(({ text, options }) => ({ text, options }))
 }
 
-function rootThemeColor(element) {
+function rootThemeColor(element: Element): string {
   return element.closest(".pptx-render-stage")?.classList.contains("work-theme-dark") ? "202C32" : "FCFAF5"
 }
 
-function addImageElement(slide, element, root, data, alt) {
+function addImageElement(slide: any, element: Element, root: Element, data: string, alt: string): void {
   const box = pixelRectToInches(relativeRect(element, root))
   const sizing = element.tagName === "IMG" && getComputedStyle(element).objectFit === "cover" ? "cover" : "contain"
-  const intrinsicWidth = element.naturalWidth || element.videoWidth || 1
-  const intrinsicHeight = element.naturalHeight || element.videoHeight || 1
+  const intrinsic = element as unknown as { naturalWidth?: number; videoWidth?: number; naturalHeight?: number; videoHeight?: number }
+  const intrinsicWidth = intrinsic.naturalWidth || intrinsic.videoWidth || 1
+  const intrinsicHeight = intrinsic.naturalHeight || intrinsic.videoHeight || 1
   const boxRatio = box.w / Math.max(box.h, 0.001)
   const mediaRatio = intrinsicWidth / intrinsicHeight
   let options = box
@@ -470,7 +633,7 @@ function addImageElement(slide, element, root, data, alt) {
   }
 }
 
-function addVideoElement(slide, element, root, media) {
+function addVideoElement(slide: any, element: Element, root: Element, media: PptxMediaAsset): void {
   const box = pixelRectToInches(relativeRect(element, root))
   slide.addMedia({
     type: "video", data: media.data, extn: "mp4", ...box,
@@ -478,7 +641,7 @@ function addVideoElement(slide, element, root, media) {
   })
 }
 
-function addRule(slide, element, root, shapeTypes) {
+function addRule(slide: any, element: Element, root: Element, shapeTypes: any): void {
   const rect = relativeRect(element, root)
   const y = rect.top + rect.height / 2
   slide.addShape(shapeTypes.line, {
@@ -487,13 +650,13 @@ function addRule(slide, element, root, shapeTypes) {
   })
 }
 
-export function relativeRect(element, root) {
+export function relativeRect(element: Element, root: Element): PixelRect {
   const rect = element.getBoundingClientRect()
   const base = root.getBoundingClientRect()
   return { left: rect.left - base.left, top: rect.top - base.top, width: rect.width, height: rect.height }
 }
 
-export function pixelRectToInches(rect) {
+export function pixelRectToInches(rect: PixelRect): InchesBox {
   return {
     x: rect.left / PX_PER_INCH,
     y: rect.top / PX_PER_INCH,
@@ -502,49 +665,51 @@ export function pixelRectToInches(rect) {
   }
 }
 
-function fontFace(style) {
+function fontFace(style: CSSStyleDeclaration): string {
   return primaryFont(style.fontFamily)
 }
 
-export function cssFontSize(style) {
+export function cssFontSize(style: { fontSize: string }): number {
   return Math.max(1, (parseFloat(style.fontSize) || 16) * 0.75)
 }
 
-export function cssCharSpacing(style) {
+export function cssCharSpacing(style: { letterSpacing: string }): number {
   const letterSpacing = parseFloat(style.letterSpacing)
   return Number.isFinite(letterSpacing) ? letterSpacing * 0.75 : 0
 }
 
-export function colorHex(color, fallback = "252A27") {
+export function colorHex(color: string, fallback = "252A27"): string {
   if (!color || color === "transparent") return fallback
   const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number)
   if (!channels || channels.length < 3) return fallback
   return channels.map((channel) => Math.round(channel).toString(16).padStart(2, "0")).join("").toUpperCase()
 }
 
-export function safeHyperlink(url) {
+export function safeHyperlink(url: string): boolean {
   return /^(https?:|mailto:|tel:)/i.test(url)
 }
 
-export function gradientBackground(theme) {
-  const [start, end, border] = {
+export function gradientBackground(theme: string): string {
+  const themes: Record<string, [string, string, string]> = {
     dark: ["#202c32", "#11161a", "#304047"],
     light: ["#fffdf8", "#f5f0e7", "#d8d0c2"],
     match: ["#fcfaf5", "#f5f0e7", "#d8d0c2"]
-  }[theme] || ["#fcfaf5", "#f5f0e7", "#d8d0c2"]
+  }
+  const fallback: [string, string, string] = ["#fcfaf5", "#f5f0e7", "#d8d0c2"]
+  const [start, end, border] = themes[theme] || fallback
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><defs><linearGradient id="g" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="${start}"/><stop offset="1" stop-color="${end}"/></linearGradient></defs><rect x="0.5" y="0.5" width="1279" height="719" rx="10" fill="url(#g)" stroke="${border}"/></svg>`
   return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
 }
 
-async function katexBlockPng(element) {
-  const clone = element.cloneNode(true)
+async function katexBlockPng(element: Element): Promise<string> {
+  const clone = element.cloneNode(true) as Element
   inlineComputedStyles(element, clone)
   clone.querySelectorAll(".katex-mathml").forEach((mathml) => mathml.remove())
   const rect = element.getBoundingClientRect()
   const serializer = new XMLSerializer()
   const markup = serializer.serializeToString(clone)
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xhtml="http://www.w3.org/1999/xhtml" width="${Math.ceil(rect.width * 2)}" height="${Math.ceil(rect.height * 2)}"><foreignObject width="100%" height="100%"><xhtml:div xmlns="http://www.w3.org/1999/xhtml" style="width:${rect.width}px;height:${rect.height}px">${markup}</xhtml:div></foreignObject></svg>`
-  const image = await new Promise((resolve, reject) => {
+  const image = await new Promise<HTMLImageElement>((resolve, reject) => {
     const rendered = new Image()
     rendered.onload = () => resolve(rendered)
     rendered.onerror = () => reject(new Error("A mathematical expression could not be rendered."))
@@ -563,16 +728,21 @@ async function katexBlockPng(element) {
   return canvas.toDataURL("image/png")
 }
 
-function inlineComputedStyles(source, target) {
+function inlineComputedStyles(source: Element, target: Element): void {
   const style = getComputedStyle(source)
-  const inline = [...style].map((property) => `${property}:${style.getPropertyValue(property)}`).join(";")
+  // Spread preserves the host's own CSSStyleDeclaration iteration behavior
+  // exactly (whatever it yields or throws); only the type is asserted.
+  const inline = [...(style as unknown as Iterable<string>)].map((property) => `${property}:${style.getPropertyValue(property)}`).join(";")
   target.setAttribute("style", inline)
   const sourceChildren = [...source.children]
   const targetChildren = [...target.children]
-  sourceChildren.forEach((child, index) => inlineComputedStyles(child, targetChildren[index]))
+  sourceChildren.forEach((child, index) => {
+    const targetChild = targetChildren[index]
+    if (targetChild) inlineComputedStyles(child, targetChild)
+  })
 }
 
-export function downloadBlob(blob, filename) {
+export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement("a")
   anchor.href = url

@@ -2,13 +2,12 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
-import { fileURLToPath, pathToFileURL } from "node:url"
+import { fileURLToPath } from "node:url"
 
-const controllerPath = new URL("../../app/javascript/controllers/appearance_controller.js", import.meta.url)
+const controllerPath = new URL("../../../../packages/editor-runtime/dist/controllers/appearance_controller.js", import.meta.url)
 const testPath = fileURLToPath(import.meta.url)
-const documentMapPath = path.resolve(path.dirname(testPath), "../../../../packages/work-model/src/index.js")
 const importmapPath = path.resolve(path.dirname(testPath), "../../config/importmap.rb")
-const documentMapUrl = pathToFileURL(documentMapPath).href
+const documentMapUrl = import.meta.resolve("@elef/work-model")
 const source = (await readFile(controllerPath, "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { withAppearanceValue } from "@elef/work-model"', `import { withAppearanceValue } from "${documentMapUrl}"`)

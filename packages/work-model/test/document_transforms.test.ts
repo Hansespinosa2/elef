@@ -10,6 +10,7 @@ import {
   directiveLineSpan,
   exciseRanges,
   expandSnippet,
+  findPositionCloseAfter,
   insertAlignDirective,
   insertBlock,
   mediaInsertText,
@@ -140,6 +141,32 @@ test("block operation ranges stay inside shared groups and refuse missing inputs
   assert.equal(blockOperationRange(null, slide), null)
   assert.equal(blockOperationRange(slide.blocks[0], null), null)
   assert.equal(blockOperationRange(null, null), null)
+})
+
+test("lone group member without a closer still covers its orphan opener", () => {
+  const [slide] = mapOf(":::align{left}\n# T\n")
+  assert.ok(slide)
+  const opener = slide.directives[0]
+  const first = slide.blocks[0]
+  assert.ok(opener?.range)
+  assert.ok(first?.range)
+  const block = { ...first, position_scope: "group", position_directive_id: opener.id }
+  const lone = { ...slide, blocks: [block] }
+  const span = blockOperationRange(block, lone)
+  assert.ok(span)
+  assert.equal(span.from, opener.range.start)
+  assert.equal(span.to, first.range.end)
+})
+
+test("findPositionCloseAfter returns the first closer after an index", () => {
+  const [slide] = mapOf(":::align{center}\n\n# T\n\n:::\n")
+  assert.ok(slide)
+  const idx = slide.directives.findIndex((d) => d.type !== "position_close")
+  const closing = findPositionCloseAfter(slide.directives, idx)
+  assert.ok(closing)
+  assert.equal(closing.type, "position_close")
+  assert.equal(findPositionCloseAfter(slide.directives, slide.directives.length), undefined)
+  assert.equal(findPositionCloseAfter(null, 0), undefined)
 })
 
 test("alignment parsing keeps the presentation grammar", () => {

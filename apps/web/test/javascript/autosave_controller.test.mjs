@@ -2,16 +2,16 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
-const workSessionUrl = new URL("../../../../packages/client/src/session/work_session.js", import.meta.url).href
-const conflictDialogSource = await readFile(new URL("../../app/javascript/lib/conflict_dialog.js", import.meta.url), "utf8")
+const workSessionUrl = import.meta.resolve("@elef/client")
+const conflictDialogSource = await readFile(new URL("../../../../packages/editor-runtime/dist/lib/conflict_dialog.js", import.meta.url), "utf8")
 const conflictDialogUrl = `data:text/javascript;base64,${Buffer.from(conflictDialogSource).toString("base64")}`
 const source = (await readFile(new URL("../../app/javascript/controllers/autosave_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { createWorkSession } from "@elef/client"', `import { createWorkSession } from "${workSessionUrl}"`)
-  .replace('import { presentConflictDialog } from "lib/conflict_dialog"', `const { presentConflictDialog } = await import("${conflictDialogUrl}")`)
-  .replace('import { editorFor } from "lib/editor_controller_lookup"', "const editorFor = () => null")
-  .replace('import { applyEditorSource } from "lib/editor_source"', "const applyEditorSource = async () => true")
-  .replace('import { waitForEditorController } from "lib/editor_ready"', "const waitForEditorController = async () => null")
+  .replace('import { presentConflictDialog } from "@elef/editor-runtime"', `const { presentConflictDialog } = await import("${conflictDialogUrl}")`)
+  .replace('import { editorFor } from "@elef/editor-runtime"', "const editorFor = () => null")
+  .replace('import { applyEditorSource } from "@elef/editor-runtime"', "const applyEditorSource = async () => true")
+  .replace('import { waitForEditorController } from "@elef/editor-runtime"', "const waitForEditorController = async () => null")
 const autosave = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 test("the Rails transport saves the live editor source without requesting a source commit", async () => {

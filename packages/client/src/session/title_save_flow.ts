@@ -1,3 +1,20 @@
+export interface TitleSaveDeck {
+  id: string
+  name: string
+}
+
+export interface TitleSaveFlowOptions {
+  getDeck(): TitleSaveDeck | null | undefined
+  getTitle(): unknown
+  renameDeck(deck: TitleSaveDeck, title: string): Promise<unknown>
+  onRenamed?: (renamed: unknown, title: string) => void
+  onState?: (state: string, details: { dirty: boolean; blocked: boolean }) => void
+  onError?: (error: unknown) => void
+  delay?: number
+  setTimer?: typeof setTimeout
+  clearTimer?: typeof clearTimeout
+}
+
 export function createTitleSaveFlow({
   getDeck,
   getTitle,
@@ -7,21 +24,26 @@ export function createTitleSaveFlow({
   onError = () => {},
   delay = 650,
   setTimer = setTimeout,
-  clearTimer = clearTimeout
-}) {
-  let timer = null
-  let worker = null
+  clearTimer: clearTimerOption = clearTimeout
+}: TitleSaveFlowOptions) {
+  // Nullable handles clear as undefined: every host clearTimeout (and the
+  // unit-test fakes) treats both as a no-op, exactly like before.
+  const clearTimer = (timer: ReturnType<typeof setTimeout> | null): void => {
+    clearTimerOption(timer ?? undefined)
+  }
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let worker: Promise<boolean> | null = null
   let dirty = false
   let blocked = false
 
-  const title = () => String(getTitle() ?? "").trim()
-  const hasChange = () => {
+  const title = (): string => String(getTitle() ?? "").trim()
+  const hasChange = (): boolean => {
     const deck = getDeck()
     return Boolean(deck && title() !== deck.name)
   }
-  const setState = state => onState(state, { dirty: dirty || Boolean(worker), blocked })
+  const setState = (state: string): void => onState(state, { dirty: dirty || Boolean(worker), blocked })
 
-  function schedule(wait = delay) {
+  function schedule(wait: number = delay): void {
     if (!getDeck()) return
     if (!hasChange()) {
       dirty = false
@@ -42,7 +64,7 @@ export function createTitleSaveFlow({
     }, wait)
   }
 
-  async function flush({ force = false } = {}) {
+  async function flush({ force = false }: { force?: boolean } = {}): Promise<boolean> {
     clearTimer(timer)
     timer = null
     if (worker) return worker

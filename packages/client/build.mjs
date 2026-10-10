@@ -44,7 +44,17 @@ esbuild.buildSync({
 });
 esbuild.buildSync({
   ...shared,
-  entryPoints: [join(here, "src", "features", "presentation", "chrome.js")],
+  entryPoints: [join(here, "src", "features", "presentation", "chrome.ts")],
   outfile: join(here, "dist", "presentation-chrome.js"),
 });
-console.log("packages/client: dist/elef-client.js + dist/preview-core.js + dist/sanitize.js + dist/presentation-chrome.js built");
+esbuild.buildSync({
+  ...shared,
+  entryPoints: [join(here, "src", "features", "settings", "vimPreferences.ts")],
+  outfile: join(here, "dist", "vim-preferences.js"),
+});
+esbuild.buildSync({
+  ...shared,
+  entryPoints: [join(here, "src", "pptx-test-internals.ts")],
+  outfile: join(here, "dist", "pptx-test-internals.js"),
+});
+console.log("packages/client: dist/elef-client.js + dist/preview-core.js + dist/sanitize.js + dist/presentation-chrome.js + dist/vim-preferences.js + dist/pptx-test-internals.js built");

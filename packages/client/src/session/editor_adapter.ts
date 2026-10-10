@@ -20,14 +20,26 @@
 // work and commit paths can refuse stale sessions.
 export const ADAPTER_METHODS = ["getText", "setText", "materializeEdits"]
 
-export function assertEditorAdapter(adapter) {
+export interface EditorAdapterSetMeta {
+  id: string
+  expectedSource: string
+  preserveMetadata?: boolean
+}
+
+export interface EditorAdapter {
+  getText(): string
+  setText(source: string, meta: EditorAdapterSetMeta): boolean | Promise<boolean>
+  materializeEdits(): void
+}
+
+export function assertEditorAdapter(adapter: unknown): EditorAdapter {
   if (!adapter || typeof adapter !== "object") {
     throw new TypeError("Session policy requires an editor adapter object.")
   }
   for (const method of ADAPTER_METHODS) {
-    if (typeof adapter[method] !== "function") {
+    if (typeof (adapter as Record<string, unknown>)[method] !== "function") {
       throw new TypeError(`Session editor adapter requires ${method}().`)
     }
   }
-  return adapter
+  return adapter as EditorAdapter
 }

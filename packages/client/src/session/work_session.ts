@@ -17,12 +17,22 @@
 // subscribers with a removed-marked snapshot; the editor text is left
 // untouched. Notifications carry two pre-migration extensions beyond the
 // contract WorkSnapshot: sourceFile (the disk source file name) and removed.
-import { createSaveFlow } from "./save_flow.js"
-import { assertEditorAdapter } from "./editor_adapter.js"
+import {
+  asTransportFailure,
+  createSaveFlow,
+  type ConflictDetailsInput,
+  type ExternalSnapshot,
+  type MergeOutcome,
+  type SaveConflict,
+  type SaveDeck,
+  type SaveFlowStatus,
+  type SaveSourceResult,
+} from "./save_flow.js"
+import { assertEditorAdapter, type EditorAdapterSetMeta } from "./editor_adapter.js"
 
 let sessionEpoch = 0
 
-const ERROR_CATEGORIES = {
+const ERROR_CATEGORIES: Record<string, string> = {
   conflict: "conflict",
   not_found: "not_found",
   invalid_input: "invalid_input",
@@ -37,30 +47,103 @@ const ERROR_CATEGORIES = {
   cancelled: "cancelled"
 }
 
-function toElefError(error) {
+export interface SessionElefError {
+  category: string
+  message: string
+  retryable: boolean
+}
+
+export type SessionStatus =
+  | { kind: "clean" }
+  | { kind: "dirty" }
+  | { kind: "saving" }
+  | { kind: "error"; error: SessionElefError }
+
+export interface SessionSnapshotNotification {
+  id: string
+  workspaceId: string
+  title: string
+  kind: string
+  text: string
+  sourceFile?: string | undefined
+  baseline: { revision: string }
+  removed?: boolean
+}
+
+export interface SessionFileEvent {
+  kind: string
+  deck_id: string
+}
+
+export interface WorkSessionTransport {
+  saveSource(id: string, source: string, options: { snapshot: string }): Promise<SaveSourceResult>
+  acceptDiskVersion(id: string, contentHash: string): void
+  mergeExternalChange?: (id: string, localSource: string) => Promise<MergeOutcome | null | undefined>
+  takeSnapshot?: (id: string, reason: string, source?: string) => Promise<unknown>
+  readSourceSnapshot?: (id: string) => Promise<ExternalSnapshot | null>
+  pollFileEvents?: () => Promise<Array<SessionFileEvent> | null | undefined>
+}
+
+export interface WorkSessionPolicy {
+  workId: string
+  kind?: string
+  deck: SaveDeck
+  getText(): string
+  setText?: ((source: string, meta: EditorAdapterSetMeta) => boolean | Promise<boolean>) | null
+  getSnapshot?: () => string
+  getConflictSnapshot?: (details: ConflictDetailsInput) => string
+  getConflictBaseline?: (details: ConflictDetailsInput) => unknown
+  isValidConflictBaseline?: (value: unknown) => boolean
+  saveDelay?: number
+  externalPollMs?: number
+  snapshotIntervalMs?: number
+  workspaceId?: string
+  title?: string
+  materializeEdits?: () => void
+  onState?: ((state: string, details: SaveFlowStatus) => void) | null
+  onConflict?: (conflict: SaveConflict) => void
+  onError?: (error: unknown) => void
+  setTimer?: typeof setTimeout
+  clearTimer?: typeof clearTimeout
+}
+
+export type SessionFlushResult =
+  | { kind: "clean"; baseline: { revision: string } }
+  | { kind: "saved"; baseline: { revision: string } }
+  | { kind: "conflict"; current: SessionSnapshotNotification }
+  | { kind: "failed"; error: SessionElefError }
+
+function toElefError(error: unknown): SessionElefError {
   if (!error || typeof error !== "object") {
     return { category: "internal", message: String(error ?? "Unknown error."), retryable: false }
   }
+  const failure = error as { code?: unknown; message?: unknown; retryable?: unknown }
   return {
-    category: ERROR_CATEGORIES[error.code] || "internal",
-    message: typeof error.message === "string" ? error.message : "Operation failed.",
-    retryable: error.retryable === true
+    category: (typeof failure.code === "string" && ERROR_CATEGORIES[failure.code]) || "internal",
+    message: typeof failure.message === "string" ? failure.message : "Operation failed.",
+    retryable: failure.retryable === true
   }
 }
 
-export function createWorkSession({ transport, policy }) {
+export function createWorkSession({ transport: transportOption, policy: policyOption }: {
+  transport: WorkSessionTransport | null | undefined
+  policy: WorkSessionPolicy | null | undefined
+}) {
   // Baseline opacity: the flow only compares baselines for equality, so any
   // non-empty token binds the session. Desktop passes 64-hex content hashes;
   // web passes revision tokens shaped `lock_version:digest` (see Work#revision_token).
-  if (!transport || typeof transport !== "object") {
+  if (!transportOption || typeof transportOption !== "object") {
     throw new TypeError("createWorkSession requires a transport.")
   }
-  if (typeof transport.saveSource !== "function" || typeof transport.acceptDiskVersion !== "function") {
+  if (typeof transportOption.saveSource !== "function" || typeof transportOption.acceptDiskVersion !== "function") {
     throw new TypeError("Session transport requires saveSource() and acceptDiskVersion().")
   }
-  if (!policy || typeof policy !== "object") {
+  if (!policyOption || typeof policyOption !== "object") {
     throw new TypeError("createWorkSession requires a policy.")
   }
+  // Const bindings so the validated narrowing persists into every closure below.
+  const transport = transportOption
+  const policy = policyOption
   const {
     workId,
     kind = "presentation",
@@ -81,8 +164,13 @@ export function createWorkSession({ transport, policy }) {
     onConflict = () => {},
     onError = () => {},
     setTimer = setTimeout,
-    clearTimer = clearTimeout
+    clearTimer: clearTimerOption = clearTimeout
   } = policy
+  // Nullable handles clear as undefined: every host clearTimeout (and the
+  // unit-test fakes) treats both as a no-op, exactly like before.
+  const clearTimer = (timer: ReturnType<typeof setTimeout> | null): void => {
+    clearTimerOption(timer ?? undefined)
+  }
   if (typeof workId !== "string" || workId.length === 0) {
     throw new TypeError("Session policy requires a workId.")
   }
@@ -96,18 +184,18 @@ export function createWorkSession({ transport, policy }) {
 
   const epoch = ++sessionEpoch
   let baseline = deck.content_hash
-  let lastError = null
-  let lastPollErrorKey = null
+  let lastError: SessionElefError | null = null
+  let lastPollErrorKey: unknown = null
   let disposed = false
-  let pollTimer = null
+  let pollTimer: ReturnType<typeof setTimeout> | null = null
   let pollBusy = false
-  let snapshotTimer = null
+  let snapshotTimer: ReturnType<typeof setTimeout> | null = null
   let snapshotBusy = false
-  let lastSnapshotErrorKey = null
-  const externalHandlers = new Set()
-  const statusHandlers = new Set()
+  let lastSnapshotErrorKey: unknown = null
+  const externalHandlers = new Set<(snapshot: SessionSnapshotNotification) => void>()
+  const statusHandlers = new Set<(status: SessionStatus) => void>()
 
-  function currentSnapshot() {
+  function currentSnapshot(): SessionSnapshotNotification {
     return {
       id: workId,
       workspaceId,
@@ -119,16 +207,16 @@ export function createWorkSession({ transport, policy }) {
     }
   }
 
-  function reportError(error) {
+  function reportError(error: unknown): void {
     lastError = toElefError(error)
     onError(error)
   }
 
-  function notifyExternal(snapshot) {
+  function notifyExternal(snapshot: SessionSnapshotNotification): void {
     for (const handler of [...externalHandlers]) handler(snapshot)
   }
 
-  function mapStatus(state) {
+  function mapStatus(state?: string): SessionStatus {
     if (flow.blocked) {
       return {
         kind: "error",
@@ -144,7 +232,7 @@ export function createWorkSession({ transport, policy }) {
     return { kind: "clean" }
   }
 
-  function notifyStatus(state) {
+  function notifyStatus(state: string): void {
     if (disposed) return
     const status = mapStatus(state)
     for (const handler of [...statusHandlers]) handler(status)
@@ -161,10 +249,18 @@ export function createWorkSession({ transport, policy }) {
       return transport.acceptDiskVersion(id, contentHash)
     },
     mergeExternalChange: typeof transport.mergeExternalChange === "function"
-      ? ((id, localSource) => transport.mergeExternalChange(id, localSource))
+      ? ((id: string, localSource: string) => {
+        const hook = transport.mergeExternalChange
+        if (typeof hook !== "function") throw new TypeError("transport.mergeExternalChange is not a function")
+        return hook.call(transport, id, localSource)
+      })
       : null,
     takeSnapshot: typeof transport.takeSnapshot === "function"
-      ? ((id, reason, source) => transport.takeSnapshot(id, reason, source))
+      ? ((id: string, reason: string, source?: string) => {
+        const hook = transport.takeSnapshot
+        if (typeof hook !== "function") throw new TypeError("transport.takeSnapshot is not a function")
+        return hook.call(transport, id, reason, source)
+      })
       : null,
     getSource: () => getText(),
     setSource: setText ? ((source, meta) => setText(source, meta)) : () => false,
@@ -181,19 +277,19 @@ export function createWorkSession({ transport, policy }) {
     onConflict,
     onError: reportError,
     setTimer,
-    clearTimer
+    clearTimer: clearTimerOption
   })
   flow.activate(deck)
 
-  async function handleExternalEvent(event) {
+  async function handleExternalEvent(event: SessionFileEvent): Promise<void> {
     if (typeof transport.readSourceSnapshot !== "function") return
     if (event.kind === "SourceRemoved") {
-      let snapshot = null
+      let snapshot: ExternalSnapshot | null = null
       try {
         snapshot = await transport.readSourceSnapshot(workId)
       } catch (error) {
         notifyExternal({ ...currentSnapshot(), removed: true })
-        const key = error?.code || "unknown"
+        const key = asTransportFailure(error).code || "unknown"
         if (key !== lastPollErrorKey) {
           lastPollErrorKey = key
           reportError(error)
@@ -204,11 +300,11 @@ export function createWorkSession({ transport, policy }) {
       if (snapshot) return handleChangedSnapshot(snapshot)
       return
     }
-    let snapshot
+    let snapshot: ExternalSnapshot | null
     try {
       snapshot = await transport.readSourceSnapshot(workId)
     } catch (error) {
-      const key = error?.code || "unknown"
+      const key = asTransportFailure(error).code || "unknown"
       if (key !== lastPollErrorKey) {
         lastPollErrorKey = key
         reportError(error)
@@ -216,10 +312,13 @@ export function createWorkSession({ transport, policy }) {
       return
     }
     lastPollErrorKey = null
-    await handleChangedSnapshot(snapshot)
+    // A null read here throws downstream exactly like before (the transport
+    // contract resolves snapshots for non-removed reads); drainExternalEvents
+    // reports it as a poll error.
+    await handleChangedSnapshot(snapshot as ExternalSnapshot)
   }
 
-  async function handleChangedSnapshot(snapshot) {
+  async function handleChangedSnapshot(snapshot: ExternalSnapshot): Promise<void> {
     notifyExternal({
       id: workId,
       workspaceId,
@@ -232,17 +331,19 @@ export function createWorkSession({ transport, policy }) {
     await flow.resolveExternalChange(workId, snapshot)
   }
 
-  async function drainExternalEvents() {
+  async function drainExternalEvents(): Promise<void> {
     if (disposed || pollBusy) return
     pollBusy = true
     try {
-      const events = await transport.pollFileEvents()
+      const poll = transport.pollFileEvents
+      if (typeof poll !== "function") return
+      const events = await poll()
       for (const event of events || []) {
         if (disposed || !event || event.deck_id !== workId) continue
         await handleExternalEvent(event)
       }
     } catch (error) {
-      const key = error?.code || "unknown"
+      const key = asTransportFailure(error).code || "unknown"
       if (key !== lastPollErrorKey) {
         lastPollErrorKey = key
         reportError(error)
@@ -252,7 +353,7 @@ export function createWorkSession({ transport, policy }) {
     }
   }
 
-  function schedulePoll() {
+  function schedulePoll(): void {
     if (disposed || !externalPollMs || typeof transport.pollFileEvents !== "function") return
     pollTimer = setTimer(() => {
       pollTimer = null
@@ -261,7 +362,7 @@ export function createWorkSession({ transport, policy }) {
   }
   schedulePoll()
 
-  function hasUnsavedEdits() {
+  function hasUnsavedEdits(): boolean {
     try {
       return Boolean(flow.dirty)
     } catch {
@@ -269,15 +370,16 @@ export function createWorkSession({ transport, policy }) {
     }
   }
 
-  async function runSnapshotCadence() {
+  async function runSnapshotCadence(): Promise<unknown> {
     if (disposed || snapshotBusy) return null
     snapshotBusy = true
     try {
-      if (typeof transport.takeSnapshot !== "function") return null
+      const snapshotHook = transport.takeSnapshot
+      if (typeof snapshotHook !== "function") return null
       if (!hasUnsavedEdits()) return null
-      return await transport.takeSnapshot(workId, "periodic", getText())
+      return await snapshotHook(workId, "periodic", getText())
     } catch (error) {
-      const key = error?.code || "unknown"
+      const key = asTransportFailure(error).code || "unknown"
       if (key !== lastSnapshotErrorKey) {
         lastSnapshotErrorKey = key
         reportError(error)
@@ -288,7 +390,7 @@ export function createWorkSession({ transport, policy }) {
     }
   }
 
-  function scheduleSnapshots() {
+  function scheduleSnapshots(): void {
     if (disposed || !snapshotIntervalMs || typeof transport.takeSnapshot !== "function") return
     snapshotTimer = setTimer(() => {
       snapshotTimer = null
@@ -297,20 +399,20 @@ export function createWorkSession({ transport, policy }) {
   }
   scheduleSnapshots()
 
-  function onExternalChange(handler) {
+  function onExternalChange(handler: (snapshot: SessionSnapshotNotification) => void): () => void {
     if (typeof handler !== "function") throw new TypeError("onExternalChange requires a handler.")
     externalHandlers.add(handler)
     return () => { externalHandlers.delete(handler) }
   }
 
-  function onStatus(handler) {
+  function onStatus(handler: (status: SessionStatus) => void): () => void {
     if (typeof handler !== "function") throw new TypeError("onStatus requires a handler.")
     statusHandlers.add(handler)
     handler(mapStatus())
     return () => { statusHandlers.delete(handler) }
   }
 
-  async function replaceText(text) {
+  async function replaceText(text: string): Promise<void> {
     if (typeof text !== "string") throw new TypeError("replaceText requires a string.")
     if (disposed) throw new Error("Session is disposed.")
     if (typeof setText !== "function") throw new Error("Session policy does not support replaceText.")
@@ -320,12 +422,12 @@ export function createWorkSession({ transport, policy }) {
     flow.noteChange()
   }
 
-  function applyLocalChange(change) {
+  function applyLocalChange(change: { from?: unknown; to?: unknown; insert?: unknown } | null | undefined): Promise<void> {
     const current = getText()
     const from = change?.from
     const to = change?.to
     const insert = change?.insert
-    if (!Number.isInteger(from) || !Number.isInteger(to) || typeof insert !== "string") {
+    if (typeof from !== "number" || !Number.isInteger(from) || typeof to !== "number" || !Number.isInteger(to) || typeof insert !== "string") {
       throw new TypeError("applyLocalChange requires { from, to, insert }.")
     }
     if (from < 0 || to < from || to > current.length) {
@@ -334,7 +436,7 @@ export function createWorkSession({ transport, policy }) {
     return replaceText(current.slice(0, from) + insert + current.slice(to))
   }
 
-  async function flush(options) {
+  async function flush(options?: { force?: boolean }): Promise<SessionFlushResult> {
     const before = baseline
     const ok = await flow.flush(options || {})
     if (disposed) {
@@ -364,7 +466,7 @@ export function createWorkSession({ transport, policy }) {
     return { kind: baseline === before ? "clean" : "saved", baseline: { revision: baseline } }
   }
 
-  function dispose() {
+  function dispose(): void {
     if (disposed) return
     disposed = true
     clearTimer(pollTimer)
@@ -399,16 +501,18 @@ export function createWorkSession({ transport, policy }) {
     get saving() { return flow.saving },
     get canRestoreDraft() { return flow.canRestoreDraft },
     get discardedDraftCount() { return flow.discardedDraftCount },
-    noteChange: (...args) => flow.noteChange(...args),
-    pause: () => flow.pause(),
-    resume: () => flow.resume(),
-    handleConflict: (...args) => flow.handleConflict(...args),
-    useDiskVersion: (...args) => flow.useDiskVersion(...args),
-    keepLocalVersion: (...args) => flow.keepLocalVersion(...args),
-    saveMergedVersion: (...args) => flow.saveMergedVersion(...args),
-    restoreDraft: (...args) => flow.restoreDraft(...args),
+    noteChange: flow.noteChange,
+    pause: flow.pause,
+    resume: flow.resume,
+    handleConflict: flow.handleConflict,
+    useDiskVersion: flow.useDiskVersion,
+    keepLocalVersion: flow.keepLocalVersion,
+    saveMergedVersion: flow.saveMergedVersion,
+    restoreDraft: flow.restoreDraft,
     // Test seam: lets e2e prove the periodic-snapshot run path without
     // waiting out the five-minute cadence in real time.
     runSnapshotCadence
   }
 }
+
+export type WorkSession = ReturnType<typeof createWorkSession>

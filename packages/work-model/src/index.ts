@@ -43,6 +43,7 @@ export {
   exciseRange,
   exciseRanges,
   expandSnippet,
+  findPositionCloseAfter,
   insertAlignDirective,
   insertBlock,
   mediaInsertText,

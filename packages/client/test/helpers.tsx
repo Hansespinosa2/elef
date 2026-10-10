@@ -3,6 +3,10 @@ import { parseHTML } from "linkedom";
 
 // React reads the testing flag from the global scope, not the environment.
 (globalThis as Record<string, unknown>)["IS_REACT_ACT_ENVIRONMENT"] = true;
+// tests/host-conformance is outside this package (an untyped JS seam owned
+// by the conformance suite); allowJs:false cannot see declarations for it,
+// so the missing-declaration error is suppressed at this single import.
+// @ts-ignore: untyped cross-package JS seam (see above)
 import { createFakeHost } from "../../../tests/host-conformance/adapters/fake-host.js";
 import { mountElef } from "../src/index.js";
 import type { ElefHost, ElefMountOptions } from "../src/index.js";

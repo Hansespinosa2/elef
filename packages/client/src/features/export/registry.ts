@@ -6,7 +6,17 @@
 // hosts. The `.elef` transfer port remains the separate TransferPort concern
 // (P07-03); it is declared here only so capability checks converge.
 
-export const EXPORT_FORMATS = [
+export interface ExportFormat {
+  id: string
+  label: string
+  kinds: Array<string>
+  hosts: Array<string>
+  engine: string
+  model?: string
+  via?: string
+}
+
+export const EXPORT_FORMATS: Array<ExportFormat> = [
   {
     id: "pptx",
     label: "PowerPoint (.pptx)",
@@ -43,13 +53,13 @@ export const EXPORT_FORMATS = [
   },
 ]
 
-export function exportFormatsFor({ kind, host } = {}) {
+export function exportFormatsFor({ kind, host }: { kind?: string; host?: string } = {}): Array<ExportFormat> {
   return EXPORT_FORMATS.filter(
     (format) =>
       (!kind || format.kinds.includes(kind)) && (!host || format.hosts.includes(host))
   )
 }
 
-export function exportFormatById(id) {
+export function exportFormatById(id: string): ExportFormat | null {
   return EXPORT_FORMATS.find((format) => format.id === id) ?? null
 }

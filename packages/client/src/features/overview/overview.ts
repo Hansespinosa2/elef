@@ -4,8 +4,54 @@
 // lifecycle and actions. The web Stimulus controller is the thin adapter.
 import { caretAfterInsert } from "../../session/source_ops.js"
 
+export interface OverviewEditor {
+  value: string
+  commitSource?(source: string, options?: { caret?: number }): unknown
+  replaceRange(replacement: string, from: number, to: number): void
+  focus(): void
+}
+
+export interface SlideOverviewTargets {
+  grid?: Element | null
+  count?: Element | null
+  warnings?: Element | null
+}
+
+export interface SlideOverviewOptions {
+  element?: Element | null
+  targets?: SlideOverviewTargets
+  preview?: Element | null
+  editorProvider?: (() => OverviewEditor | null) | null
+}
+
+export interface OverviewSelectEvent {
+  currentTarget?: EventTarget | null | undefined
+  target?: EventTarget | null | undefined
+}
+
+interface ThumbnailEntry {
+  card: Element
+  frame: Element
+}
+
 export class SlideOverview {
-  constructor({ element, targets = {}, preview = null, editorProvider = null } = {}) {
+  element: Element | null
+  gridTarget: Element | null
+  hasGridTarget: boolean
+  countTarget: Element | null
+  warningsTarget: Element | null
+  preview: Element | null
+  editorProvider: (() => OverviewEditor | null) | null
+  selectedIndex: number
+  projectionPending: boolean
+  installedSource: string | undefined
+  mediaLoaded: (() => void) | undefined
+  previewObserver: ResizeObserver | null | undefined
+  thumbnailObserver: IntersectionObserver | null | undefined
+  thumbnailFrames: Map<Element, Element> | undefined
+  measurementFrame: number | undefined
+
+  constructor({ element, targets = {}, preview = null, editorProvider = null }: SlideOverviewOptions = {}) {
     this.element = element ?? null
     this.gridTarget = targets.grid ?? null
     this.hasGridTarget = Boolean(targets.grid)
@@ -17,7 +63,7 @@ export class SlideOverview {
     this.projectionPending = false
   }
 
-  connect() {
+  connect(): void {
     this.selectedIndex = 0
     this.projectionPending = false
     this.installedSource = this.source
@@ -38,61 +84,64 @@ export class SlideOverview {
     }
   }
 
-  disconnect() {
+  disconnect(): void {
     this.previewObserver?.disconnect()
     this.thumbnailObserver?.disconnect()
     this.thumbnailFrames?.clear()
-    this.preview?.removeEventListener("load", this.mediaLoaded, true)
-    this.preview?.removeEventListener("loadeddata", this.mediaLoaded, true)
-    if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.measurementFrame)
+    if (this.mediaLoaded) {
+      this.preview?.removeEventListener("load", this.mediaLoaded, true)
+      this.preview?.removeEventListener("loadeddata", this.mediaLoaded, true)
+    }
+    if (typeof cancelAnimationFrame === "function" && this.measurementFrame !== undefined) cancelAnimationFrame(this.measurementFrame)
   }
 
-  sourceChanged() {
+  sourceChanged(): void {
     this.projectionPending = this.source !== this.installedSource
     if (this.countTarget) this.countTarget.textContent = `${this.sourceRanges().length} slides`
     this.renderOverview()
   }
 
-  previewUpdated() {
+  previewUpdated(): void {
     this.installedSource = this.source
     this.projectionPending = false
     this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.sourceRanges().length - 1))
     this.scheduleMeasurement()
   }
 
-  select(event) {
+  select(event: OverviewSelectEvent): void {
     if (this.projectionPending) return
 
     // Stimulus dispatches with the card as currentTarget; neutral host
     // bindings delegate natively, so resolve the card from the event target.
-    const card = event.currentTarget?.dataset?.slideIndex !== undefined
-      ? event.currentTarget
-      : event.target?.closest?.("[data-editor-action='overview-select']")
+    const currentTarget = event.currentTarget as HTMLElement | null | undefined
+    const card = currentTarget?.dataset?.slideIndex !== undefined
+      ? currentTarget
+      : (event.target as Element | null | undefined)?.closest?.("[data-editor-action='overview-select']") as HTMLElement | null | undefined
     if (!card) return
     this.selectCard(card)
   }
 
-  selectCard(card) {
+  selectCard(card: HTMLElement): void {
     this.selectedIndex = Number(card?.dataset.slideIndex || 0)
-    if (this.element) this.element.dataset.selectedSlideIndex = String(this.selectedIndex)
+    if (this.element) (this.element as HTMLElement).dataset.selectedSlideIndex = String(this.selectedIndex)
     this.renderOverview()
     const frame = this.preview?.querySelectorAll(".slide-frame")[this.selectedIndex]
     frame?.scrollIntoView({ block: "nearest", behavior: "smooth" })
   }
 
-  add() {
+  add(): void {
     const slides = this.slideBodies()
     slides.splice(this.selectedIndex + 1, 0, "")
     this.applySlides(slides, this.selectedIndex + 1)
   }
 
-  duplicate() {
+  duplicate(): void {
     const slides = this.slideBodies()
-    slides.splice(this.selectedIndex + 1, 0, slides[this.selectedIndex])
+    slides.splice(this.selectedIndex + 1, 0, slides[this.selectedIndex] as string)
     this.applySlides(slides, this.selectedIndex + 1)
   }
 
-  delete() {
+  delete(): void {
     const slides = this.slideBodies()
     if (slides.length === 1) {
       slides[0] = ""
@@ -103,28 +152,28 @@ export class SlideOverview {
     this.applySlides(slides, Math.min(this.selectedIndex, slides.length - 1))
   }
 
-  moveUp() {
+  moveUp(): void {
     this.move(-1)
   }
 
-  moveDown() {
+  moveDown(): void {
     this.move(1)
   }
 
-  move(distance) {
+  move(distance: number): void {
     const slides = this.slideBodies()
     const target = this.selectedIndex + distance
     if (target < 0 || target >= slides.length) return
-    ;[slides[this.selectedIndex], slides[target]] = [slides[target], slides[this.selectedIndex]]
+    ;[slides[this.selectedIndex], slides[target]] = [slides[target] as string, slides[this.selectedIndex] as string]
     this.applySlides(slides, target)
   }
 
-  slideBodies(source = this.source) {
+  slideBodies(source: string = this.source): Array<string> {
     const ranges = this.sourceRanges(source)
     return ranges.map(({ start, end }) => source.slice(start, end))
   }
 
-  applySlides(slides, selectedIndex) {
+  applySlides(slides: Array<string>, selectedIndex: number): void {
     if (this.projectionPending) return
 
     const source = this.source
@@ -146,24 +195,25 @@ export class SlideOverview {
       editor.replaceRange(body, bodyStart, source.length)
     }
     this.selectedIndex = selectedIndex
-    if (this.element) this.element.dataset.selectedSlideIndex = String(selectedIndex)
+    if (this.element) (this.element as HTMLElement).dataset.selectedSlideIndex = String(selectedIndex)
     this.renderOverview()
     editor.focus()
   }
 
-  renderOverview() {
+  renderOverview(): void {
     if (!this.hasGridTarget || !this.gridTarget) return
     recordPreviewTrace("slide-overview-render-start")
     const count = this.sourceRanges().length
     const frames = [...(this.preview?.querySelectorAll(".slide-frame") || [])]
-    const focusedIndex = this.gridTarget.contains(globalThis.document?.activeElement)
-      ? Number(globalThis.document.activeElement.dataset.slideIndex)
+    const activeElement = globalThis.document?.activeElement
+    const focusedIndex = activeElement && this.gridTarget.contains(activeElement)
+      ? Number((activeElement as HTMLElement).dataset.slideIndex)
       : null
     this.thumbnailObserver?.disconnect()
     this.thumbnailFrames = new Map()
     this.gridTarget.replaceChildren()
 
-    const thumbnailCards = []
+    const thumbnailCards: Array<Element> = []
     for (let index = 0; index < count; index += 1) {
       const frame = frames[index]
       const title = frame?.querySelector("h1, h2, h3, h4, .empty-slide")?.textContent?.trim() || `Slide ${index + 1}`
@@ -196,24 +246,25 @@ export class SlideOverview {
     if (this.countTarget) this.countTarget.textContent = `${count} ${count === 1 ? "slide" : "slides"}`
     this.updateActionAvailability(count)
     recordPreviewTrace("slide-overview-render-ready")
-    if (Number.isInteger(focusedIndex)) this.gridTarget.querySelector(`[data-slide-index="${focusedIndex}"]`)?.focus()
+    if (Number.isInteger(focusedIndex)) (this.gridTarget.querySelector(`[data-slide-index="${focusedIndex}"]`) as HTMLElement | null)?.focus()
 
     if (typeof IntersectionObserver === "function") {
-      this.thumbnailObserver = new IntersectionObserver(entries => {
+      const observer = new IntersectionObserver(entries => {
         const visibleCards = entries
           .filter(entry => entry.isIntersecting)
-          .map(entry => ({ card: entry.target, frame: this.thumbnailFrames.get(entry.target) }))
-          .filter(entry => entry.frame)
-        visibleCards.forEach(({ card }) => this.thumbnailObserver?.unobserve(card))
+          .map(entry => ({ card: entry.target, frame: this.thumbnailFrames?.get(entry.target) }))
+          .filter((entry): entry is ThumbnailEntry => Boolean(entry.frame))
+        visibleCards.forEach(({ card }) => observer.unobserve(card))
         this.renderVisibleThumbnails(visibleCards)
       }, { root: this.gridTarget, rootMargin: "80px" })
-      thumbnailCards.forEach(card => this.thumbnailObserver.observe(card))
+      this.thumbnailObserver = observer
+      thumbnailCards.forEach(card => observer.observe(card))
     } else {
-      this.renderVisibleThumbnails(thumbnailCards.map(card => ({ card, frame: this.thumbnailFrames.get(card) })))
+      this.renderVisibleThumbnails(thumbnailCards.map(card => ({ card, frame: this.thumbnailFrames?.get(card) as Element })))
     }
   }
 
-  renderVisibleThumbnails(entries) {
+  renderVisibleThumbnails(entries: Array<ThumbnailEntry>): void {
     if (!entries.length) return
     recordPreviewTrace("slide-overview-scale-start")
     for (const { card, frame } of entries) {
@@ -230,21 +281,20 @@ export class SlideOverview {
         element.removeAttribute("data-editor-region-id")
       })
       clone.querySelectorAll("a, button, input, video").forEach(element => {
-        element.tabIndex = -1
+        ;(element as HTMLElement).tabIndex = -1
         if (element instanceof globalThis.HTMLVideoElement) element.controls = false
       })
-      const thumbnail = card.querySelector(".slide-overview-thumbnail")
+      const thumbnail = card.querySelector(".slide-overview-thumbnail") as Element
       thumbnail.classList.remove("is-loading")
       thumbnail.append(clone)
     }
-    const clones = entries.map(({ card }) => card.querySelector(".slide-overview-thumbnail > .slide-frame"))
-    const scales = clones.map(frame => frame.clientWidth / 1280)
-    clones.forEach((frame, index) => frame.style.setProperty("--slide-scale", scales[index]))
+    const clones = entries.map(({ card }) => card.querySelector(".slide-overview-thumbnail > .slide-frame") as HTMLElement)
+    clones.forEach((frame) => frame.style.setProperty("--slide-scale", String(frame.clientWidth / 1280)))
     recordPreviewTrace("slide-overview-scale-ready")
   }
 
-  scheduleMeasurement() {
-    if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(this.measurementFrame)
+  scheduleMeasurement(): void {
+    if (typeof cancelAnimationFrame === "function" && this.measurementFrame !== undefined) cancelAnimationFrame(this.measurementFrame)
     if (typeof requestAnimationFrame === "function") {
       this.measurementFrame = requestAnimationFrame(() => this.measureOverflow())
     } else {
@@ -252,7 +302,7 @@ export class SlideOverview {
     }
   }
 
-  measureOverflow() {
+  measureOverflow(): void {
     recordPreviewTrace("slide-overflow-start")
     const frames = [...(this.preview?.querySelectorAll(".slide-frame") || [])]
     const measurements = frames.map((frame, index) => {
@@ -265,7 +315,7 @@ export class SlideOverview {
         overflowing: slide.scrollHeight > slide.clientHeight + 4 || slide.scrollWidth > slide.clientWidth + 4
       }
     })
-    const messages = []
+    const messages: Array<string> = []
     measurements.forEach(measurement => {
       if (!measurement) return
       const { frame, slide, index, overflowing } = measurement
@@ -280,18 +330,19 @@ export class SlideOverview {
       item.textContent = message
       this.warningListTarget.append(item)
     })
-    if (this.warningsTarget) this.warningsTarget.hidden = messages.length === 0
+    if (this.warningsTarget) (this.warningsTarget as HTMLElement).hidden = messages.length === 0
     this.renderOverview()
     recordPreviewTrace("slide-overflow-ready")
   }
 
-  get warningListTarget() {
-    return this.warningsTarget.querySelector("ul")
+  get warningListTarget(): Element {
+    return this.warningsTarget?.querySelector("ul") as Element
   }
 
-  updateActionAvailability(count) {
-    const buttons = this.element?.querySelectorAll(".slide-overview-actions button") ?? []
+  updateActionAvailability(count: number): void {
+    const buttons = [...(this.element?.querySelectorAll(".slide-overview-actions button") ?? [])] as Array<HTMLButtonElement>
     const [add, duplicate, remove, up, down] = buttons
+    if (!add || !duplicate || !remove || !up || !down) return
     add.disabled = this.projectionPending
     duplicate.disabled = this.projectionPending || count === 0
     remove.disabled = this.projectionPending || count === 0
@@ -299,7 +350,7 @@ export class SlideOverview {
     down.disabled = this.projectionPending || this.selectedIndex >= count - 1
   }
 
-  sourceRanges(source = this.source) {
+  sourceRanges(source: string = this.source): Array<{ start: number; end: number }> {
     const lines = this.sourceLines(source)
     const firstLine = lines[0]
     const opensFrontMatter = firstLine && firstLine.text.replace(/^\uFEFF/, "").replace(/[ \t]+$/, "") === "---"
@@ -307,20 +358,21 @@ export class SlideOverview {
     if (opensFrontMatter) {
       const closingIndex = lines.findIndex((line, index) => index > 0 && line.text.replace(/[ \t]+$/, "") === "---")
       const hasMetadata = lines.slice(1, closingIndex).some((line) => /^[A-Za-z_][\w-]*\s*:/.test(line.text))
-      if (closingIndex > 0 && hasMetadata) bodyStart = lines[closingIndex].end
+      if (closingIndex > 0 && hasMetadata) bodyStart = lines[closingIndex]?.end ?? bodyStart
     }
 
-    const ranges = []
+    const ranges: Array<{ start: number; end: number }> = []
     let slideStart = bodyStart
-    let fence = null
+    let fence: { marker: string; length: number; closing: boolean } | null = null
     lines.forEach((line) => {
       if (line.end <= bodyStart) return
       const incoming = line.text.match(/^[ \t]{0,3}(`{3,}|~{3,})(.*)$/)
       if (incoming) {
+        const [, markerText = "", restText = ""] = incoming
         const nextFence = {
-          marker: incoming[1][0],
-          length: incoming[1].length,
-          closing: /^[ \t]*$/.test(incoming[2])
+          marker: markerText[0] ?? "",
+          length: markerText.length,
+          closing: /^[ \t]*$/.test(restText)
         }
         if (!fence) fence = nextFence
         else if (fence.marker === nextFence.marker && nextFence.length >= fence.length && nextFence.closing) fence = null
@@ -334,8 +386,8 @@ export class SlideOverview {
     return ranges
   }
 
-  sourceLines(source) {
-    const lines = []
+  sourceLines(source: string): Array<{ start: number; end: number; text: string }> {
+    const lines: Array<{ start: number; end: number; text: string }> = []
     let cursor = 0
     while (cursor < source.length) {
       const start = cursor
@@ -351,22 +403,24 @@ export class SlideOverview {
     return lines
   }
 
-  lineEnding(source) {
+  lineEnding(source: string): string {
     return source.match(/\r\n|\r|\n/)?.[0] || "\n"
   }
 
-  get editor() {
+  get editor(): OverviewEditor | null {
     if (typeof this.editorProvider === "function") return this.editorProvider()
-    return this.element?.querySelector("[data-controller~='editor']")?.editorController ?? null
+    const host = this.element?.querySelector("[data-controller~='editor']") as (Element & { editorController?: OverviewEditor | null }) | null | undefined
+    return host?.editorController ?? null
   }
 
-  get source() {
-    return this.editor?.value ?? this.element?.querySelector('[name$="[source]"]')?.value ?? ""
+  get source(): string {
+    const field = this.element?.querySelector('[name$="[source]"]') as HTMLTextAreaElement | null | undefined
+    return this.editor?.value ?? field?.value ?? ""
   }
 }
 
-function recordPreviewTrace(stage) {
-  const trace = globalThis.__elefPreviewTrace
+function recordPreviewTrace(stage: string): void {
+  const trace = (globalThis as unknown as { __elefPreviewTrace?: unknown }).__elefPreviewTrace
   if (!Array.isArray(trace)) return
   trace.push({ time: performance.now(), stage })
   if (trace.length > 512) trace.shift()

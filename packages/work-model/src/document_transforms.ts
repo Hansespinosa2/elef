@@ -166,6 +166,16 @@ export function blockOperationStart(
   return directive?.range?.start ?? range.start
 }
 
+// The single position_close lookup rule (F6): the first closing directive
+// after a directive index. Both client editors share it through
+// blockOperationRange (span math) or directly (directive excision).
+export function findPositionCloseAfter(
+  directives: TransformDirective[] | null | undefined,
+  directiveIndex: number
+): TransformDirective | undefined {
+  return (directives || []).slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
+}
+
 // Shared block-operation span (F6): the source range a block-level operation
 // (remove, empty-block cleanup) must cover, including the single-block
 // directive or — for a lone group member — the whole directive pair. Both
@@ -186,13 +196,11 @@ export function blockOperationRange(
       const directives = slide.directives || []
       const directiveIndex = directives.findIndex((candidate) => candidate.id === block.position_directive_id)
       const directive = directiveIndex >= 0 ? directives[directiveIndex] : undefined
-      const closing = directives.slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
-      const directiveRange = directive?.range
-      const closingRange = closing?.range
-      if (directiveRange && closingRange) {
-        from = directiveRange.start
-        to = closingRange.end
-      }
+      const closing = findPositionCloseAfter(directives, directiveIndex)
+      // Independent halves: a found opener extends the span even when its
+      // closer is missing (malformed input still cleans up the orphan).
+      if (directive?.range) from = directive.range.start
+      if (closing?.range) to = closing.range.end
     }
   }
 

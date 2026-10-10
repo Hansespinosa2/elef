@@ -1,3 +1,5 @@
+import type { EditorAdapterSetMeta } from "./editor_adapter.js"
+
 const MAX_DISCARDED_DRAFTS = 10
 const RETRY_DELAYS = [1_000, 3_000, 10_000, 30_000]
 // Clean fast-path pre-gate. Mirrors is_suspicious_external_change in
@@ -8,7 +10,110 @@ const RETRY_DELAYS = [1_000, 3_000, 10_000, 30_000]
 // this only decides whether the cheap call-free reload may run.
 const SUSPICIOUS_MIN_LOCAL_CHARS = 200
 
-function isSuspiciousExternalChange(local, external) {
+export interface SaveDeck {
+  id: string
+  content_hash: string
+  source: string
+  source_file?: string | undefined
+  savedSnapshot?: string
+}
+
+export interface SaveSourceResult {
+  content_hash: string
+  source?: unknown
+  snapshot?: unknown
+}
+
+export interface ConflictSnapshotInput {
+  source?: unknown
+  source_file?: string | undefined
+}
+
+export interface ConflictDetailsInput {
+  current?: ConflictSnapshotInput
+  disk_hash?: unknown
+  message?: unknown
+  recovery_revision_id?: unknown
+}
+
+export interface SaveConflict {
+  id: string
+  diskHash: string
+  diskSnapshot: string
+  diskSource: string
+  diskSourceFile?: string | undefined
+  localSource: string
+  current: unknown
+  message: unknown
+  recovery_revision_id: unknown
+}
+
+export interface ExternalSnapshot {
+  source: string
+  content_hash: string
+  source_file?: string | undefined
+}
+
+export interface MergeOutcome {
+  kind: string
+  source?: unknown
+}
+
+export interface SaveFlowStatus {
+  dirty: boolean
+  blocked: boolean
+  conflict: SaveConflict | null
+  discardedDrafts: number
+  canRestoreDraft: boolean
+}
+
+// Thrown transport/host values are untyped by contract; every read below is
+// optional-chained exactly like the JavaScript, so any value behaves
+// identically and only the type changes.
+export interface TransportFailure {
+  code?: unknown
+  message?: unknown
+  details?: unknown
+  retryable?: unknown
+}
+
+export function asTransportFailure(error: unknown): TransportFailure {
+  return (error ?? {}) as TransportFailure
+}
+
+export interface SaveFlowOptions {
+  saveSource(id: string, source: string, options: { snapshot: string }): Promise<SaveSourceResult>
+  acceptDiskVersion(id: string, contentHash: string): void
+  mergeExternalChange?: ((id: string, localSource: string) => Promise<MergeOutcome | null | undefined>) | null
+  takeSnapshot?: ((id: string, reason: string, source?: string) => Promise<unknown>) | null
+  getSource(): string
+  getSnapshot?: () => string
+  setSource(source: string, meta: EditorAdapterSetMeta): boolean | Promise<boolean>
+  getConflictSnapshot?: (details: ConflictDetailsInput) => string
+  getConflictBaseline?: (details: ConflictDetailsInput) => unknown
+  isValidConflictBaseline?: (value: unknown) => boolean
+  saveDelay?: number
+  onState?: (state: string, details: SaveFlowStatus) => void
+  onConflict?: (conflict: SaveConflict) => void
+  onError?: (error: unknown) => void
+  materializeEdits?: () => void
+  setTimer?: typeof setTimeout
+  clearTimer?: typeof clearTimeout
+  maxDiscardedDrafts?: number
+}
+
+// Last index whose item matches, or -1. The shared tsconfig targets ES2022
+// (whose lib lacks Array.findLastIndex), so the scan is explicit; the dense
+// drafts array visits identically to the native method.
+function findLastIndexWhere<T>(items: ReadonlyArray<T>, predicate: (item: T) => boolean): number {
+  for (let index = items.length - 1; index >= 0; index -= 1) {
+    const item = items[index]
+    if (item !== undefined && predicate(item)) return index
+  }
+  return -1
+}
+
+function isSuspiciousExternalChange(local: unknown, external: unknown): boolean {
   const localText = typeof local === "string" ? local : ""
   const externalText = typeof external === "string" ? external : ""
   if (externalText === "") {
@@ -31,35 +136,40 @@ export function createSaveFlow({
   setSource,
   getConflictSnapshot = details => typeof details.current?.source === "string" ? details.current.source : getSnapshot(),
   getConflictBaseline = details => details.disk_hash,
-  isValidConflictBaseline = value => /^[a-f\d]{64}$/i.test(value || ""),
+  isValidConflictBaseline = value => /^[a-f\d]{64}$/i.test(String(value || "")),
   saveDelay = 650,
   onState = () => {},
   onConflict = () => {},
   onError = () => {},
   materializeEdits = () => {},
   setTimer = setTimeout,
-  clearTimer = clearTimeout,
+  clearTimer: clearTimerOption = clearTimeout,
   maxDiscardedDrafts = MAX_DISCARDED_DRAFTS
-}) {
-  let activeDeck = null
-  let activeConflict = null
+}: SaveFlowOptions) {
+  // Nullable handles clear as undefined: every host clearTimeout (and the
+  // unit-test fakes) treats both as a no-op, exactly like before.
+  const clearTimer = (timer: ReturnType<typeof setTimeout> | null): void => {
+    clearTimerOption(timer ?? undefined)
+  }
+  let activeDeck: SaveDeck | null = null
+  let activeConflict: SaveConflict | null = null
   let dirty = false
   let blocked = false
-  let blockedSnapshot = null
+  let blockedSnapshot: string | null = null
   let paused = false
-  let saveWorker = null
-  let sourceMutation = null
+  let saveWorker: Promise<boolean> | null = null
+  let sourceMutation: object | null = null
   let revision = 0
-  let saveTimer = null
-  let retryTimer = null
+  let saveTimer: ReturnType<typeof setTimeout> | null = null
+  let retryTimer: ReturnType<typeof setTimeout> | null = null
   let retryAttempt = 0
-  const discardedDrafts = []
+  const discardedDrafts: Array<{ id: string; source: string }> = []
 
-  function setStatus(value) {
+  function setStatus(value: string): void {
     onState(value, { dirty: dirty || Boolean(sourceMutation), blocked, conflict: activeConflict, discardedDrafts: discardedDrafts.length, canRestoreDraft: discardedDrafts.some(draft => draft.id === activeDeck?.id) })
   }
 
-  function schedule(delay = saveDelay) {
+  function schedule(delay: number = saveDelay): void {
     if (!activeDeck || activeConflict) return
     if (!saveWorker && getSnapshot() === activeDeck.savedSnapshot) {
       dirty = false
@@ -83,13 +193,14 @@ export function createSaveFlow({
     }, delay)
   }
 
-  function rememberDraft(source) {
+  function rememberDraft(source: string): void {
+    if (!activeDeck) return
     discardedDrafts.push({ id: activeDeck.id, source })
     while (discardedDrafts.length > Math.max(0, maxDiscardedDrafts)) discardedDrafts.shift()
     setStatus("Saved external version")
   }
 
-  function handleConflict({ id, details = {} }) {
+  function handleConflict({ id, details = {} }: { id: string; details?: ConflictDetailsInput }): boolean | undefined {
     if (activeDeck?.id !== id) return
     const diskSource = typeof details.current?.source === "string" ? details.current.source : ""
     const diskHash = getConflictBaseline(details)
@@ -103,7 +214,7 @@ export function createSaveFlow({
     }
     activeConflict = {
       id,
-      diskHash,
+      diskHash: diskHash as string,
       diskSnapshot: getConflictSnapshot(details),
       diskSource,
       diskSourceFile: details.current?.source_file || activeDeck.source_file,
@@ -122,7 +233,7 @@ export function createSaveFlow({
     return true
   }
 
-  async function checkExternalChange(id, snapshot) {
+  async function checkExternalChange(id: string, snapshot: ExternalSnapshot): Promise<string> {
     if (!activeDeck || activeDeck.id !== id) return "inactive"
     materializeEdits()
     if (sourceMutation) return "busy"
@@ -187,7 +298,7 @@ export function createSaveFlow({
     return "reloaded"
   }
 
-  async function resolveExternalChange(id, snapshot) {
+  async function resolveExternalChange(id: string, snapshot: ExternalSnapshot): Promise<string> {
     if (!activeDeck || activeDeck.id !== id) return "inactive"
     materializeEdits()
     if (sourceMutation) return "busy"
@@ -212,7 +323,7 @@ export function createSaveFlow({
     if (wasClean && !isSuspiciousExternalChange(localSource, snapshot.source)) {
       return checkExternalChange(id, snapshot)
     }
-    const conflictUnverifiable = () => {
+    const conflictUnverifiable = (): string => {
       handleConflict({
         id,
         details: {
@@ -230,7 +341,7 @@ export function createSaveFlow({
       if (wasClean) return conflictUnverifiable()
       return checkExternalChange(id, snapshot)
     }
-    let outcome
+    let outcome: MergeOutcome | null | undefined
     try {
       outcome = await mergeExternalChange(id, localSource)
     } catch (error) {
@@ -260,7 +371,7 @@ export function createSaveFlow({
     return "merged"
   }
 
-  async function flush({ force = false } = {}) {
+  async function flush({ force = false }: { force?: boolean } = {}): Promise<boolean> {
     if (sourceMutation) return false
     clearTimer(saveTimer)
     saveTimer = null
@@ -281,7 +392,7 @@ export function createSaveFlow({
 
     saveWorker = (async () => {
       while (activeDeck && dirty && !activeConflict && !sourceMutation) {
-        const deck = activeDeck
+        const deck: SaveDeck = activeDeck
         const source = getSource()
         const snapshot = getSnapshot()
         setStatus("Saving…")
@@ -299,15 +410,16 @@ export function createSaveFlow({
           setStatus(dirty ? "Unsaved changes" : "Saved")
         } catch (error) {
           dirty = true
-          if (error?.code === "conflict") {
-            if (!activeConflict && !handleConflict({ id: deck.id, details: error.details })) {
+          const failure = asTransportFailure(error)
+          if (failure.code === "conflict") {
+            if (!activeConflict && !handleConflict({ id: deck.id, details: (failure.details ?? {}) as ConflictDetailsInput })) {
               blocked = true
               setStatus("Save blocked · retry manually")
             }
             return false
           }
           onError(error)
-          if (error?.retryable !== true) {
+          if (failure.retryable !== true) {
             if (getSnapshot() !== snapshot) {
               blocked = false
               blockedSnapshot = null
@@ -319,7 +431,7 @@ export function createSaveFlow({
             return false
           }
           setStatus("Save failed")
-          const retryDelay = RETRY_DELAYS[Math.min(retryAttempt, RETRY_DELAYS.length - 1)]
+          const retryDelay = RETRY_DELAYS[Math.min(retryAttempt, RETRY_DELAYS.length - 1)] ?? 30_000
           retryAttempt += 1
           if (!retryTimer && activeDeck === deck) {
             retryTimer = setTimer(() => {
@@ -342,7 +454,7 @@ export function createSaveFlow({
     }
   }
 
-  function activate(deck) {
+  function activate(deck: SaveDeck): void {
     revision += 1
     clearTimer(saveTimer)
     clearTimer(retryTimer)
@@ -359,7 +471,7 @@ export function createSaveFlow({
     setStatus("Saved")
   }
 
-  function noteChange(delay) {
+  function noteChange(delay?: number): void {
     revision += 1
     if (blocked && blockedSnapshot !== null && getSnapshot() !== blockedSnapshot) {
       blocked = false
@@ -368,19 +480,19 @@ export function createSaveFlow({
     schedule(delay)
   }
 
-  function pause() {
+  function pause(): void {
     paused = true
     clearTimer(saveTimer)
     saveTimer = null
   }
 
-  function resume() {
+  function resume(): void {
     if (!paused) return
     paused = false
     if (dirty && !activeConflict) schedule(0)
   }
 
-  async function applySource(source, deck, options = {}) {
+  async function applySource(source: string, deck: SaveDeck, options: { preserveMetadata?: boolean } = {}): Promise<boolean> {
     if (sourceMutation) return false
     const token = {}
     sourceMutation = token
@@ -395,7 +507,7 @@ export function createSaveFlow({
     }
   }
 
-  async function useDiskVersion() {
+  async function useDiskVersion(): Promise<boolean> {
     if (!activeConflict || !activeDeck || sourceMutation) return false
     materializeEdits()
     const conflict = activeConflict
@@ -415,7 +527,7 @@ export function createSaveFlow({
     return true
   }
 
-  function keepLocalVersion() {
+  function keepLocalVersion(): boolean {
     if (!activeConflict || !activeDeck || sourceMutation) return false
     materializeEdits()
     const conflict = activeConflict
@@ -432,7 +544,7 @@ export function createSaveFlow({
     return true
   }
 
-  async function saveMergedVersion(mergedSource) {
+  async function saveMergedVersion(mergedSource: string): Promise<boolean> {
     if (!activeConflict || !activeDeck || sourceMutation) return false
     materializeEdits()
     const conflict = activeConflict
@@ -451,13 +563,14 @@ export function createSaveFlow({
     return true
   }
 
-  async function restoreDraft() {
+  async function restoreDraft(): Promise<boolean> {
     if (!activeDeck || sourceMutation || activeConflict) return false
     materializeEdits()
     const deck = activeDeck
-    const index = discardedDrafts.findLastIndex(draft => draft.id === activeDeck.id)
+    const index = findLastIndexWhere(discardedDrafts, draft => draft.id === deck.id)
     if (index < 0) return false
     const draft = discardedDrafts[index]
+    if (!draft) return false
     if (!(await applySource(draft.source, deck))) {
       if (activeDeck === deck && !activeConflict && (dirty || getSource() !== deck.source)) schedule(0)
       return false
@@ -467,7 +580,7 @@ export function createSaveFlow({
     return true
   }
 
-  function deactivate() {
+  function deactivate(): void {
     revision += 1
     clearTimer(saveTimer)
     clearTimer(retryTimer)
@@ -502,6 +615,11 @@ export function createSaveFlow({
     get blocked() { return blocked },
     get conflict() { return activeConflict },
     get discardedDraftCount() { return discardedDrafts.length },
-    get canRestoreDraft() { return Boolean(activeDeck && discardedDrafts.some(draft => draft.id === activeDeck.id)) }
+    get canRestoreDraft() {
+      const deck = activeDeck
+      return Boolean(deck && discardedDrafts.some(draft => draft.id === deck.id))
+    }
   }
 }
+
+export type SaveFlow = ReturnType<typeof createSaveFlow>

@@ -2,8 +2,8 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
 import { renderPreviewCore } from "@elef/renderer"
-import { editorChrome } from "../../../app/javascript/lib/preview_chrome.js"
-import { installSanitizedPreview } from "../../../app/javascript/lib/preview_sanitizer.js"
+import { editorChrome } from "../../../../../packages/editor-runtime/dist/preview_chrome.js"
+import { sanitizePreview as installSanitizedPreview } from "@elef/client/sanitize"
 import { CASES, runChecks } from "./preview_sanitizer_cases.js"
 
 const renderPreview = input => renderPreviewCore(input, { chrome: editorChrome })

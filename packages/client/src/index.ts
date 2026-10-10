@@ -21,7 +21,7 @@ export { attachCanvasScaling, PresentationController, mountPresentation } from "
 export { PresentationEditor, mountPresentationEditor } from "./features/presentation/editor.js";
 export { DocumentEditor } from "./features/document/document_editor.js";
 export { SlideOverview } from "./features/overview/overview.js";
-export { exportPptxModel, loadPptxLibrary, createPresentation, primaryFont, createRenderStage, slideMarkup, blockMarkup, escapeHtml, prepareMedia, dataUriToBlob, renderSlides, cssLineSpacingMultiple, relativeRect, pixelRectToInches, cssFontSize, cssCharSpacing, colorHex, safeHyperlink, gradientBackground, downloadBlob } from "./features/export/pptx.js";
+export { exportPptxModel, downloadBlob } from "./features/export/pptx.js";
 export { EXPORT_FORMATS, exportFormatsFor, exportFormatById } from "./features/export/registry.js";
 export {
   presentationBlockAttributes,

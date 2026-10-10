@@ -2,10 +2,10 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
-const source = (await readFile(new URL("../../app/javascript/controllers/media_controller.js", import.meta.url), "utf8"))
+const source = (await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/media_controller.js", import.meta.url), "utf8"))
   .replace(/^import\s+{[^}]+}\s+from\s+["']@hotwired\/stimulus["'];?\n/m, "class Controller {}\n")
-  .replace('from "@elef/work-model/document-transforms"', `from "${new URL("../../../../packages/work-model/src/document_transforms.js", import.meta.url).href}"`)
-  .replace('from "lib/editor_actions"', `from "${new URL("../../app/javascript/lib/editor_actions.js", import.meta.url).href}"`)
+  .replace('from "@elef/work-model/document-transforms"', `from "${import.meta.resolve("@elef/work-model/document-transforms")}"`)
+  .replace('from "../lib/editor_actions.js"', `from "${new URL("../../../../packages/editor-runtime/dist/lib/editor_actions.js", import.meta.url).href}"`)
 const mediaModule = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 const { isMediaTransferTypes, urlFromTransfer, imageTypeForFilename } = mediaModule

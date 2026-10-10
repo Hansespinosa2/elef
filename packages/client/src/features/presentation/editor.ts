@@ -14,7 +14,7 @@
 // restoreCaret after mode changes) and clears it on destroy.
 import {
   addSlide as addSlideToSource,
-  blockOperationStart as blockOperationStartInSource,
+  blockOperationRange,
   deleteSlide as deleteSlideFromSource,
   directiveLineSpan,
   exciseRanges,
@@ -24,25 +24,189 @@ import {
   moveSlide as moveSlideInSource,
   parseAlignment,
   removeBlock as removeBlockFromSource
+// @ts-ignore: work-model is still untyped JS (S3 converts it); the ignore goes dormant once its types land.
 } from "@elef/work-model/document-transforms"
 
-function defaultEnv(form) {
+export interface EditorSourceRange {
+  start: number
+  end: number
+}
+
+export interface PresentationEditorBlock {
+  id: string
+  range: EditorSourceRange
+  source_range?: EditorSourceRange
+  content_range?: EditorSourceRange
+  delimiter_range?: EditorSourceRange
+  position_scope?: string
+  position_directive_id?: string
+  position?: { horizontal: string; vertical: string; vertical_explicit?: boolean }
+}
+
+export interface PresentationEditorDirective {
+  id: string
+  type: string
+  range: EditorSourceRange
+  source_range: EditorSourceRange
+  content_range?: EditorSourceRange
+  delimiter_range?: EditorSourceRange
+}
+
+export interface PresentationEditorRegion {
+  id: string
+  block_id?: string
+  kind: string
+  role?: string
+  editable: boolean
+  range?: EditorSourceRange
+  source_range?: EditorSourceRange
+  content_range: EditorSourceRange
+  delimiter_range?: EditorSourceRange
+}
+
+export interface PresentationEditorSlide {
+  range?: EditorSourceRange
+  source_range?: EditorSourceRange
+  content_range?: EditorSourceRange
+  delimiter_range?: EditorSourceRange
+  blocks?: Array<PresentationEditorBlock>
+  directives?: Array<PresentationEditorDirective>
+  editable_regions?: Array<PresentationEditorRegion>
+}
+
+export interface PresentationEditorMap {
+  source_length?: number
+  slides?: Array<PresentationEditorSlide>
+  directives?: Array<PresentationEditorDirective>
+  editable_regions?: Array<PresentationEditorRegion>
+}
+
+export interface PresentationEditorSeam {
+  value: string
+  inputTarget?: unknown
+  commitSource?(source: string): unknown
+  replaceRange(replacement: string, from: number, to: number): void
+  replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
+}
+
+export interface ProjectionEvent {
+  readonly target: EventTarget | null | undefined
+  preventDefault(): void
+}
+
+export interface ProjectionKeyEvent {
+  readonly key: string
+  readonly target: EventTarget | null | undefined
+  preventDefault(): void
+}
+
+export interface PresentationEditorDeps {
+  syncActiveMath(element: Element | null, flush: () => void): void
+  handleMathClick(event: ProjectionEvent, target: Element | null): boolean
+  handleMathKeydown(event: ProjectionKeyEvent, canvas: Element | null, flush: () => void): boolean
+  moveCaretBetweenBlocks(event: ProjectionKeyEvent, canvas: Element | null): boolean
+  visibleOffsetAtPoint(block: Element, node: Node | null, offset: number): number | null
+  sourceOffsetForVisibleOffset(source: string, offset: number): number
+  visibleOffsetForSourceOffset(source: string, offset: number): number
+  pointAtVisibleOffset(block: Element, offset: number): any
+  markdownForVisibleText(source: string, text: string, kind: string, element: Element, options?: { documentMode?: boolean }): string
+  renderInlineMath(element: Element): void
+  setProjectionBlockEditable(block: Element, editable: boolean, label: string): void
+  removeEmptyBlockSource(source: string, from: number, to: number): string
+}
+
+export interface PresentationEditorEnv {
+  confirm(message: string): boolean
+  scheduleFrame(callback: () => void): number | undefined
+  cancelFrame(handle: number): void
+  getSelection(): Selection | null
+  activeElement(): Element | null
+  Node: { ELEMENT_NODE: number }
+}
+
+export interface PresentationEditorHost extends HTMLFormElement {
+  previewController?: { projectionFresh?: boolean } | null
+  presentationEditorController?: PresentationEditor
+}
+
+export interface MountPresentationEditorOptions {
+  deps?: PresentationEditorDeps
+  env?: Partial<PresentationEditorEnv>
+  canvasElement?: Element | null
+  statusElement?: Element | null
+  sourceElement?: Element | null
+  getEditor?: () => PresentationEditorSeam | null
+  isProjectionFresh?: () => boolean
+  editorMap?: PresentationEditorMap | null
+}
+
+interface ProjectionEdit {
+  id: string
+  blockId: string
+  from: number
+  to: number
+  source: string
+  kind: string
+  blockElement: Element
+}
+
+interface ShiftableRanges {
+  range?: EditorSourceRange | undefined
+  source_range?: EditorSourceRange | undefined
+  content_range?: EditorSourceRange | undefined
+  delimiter_range?: EditorSourceRange | undefined
+}
+
+interface EditorRuntimeView {
+  confirm?(message: string): boolean
+  requestAnimationFrame?(callback: () => void): number
+  cancelAnimationFrame?(handle: number): void
+  getSelection?(): Selection | null
+  Node?: { ELEMENT_NODE: number }
+}
+
+function defaultEnv(form: PresentationEditorHost | null): PresentationEditorEnv {
   const doc = form?.ownerDocument ?? globalThis.document
-  const view = doc?.defaultView ?? globalThis
+  const view = (doc?.defaultView ?? globalThis) as unknown as EditorRuntimeView | null | undefined
+  const docSelection = (doc as unknown as { getSelection?(): Selection | null }).getSelection
   return {
     confirm: (message) => globalThis.window?.confirm?.(message) ?? view?.confirm?.(message) ?? false,
     scheduleFrame: (callback) => (view?.requestAnimationFrame ?? globalThis.requestAnimationFrame)?.(callback),
     cancelFrame: (handle) => (view?.cancelAnimationFrame ?? globalThis.cancelAnimationFrame)?.(handle),
-    getSelection: () => view?.getSelection?.() ?? doc?.getSelection?.() ?? null,
+    getSelection: () => view?.getSelection?.() ?? docSelection?.() ?? null,
     activeElement: () => doc?.activeElement ?? null,
     Node: view?.Node ?? globalThis.Node,
   }
 }
 
 export class PresentationEditor {
-  constructor(form, options = {}) {
+  element: PresentationEditorHost
+  deps: PresentationEditorDeps
+  confirm: (message: string) => boolean
+  scheduleFrame: (callback: () => void) => number | undefined
+  cancelFrame: (handle: number) => void
+  getSelection: () => Selection | null
+  activeElement: () => Element | null
+  Node: { ELEMENT_NODE: number }
+  canvasElement: Element | null
+  statusElement: Element | null
+  sourceElement: Element | null
+  getEditor: () => PresentationEditorSeam | null
+  isProjectionFresh: () => boolean
+  editorController: PresentationEditorSeam | null
+  map: PresentationEditorMap | null
+  disposers: Array<() => void>
+  operationPending: boolean
+  updatingSource: boolean
+  pendingProjectionFrame: number | undefined
+  pendingProjectionEdits: Map<string, ProjectionEdit> | undefined
+  activeProjectionBlock: Element | null | undefined
+  lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
+  pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null } | null | undefined
+
+  constructor(form: PresentationEditorHost, options: MountPresentationEditorOptions = {}) {
     this.element = form
-    this.deps = options.deps ?? {}
+    this.deps = (options.deps ?? {}) as PresentationEditorDeps
     const env = { ...defaultEnv(form), ...(options.env ?? {}) }
     this.confirm = env.confirm
     this.scheduleFrame = env.scheduleFrame
@@ -62,7 +226,15 @@ export class PresentationEditor {
     this.operationPending = false
     this.updatingSource = false
 
-    const on = (target, type, handler, capture) => {
+    const on = (
+      target: {
+        addEventListener?(type: string, listener: (event: any) => void, capture?: boolean): void
+        removeEventListener?(type: string, listener: (event: any) => void, capture?: boolean): void
+      } | null | undefined,
+      type: string,
+      handler: (event: any) => void,
+      capture?: boolean
+    ): void => {
       target?.addEventListener?.(type, handler, capture)
       this.disposers.push(() => target?.removeEventListener?.(type, handler, capture))
     }
@@ -102,34 +274,34 @@ export class PresentationEditor {
     this.updateBlockBoundaries()
   }
 
-  destroy() {
+  destroy(): void {
     if (this.pendingProjectionFrame) this.cancelFrame(this.pendingProjectionFrame)
     this.flushPendingProjectionEdits()
     this.disposers.splice(0).forEach((dispose) => dispose())
   }
 
-  canvas() {
+  canvas(): Element | null {
     return (
       this.canvasElement ??
       this.element.querySelector('[data-presentation-editor-target="canvas"]')
     )
   }
 
-  status() {
+  status(): Element | null {
     return (
       this.statusElement ??
       this.element.querySelector('[data-presentation-editor-target="status"]')
     )
   }
 
-  source() {
+  source(): Element | null {
     return (
       this.sourceElement ??
       this.element.querySelector('[data-presentation-editor-target="source"]')
     )
   }
 
-  applyMode(mode) {
+  applyMode(mode: string): void {
     const visual = mode !== "source"
     this.element.dataset.editorMode = visual ? "visual" : "source"
     if (!visual) this.pendingCaretRestore = null
@@ -137,12 +309,12 @@ export class PresentationEditor {
     this.syncProjectionEditability()
   }
 
-  blockFocus(event) {
-    this.activeProjectionBlock = event.target.closest("[data-editor-block-id]")
+  blockFocus(event: ProjectionEvent): void {
+    this.activeProjectionBlock = (event.target as Element).closest("[data-editor-block-id]")
     this.element.dataset.editorProjectionActive = "true"
   }
 
-  blockBlur(_event) {
+  blockBlur(_event: ProjectionEvent): void {
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
     this.flushPendingProjectionEdits()
     this.activeProjectionBlock = null
@@ -150,21 +322,21 @@ export class PresentationEditor {
     this.syncProjectionEditability()
   }
 
-  projectionLinkClicked(event) {
+  projectionLinkClicked(event: ProjectionEvent): void {
     if (this.deps.handleMathClick(event, this.canvas())) return
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
-    const link = event.target.closest?.(".editor-projection [contenteditable='true'] a")
+    const link = (event.target as Element).closest?.(".editor-projection [contenteditable='true'] a")
     if (!link) return
 
     event.preventDefault()
-    link.closest("[contenteditable='true']")?.focus()
+    ;(link.closest("[contenteditable='true']") as HTMLElement | null)?.focus()
   }
 
-  blockInput(event) {
+  blockInput(event: ProjectionEvent): void {
     if (!this.editorController || this.updatingSource) return
-    const blockElement = event.target.closest?.("[data-editor-block-id]")
+    const blockElement = (event.target as Element).closest?.("[data-editor-block-id]")
     if (!blockElement || !this.canEditBlock(blockElement)) return
-    const block = this.findBlock(blockElement.dataset.editorBlockId)
+    const block = this.findBlock((blockElement as HTMLElement).dataset.editorBlockId)
     const region = this.map?.editable_regions?.find((candidate) => candidate.block_id === block?.id)
     if (!block || !region) return
 
@@ -182,27 +354,31 @@ export class PresentationEditor {
     this.scheduleProjectionFlush()
   }
 
-  captureCaret() {
+  captureCaret(): { blockId: string; sourceOffset: number } | null {
     const selection = this.getSelection()
-    const block = selection?.focusNode
-      ? (selection.focusNode.nodeType === this.Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode.parentElement)?.closest?.("[data-editor-block-id]")
+    const focusNode = selection?.focusNode ?? null
+    const container = focusNode
+      ? (focusNode.nodeType === this.Node.ELEMENT_NODE ? focusNode : focusNode.parentElement) as Element | null
       : null
+    const block = container?.closest?.("[data-editor-block-id]") as HTMLElement | null | undefined
     const canvas = this.canvas()
-    const current = block && canvas?.contains(block)
-      ? { blockId: block.dataset.editorBlockId, visibleOffset: this.deps.visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset) }
+    const current: { blockId: string | undefined; visibleOffset: number | null | undefined } | undefined = block && canvas?.contains(block)
+      ? { blockId: block.dataset.editorBlockId, visibleOffset: this.deps.visibleOffsetAtPoint(block, focusNode, selection?.focusOffset ?? 0) }
       : this.lastProjectionCaret
-    if (!current || current.visibleOffset === null || current.visibleOffset === undefined) return null
+    if (!current || current.visibleOffset == null) return null
 
     const region = this.regionForBlock(current.blockId)
     if (!region) return null
-    const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
+    const editor = this.editorController
+    if (!editor) return null
+    const source = editor.value.slice(region.content_range.start, region.content_range.end)
     return {
-      blockId: current.blockId,
+      blockId: current.blockId ?? "",
       sourceOffset: region.content_range.start + this.deps.sourceOffsetForVisibleOffset(source, current.visibleOffset)
     }
   }
 
-  restoreCaret(sourceOffset, preferredBlockId = null) {
+  restoreCaret(sourceOffset: number, preferredBlockId: string | null = null): boolean {
     const canvas = this.canvas()
     if (!canvas || !this.editorController) return false
     const regions = this.allRegions().filter((region) => region.editable)
@@ -213,28 +389,28 @@ export class PresentationEditor {
         const distance = Math.min(Math.abs(sourceOffset - candidate.content_range.start), Math.abs(sourceOffset - candidate.content_range.end))
         const closestDistance = Math.min(Math.abs(sourceOffset - closest.content_range.start), Math.abs(sourceOffset - closest.content_range.end))
         return distance < closestDistance ? candidate : closest
-      }, null)
+      }, null as PresentationEditorRegion | null)
     if (!region) return false
 
     const block = [...canvas.querySelectorAll("[data-editor-block-id]")]
-      .find((candidate) => candidate.dataset.editorBlockId === region.block_id)
+      .find((candidate) => (candidate as HTMLElement).dataset.editorBlockId === region.block_id)
     if (!block) return false
-    if (block.contentEditable !== "true") {
+    if ((block as HTMLElement).contentEditable !== "true") {
       if (this.isProjectionFresh() === false) this.pendingCaretRestore = { sourceOffset, preferredBlockId }
       return false
     }
     const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
     const visibleOffset = this.deps.visibleOffsetForSourceOffset(source, sourceOffset - region.content_range.start)
     const point = this.deps.pointAtVisibleOffset(block, visibleOffset)
-    block.focus({ preventScroll: true })
+    ;(block as HTMLElement).focus({ preventScroll: true })
     this.getSelection()?.setPosition(point[0], point[1])
-    this.lastProjectionCaret = { blockId: region.block_id, visibleOffset }
+    this.lastProjectionCaret = { blockId: region.block_id ?? "", visibleOffset }
     return true
   }
 
-  flushPendingProjectionEdits() {
+  flushPendingProjectionEdits(): void {
     if (this.pendingProjectionFrame) this.cancelFrame(this.pendingProjectionFrame)
-    this.pendingProjectionFrame = null
+    this.pendingProjectionFrame = undefined
     if (!this.pendingProjectionEdits?.size || !this.editorController) return
 
     const edits = [...this.pendingProjectionEdits.values()].map((edit) => ({
@@ -262,27 +438,28 @@ export class PresentationEditor {
     this.editorController.replaceRanges(changes)
   }
 
-  scheduleProjectionFlush() {
+  scheduleProjectionFlush(): void {
     if (this.pendingProjectionFrame) return
     this.pendingProjectionFrame = this.scheduleFrame(() => {
-      this.pendingProjectionFrame = null
+      this.pendingProjectionFrame = undefined
       this.flushPendingProjectionEdits()
     })
   }
 
-  rememberProjectionCaret() {
+  rememberProjectionCaret(): void {
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
     const selection = this.getSelection()
     if (!selection?.focusNode) return
-    const node = selection.focusNode.nodeType === this.Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode.parentElement
+    const focusNode = selection.focusNode
+    const node = (focusNode.nodeType === this.Node.ELEMENT_NODE ? focusNode : focusNode.parentElement) as Element | null
     const block = node?.closest?.("[data-editor-block-id]")
     const canvas = this.canvas()
     if (!block || !canvas?.contains(block)) return
     const visibleOffset = this.deps.visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
-    if (visibleOffset !== null) this.lastProjectionCaret = { blockId: block.dataset.editorBlockId, visibleOffset }
+    if (visibleOffset !== null) this.lastProjectionCaret = { blockId: (block as HTMLElement).dataset.editorBlockId ?? "", visibleOffset }
   }
 
-  blockKeydown(event) {
+  blockKeydown(event: ProjectionKeyEvent): void {
     if (this.pendingProjectionFrame || this.pendingProjectionEdits?.size) {
       this.flushPendingProjectionEdits()
     }
@@ -292,13 +469,16 @@ export class PresentationEditor {
 
     const selection = this.getSelection()
     if (!selection?.isCollapsed) return
-    const node = selection.focusNode?.nodeType === this.Node.ELEMENT_NODE ? selection.focusNode : selection.focusNode?.parentElement
+    const focusNode = selection.focusNode
+    const node = focusNode
+      ? (focusNode.nodeType === this.Node.ELEMENT_NODE ? focusNode : focusNode.parentElement) as Element | null
+      : null
     const blockElement = node?.closest?.("[data-editor-block-id][contenteditable='true']")
     const canvas = this.canvas()
     if (!blockElement || !canvas?.contains(blockElement) || this.editableText(blockElement).trim() !== "") return
     if (blockElement.querySelector("img, video, iframe, [data-editor-math-source]")) return
 
-    const located = this.locateBlock(blockElement.dataset.editorBlockId)
+    const located = this.locateBlock((blockElement as HTMLElement).dataset.editorBlockId)
     const slide = located && this.map?.slides?.[located.slideIndex]
     const block = located?.block
     if (!slide || !block) return
@@ -306,26 +486,17 @@ export class PresentationEditor {
     event.preventDefault()
     this.flushPendingProjectionEdits()
     const source = this.sourceValue()
-    let from = this.blockOperationStart(slide, block)
-    let to = block.range.end
-    if (block.position_scope === "group") {
-      const groupMembers = slide.blocks.filter((candidate) => candidate.position_directive_id === block.position_directive_id)
-      if (groupMembers.length === 1) {
-        const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === block.position_directive_id)
-        const closing = slide.directives.slice(directiveIndex + 1).find((candidate) => candidate.type === "position_close")
-        if (closing) {
-          from = slide.directives[directiveIndex].range.start
-          to = closing.range.end
-        }
-      }
-    }
+    // Shared span math (F6); the slide and block are guaranteed present here.
+    const span = blockOperationRange(block, slide) ?? { from: block.range.start, to: block.range.end }
+    const from = span.from
+    const to = span.to
     const updated = this.deps.removeEmptyBlockSource(source, from, to)
     if (updated !== source) this.replaceSource(updated)
   }
 
-  alignmentChanged(event) {
+  alignmentChanged(event: ProjectionEvent): void {
     if (this.element.dataset.editorMode === "source") return
-    const select = event.target.closest("[data-presentation-editor-align]")
+    const select = (event.target as Element).closest("[data-presentation-editor-align]") as HTMLSelectElement
     if (!this.editorController || !this.map) return
 
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
@@ -338,12 +509,13 @@ export class PresentationEditor {
     const block = (blockId && this.findBlock(blockId)) || this.map?.slides?.[slideIndex]?.blocks?.[blockIndex]
     if (!block) return
 
-    const slide = this.map.slides.find((candidate) => candidate.blocks?.some((item) => item.id === block.id)) || this.map.slides[slideIndex]
+    const slides = this.map.slides ?? []
+    const slide = slides.find((candidate) => candidate.blocks?.some((item) => item.id === block.id)) || slides[slideIndex]
     if (!slide) return
 
     const directive = slide.directives?.find((candidate) => candidate.id === block.position_directive_id)
     const alignment = select.value
-    let updated
+    let updated: string
 
     const { horizontal, vertical, verticalExplicit } = parseAlignment(alignment)
 
@@ -353,8 +525,8 @@ export class PresentationEditor {
       ? caret.sourceOffset
       : (region?.content_range.start ?? block.range.start)
 
-    let from
-    let to
+    let from: number
+    let to: number
     let replacement = ""
 
     if (directive) {
@@ -375,8 +547,13 @@ export class PresentationEditor {
           preferredBlockId: block.id
         }
       } else {
-        const directiveIndex = slide.directives.findIndex((candidate) => candidate.id === directive.id)
-        const closing = slide.directives[directiveIndex + 1]
+        const directives = slide.directives ?? []
+        const directiveIndex = directives.findIndex((candidate) => candidate.id === directive.id)
+        // Immediate-next rule (NOT the shared find-after rule): alignment
+        // removal strips the opener plus an ADJACENT closer only. Unifying
+        // with findPositionCloseAfter would change behavior on non-adjacent
+        // closers, so this hand-rolled lookup stays deliberately.
+        const closing = directives[directiveIndex + 1]
         const ranges = [directive]
         if (closing?.type === "position_close") ranges.push(closing)
         ranges.sort((left, right) => right.range.start - left.range.start).forEach((candidate) => {
@@ -390,7 +567,7 @@ export class PresentationEditor {
         })
         delete block.position_directive_id
         delete block.position
-        slide.directives = slide.directives.filter((candidate) => !ranges.includes(candidate))
+        slide.directives = (slide.directives ?? []).filter((candidate) => !ranges.includes(candidate))
         updated = exciseRanges(source, ranges.map((candidate) => candidate.range))
       }
     } else if (alignment) {
@@ -401,15 +578,16 @@ export class PresentationEditor {
       replacement = inserted.replacement
       updated = inserted.updated
       this.shiftMapAfterEdit(from, to, replacement.length)
-      const affected = [block, region].filter(Boolean)
+      const affected = [block, region].filter((item): item is PresentationEditorBlock | PresentationEditorRegion => Boolean(item))
       affected.forEach((object) => {
-        ["range", "source_range", "content_range", "delimiter_range"].forEach((name) => {
-          if (object[name]?.start === from) object[name].start += replacement.length
+        (["range", "source_range", "content_range", "delimiter_range"] as const).forEach((name) => {
+          const range = object[name]
+          if (range?.start === from) range.start += replacement.length
         })
       })
       const directiveId = `directive-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
       const directiveLength = `:::align{${alignment}}${lineEnding}`.length
-      const newDirective = {
+      const newDirective: PresentationEditorDirective = {
         id: directiveId,
         type: "position",
         range: { start: from, end: from + directiveLength },
@@ -452,9 +630,9 @@ export class PresentationEditor {
     })
   }
 
-  handleAction(event) {
+  handleAction(event: ProjectionEvent): void {
     if (!this.canOperateOnProjection()) return
-    const control = event.target.closest?.("[data-presentation-editor-action]")
+    const control = (event.target as Element).closest?.("[data-presentation-editor-action]") as HTMLButtonElement | null | undefined
     if (!control || control.disabled) return
     event.preventDefault()
     const action = control.dataset.presentationEditorAction
@@ -494,42 +672,44 @@ export class PresentationEditor {
     }
   }
 
-  addSlide(index) {
+  addSlide(index: number): void {
     this.replaceSource(addSlideToSource(this.sourceValue(), this.map?.slides || [], index))
   }
 
-  deleteSlide(index) {
+  deleteSlide(index: number): void {
     const updated = deleteSlideFromSource(this.sourceValue(), this.map?.slides || [], index)
     if (updated === null) return
     this.replaceSource(updated)
   }
 
-  moveSlide(index, target) {
+  moveSlide(index: number, target: number): void {
     const updated = moveSlideInSource(this.sourceValue(), this.map, index, target)
     if (updated === null) return
     this.replaceSource(updated)
   }
 
-  addBlock(slideIndex, index) {
+  addBlock(slideIndex: number, index: number): void {
     const updated = insertBlockInSource(this.sourceValue(), this.map?.slides?.[slideIndex], index)
     if (updated === null) return
     this.replaceSource(updated)
   }
 
-  deleteBlock(slideIndex, blockIndex) {
+  deleteBlock(slideIndex: number, blockIndex: number): void {
     const slide = this.map?.slides?.[slideIndex]
     const block = slide?.blocks?.[blockIndex]
     if (!slide || !block) return
-    this.replaceSource(removeBlockFromSource(this.sourceValue(), slide, block))
+    const updated = removeBlockFromSource(this.sourceValue(), slide, block)
+    if (updated === null) return
+    this.replaceSource(updated)
   }
 
-  moveBlock(slideIndex, index, target) {
+  moveBlock(slideIndex: number, index: number, target: number): void {
     const updated = moveBlockInSource(this.sourceValue(), this.map?.slides?.[slideIndex], index, target)
     if (updated === null) return
     this.replaceSource(updated)
   }
 
-  previewUpdated(payload) {
+  previewUpdated(payload: { editor_map?: PresentationEditorMap } | null | undefined): void {
     if (!payload?.editor_map) {
       if (this.operationPending) this.setStatus("Visual controls are paused until the preview recovers.")
       this.syncProjectionEditability({ preserveActive: Boolean(this.activeProjectionBlock && this.element.dataset.editorProjectionActive === "true") })
@@ -545,7 +725,7 @@ export class PresentationEditor {
     this.restorePendingCaret()
   }
 
-  previewStale(detail = {}) {
+  previewStale(detail: { preserveActive?: boolean } = {}): void {
     if (!this.isMapSynchronized()) {
       this.operationPending = true
       this.setControlsDisabled(true)
@@ -553,7 +733,7 @@ export class PresentationEditor {
     this.syncProjectionEditability({ preserveActive: detail.preserveActive })
   }
 
-  isMapSynchronized() {
+  isMapSynchronized(): boolean {
     return Boolean(
       this.map &&
       this.editorController &&
@@ -561,37 +741,38 @@ export class PresentationEditor {
     )
   }
 
-  canOperateOnProjection() {
+  canOperateOnProjection(): boolean {
     if (this.element.dataset.editorMode === "source") return false
     if (this.operationPending) return false
     return this.isMapSynchronized() || this.isProjectionFresh() !== false
   }
 
-  canEditBlock(blockElement) {
-    if (this.element.dataset.editorMode === "source" || blockElement.dataset.editorSourceEditable === "false") return false
+  canEditBlock(blockElement: Element): boolean {
+    if (this.element.dataset.editorMode === "source" || (blockElement as HTMLElement).dataset.editorSourceEditable === "false") return false
     if (this.isProjectionFresh() !== false) return true
 
     return this.activeProjectionBlock === blockElement &&
       this.activeElement()?.closest?.("[contenteditable='true']") === blockElement
   }
 
-  syncProjectionEditability({ preserveActive = false } = {}) {
+  syncProjectionEditability({ preserveActive = false }: { preserveActive?: boolean | undefined } = {}): void {
     const visual = this.element.dataset.editorMode !== "source"
     const fresh = this.isProjectionFresh() !== false
     const active = preserveActive ? this.activeElement()?.closest?.("[data-editor-block-id]") : null
     this.element.querySelectorAll("[data-editor-block-id][data-editor-source-editable]").forEach((block) => {
-      const sourceEditable = block.dataset.editorSourceEditable !== "false"
+      const sourceEditable = (block as HTMLElement).dataset.editorSourceEditable !== "false"
       const editable = sourceEditable && visual && (fresh || (preserveActive && block === active))
       const label = block.classList.contains("slide-title") ? "Editable slide title" : "Editable slide block"
       this.deps.setProjectionBlockEditable(block, editable, label)
     })
     this.element.querySelectorAll("[data-presentation-editor-align]").forEach((control) => {
+      const target = control as HTMLSelectElement
       const disabled = !visual || !this.map
-      if (control.disabled !== disabled) control.disabled = disabled
+      if (target.disabled !== disabled) target.disabled = disabled
     })
   }
 
-  sourceInput(event) {
+  sourceInput(event: ProjectionEvent): void {
     if (this.updatingSource || !this.editorController) return
     if (event.target !== this.editorController.inputTarget) return
     if (this.activeElement()?.closest?.(".editor-projection")) return
@@ -600,13 +781,13 @@ export class PresentationEditor {
     this.setControlsDisabled(true)
   }
 
-  shiftMapAfterEdit(from, to, replacementLength) {
+  shiftMapAfterEdit(from: number, to: number, replacementLength: number): void {
     if (!this.map) return
 
     const delta = replacementLength - (to - from)
-    const shiftRange = (range) => {
+    const shiftRange = (range: EditorSourceRange | null | undefined): void => {
       if (!range) return
-      const shiftPosition = (position) => {
+      const shiftPosition = (position: number): number => {
         if (position <= from) return position
         if (position >= to) return position + delta
         return from + replacementLength
@@ -614,7 +795,7 @@ export class PresentationEditor {
       range.start = shiftPosition(range.start)
       range.end = Math.max(range.start, shiftPosition(range.end))
     }
-    const shiftObject = (object) => {
+    const shiftObject = (object: ShiftableRanges | null | undefined): void => {
       if (!object) return
       shiftRange(object.range)
       shiftRange(object.source_range)
@@ -633,7 +814,7 @@ export class PresentationEditor {
     this.map.editable_regions?.forEach(shiftObject)
   }
 
-  replaceSource(source) {
+  replaceSource(source: string): void {
     if (!this.editorController) return
     this.operationPending = true
     this.setControlsDisabled(true)
@@ -649,15 +830,15 @@ export class PresentationEditor {
     })
   }
 
-  sourceValue() {
+  sourceValue(): string {
     return this.editorController?.value || this.source()?.querySelector("textarea")?.value || ""
   }
 
-  findBlock(id) {
+  findBlock(id: string | undefined): PresentationEditorBlock | undefined {
     return this.map?.slides?.flatMap((slide) => slide.blocks || []).find((block) => block.id === id)
   }
 
-  locateBlock(id) {
+  locateBlock(id: string | undefined): { slideIndex: number; block: PresentationEditorBlock } | null {
     for (const [slideIndex, slide] of (this.map?.slides || []).entries()) {
       const block = slide.blocks?.find((candidate) => candidate.id === id)
       if (block) return { slideIndex, block }
@@ -665,27 +846,23 @@ export class PresentationEditor {
     return null
   }
 
-  allRegions() {
+  allRegions(): Array<PresentationEditorRegion> {
     return this.map?.editable_regions || this.map?.slides?.flatMap((slide) => slide.editable_regions || []) || []
   }
 
-  regionForBlock(blockId) {
+  regionForBlock(blockId: string | undefined): PresentationEditorRegion | null {
     return this.allRegions().find((region) => region.block_id === blockId) || null
   }
 
-  restorePendingCaret() {
+  restorePendingCaret(): void {
     const pending = this.pendingCaretRestore
     if (!pending || this.element.dataset.editorMode !== "visual") return
     this.pendingCaretRestore = null
     this.scheduleFrame(() => this.restoreCaret(pending.sourceOffset, pending.preferredBlockId))
   }
 
-  blockOperationStart(slide, block) {
-    return blockOperationStartInSource(slide, block)
-  }
-
-  updateBlockBoundaries() {
-    this.element.querySelectorAll('[data-presentation-editor-action="move-block-up"], [data-presentation-editor-action="move-block-down"]').forEach((control) => {
+  updateBlockBoundaries(): void {
+    ;([...this.element.querySelectorAll('[data-presentation-editor-action="move-block-up"], [data-presentation-editor-action="move-block-down"]')] as Array<HTMLButtonElement>).forEach((control) => {
       const slide = this.map?.slides?.[Number(control.dataset.slideIndex)]
       const index = Number(control.dataset.blockIndex)
       const delta = control.dataset.presentationEditorAction === "move-block-up" ? -1 : 1
@@ -708,11 +885,11 @@ export class PresentationEditor {
     })
   }
 
-  editableText(element) {
-    return (element.innerText || element.textContent || "").replace(/ /g, " ").replace(/\n+$/, "")
+  editableText(element: Element): string {
+    return ((element as HTMLElement).innerText || element.textContent || "").replace(/ /g, " ").replace(/\n+$/, "")
   }
 
-  readMap() {
+  readMap(): PresentationEditorMap | null {
     const source = this.element.querySelector("[data-editor-map-json]")?.textContent
     if (!source) return null
     try {
@@ -722,13 +899,13 @@ export class PresentationEditor {
     }
   }
 
-  setStatus(text) {
+  setStatus(text: string): void {
     const status = this.status()
     if (status) status.textContent = text
   }
 
-  setControlsDisabled(disabled) {
-    this.element.querySelectorAll("[data-presentation-editor-action]").forEach((control) => {
+  setControlsDisabled(disabled: boolean): void {
+    ;([...this.element.querySelectorAll("[data-presentation-editor-action]")] as Array<HTMLButtonElement>).forEach((control) => {
       if (disabled) {
         if (control.dataset.editorOperationPending !== "true") {
           control.dataset.editorOriginalDisabled = String(control.disabled)
@@ -749,7 +926,7 @@ export class PresentationEditor {
 // the editing utility deps. The mount publishes itself as
 // form.presentationEditorController for the CodeMirror editor host (caret
 // restore after mode changes) and clears it on destroy.
-export function mountPresentationEditor(form, options = {}) {
+export function mountPresentationEditor(form: PresentationEditorHost, options: MountPresentationEditorOptions = {}) {
   const editor = new PresentationEditor(form, options)
   const previous = form.presentationEditorController
   form.presentationEditorController = editor

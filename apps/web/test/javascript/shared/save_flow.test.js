@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { createSaveFlow } from "../../../../../packages/client/src/session/save_flow.js"
-import { applyEditorSource } from "../../../app/javascript/lib/editor_source.js"
+import { createSaveFlow } from "@elef/client"
+import { applyEditorSource } from "../../../../../packages/editor-runtime/dist/lib/editor_source.js"
 
 const hash = letter => letter.repeat(64)
 

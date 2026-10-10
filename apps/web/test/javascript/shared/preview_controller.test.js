@@ -5,19 +5,19 @@ import path from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
-const source = (await readFile(path.join(root, "apps/web/app/javascript/controllers/preview_controller.js"), "utf8"))
+const source = (await readFile(path.join(root, "packages/editor-runtime/dist/controllers/preview_controller.js"), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace(
-    'import { installPreviewHtml } from "lib/editor_view"',
-    `import { installPreviewHtml } from "${pathToFileURL(path.join(root, "apps/web/app/javascript/lib/editor_view.js")).href}"`
+    'import { installPreviewHtml } from "../lib/editor_view.js"',
+    `import { installPreviewHtml } from "${pathToFileURL(path.join(root, "packages/editor-runtime/dist/lib/editor_view.js")).href}"`
   )
   .replace(
-    'import { buildPreviewRequestBody } from "lib/preview_request_body"',
-    `import { buildPreviewRequestBody } from "${pathToFileURL(path.join(root, "apps/web/app/javascript/lib/preview_request_body.js")).href}"`
+    'import { buildPreviewRequestBody } from "../lib/preview_request_body.js"',
+    `import { buildPreviewRequestBody } from "${pathToFileURL(path.join(root, "packages/editor-runtime/dist/lib/preview_request_body.js")).href}"`
   )
   .replace(
     'import { attachCanvasScaling } from "@elef/client"',
-    `import { attachCanvasScaling } from "${pathToFileURL(path.join(root, "packages/client/src/features/presentation/presentation.js")).href}"`
+    `import { attachCanvasScaling } from "${import.meta.resolve("@elef/client")}"`
   )
 const preview = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 

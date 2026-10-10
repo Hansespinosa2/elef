@@ -1,15 +1,23 @@
-const PRESENTATION_KEY_ACTIONS = new Map([
-  ...["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].map(key => [key, "next"]),
-  ...["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].map(key => [key, "previous"]),
+const PRESENTATION_KEY_ACTIONS = new Map<string, string>([
+  ...["ArrowRight", "ArrowDown", "PageDown", " ", "Enter"].map((key): [string, string] => [key, "next"]),
+  ...["ArrowLeft", "ArrowUp", "PageUp", "Backspace"].map((key): [string, string] => [key, "previous"]),
   ["Home", "first"],
   ["End", "last"]
 ])
 
-export function presentationActionForKey(key) {
+export function presentationActionForKey(key: string): string | null {
   return PRESENTATION_KEY_ACTIONS.get(key) || null
 }
 
-export function createPresentationNavigation(slideCount, initialIndex = 0) {
+export interface PresentationNavigationState {
+  readonly currentIndex: number
+  next(): number
+  previous(): number
+  first(): number
+  last(): number
+}
+
+export function createPresentationNavigation(slideCount: number, initialIndex = 0): PresentationNavigationState | null {
   if (!Number.isInteger(slideCount) || slideCount < 1) return null
   let currentIndex = Number.isInteger(initialIndex)
     ? Math.max(0, Math.min(initialIndex, slideCount - 1))
