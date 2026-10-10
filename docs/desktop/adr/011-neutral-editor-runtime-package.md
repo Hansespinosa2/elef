@@ -32,7 +32,7 @@ state. It supersedes ADR-004 ("Rails `app/` owns shareable product UI").
 
 ## Decision
 
-`packages/editor-runtime` (name provisional — see interview Q4) is permanent
+`packages/editor-runtime` (name owner-confirmed) is permanent
 v9 architecture, not transitional debt. The shared Stimulus editor shell and
 desktop bootstrap live there; both hosts consume the package; no host imports
 from the other host. The §4 "client = the complete host-neutral interactive

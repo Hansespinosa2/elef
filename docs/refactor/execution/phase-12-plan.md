@@ -62,6 +62,7 @@ Settled owner decisions (interview 2026-10-10; recorded here at PLAN, frozen wit
 - D1 permanence: `editor-runtime` is PERMANENT v9 architecture (ADR-011 Draft), with a revisit trigger instead of a removal condition. No P12-01 register entry.
 - D2 #148/#149 timing: (a) campaign beautifies its own tree (F6/F7 unify first); the dev port follows after campaign PASS and deletes the single unified implementation then. The port also owns the desktop-`.md` silent-reinterpretation hazard (dev's migration rewrites Postgres rows only). No dev scope enters the campaign.
 - D3 TS strictness: (a) hold the strictest bar (`strict` + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess`) for all converted code. Contortion guard: explicit guards over `!` assertions; a per-file documented relaxation needs implementer approval with justification, and is the exception, not the pattern.
+- D4a package name: `editor-runtime` (owner-confirmed; names the role, not the framework).
 
 ## 3. Ownership classification
 | Change | Semantic owner (constitution §4) | Shared or host-specific (+ concrete reason) |
