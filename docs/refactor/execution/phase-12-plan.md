@@ -64,6 +64,7 @@ Settled owner decisions (interview 2026-10-10; recorded here at PLAN, frozen wit
 - D3 TS strictness: (a) hold the strictest bar (`strict` + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess`) for all converted code. Contortion guard: explicit guards over `!` assertions; a per-file documented relaxation needs implementer approval with justification, and is the exception, not the pattern.
 - D4a package name: `editor-runtime` (owner-confirmed; names the role, not the framework).
 - D4b `spec/` depth: minimal-honest (deck-manifest + archive schemas, version rules, compat fixtures, one CI-wired consumer) + machine-enforced extension rule (any format change extends `spec/` + fixtures in the same commit). Full bible rejected as speculative generality.
+- D4c host TypeScript: packages only. Host JS stays JavaScript (thin glue by design; typed at the seams via contracts ports + package APIs). Standing rule: host code that grows real logic moves to its owning package instead of being converted in place.
 
 ## 3. Ownership classification
 | Change | Semantic owner (constitution §4) | Shared or host-specific (+ concrete reason) |
