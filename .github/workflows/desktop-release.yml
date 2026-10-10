@@ -59,6 +59,7 @@ jobs:
       pull-requests: read
     outputs:
       trusted_tool_sha: ${{ steps.verify.outputs.trusted_tool_sha }}
+      failure_only: ${{ steps.verify.outputs.failure_only }}
     steps:
       - name: Check out current main history as data
         uses: actions/checkout@v7
@@ -110,6 +111,10 @@ jobs:
           GITHUB_REF_NAME: ${{ github.ref_name }}
           GITHUB_ACTOR: ${{ github.actor }}
           DESKTOP_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          DESKTOP_GATE_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          DESKTOP_TRIGGER_EVENT: ${{ github.event.workflow_run.event }}
+          DESKTOP_TRIGGER_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          DESKTOP_TRIGGER_SHA: ${{ github.event.workflow_run.head_sha }}
         run: node verifier/desktop/scripts/verify_release_coordinator.mjs current main-history pages
 
   reconcile:
@@ -128,6 +133,8 @@ jobs:
       macos_candidate: ${{ steps.publish.outputs.macos_candidate }}
       linux_candidate: ${{ steps.publish.outputs.linux_candidate }}
       aur_candidate: ${{ steps.publish.outputs.aur_candidate }}
+      failure_only: ${{ steps.publish.outputs.failure_only }}
+      failed_gate_count: ${{ steps.publish.outputs.failed_gate_count }}
       release_action: ${{ github.event.inputs.action || 'reconcile' }}
       control_versions: ${{ github.event.inputs.versions || '' }}
     permissions:
@@ -191,18 +198,38 @@ jobs:
           DESKTOP_RELEASE_MINOR: ${{ github.event.inputs.minor }}
           DESKTOP_RELEASE_VERSIONS: ${{ github.event.inputs.versions }}
           DESKTOP_RELEASE_REASON: ${{ github.event.inputs.reason }}
+          DESKTOP_RELEASE_FAILURE_ONLY: ${{ needs.verify-coordinator.outputs.failure_only }}
         run: node tooling/desktop/scripts/publish_desktop_release_state.mjs pages source
 
-      - name: Notify on terminal Gate A failures
-        if: steps.publish.outputs.failed_gate_count != '0'
+  notify-failed-gate:
+    name: Notify on terminal Gate A failures
+    needs: reconcile
+    if: >-
+      always() &&
+      needs.reconcile.result == 'success' &&
+      (needs.reconcile.outputs.failure_only == 'true' || needs.reconcile.outputs.failed_gate_count != '0')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Report the recorded terminal Gate A failure
+        env:
+          FAILURE_ONLY: ${{ needs.reconcile.outputs.failure_only }}
+          FAILED_GATE_COUNT: ${{ needs.reconcile.outputs.failed_gate_count }}
         run: |
-          echo "::error::One or more owner-approved main merges failed exact-SHA Gate A. The ledger records failed_gate and no release version was reserved."
+          if [[ "$FAILURE_ONLY" == "true" ]]; then
+            echo "::error::The first exact-SHA Gate A failed. Owner-reviewed main code recorded the failed gate through the failure-only bootstrap; release publication was suppressed."
+          else
+            echo "::error::One or more owner-approved main merges failed exact-SHA Gate A. The ledger records failed_gate and no artifact was made eligible for those merges."
+          fi
+          echo "Recorded failed Gate A merge count: $FAILED_GATE_COUNT"
           exit 1
 
   prepare-releases:
     name: Prepare immutable release tags and drafts
     needs: reconcile
-    if: needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
+    if: needs.reconcile.outputs.failure_only != 'true' && needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
     runs-on: ubuntu-latest
     environment: desktop-release-state
     permissions:
@@ -235,7 +262,7 @@ jobs:
   linux-release:
     name: Build and publish Arch x86-64 release
     needs: [ reconcile, prepare-releases ]
-    if: needs.reconcile.outputs.linux_candidate != '' && needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
+    if: needs.reconcile.outputs.failure_only != 'true' && needs.reconcile.outputs.linux_candidate != '' && needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
     runs-on: ubuntu-latest
     timeout-minutes: 90
     environment: desktop-release-state
@@ -348,7 +375,7 @@ jobs:
   macos-release:
     name: Build and publish Apple Silicon macOS release
     needs: [ reconcile, prepare-releases ]
-    if: needs.reconcile.outputs.macos_candidate != '' && needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
+    if: needs.reconcile.outputs.failure_only != 'true' && needs.reconcile.outputs.macos_candidate != '' && needs.reconcile.outputs.release_action != 'block' && needs.reconcile.outputs.release_action != 'unblock'
     runs-on: macos-15
     timeout-minutes: 90
     environment: desktop-release-signing
@@ -495,6 +522,7 @@ jobs:
     needs: [ reconcile, prepare-releases, linux-release ]
     if: >-
       always() &&
+      needs.reconcile.outputs.failure_only != 'true' &&
       needs.prepare-releases.result == 'success' &&
       (
         needs.reconcile.outputs.aur_candidate != '' ||
@@ -603,7 +631,7 @@ jobs:
   finalize-release-notes:
     name: Finalize release status and safety notes
     needs: [ reconcile, prepare-releases, linux-release, macos-release, aur-release ]
-    if: always() && (needs.reconcile.outputs.macos_candidate != '' || needs.reconcile.outputs.linux_candidate != '' || needs.reconcile.outputs.aur_candidate != '' || needs.reconcile.outputs.release_action == 'block' || needs.reconcile.outputs.release_action == 'unblock')
+    if: always() && needs.reconcile.outputs.failure_only != 'true' && (needs.reconcile.outputs.macos_candidate != '' || needs.reconcile.outputs.linux_candidate != '' || needs.reconcile.outputs.aur_candidate != '' || needs.reconcile.outputs.release_action == 'block' || needs.reconcile.outputs.release_action == 'unblock')
     runs-on: ubuntu-latest
     environment: desktop-release-state
     permissions:

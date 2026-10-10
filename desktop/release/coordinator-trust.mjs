@@ -83,6 +83,70 @@ export function assertMainReviewProtection(rules) {
   return true
 }
 
+export function isExactFailedMainWorkflowRun({ mode, eventName, triggerEvent, triggerBranch, triggerSha, gateConclusion, ref, refType, refName, workflowSha, coordinatorSha }) {
+  return mode === "current" &&
+    eventName === "workflow_run" &&
+    triggerEvent === "push" &&
+    triggerBranch === "main" &&
+    triggerSha === coordinatorSha &&
+    Boolean(gateConclusion) &&
+    gateConclusion !== "success" &&
+    ref === "refs/heads/main" &&
+    refType === "branch" &&
+    refName === "main" &&
+    workflowSha === coordinatorSha
+}
+
+/**
+ * A failed first Gate A has no previously passed release tooling revision to
+ * trust. The protected-main owner review is the bootstrap trust anchor for a
+ * one-purpose reconciliation mode that cannot emit release candidates.
+ */
+export async function assertBootstrapFailedGateRecorderRevision({ coordinatorSha, mainHistory, ledger, github, ownerLogin }) {
+  if (typeof coordinatorSha !== "string" || !/^[a-f0-9]{40}$/i.test(coordinatorSha)) {
+    throw new TypeError("failed-gate recorder revision must be a commit SHA")
+  }
+  if (!Array.isArray(mainHistory) || mainHistory.length === 0 || mainHistory.at(-1) !== coordinatorSha) {
+    throw new Error("failed-gate recorder must use the current main head")
+  }
+  if (!ledger || typeof ledger !== "object") throw new Error("failed-gate recording needs the authoritative release ledger")
+  if (latestTrustedToolingSha(ledger)) throw new Error("failed-gate bootstrap is only available before trusted tooling is recorded")
+  if (!github || !ownerLogin || typeof github.verifyMainReviewProtection !== "function") {
+    throw new TypeError("failed-gate bootstrap needs authoritative GitHub owner and review-protection records")
+  }
+  await github.verifyMainReviewProtection()
+
+  const coordinatorIndex = mainHistory.length - 1
+  const watermarkIndex = mainHistory.indexOf(ledger.last_reconciled_main)
+  if (watermarkIndex < 0 || watermarkIndex > coordinatorIndex) {
+    throw new Error("failed-gate recorder needs a valid Pages ledger watermark in main history")
+  }
+
+  const associations = await github.pullRequestsForCommit(coordinatorSha)
+  const matching = associations.filter(pr => pr.base?.ref === "main" && pr.merge_commit_sha === coordinatorSha)
+  if (matching.length !== 1) throw new Error("failed-gate recorder revision must map to exactly one merged main pull request")
+  const associated = matching[0]
+  const pullRequest = await github.pullRequest(associated.number)
+  if (!pullRequest || pullRequest.base?.ref !== "main" || !pullRequest.merged_at || pullRequest.merge_commit_sha !== coordinatorSha) {
+    throw new Error("failed-gate recorder pull request metadata is incomplete")
+  }
+  if (!await github.ownerApprovedPullRequest(pullRequest, ownerLogin)) {
+    throw new Error("failed-gate recorder pull request lacks repository-owner approval")
+  }
+  if (await github.gateForMainSha(coordinatorSha) !== "failed_gate") {
+    throw new Error("bootstrap recorder is restricted to a terminal failed exact-SHA Gate A")
+  }
+
+  const recorded = ledger.processed_merges?.find(merge => merge.sha === coordinatorSha)
+  if (recorded && (recorded.gate !== "failed_gate" || recorded.pr !== pullRequest.number)) {
+    throw new Error("failed-gate recorder cannot change an existing main merge result")
+  }
+  if (watermarkIndex === coordinatorIndex && !recorded) {
+    throw new Error("failed-gate ledger watermark has no immutable failed merge record")
+  }
+  return { sha: coordinatorSha, pr: pullRequest.number }
+}
+
 export async function selectTrustedCoordinatorRevision({ coordinatorSha, mainHistory, ledger, github, ownerLogin }) {
   let currentError
   try {

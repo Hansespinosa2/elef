@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process"
 import path from "node:path"
 
 import { GitHubReleaseApi } from "../release/github-api.mjs"
-import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, latestTrustedToolingSha, selectTrustedCoordinatorRevision, assertTrustedCoordinatorRevision } from "../release/coordinator-trust.mjs"
+import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertBootstrapFailedGateRecorderRevision, isExactFailedMainWorkflowRun, latestTrustedToolingSha, selectTrustedCoordinatorRevision, assertTrustedCoordinatorRevision } from "../release/coordinator-trust.mjs"
 import { parseLedger } from "../release/ledger.mjs"
 
 const [mode, mainCheckoutArgument, pagesCheckoutArgument] = process.argv.slice(2)
@@ -67,31 +67,60 @@ if (dispatchTag) {
   dispatchTooling = latestTrustedToolingSha(ledger)
   if (!dispatchTooling) throw new Error("manual actions need a Gate-A-passed tooling revision in the release ledger")
 }
-const trusted = mode === "current"
-  ? dispatchTag
-    ? await assertTrustedCoordinatorRevision({
-        ...trustArguments,
-        coordinatorSha: dispatchTooling
-      })
-    : await selectTrustedCoordinatorRevision(trustArguments)
-  : await assertTrustedCoordinatorRevision(trustArguments)
+const failedWorkflowRun = isExactFailedMainWorkflowRun({
+  mode,
+  eventName,
+  triggerEvent: process.env.DESKTOP_TRIGGER_EVENT,
+  triggerBranch: process.env.DESKTOP_TRIGGER_BRANCH,
+  triggerSha: process.env.DESKTOP_TRIGGER_SHA,
+  gateConclusion: process.env.DESKTOP_GATE_CONCLUSION,
+  ref: process.env.GITHUB_REF,
+  refType: process.env.GITHUB_REF_TYPE,
+  refName: process.env.GITHUB_REF_NAME,
+  workflowSha: process.env.DESKTOP_WORKFLOW_SHA,
+  coordinatorSha
+})
+
+let trusted
+const bootstrapFailureOnly = failedWorkflowRun &&
+  !latestTrustedToolingSha(ledger) &&
+  await github.gateForMainSha(coordinatorSha) === "failed_gate"
+
+if (bootstrapFailureOnly) {
+  trusted = {
+    ...(await assertBootstrapFailedGateRecorderRevision(trustArguments)),
+    selectedFrom: "failure-only-bootstrap"
+  }
+} else {
+  trusted = mode === "current"
+    ? dispatchTag
+      ? await assertTrustedCoordinatorRevision({
+          ...trustArguments,
+          coordinatorSha: dispatchTooling
+        })
+      : await selectTrustedCoordinatorRevision(trustArguments)
+    : await assertTrustedCoordinatorRevision(trustArguments)
+}
+const failureOnly = trusted.selectedFrom === "failure-only-bootstrap"
 
 const output = process.env.GITHUB_OUTPUT
 if (output) {
-  await appendFile(output, `trusted_tool_sha=${trusted.sha}\ntrusted_tool_pr=${trusted.pr}\n`)
+  await appendFile(output, `trusted_tool_sha=${trusted.sha}\ntrusted_tool_pr=${trusted.pr}\nfailure_only=${failureOnly}\n`)
 }
 if (process.env.GITHUB_STEP_SUMMARY) {
   await appendFile(process.env.GITHUB_STEP_SUMMARY, [
-    "## Trusted desktop release tooling",
+    failureOnly ? "## Failure-only desktop release bootstrap" : "## Trusted desktop release tooling",
     "",
     `- Tooling SHA: \`${trusted.sha}\``,
     `- Owner-approved main PR: #${trusted.pr}`,
-    `- Exact-SHA Gate A: passed`,
+    failureOnly
+      ? "- Exact-SHA Gate A: failed; tooling is permitted only to record the failure and suppress platform publication."
+      : "- Exact-SHA Gate A: passed",
     ...(trusted.selectedFrom === "ledger" ? [`- Event revision was not trusted; using the latest verified ledger tooling SHA.`] : []),
     "- Current `main` was checked out separately as reconciliation data."
   ].join("\n") + "\n")
 }
-process.stdout.write(`Trusted desktop release tooling: ${trusted.sha} (PR #${trusted.pr}; selected from ${trusted.selectedFrom || "ledger"}).\n`)
+process.stdout.write(`${failureOnly ? "Failure-only desktop release bootstrap" : "Trusted desktop release tooling"}: ${trusted.sha} (PR #${trusted.pr}; selected from ${trusted.selectedFrom || "ledger"}).\n`)
 
 function git(repositoryPath, args) {
   try {

@@ -26,6 +26,7 @@ const result = await publishPagesStateWithRetry({
 })
 const reconciliation = result.reconciliation || {}
 const processedMerges = result.processedMerges || []
+const failureOnly = process.env.DESKTOP_RELEASE_FAILURE_ONLY === "true"
 const outputs = {
   initialized: reconciliation.initialized || false,
   revision: reconciliation.revision ?? "",
@@ -35,10 +36,11 @@ const outputs = {
   unapproved_merges: reconciliation.unapprovedMerges ?? [],
   recovered_merges: reconciliation.recoveredMerges ?? [],
   processed_merges: processedMerges,
-  macos_candidate: reconciliation.platformCandidates?.macos ? JSON.stringify(reconciliation.platformCandidates.macos) : "",
-  linux_candidate: reconciliation.platformCandidates?.linux_asset ? JSON.stringify(reconciliation.platformCandidates.linux_asset) : "",
-  aur_candidate: reconciliation.platformCandidates?.aur ? JSON.stringify(reconciliation.platformCandidates.aur) : "",
+  macos_candidate: !failureOnly && reconciliation.platformCandidates?.macos ? JSON.stringify(reconciliation.platformCandidates.macos) : "",
+  linux_candidate: !failureOnly && reconciliation.platformCandidates?.linux_asset ? JSON.stringify(reconciliation.platformCandidates.linux_asset) : "",
+  aur_candidate: !failureOnly && reconciliation.platformCandidates?.aur ? JSON.stringify(reconciliation.platformCandidates.aur) : "",
   failed_gate_count: result.failedGateCount || 0,
+  failure_only: failureOnly,
   public_versions: reconciliation.publicVersions || [],
   cas_attempts: result.attempts,
   pages_commit: result.commitSha || ""
@@ -100,6 +102,7 @@ async function writeOutputs(values) {
     `linux_candidate=${values.linux_candidate}`,
     `aur_candidate=${values.aur_candidate}`,
     `failed_gate_count=${values.failed_gate_count}`,
+    `failure_only=${values.failure_only}`,
     `public_versions=${JSON.stringify(values.public_versions)}`,
     `cas_attempts=${values.cas_attempts}`,
     `pages_commit=${values.pages_commit}`
@@ -119,6 +122,7 @@ async function writeSummary({ outputs: values, published, reconciliation: detail
     `- New version reservations: ${values.processed_merges.filter(merge => merge.version).length}`,
     `- Failed Gate A merges: ${values.failed_gate_count}`
   ]
+  if (values.failure_only) lines.push("- Bootstrap mode: failure-only; platform candidate outputs were suppressed.")
   if (detail.initialized) lines.push("- Release ledger initialized at the current main head; earlier merges are not retroactively released.")
   if (detail.pendingSha) lines.push(`- Waiting at main SHA \`${detail.pendingSha}\` (${detail.pendingReason}).`)
   if (detail.unapprovedMerges?.length) {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createLedger, reconcileMain } from "./ledger.mjs"
-import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertMainReviewProtection, assertTrustedCoordinatorRevision, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
+import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertBootstrapFailedGateRecorderRevision, assertMainReviewProtection, assertTrustedCoordinatorRevision, isExactFailedMainWorkflowRun, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
 
 const SHA0 = "0".repeat(40)
 const SHA1 = "1".repeat(40)
@@ -126,6 +126,92 @@ test("failed or pending event Gate A falls back to the latest recorded trusted t
     github,
     ownerLogin: "owner"
   })).sha, SHA1)
+})
+
+test("the protected-main owner approval can bootstrap a failure-only recorder for the first failed Gate A", async () => {
+  const initial = createLedger({ lastReconciledMain: SHA0 })
+  const github = fakeGitHub([pull(601, SHA1)], { gates: new Map([[SHA1, "failed_gate"]]) })
+  const arguments_ = {
+    coordinatorSha: SHA1,
+    mainHistory: [SHA0, SHA1],
+    ledger: initial,
+    github,
+    ownerLogin: "owner"
+  }
+  assert.deepEqual(await assertBootstrapFailedGateRecorderRevision(arguments_), { sha: SHA1, pr: 601 })
+
+  const recorded = reconcileMain(initial, {
+    mainHistory: [SHA0, SHA1],
+    merges: [{ base: "main", merged: true, approved: true, pr: 601, sha: SHA1, gate: "failed_gate" }],
+    expectedRevision: initial.revision,
+    now: () => NOW
+  })
+  assert.deepEqual(await assertBootstrapFailedGateRecorderRevision({ ...arguments_, ledger: recorded }), { sha: SHA1, pr: 601 })
+})
+
+test("failure-only bootstrap accepts only a failed exact current-main push workflow run", () => {
+  const event = {
+    mode: "current",
+    eventName: "workflow_run",
+    triggerEvent: "push",
+    triggerBranch: "main",
+    triggerSha: SHA1,
+    gateConclusion: "failure",
+    ref: "refs/heads/main",
+    refType: "branch",
+    refName: "main",
+    workflowSha: SHA1,
+    coordinatorSha: SHA1
+  }
+  assert.equal(isExactFailedMainWorkflowRun(event), true)
+  assert.equal(isExactFailedMainWorkflowRun({ ...event, gateConclusion: "cancelled" }), true)
+
+  for (const change of [
+    { mode: "latest" },
+    { eventName: "workflow_dispatch" },
+    { triggerEvent: "pull_request" },
+    { triggerBranch: "feature" },
+    { triggerSha: SHA2 },
+    { gateConclusion: "success" },
+    { gateConclusion: "" },
+    { ref: "refs/heads/feature" },
+    { refType: "tag" },
+    { refName: "feature" },
+    { workflowSha: SHA2 },
+    { coordinatorSha: SHA2 }
+  ]) {
+    assert.equal(isExactFailedMainWorkflowRun({ ...event, ...change }), false, JSON.stringify(change))
+  }
+})
+
+test("failure-only bootstrap rejects pending, passed, unapproved, stale, or already-trusted candidates", async () => {
+  const makeArguments = ({ gate = "failed_gate", approved = true, coordinatorSha = SHA1, ledger = createLedger({ lastReconciledMain: SHA0 }), mainHistory } = {}) => ({
+    coordinatorSha,
+    mainHistory: mainHistory || (coordinatorSha === SHA2 ? [SHA0, SHA1, SHA2] : [SHA0, SHA1]),
+    ledger,
+    github: fakeGitHub([pull(602, SHA1), pull(603, SHA2)], {
+      approved,
+      gates: new Map([[SHA1, gate], [SHA2, "failed_gate"]])
+    }),
+    ownerLogin: "owner"
+  })
+
+  await assert.rejects(assertBootstrapFailedGateRecorderRevision(makeArguments({ gate: null })), /terminal failed exact-SHA Gate A/)
+  await assert.rejects(assertBootstrapFailedGateRecorderRevision(makeArguments({ gate: "passed" })), /terminal failed exact-SHA Gate A/)
+  await assert.rejects(assertBootstrapFailedGateRecorderRevision(makeArguments({ approved: false })), /lacks repository-owner approval/)
+  await assert.rejects(assertBootstrapFailedGateRecorderRevision(makeArguments({ coordinatorSha: SHA1, mainHistory: [SHA0, SHA1, SHA2] })), /current main head/)
+
+  let trustedLedger = createLedger({ lastReconciledMain: SHA0 })
+  trustedLedger = reconcileMain(trustedLedger, {
+    mainHistory: [SHA0, SHA1],
+    merges: [{ base: "main", merged: true, approved: true, pr: 604, sha: SHA1, gate: "passed" }],
+    expectedRevision: trustedLedger.revision,
+    now: () => NOW
+  })
+  await assert.rejects(assertBootstrapFailedGateRecorderRevision(makeArguments({
+    coordinatorSha: SHA2,
+    ledger: trustedLedger
+  })), /only available before trusted tooling/)
 })
 
 test("coordinator trust fails closed on pending or failed exact-SHA checks", async () => {
