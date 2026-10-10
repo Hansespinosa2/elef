@@ -1,7 +1,7 @@
 // Editor chrome for the shared renderer: interactive shells, toolbars, controls
 // and Stimulus hooks wrapped around @elef/renderer projection output.
 // Presentation chrome lives in @elef/client (features/presentation); this
-// module keeps the document-editor chrome until Phase 09. The bundle entry
+// module keeps the document-editor chrome permanently (fork B, ADR-011). The bundle entry
 // composes `editorChrome` with `renderPreviewCore` to keep shipped bytes
 // identical. `renderPreviewCore` alone emits bare projection.
 import {

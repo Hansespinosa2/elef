@@ -3,16 +3,22 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Deterministic projection of an Elef Work to HTML: markdown-it core, Elef syntax rules, image/math rules, block and preview rendering. No editor chrome, DOM, React, filesystem, network, Rails or Tauri.",
-  "types": "./src/index.js",
+  "description": "Deterministic projection of an Elef Work to HTML: markdown-it core, Elef syntax rules, image/math rules, block and preview rendering. Bare projection by default; editor chrome is injected through the chrome option. No DOM, React, filesystem, network, Rails or Tauri.",
+  "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.js"
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/elef-renderer.js"
+    }
   },
   "files": [
+    "dist",
     "src"
   ],
   "scripts": {
-    "test": "node --test test/*.test.js"
+    "build": "node build.mjs",
+    "test": "node run-tests.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@elef/work-model": "0.1.0",

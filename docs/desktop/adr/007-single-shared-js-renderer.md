@@ -1,10 +1,9 @@
 # ADR-007: One shared JavaScript renderer
 
-- Status: Proposed
-- Date: 2026-10-01
+- Status: Accepted
+- Date: 2026-10-01 (accepted 2026-10-10: the single-renderer migration is complete in-tree — one bundle, no Ruby implementation left, both consumers on it; see Decision)
 - Decider: Andres
 - Confidence: medium
-- Accepted when: the remaining consumer and exact-fixture gates in [issue #126](https://github.com/Hansespinosa2/elef/issues/126) are closed
 
 ## Context
 
@@ -18,12 +17,12 @@ Maintaining separate Ruby and JavaScript Markdown renderers would make each rend
 
 ## Decision
 
-Use one JavaScript renderer bundle. Rails runs it through MiniRacer; desktop runs it in a web worker. Mermaid rendering remains in the browser/webview because it needs a DOM. The shared renderer and build entry point live under `app/javascript/lib/` and `script/`.
+Use one JavaScript renderer bundle. Rails runs it through MiniRacer; desktop runs it in a web worker. Mermaid rendering remains in the browser/webview because it needs a DOM. The renderer lives in `packages/renderer`: entry `packages/renderer/src/renderer_global.ts`, build `packages/renderer/build.mjs`, canonical output `packages/renderer/dist/elef-renderer.bundle.js`. Rails loads that bundle through MiniRacer (`Source::JavascriptRenderer::BUNDLE_PATH`); the desktop worker and the importmap `elef-renderer` pin consume the same build.
 
 ## Consequences
 
-- Renderer behavior is tested from one fixture set and the desktop packages the Rails-built bundle.
-- The Ruby renderer remains only as a rollback path until consumer parity, exact fixtures, and the production soak are complete.
+- Renderer behavior is tested from one fixture set (renderer fixtures + corpus) and both hosts consume the package-built bundle.
+- No Ruby renderer implementation remains: `Source::Renderer` is a thin delegate to `Source::JavascriptRenderer`, and the boundary checker (R8) rejects any Ruby/Rust reinterpretation of Work syntax.
 - Renderer changes update the shared tests and both consumers; see [development and testing](../../development.md).
 
 ## Revisit when

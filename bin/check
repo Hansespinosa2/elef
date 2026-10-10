@@ -55,7 +55,7 @@ EXPECTED_QUICK_COMMANDS = (
 EXPECTED_AFFECTED_COMMANDS = (
     "apps/web/bin/rails tailwindcss:build",
     "npm run renderer:build",
-    "git diff --exit-code -- apps/web/vendor/javascript/elef-renderer.bundle.js apps/web/app/assets/builds/tailwind.css",
+    "git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js apps/web/app/assets/builds/tailwind.css",
     "npm run test:javascript",
     "apps/web/bin/rails db:test:prepare",
     "apps/web/bin/rails test apps/web/test/lib/source/renderer_test.rb apps/web/test/lib/source/javascript_renderer_test.rb apps/web/test/lib/authoring_registry_test.rb apps/web/test/models/presentation_test.rb apps/web/test/services/presentations/pptx_export_test.rb",
@@ -691,7 +691,7 @@ AFFECTED_RAILS_TESTS = (
 AFFECTED_COMMANDS_1 = (
     *QUICK_COMMANDS_1,
     "npm run renderer:build",
-    "git diff --exit-code -- apps/web/vendor/javascript/elef-renderer.bundle.js",
+    "git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js",
     "npm run build --prefix packages/client",
     "git diff --exit-code -- packages/client/dist/",
     "apps/web/bin/rails tailwindcss:build",
@@ -823,7 +823,7 @@ def check_contracts_fresh() -> None:
 
 def check_renderer_fresh() -> None:
     run_step("npm run renderer:build")
-    run_step("git diff --exit-code -- apps/web/vendor/javascript/elef-renderer.bundle.js")
+    run_step("git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js")
 
 
 def run_fresh() -> None:
@@ -1133,7 +1133,6 @@ PHASE11_SWEEP_C_NAMES = (
 PHASE11_SWEEP_SELF_LITERALS = (
     '"desktop/", "/desktop/"',
     '"desktop/" not in desktop_application',
-    '"script/build_renderer.mjs" not in build',
     '"desktop/" not in renderer_build',
 )
 PHASE11_OWNERSHIP_PATH = "apps/web/script/check_frontend_ownership.py"

@@ -61,7 +61,7 @@ Markdown is the authored source. Rendered HTML, editor projections, library card
 | apps/web/test/ | Rails model, service, request, JavaScript, architecture, and browser system tests |
 | .github/workflows | CI, desktop release packaging, and deployment automation |
 
-apps/desktop/frontend/build.mjs resolves `@elef/editor-runtime` (and the `@elef/client` bundle) as workspace packages, packages apps/web/app/views/desktop_host.html and Rails-owned styles, and copies the renderer bundle built by apps/web/script/build_renderer.mjs. Tauri's configured dev and build hooks use that same frontend build. No Rails server is started by the desktop shell.
+apps/desktop/frontend/build.mjs resolves `@elef/editor-runtime` (and the `@elef/client` bundle) as workspace packages, packages apps/web/app/views/desktop_host.html and Rails-owned styles, and copies the renderer bundle built by packages/renderer/build.mjs. Tauri's configured dev and build hooks use that same frontend build. No Rails server is started by the desktop shell.
 
 The Rails-owned application calls named library services. Tauri command names and raw IPC stay inside `apps/desktop/frontend/src` adapters; Rails-owned frontend code does not invoke Tauri commands.
 

@@ -8,10 +8,10 @@
 // entry) which the desktop build re-bundles into its own deferred chunk.
 // A failed load degrades to the card's "unavailable" state, never a crash.
 export { renderPreviewCore } from "@elef/renderer";
+// Client-flavored names for card previews, owned by @elef/renderer: the input
+// covers what cards pass, the output what they read (html + style).
 export type {
-  RendererPreviewInput as ClientPreviewInput,
-  RendererPreviewOutput as ClientPreviewOutput,
+  ClientPreviewInput,
+  ClientPreviewOutput,
+  ClientPreviewStyle,
 } from "@elef/renderer";
-// ClientPreviewStyle keeps this entry's shipped type names stable; the shape
-// itself is work-model's EditorStyle, owned there.
-export type { EditorStyle as ClientPreviewStyle } from "@elef/work-model";

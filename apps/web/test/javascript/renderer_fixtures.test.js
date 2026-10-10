@@ -6,7 +6,7 @@ import vm from "node:vm"
 const inputs = JSON.parse(await readFile(new URL("./fixtures/renderer-inputs.json", import.meta.url)))
 const outputs = JSON.parse(await readFile(new URL("./fixtures/renderer-outputs.json", import.meta.url)))
 const sandbox = vm.createContext({})
-vm.runInContext(await readFile(new URL("../../vendor/javascript/elef-renderer.bundle.js", import.meta.url), "utf8"), sandbox)
+vm.runInContext(await readFile(new URL("../../../../packages/renderer/dist/elef-renderer.bundle.js", import.meta.url), "utf8"), sandbox)
 
 assert.deepEqual(inputs.map(row => row.name), outputs.map(row => row.name), "Every fixture needs a reviewed expected output")
 for (const [index, { name, input }] of inputs.entries()) {

@@ -63,6 +63,17 @@ test("client presentation block attributes gate editability on region flags", ()
     presentationBlockAttributes({ valid: false, mapped: { id: "b1" }, region: { id: "r1" }, label: "Block" }),
     'contenteditable="false" aria-readonly="true"',
   );
+
+  // Unresolved triples degrade to the invalid string instead of throwing,
+  // matching the renderer's possibly-unmapped input.
+  assert.equal(
+    presentationBlockAttributes({ valid: true, mapped: null, region: { id: "r1", editable: true }, label: "Block" }),
+    'contenteditable="false" aria-readonly="true"',
+  );
+  assert.equal(
+    presentationBlockAttributes({ valid: true, mapped: { id: "b1" }, region: undefined, label: "Block" }),
+    'contenteditable="false" aria-readonly="true"',
+  );
 });
 
 test("client presentation block controls disable edge moves and single delete", () => {

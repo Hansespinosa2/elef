@@ -32,7 +32,7 @@ pin "crelt" # @1.0.7
 pin "style-mod" # @4.1.4
 pin "w3c-keyname" # @2.2.8
 pin "katex", to: "katex.js" # @0.18.7 Shared Rails and desktop browser runtime
-pin "elef-renderer", to: "elef-renderer.bundle.js"
+pin "elef-renderer", to: "renderer/dist/elef-renderer.bundle.js"
 pin "mermaid", to: "mermaid.min.js" # @11.17.2 Vendored self-contained build; exposes globalThis.mermaid
 
 pin "@elef/client", to: "client/dist/elef-client.js"

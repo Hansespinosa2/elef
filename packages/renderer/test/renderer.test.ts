@@ -8,12 +8,14 @@ test("presentation preview builds editable source ranges and ignores slide delim
   const preview = renderPreviewCore({ source, title: "Deck" })
 
   assert.equal(preview.editor_map.slides.length, 2)
-  assert.equal(preview.editor_map.front_matter.body_start, source.indexOf("# One"))
+  assert.equal(preview.editor_map.front_matter?.body_start, source.indexOf("# One"))
   assert.equal(preview.editor_map.source_length, source.length)
   assert.match(preview.html, /<div class="presentation">/)
   assert.equal((preview.html.match(/<section class="slide slide-body">/g) || []).length, 2)
   assert.match(preview.html, /<code[^>]*>---/)
-  assert.equal(preview.editor_map.slides[1].blocks[0].markdown, "# Two")
+  const secondSlide = preview.editor_map.slides[1]
+  assert.ok(secondSlide)
+  assert.equal(secondSlide.blocks[0]?.markdown, "# Two")
 })
 
 test("desktop presentation structure comes from the same source map exported to Rails", () => {
@@ -47,9 +49,13 @@ test("desktop presentation structure comes from the same source map exported to 
     mode: "presentation"
   }))
   assert.equal(preview.editor_map.source_length, source.length)
-  assert.equal(preview.editor_map.slides[0].layout, "two-column")
-  assert.equal(preview.editor_map.slides[0].directives[0].type, "section")
-  assert.equal(preview.editor_map.slides[1].blocks.length, 2)
+  const firstSlide = preview.editor_map.slides[0]
+  const secondSlide = preview.editor_map.slides[1]
+  assert.ok(firstSlide)
+  assert.ok(secondSlide)
+  assert.equal(firstSlide.layout, "two-column")
+  assert.equal(firstSlide.directives[0]?.type, "section")
+  assert.equal(secondSlide.blocks.length, 2)
   assert.match(preview.html, /<section class="slide slide-two-column">/)
   assert.match(preview.html, /class="slide-regions"/)
   assert.match(preview.html, /class="slide-margin-section"/)
@@ -141,7 +147,7 @@ test("wiki links resolve through local document IDs and math stays inert", () =>
 })
 
 test("preview rejects non-text and oversized source with typed errors", () => {
-  assert.throws(() => renderPreviewCore({ source: 42 }), { code: "invalid_input", retryable: false })
+  assert.throws(() => renderPreviewCore({ source: 42 as unknown as string }), { code: "invalid_input", retryable: false })
   assert.throws(() => renderPreviewCore({ source: "x".repeat(50 * 1024 * 1024 + 1) }), { code: "too_large", retryable: false })
 })
 
@@ -149,6 +155,8 @@ test("shared Markdown block renderer keeps media resolution explicit and support
   const source = "![Photo](images/diagram.png) ![Clip](elef-asset:clip) ![Remote](https://example.com/a.png)"
   const references = collectMediaReferences(source)
   assert.deepEqual(references, ["images/diagram.png", "elef-asset:clip", "https://example.com/a.png"])
+  // Wiki links parse without a resolver and contribute no references.
+  assert.deepEqual(collectMediaReferences("See [[Target|Display]] and [[Other]] for context."), [])
 
   const local = renderMarkdownBlock(source, {
     mediaBaseUrl: "elefasset://localhost/deck-id",

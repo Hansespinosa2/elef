@@ -9,7 +9,7 @@ const e2eRoot = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
 const repoRoot = path.resolve(e2eRoot, "../../..")
 const inputs = JSON.parse(await readFile(path.join(repoRoot, "apps/web/test/javascript/fixtures/renderer-inputs.json"), "utf8"))
 const outputs = JSON.parse(await readFile(path.join(repoRoot, "apps/web/test/javascript/fixtures/renderer-outputs.json"), "utf8"))
-const bundlePath = path.join(repoRoot, "apps/web/vendor/javascript/elef-renderer.bundle.js")
+const bundlePath = path.join(repoRoot, "packages/renderer/dist/elef-renderer.bundle.js")
 
 test.describe("renderer corpus in Chromium", () => {
   test.beforeEach(async ({ page }) => {

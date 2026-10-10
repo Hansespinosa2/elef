@@ -19,8 +19,11 @@ export function presentationSlideFrame({ index, layout, toolbar, topMargin, cont
   return `<div class="slide-frame"><section class="slide slide-${layout}" aria-label="Slide ${index + 1}" data-editor-slide-id="slide-${index + 1}" data-slide-index="${index}">${toolbar}${topMargin}<div class="slide-content">${content}</div>${bottomMargin}</section></div>`
 }
 
-export function presentationBlockAttributes({ valid, mapped, region, label }: { valid: boolean; mapped: { id: string }; region: { id: string; editable?: boolean }; label: string }): string {
-  if (!valid) return "contenteditable=\"false\" aria-readonly=\"true\""
+export function presentationBlockAttributes({ valid, mapped, region, label }: { valid: boolean; mapped: { id: string } | null | undefined; region: { id: string; editable?: boolean } | null | undefined; label: string }): string {
+  // The renderer passes possibly-unmapped blocks; only valid+resolved triples
+  // are editable. (The renderer guarantees resolved-when-valid, so the extra
+  // disjuncts only turn a would-be TypeError into graceful degradation.)
+  if (!valid || !mapped || !region) return "contenteditable=\"false\" aria-readonly=\"true\""
   const editable = region.editable
     ? ` contenteditable="true" role="textbox" aria-label="${label}" aria-multiline="true" spellcheck="true"`
     : " contenteditable=\"false\" aria-readonly=\"true\""

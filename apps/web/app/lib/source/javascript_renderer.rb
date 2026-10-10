@@ -1,6 +1,6 @@
 module Source
   module JavascriptRenderer
-    BUNDLE_PATH = Rails.root.join("vendor/javascript/elef-renderer.bundle.js").freeze
+    BUNDLE_PATH = Rails.root.join("../../packages/renderer/dist/elef-renderer.bundle.js").freeze
     MAX_RENDER_BYTES = 50 * 1024 * 1024
     MAX_MEDIA_REFERENCES = 10_000
     CONTEXT_TIMEOUT_MS = 4_000

@@ -43,7 +43,7 @@ feature_flags_source = (REPO_ROOT / "packages" / "editor-runtime" / "src" / "lib
 delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
 document_model = (REPO_ROOT / "apps" / "web" / "app" / "lib" / "source" / "document.rb").read_text()
 javascript_renderer = (REPO_ROOT / "apps" / "web" / "app" / "lib" / "source" / "javascript_renderer.rb").read_text()
-renderer_global = (REPO_ROOT / "apps" / "web" / "script" / "renderer_bundle_entry.js").read_text()
+renderer_global = (REPO_ROOT / "packages" / "renderer" / "src" / "renderer_global.ts").read_text()
 renderer_worker = (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
 desktop_main = (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "main.js").read_text()
 desktop_application = (REPO_ROOT / "packages" / "editor-runtime" / "src" / "lib" / "file_library_application.ts").read_text()
@@ -253,12 +253,12 @@ assert re.search(r"def editor_map\([^)]*\).*?Source::JavascriptRenderer\.editor_
 assert '"ElefRenderer.buildEditorMap"' in javascript_renderer, "the Rails wrapper must call the shared map exported by the renderer bundle"
 assert "buildEditorMap" in renderer_global and "buildEditorStructure" in renderer_global, "the renderer bundle must expose the shared editor map and structure"
 assert 'import "./renderer.bundle.js"' in renderer_worker, "the desktop worker must load the same renderer bundle as Rails"
-rails_bundle = REPO_ROOT / "apps" / "web" / "vendor" / "javascript" / "elef-renderer.bundle.js"
+package_bundle = REPO_ROOT / "packages" / "renderer" / "dist" / "elef-renderer.bundle.js"
 desktop_bundle = REPO_ROOT / "apps" / "desktop" / "frontend" / "dist" / "assets" / "renderer.bundle.js"
 assert desktop_bundle.is_file(), "build the desktop frontend before checking the shared renderer bundle"
-rails_hash = hashlib.sha256(rails_bundle.read_bytes()).hexdigest()
+package_hash = hashlib.sha256(package_bundle.read_bytes()).hexdigest()
 desktop_hash = hashlib.sha256(desktop_bundle.read_bytes()).hexdigest()
-assert rails_hash == desktop_hash, "Rails and desktop renderer bundle hashes differ; run npm run renderer:build"
+assert package_hash == desktop_hash, "package and desktop renderer bundle hashes differ; run npm run renderer:build"
 assert not re.search(r"def (?:editor_blocks|editable_region_for_block|utf16_range)\b", document_model), "Rails must not retain a second editor-map implementation"
 assert {
     permission

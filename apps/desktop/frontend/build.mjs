@@ -111,8 +111,8 @@ const duplicates = [...packageInstallations]
 if (duplicates.length) {
   throw new Error(`Desktop bundle contains duplicate runtime identity packages:\n${duplicates.join("\n")}`)
 }
-// Rails owns and builds the renderer. Desktop packages the exact same artifact.
-const rendererBundle = path.join(repoRoot, "apps/web/vendor/javascript/elef-renderer.bundle.js")
+// @elef/renderer owns and builds the renderer. Desktop packages the exact same artifact.
+const rendererBundle = path.join(repoRoot, "packages/renderer/dist/elef-renderer.bundle.js")
 await copyFile(rendererBundle, path.join(assets, "renderer.bundle.js"))
 await build({
   entryPoints: [path.join(frontendRoot, "src/renderer-worker.js")],
