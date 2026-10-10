@@ -14,6 +14,10 @@ export async function assertTrustedCoordinatorRevision({ coordinatorSha, mainHis
   }
   if (!ledger || typeof ledger !== "object") throw new Error("release tooling needs an initialized Pages ledger")
   if (!github || !ownerLogin) throw new TypeError("coordinator verification needs GitHub records and the repository owner")
+  if (typeof github.verifyMainReviewProtection !== "function") {
+    throw new TypeError("coordinator verification needs an authoritative main review-protection check")
+  }
+  await github.verifyMainReviewProtection()
 
   const coordinatorIndex = mainHistory.indexOf(coordinatorSha)
   if (coordinatorIndex < 0) throw new Error("coordinator revision is not in the current first-parent main history")
@@ -63,6 +67,36 @@ export async function assertTrustedCoordinatorRevision({ coordinatorSha, mainHis
   }
 
   return { sha: coordinatorSha, pr: pullRequest.number }
+}
+
+export function assertMainReviewProtection(rulesets, repository) {
+  if (!Array.isArray(rulesets)) throw new TypeError("main review-protection verification needs repository rulesets")
+  if (typeof repository !== "string" || !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository)) {
+    throw new TypeError("main review-protection verification needs owner/repository identity")
+  }
+
+  const matching = rulesets.filter(ruleset =>
+    ruleset?.name === "main" &&
+    ruleset.target === "branch" &&
+    ruleset.enforcement === "active" &&
+    ruleset.source_type === "Repository" &&
+    ruleset.source?.toLowerCase() === repository.toLowerCase() &&
+    ruleset.conditions?.ref_name?.include?.includes("refs/heads/main") &&
+    Array.isArray(ruleset.conditions.ref_name.exclude) &&
+    ruleset.conditions.ref_name.exclude.length === 0
+  )
+  if (matching.length !== 1) throw new Error("the active repository main ruleset is missing or ambiguous")
+
+  const reviewRule = matching[0].rules?.find(rule =>
+    rule?.type === "pull_request" &&
+    Number.isInteger(rule.parameters?.required_approving_review_count) &&
+    rule.parameters.required_approving_review_count >= 1 &&
+    rule.parameters.require_code_owner_review === true
+  )
+  if (!reviewRule) {
+    throw new Error("the active main ruleset must require an approving review and CODEOWNERS review")
+  }
+  return true
 }
 
 export async function selectTrustedCoordinatorRevision({ coordinatorSha, mainHistory, ledger, github, ownerLogin }) {

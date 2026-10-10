@@ -2,13 +2,37 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createLedger, reconcileMain } from "./ledger.mjs"
-import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertTrustedCoordinatorRevision, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
+import { assertAuthorizedMainCoordinatorDispatch, assertAuthorizedReleaseTagDispatch, assertMainReviewProtection, assertTrustedCoordinatorRevision, latestTrustedToolingSha, selectTrustedCoordinatorRevision } from "./coordinator-trust.mjs"
 
 const SHA0 = "0".repeat(40)
 const SHA1 = "1".repeat(40)
 const SHA2 = "2".repeat(40)
 const SHA3 = "3".repeat(40)
 const NOW = "2026-10-10T09:00:00.000Z"
+
+test("main coordinator trust requires the active repository ruleset to require approval and CODEOWNERS review", () => {
+  const ruleset = {
+    name: "main",
+    target: "branch",
+    enforcement: "active",
+    source_type: "Repository",
+    source: "owner/elef",
+    conditions: { ref_name: { include: ["refs/heads/main"], exclude: [] } },
+    rules: [{ type: "pull_request", parameters: { required_approving_review_count: 1, require_code_owner_review: true } }]
+  }
+  assert.equal(assertMainReviewProtection([ruleset], "OWNER/elef"), true)
+  for (const invalid of [
+    { ...ruleset, enforcement: "disabled" },
+    { ...ruleset, source: "other/elef" },
+    { ...ruleset, conditions: { ref_name: { include: ["refs/heads/dev"], exclude: [] } } },
+    { ...ruleset, conditions: { ref_name: { include: ["refs/heads/main"], exclude: ["refs/heads/main"] } } },
+    { ...ruleset, rules: [{ type: "pull_request", parameters: { required_approving_review_count: 0, require_code_owner_review: true } }] },
+    { ...ruleset, rules: [{ type: "pull_request", parameters: { required_approving_review_count: 1, require_code_owner_review: false } }] }
+  ]) {
+    assert.throws(() => assertMainReviewProtection([invalid], "owner/elef"))
+  }
+  assert.throws(() => assertMainReviewProtection([], "owner/elef"), /missing or ambiguous/)
+})
 
 test("manual release actions require the owner, immutable version tag and Gate-A-passed ledger source", () => {
   const release = { version: "0.1.0", tag: "desktop-v0.1.0", main_sha: SHA1, gate: "passed" }
@@ -208,6 +232,7 @@ function pull(number, sha) {
 function fakeGitHub(prs, { gates = new Map(), approved = true, trees = new Map() } = {}) {
   const bySha = new Map(prs.map(pr => [pr.merge_commit_sha, pr]))
   return {
+    verifyMainReviewProtection: async () => true,
     pullRequestsForCommit: async sha => bySha.has(sha) ? [bySha.get(sha)] : [],
     pullRequest: async number => prs.find(pr => pr.number === number) || null,
     ownerApprovedPullRequest: async pr => typeof approved === "function" ? approved(pr) : approved,

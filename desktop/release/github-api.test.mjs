@@ -5,6 +5,37 @@ import { GitHubReleaseApi, RELEASE_GATE_JOB_NAMES } from "./github-api.mjs"
 
 const SHA = "a".repeat(40)
 
+test("coordinator preflight fetches and verifies the complete main review ruleset", async () => {
+  const requests = []
+  const ruleset = {
+    id: 23894784,
+    name: "main",
+    target: "branch",
+    enforcement: "active",
+    source_type: "Repository",
+    source: "example/elef",
+    conditions: { ref_name: { include: ["refs/heads/main"], exclude: [] } },
+    rules: [{ type: "pull_request", parameters: { required_approving_review_count: 1, require_code_owner_review: true } }]
+  }
+  const api = new GitHubReleaseApi({
+    owner: "example",
+    repository: "elef",
+    token: "test-token",
+    fetchImpl: async url => {
+      requests.push(String(url))
+      if (String(url).includes("/rulesets?")) return jsonResponse([{ id: ruleset.id, name: ruleset.name, source_type: ruleset.source_type, source: ruleset.source }])
+      if (String(url).includes(`/rulesets/${ruleset.id}?`)) return jsonResponse(ruleset)
+      throw new Error("unexpected API URL")
+    },
+    sleep: async () => {}
+  })
+
+  assert.equal(await api.verifyMainReviewProtection(), true)
+  assert.equal(requests.length, 2)
+  assert.match(requests[0], /rulesets\?includes_parents=true/)
+  assert.match(requests[1], /rulesets\/23894784\?includes_parents=true/)
+})
+
 test("exact main SHA gate passes only when every required CI job succeeds", async () => {
   const api = new GitHubReleaseApi({
     owner: "example",
