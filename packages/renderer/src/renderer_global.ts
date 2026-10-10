@@ -21,6 +21,7 @@ import {
   readStyle,
   readStyleOverrides,
   replaceFirstHeading,
+  resolveArtBindings,
   sourceAnchorLines,
   withAppearanceValue,
   withFrontMatterValue
@@ -53,6 +54,7 @@ globalThis.ElefRenderer = Object.freeze({
   readStyle,
   readStyleOverrides,
   replaceFirstHeading,
+  resolveArtBindings,
   sourceAnchorLines,
   withAppearanceValue,
   withFrontMatterValue,

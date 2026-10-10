@@ -1,7 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { collectMediaReferences, renderMarkdownBlock, renderPreviewCore } from "../src/index.js"
-import { buildEditorMap } from "@elef/work-model"
+import { buildEditorMap, buildEditorStructure } from "@elef/work-model"
 
 test("presentation preview builds editable source ranges and ignores slide delimiters in code fences", () => {
   const source = "---\ntheme: dark\n---\n# One\n\nText 😀\n\n```md\n---\n```\n---\n# Two"
@@ -223,4 +223,17 @@ test("shared Markdown rendering preserves styled transpose and inverse atoms", (
     assert.match(html, /class="katex"/, `${expression} should render as math`)
     assert.doesNotMatch(html, /class="math-error"/, `${expression} should not produce a math error`)
   }
+})
+
+test("ART-SRC-INVALID-PARITY: invalid Art is consumed with only its stable Art diagnostic", () => {
+  const source = ":::art{flow}\n- A"
+  const structure = buildEditorStructure(source, { sourceName: "invalid-art", mode: "document" })
+  const preview = renderPreviewCore({ kind: "document", source, title: "Invalid Art" })
+
+  assert.equal(structure.editorMap.slides[0]?.directives[0]?.type, "art_invalid")
+  assert.deepEqual(structure.editorMap.art_diagnostics?.map((diagnostic) => diagnostic.code), ["ART_INVALID_SYNTAX"])
+  assert.ok(structure.warnings.some((warning) => warning.includes("syntax is invalid")))
+  assert.ok(structure.warnings.every((warning) => !warning.includes("Unknown or malformed presentation directive")))
+  assert.doesNotMatch(preview.html, /:::art\{flow\}/)
+  assert.doesNotMatch(preview.html, /data-elef-art-root/)
 })

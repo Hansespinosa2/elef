@@ -11,8 +11,10 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 ART_CSS = ROOT / "app/assets/stylesheets/components/art.css"
 TOKEN_CSS = ROOT / "app/assets/stylesheets/tokens.css"
 LAYOUT_JS = REPO_ROOT / "packages/editor-runtime/src/lib/art_layout.ts"
+# The Stimulus controller is a thin shell; its lifecycle lives in the lib module.
 CONTROLLER_JS = REPO_ROOT / "packages/editor-runtime/src/controllers/art_layout_controller.ts"
-SOURCE_JS = REPO_ROOT / "packages/editor-runtime/src/lib/art_source.ts"
+CONTROLLER_LIB_JS = REPO_ROOT / "packages/editor-runtime/src/lib/art_layout.ts"
+SOURCE_JS = REPO_ROOT / "packages/work-model/src/art_source.ts"
 RENDERER_JS = REPO_ROOT / "packages/renderer/src/renderer.ts"
 GLOBAL_RENDERER_JS = REPO_ROOT / "packages/renderer/src/renderer_global.ts"
 AUTHORING_REGISTRY = ROOT / "app/javascript/data/default_authoring_registry.json"
@@ -36,7 +38,7 @@ token_css = TOKEN_CSS.read_text()
 all_css = "\n".join(path.read_text() for path in (ROOT / "app/assets/stylesheets").rglob("*.css"))
 art_css = ART_CSS.read_text()
 layout_js = LAYOUT_JS.read_text()
-controller_js = CONTROLLER_JS.read_text()
+controller_js = CONTROLLER_JS.read_text() + "\n" + CONTROLLER_LIB_JS.read_text()
 source_js = SOURCE_JS.read_text()
 renderer_js = RENDERER_JS.read_text()
 global_renderer_js = GLOBAL_RENDERER_JS.read_text()
@@ -105,7 +107,7 @@ def lifecycle_is_batched_and_cleaned_up():
     return all(fragment in controller_js for fragment in (
         "new ResizeObserver", "new MutationObserver", "requestAnimationFrame", "runDecisionPass",
         "runMeasurementPass", "runFallbackMeasurement", "resizeObserver?.disconnect()",
-        "mutationObserver?.disconnect()", "document.fonts?.ready", 'addEventListener?.("loadingdone"'
+        "mutationObserver?.disconnect()", "fonts?.ready", 'addEventListener?.("loadingdone"'
     ))
 
 
