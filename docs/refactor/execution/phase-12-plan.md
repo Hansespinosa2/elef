@@ -1,6 +1,6 @@
 # Phase 12 plan — Cleanup, durable docs, and final architecture audit
 
-Status: RE-PLAN DRAFT (v1 frozen 2026-10-09; v2 freeze pending the F1 owner fork — see §9 log 2026-10-10)
+Status: FROZEN v2 at 2026-10-10 (hash recorded in `docs/refactor/status.json`; re-plan log §9)
 Phase contract: `docs/refactor/phases/12-cleanup.md` (sha256 `626b04626484ffda893825753e01de5bf4dcd4fe5c7f3b93ca44554ba3311386`)
 Phase base: `15e95a91d8683d32459cfff82b88caa812ff2a22`
 
@@ -43,10 +43,8 @@ In scope (DO-1..DO-7, ordered; structural/prose/tooling commits separated):
 - DO-5: P12-07 five unseen routing exercises (new seeds + fresh-agent transcripts, phase-10 format).
 - DO-6: P12-08 deletion proof in a throwaway checkout (`rm -rf docs/refactor`, proof set below) + P12-12 retirement manifest (removed-vs-marked record).
 - DO-7: phase-12 gate in `bin/check` + evidence; freeze candidate. (v1 candidate `92d9d3b` SUPERSEDED by the §9 2026-10-10 re-plan; gate stands, evidence re-runs at the new candidate.)
-- DO-8 (F1 endgame — scope set by the owner fork; no edits until the fork resolves):
-  - Fork A (full migration): move the 45-file desktop-consumed closure into `packages/client` (application/ + feature slices), de-Stimulus the editor shell, delete the desktop alias plugin; `check_frontend_ownership.py` transitional rule retires.
-  - Fork B (neutral package + ADR, recommended): rehome the shared Stimulus shell into a new neutral package with a narrowed boot API (both hosts consume the package; no host→host), retire the alias + transitional rule, owner-approved ADR amends the §4 client definition; package-admission law applied in writing in this plan before the move.
-  - Fork C (waiver): owner ADR blesses the alias as steady state; no moves (not recommended — abandons the structural goal).
+- DO-8 (F1 endgame — fork B, owner-selected, ADR-011): scaffold `packages/editor-runtime` (Stimulus shell, strict TS); narrowed boot API (`registerEditorRuntime`, `mountEditorHosts`, `startFileLibraryApplication`, mount tokens); rehome the 45-file closure verbatim, then convert to strict TS; rewire F2 (repoint moved `editor_controller` to the client vim subpath, delete the web copy) and F3 (delete sanitizer re-export + repoint its 3 importers; move document chrome in, export it for the renderer bundle); repoint importmap + desktop build at the package; delete the alias plugin; retire the transitional ownership rule into a permanent no-host→host tripwire; accept ADR-011; update durable paths in the same commits.
+- Execution is 6 parallel workstreams (S1 editor-runtime rehome; S2 client beauty; S3 work-model beauty + canonical dist; S4 renderer home + beauty; S5 contracts/spec/smalls; S6 local-store split) in the shared checkout with disjoint file sets, workers commit nothing and run narrow proof only; main integrates serially (S6 → S3 → S2 → S1 → S4 → S5) with `affected` between each, applies reported shared-file changes (importmap/renderer pins, `bin/check` freshness paths, N1 pins, N2 dedup), then runs the full battery.
 - DO-9 (unconditional remediation batch, separate commits per finding): F2 vim single-owner; F3 temp-compat deletion (sanitizer re-export + document chrome; chrome target follows the F1 fork); F4 contracts phantom deletion; F5 minimal `spec/` (deck-manifest + archive schemas, version rules, compat fixtures, one wired consumer); F6 work-model `blockOperationRange` + both editors call it; F7 grammar derives from work-model; F8 narrow client barrel; F9 tests through barrels + repo-wide deep-import check; F10 markup-vocabulary pin test; F11 missing dep; F12 `local-store` module split; F13 renderer entry/build/dist into `packages/renderer`; F14/F15 docs reconciliation; N1 dead pins. N2–N5: N2 share-or-leave at fix time, N3/N5 fix, N4 accept (commented, don't extend).
 - DO-10: new candidate battery (`all` ×2 P12-09 evidence at the post-remediation candidate), CHECK, independent review, ACT/PASS.
 
@@ -65,6 +63,7 @@ Settled owner decisions (interview 2026-10-10; recorded here at PLAN, frozen wit
 - D4a package name: `editor-runtime` (owner-confirmed; names the role, not the framework).
 - D4b `spec/` depth: minimal-honest (deck-manifest + archive schemas, version rules, compat fixtures, one CI-wired consumer) + machine-enforced extension rule (any format change extends `spec/` + fixtures in the same commit). Full bible rejected as speculative generality.
 - D4c host TypeScript: packages only. Host JS stays JavaScript (thin glue by design; typed at the seams via contracts ports + package APIs). Standing rule: host code that grows real logic moves to its owning package instead of being converted in place.
+- D5 end state (owner-corrected): the campaign NEVER merges into `dev`. Terminal state is the campaign branch up to date (post-PASS port streams + `dev`-into-branch merge resolving toward ported code), PR open, conflict-free, CI green. Owner performs the final merge. Post-merge CI (owner's merge result) is out of campaign scope; red CI on the PR is fixed on the branch until green.
 
 ## 3. Ownership classification
 | Change | Semantic owner (constitution §4) | Shared or host-specific (+ concrete reason) |
@@ -78,7 +77,7 @@ Settled owner decisions (interview 2026-10-10; recorded here at PLAN, frozen wit
 | Phase-12 gate | `tooling` (via `bin/`) | Shared repo verification |
 
 | F1 fork A: closure → client | `client` (`application/` orchestration + `features/` slices + `session/` lifecycle + `ui/` chrome) | Shared: both hosts mount the same client entries; Tauri/Rails transports stay host-side, injected through contracts ports |
-| F1 fork B: shell → new package | new `packages/editor-runtime` (name fixed at freeze) | Shared: both hosts consume the package; narrowed boot API (`registerEditorRuntime`, `mountEditorHosts`, `startFileLibraryApplication`) — no per-controller deep imports |
+| F1 fork B: shell → new package | `packages/editor-runtime` (owner-confirmed) | Shared: both hosts consume the package; narrowed boot API (`registerEditorRuntime`, `mountEditorHosts`, `startFileLibraryApplication`) — no per-controller deep imports |
 | F2 vim single owner | `client` (`features/settings/vimPreferences.ts`) | Shared; web `editor_controller.js` imports the client subpath (new export) |
 | F3 sanitizer deletion | `client` (`ui/sanitize.ts` + `/sanitize` subpath already exist) | Shared; 3 importers repointed, `#elef/preview-sanitizer` pin removed |
 | F3 chrome move | `client` (`ui/` or `features/document/`) under fork A; the neutral package under fork B | Shared; `preview_chrome.js` leaves the web host either way |
@@ -96,7 +95,7 @@ Settled owner decisions (interview 2026-10-10; recorded here at PLAN, frozen wit
 
 Package admission for fork B's editor-runtime package (written before any move; fork A/C need no new package):
 1. One cohesive responsibility: the Stimulus editor-shell runtime (controllers + editor lib + desktop bootstrap) — yes.
-2. Small stable public API: narrowed boot entries only (`registerEditorRuntime`, `mountEditorHosts`, `startFileLibraryApplication`, mount tokens); per-controller imports forbidden by checker — must hold at freeze or the fork fails back to A.
+2. Small stable public API: narrowed boot entries only (`registerEditorRuntime`, `mountEditorHosts`, `startFileLibraryApplication`, mount tokens); per-controller imports forbidden by checker — must hold at S1 integration or DO-8 re-plans.
 3. Acyclic machine-enforceable direction: package → client/work-model/contracts; hosts → package; enforced by `check_boundaries.py` + ownership checker — yes.
 4. Meaningful independent tests: the existing `apps/web/test/javascript` suite runs against package paths — yes (relocated, not rewritten).
 5. Concrete architectural payoff: eliminates all host→host imports; retires the transitional ownership rule — yes.
@@ -130,7 +129,7 @@ Ordered steps; structural moves and behavior changes in separate commits.
 5. DO-5 (exercises): five unseen P12-07 seeds + fresh-agent transcripts (all PASS ≤5 min or docs-fixed + reseed per phase-10 precedent). Commit.
 6. DO-6 (deletion proof): throwaway-checkout P12-08 proof + P12-12 retirement manifest. Commit.
 7. DO-7 (tooling): phase-12 gate in `bin/check` (P12-09 evidence validation + P12-11 transition preconditions); full proof map (§8); freeze candidate. (v1 candidate superseded; gate code stands.)
-8. DO-8 (F1 endgame per the frozen fork): fork A — closure moves in per-slice commits (bootstrap → application/, editor shell → features/ui, helpers → session/work-model), alias deletion, ownership-checker retirement, durable-docs path updates in the same commits (I09); fork B — package scaffold + narrowed boot API + bulk rehome + consumer repoint + alias/checker retirement + ADR; fork C — ADR only. Each commit: affected tier + targeted e2e proof.
+8. DO-8 (F1 endgame, fork B): S1 stream — package scaffold + narrowed boot API + verbatim rehome of the 45-file closure + strict-TS conversion + F2/F3 rewires + importmap/desktop repoint + alias deletion + ownership-checker retirement + ADR-011 acceptance + durable path updates. Main integrates after S6/S3/S2 with `affected` + desktop e2e proof.
 9. DO-9 (unconditional batch, one commit per finding, ordered F11 → F4 → F2 → F3-sanitizer → F8 → F9 → F6 → F7 → F10 → F5 → F13 → F12 → F14/F15/N1/N3/N5): each commit proves its own scope (named suite green); F3-chrome follows the DO-8 fork target.
 10. DO-10 (candidate): re-run `all` ×2 at the post-remediation candidate (P12-09 evidence); prepare-gate/run-gate ×2; CHECK; independent review round 1; ACT→PASS; `reconstruct` 13 checkpoints; handoff.
 
@@ -143,10 +142,10 @@ Ordered steps; structural moves and behavior changes in separate commits.
 | `apps/web/app/javascript/lib/preview_chrome.js` (web-host home) | client or neutral package per F1 fork | Temp-compat with expired condition (phase 09 PASS); moves, not deleted | This phase (DO-8/DO-9) |
 | `apps/web/app/javascript/controllers/vim_preferences.js` | client (true owner already) | Duplicate implementation; web importer repoints to the client subpath | This phase (DO-9) |
 | `mountElef` in `packages/contracts` | contracts (deletion) | Phantom declaration; true entry already owned by client | This phase (DO-9) |
-| Desktop alias plugin + `#elef/*` web-host pins (forks A/B) | desktop host build | Host→host mechanism; consumers repoint to package entries | This phase (DO-8) |
+| Desktop alias plugin + `#elef/*` web-host pins | desktop host build | Host→host mechanism; consumers repoint to package entries | This phase (DO-8) |
 | `apps/web/vendor/javascript/elef-renderer.bundle.js` (host home) + host build script | renderer (true home) | §6 canonical-home rule; moves to `packages/renderer/dist/` | This phase (DO-9) |
 | Temporary compatibility paths introduced | — | None: every move is atomic per commit (old path deleted, new path live, no shims) | — |
-| Temp-compat register position | — | Empty after DO-9: F3 items deleted/moved (this table); v1 §6 audit corrected per §9 log; F1 transitional ownership rule retired (forks A/B) or owner-ADR'd (fork C); OQ-1 positions the two judgment calls for the reviewer | Reviewer verdict (ACT resolves any FAIL) |
+| Temp-compat register position | — | Empty after DO-9: F3 items deleted/moved (this table); v1 §6 audit corrected per §9 log; F1 transitional ownership rule retired into a permanent tripwire (D1 permanent, ADR-011); OQ-1 positions the two judgment calls for the reviewer | Reviewer verdict (ACT resolves any FAIL) |
 
 ## 7. Risks and rollback triggers
 | Risk | Trigger | Response |
@@ -168,11 +167,11 @@ Rollback reference: `phase_base_sha` `15e95a91d8683d32459cfff82b88caa812ff2a22`.
 ## 8. Proof map
 | Criterion / invariant | Proof (command, test, CI job, reviewer checklist) | Tier | Environment needs |
 |---|---|---|---|
-| P12-01 temp-compat register | Empty after DO-9: corrected audit (`grep -rni 'temporar\|until Phase\|compat\|shim'` + per-file disposition in evidence); F3 items deleted/moved (§6); F1 transitional rule retired (A/B) or ADR'd (C); OQ-1 reviewer judgment | reviewer + gate tripwires | — |
+| P12-01 temp-compat register | Empty after DO-9: corrected audit (`grep -rni 'temporar\|until Phase\|compat\|shim'` + per-file disposition in evidence); F3 items deleted/moved (§6); F1 transitional rule retired into a permanent tripwire (ADR-011); OQ-1 reviewer judgment | reviewer + gate tripwires | — |
 | P12-02 arch allowlist | `RANGE_WRAPPER_ALLOW` removed (diff); `*_ALLOWED_BARE` positioned as rule definitions (reviewer judges); `check_boundaries.py` + self-test green; never-grown diff audit | quick + reviewer | — |
 | P12-03 package admission | Reviewer records justifications for the 5 (plan §1 inventory + admission-law analysis); fork B adds the 6th with §3 admission record; `ls packages/ crates/ spec/` shows no extras; frontend/e2e positioned as host tooling | reviewer | — |
 | P12-04 no duplicate implementation | Ownership/boundary/arch green; F2/F6/F7/F8 deletions in diff; duplicate-implementation sweep zero hits; phase-9 partials positioned web-only (reviewer judges) | quick + reviewer | — |
-| P12-05 state ownership | §5 9-row table as reviewer checklist against code; F1 end state evidenced (navigation in client application/ under A, in the neutral package with ADR scoping under B); F2 single vim owner | reviewer | — |
+| P12-05 state ownership | §5 9-row table as reviewer checklist against code; navigation split per ADR-011 (client application/ + editor-runtime, each evidenced); F2 single vim owner | reviewer | — |
 | P12-06 durable docs | Completion audit diff (every durable rule homed); `AGENTS.md` short router (line count + no campaign refs); link check green; F14/F15 reconciled in the same commits that change the code (I09); `spec/` rules homed | reviewer | — |
 | P12-07 fresh-agent routing | Five unseen seeds + timed transcripts, all PASS ≤5 min (phase-10 format) | exercises | fresh subagent, docs only |
 | P12-08 deletion proof | Throwaway checkout: `rm -rf docs/refactor` then `npm ci` + `npm run test:javascript` + `bin/rails test` (subset) + `cargo test -p local-store` + `tailwindcss:build` + `bin/check quick` + `bin/check all` — all green; durable link check ∅ | deletion proof | PG + toolchains |
@@ -202,3 +201,8 @@ Human gates touched (constitution §8): none triggered; H1–H5 remain pending, 
 - Added scope: DO-8 F1 endgame (owner fork A/B/C — §2; no edits until resolved), DO-9 unconditional remediation batch (ordered commits), DO-10 new-candidate battery. Preserved legal work: DO-1..DO-7 commits, the phase-12 gate code (evidence re-runs at the new candidate), P12-07 exercises (docs-routing still valid; reviewer re-verifies), P12-08 deletion proof (unaffected by production moves), five named human gates.
 - Proof changes: P12-01 corrected audit command + per-file disposition; P12-03 sixth-package branch; P12-04/05/06/10 evidence extended per finding; P12-09 re-runs at the new candidate.
 - Resolution: re-plan entry `d7eb4e7` (DO→PLAN, hash cleared); this v2 draft freezes on the owner fork answer (hash recorded in status + DO resume in the freeze commit).
+
+### 2026-10-10 — v2 freeze (fork B + package beauty + 6 workstreams)
+- Owner interview settled D1 (editor-runtime permanent, ADR-011), D2 (port after PASS), D3 (strictest TS bar), D4a (name `editor-runtime`), D4b (minimal-honest `spec/` + extension rule), D4c (packages-only TS), D5 (terminal state = open green PR; campaign NEVER merges into `dev`; post-PASS port + `dev`-into-branch merge resolving toward ported code).
+- Frozen scope: DO-8 fork B (S1) + DO-9 beauty batch (S2–S6, ordered commits per finding) + DO-10 battery. Work-model canonical dist entailed by its TS conversion (TS source cannot be importmap/browser-consumed). Fixed cross-stream seams: `@elef/client/vim-preferences` (S2 creates, S1 consumes), `@elef/editor-runtime/editor-chrome` exporting `editorChrome` (S1 creates, S4 consumes), import-specifier stability across all `.js`→`.ts` renames.
+- Execution: 6 parallel workstreams, shared checkout, disjoint file sets, workers commit nothing and run narrow proof only; main integrates S6 → S3 → S2 → S1 → S4 → S5 with `affected` between each, applies reported shared-file changes, then `all` ×2 → CHECK → review → ACT/PASS → (post-campaign) port streams → `dev`-into-branch merge → green PR.
