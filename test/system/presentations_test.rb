@@ -215,18 +215,18 @@ class PresentationsTest < ApplicationSystemTestCase
     find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='0']").select("Bottom Right")
     assert_field "Markdown source", with: /:::align\{bottom right\}\n# Untitled Document/, wait: 5
     wait_for_fresh_projection
-    assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Untitled Document", wait: 5
+    assert_selector ".slide-statement .slide-block.position-right.position-top", text: "Untitled Document", wait: 5
 
     updated_alignment = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
-        const title = document.querySelector('.slide-statement .slide-block.position-right.position-bottom');
+        const title = document.querySelector('.slide-statement .slide-block.position-right.position-top');
         const style = getComputedStyle(title);
-        return { alignSelf: style.alignSelf, textAlign: style.textAlign, marginTop: parseFloat(style.marginTop) };
+        return { alignSelf: style.alignSelf, textAlign: style.textAlign, inBottomLane: Boolean(title.closest('.slide-bottom-lane')) };
       })()
     JAVASCRIPT
     assert_equal "flex-end", updated_alignment["alignSelf"]
     assert_equal "right", updated_alignment["textAlign"]
-    assert_operator updated_alignment["marginTop"], :>, 0
+    assert_equal false, updated_alignment["inBottomLane"]
   end
 
   test "layouts and themes sample preserves positions while adding and deleting blocks" do
@@ -244,7 +244,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='0']").select("Bottom Right")
     assert_field "Markdown source", with: /:::align\{bottom right\}\n# Designing a visual system/, wait: 5
-    assert_selector ".slide-statement .slide-block.position-right.position-bottom", text: "Designing a visual system", wait: 5
+    assert_selector ".slide-statement .slide-block.position-right.position-top", text: "Designing a visual system", wait: 5
 
     find("[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1']").click
     assert_field "Markdown source", with: /about consistent presentation design\.\n\nNew block/

@@ -13,6 +13,7 @@ import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflo
 import { authoringSettingsWorkflow } from "../../../test/e2e/scenarios/authoring-settings.js"
 import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../../../test/e2e/scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../../../test/e2e/scenarios/presentation-mode.js"
+import { slidePositionGrammarWorkflow } from "../../../test/e2e/scenarios/slide-position-grammar.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
 import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-math-enter.js"
@@ -465,6 +466,75 @@ class DesktopEditorUi {
     const expectedVisibility = visible ? "visible" : "hidden"
     if (state.visibility !== expectedVisibility || state.ariaHidden !== (visible ? null : "true") || state.inert !== !visible) {
       throw new Error(`Unexpected reveal state for ${JSON.stringify(text)}: ${JSON.stringify(state)}`)
+    }
+  }
+
+  async assertSlidePositionGrammar() {
+    const inspect = () => browser.execute(() => {
+      const root = document.querySelector("#desktop-preview")
+      const slide = root?.querySelector(".slide")
+      const content = slide?.querySelector(".slide-content")
+      const group = slide?.querySelector(".slide-middle-group")
+      const lane = slide?.querySelector(".slide-bottom-lane")
+      const blocks = element => [...(element?.querySelectorAll(".slide-block") || [])]
+      const rect = element => element.getBoundingClientRect()
+      return {
+        groups: [...(slide?.querySelectorAll(".slide-middle-group") || [])].map(group => blocks(group).map(block => block.textContent.trim())),
+        lanes: [...(slide?.querySelectorAll(".slide-bottom-lane") || [])].map(lane => blocks(lane).map(block => block.textContent.trim())),
+        flushBottom: group?.classList.contains("flush-bottom") || false,
+        blockGap: blocks(group).length > 1 ? rect(blocks(group)[1]).top - rect(blocks(group)[0]).bottom : null,
+        laneBottomGap: content && lane ? rect(content).bottom - rect(lane).bottom : null,
+        classes: blocks(slide).map(block => block.className)
+      }
+    })
+    const groups = [["Alignment stack", "Subtitle"]]
+    const lanes = [["Footer"]]
+    await browser.waitUntil(async () => {
+      const measurements = await inspect()
+      return JSON.stringify(measurements.groups) === JSON.stringify(groups) &&
+        JSON.stringify(measurements.lanes) === JSON.stringify(lanes) && measurements.flushBottom
+    }, { timeout: 10_000, timeoutMsg: "The desktop preview did not render the middle stack and bottom lane" })
+
+    const measurements = await inspect()
+    if (measurements.blockGap >= 8 || Math.abs(measurements.laneBottomGap) > 1 ||
+        !measurements.classes[0]?.includes("position-center position-middle") ||
+        !measurements.classes[1]?.includes("position-center position-top") ||
+        !measurements.classes[2]?.includes("position-right position-bottom")) {
+      throw new Error(`Desktop slide position grammar did not match the expected layout: ${JSON.stringify(measurements)}`)
+    }
+  }
+
+  async assertColumnSlidePositionDocking() {
+    const inspect = () => browser.execute(() => {
+      const root = document.querySelector("#desktop-preview")
+      const slide = root?.querySelector(".slide")
+      const regions = [...(slide?.querySelectorAll(".slide-region") || [])]
+      const left = regions[0]
+      const group = left?.querySelector(".slide-middle-group.flush-bottom")
+      const lane = left?.querySelector(".slide-bottom-lane")
+      const blockText = element => [...(element?.querySelectorAll(".slide-block") || [])]
+        .map(block => block.textContent.trim()).join(" ")
+      const rect = element => element.getBoundingClientRect()
+      return {
+        regionCount: regions.length,
+        leftGroup: blockText(group),
+        leftLane: blockText(lane),
+        rightHasPlacement: Boolean(regions[1]?.querySelector(".slide-middle-group, .slide-bottom-lane")),
+        dockGap: group && lane ? rect(lane).top - rect(group).bottom : null,
+        laneBottomGap: left && lane ? rect(left).bottom - rect(lane).bottom : null
+      }
+    })
+    await browser.waitUntil(async () => {
+      const measurements = await inspect()
+      return measurements.regionCount === 2 &&
+        measurements.leftGroup === "Left stack" &&
+        measurements.leftLane === "Left footer" &&
+        !measurements.rightHasPlacement
+    }, { timeout: 10_000, timeoutMsg: "The desktop preview did not render column docking" })
+
+    const measurements = await inspect()
+    if (Math.abs(measurements.dockGap) > 1 || Math.abs(measurements.laneBottomGap) > 1) {
+      throw new Error(`Desktop column docking left a gap: ${JSON.stringify(measurements)}`)
     }
   }
 
@@ -1952,6 +2022,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("runs the shared presentation navigation flow in the desktop binary", async () => {
     await presentationModeWorkflow(new DesktopEditorUi())
+  })
+
+  it("keeps slide position stacks and lanes aligned in the desktop preview", async () => {
+    await slidePositionGrammarWorkflow(new DesktopEditorUi())
   })
 
   it("updates Vim relative line numbers from CodeMirror cursor positions", async () => {

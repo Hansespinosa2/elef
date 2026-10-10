@@ -845,7 +845,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get present_presentation_path(presentation)
 
     assert_response :success
-    assert_select ".slide-region[data-art-host='fixed'] > .slide-region-block.position-right.position-middle > .slide-block.position-right.position-middle [data-elef-art-root][data-art-mode='peers']"
+    assert_select ".slide-region[data-art-host='fixed'] > .slide-middle-group > .slide-block-item > .slide-region-block.position-right.position-middle > .slide-block.position-right.position-middle [data-elef-art-root][data-art-mode='peers']"
   end
 
   test "print output preserves attached media in the Art fallback" do

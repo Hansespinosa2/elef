@@ -13,6 +13,7 @@ import { vimRelativeLineNumbersWorkflow } from "../../../test/e2e/scenarios/vim-
 import { documentPageAspectRatioWorkflow } from "../../../test/e2e/scenarios/document-page-aspect-ratio.js"
 import { displayMathEnterWorkflow } from "../../../test/e2e/scenarios/display-math-enter.js"
 import { artRenderingWorkflow } from "../../../test/e2e/scenarios/art-rendering.js"
+import { slidePositionGrammarWorkflow } from "../../../test/e2e/scenarios/slide-position-grammar.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 
@@ -40,6 +41,72 @@ class WebEditorUi {
 
   async assertAppearance(theme, typography) {
     await expect(this.page.locator(`.slides-theme-${theme}.slides-typography-${typography}`)).toBeVisible()
+  }
+
+  async assertSlidePositionGrammar() {
+    const inspect = () => this.page.evaluate(() => {
+      const root = document.querySelector("#desktop-preview")
+      const slide = root?.querySelector(".slide")
+      const content = slide?.querySelector(".slide-content")
+      const group = slide?.querySelector(".slide-middle-group")
+      const lane = slide?.querySelector(".slide-bottom-lane")
+      const blocks = element => [...(element?.querySelectorAll(".slide-block") || [])]
+      const rect = element => element.getBoundingClientRect()
+      return {
+        groups: [...(slide?.querySelectorAll(".slide-middle-group") || [])].map(group => blocks(group).map(block => block.textContent.trim())),
+        lanes: [...(slide?.querySelectorAll(".slide-bottom-lane") || [])].map(lane => blocks(lane).map(block => block.textContent.trim())),
+        flushBottom: group?.classList.contains("flush-bottom") || false,
+        blockGap: blocks(group).length > 1 ? rect(blocks(group)[1]).top - rect(blocks(group)[0]).bottom : null,
+        laneBottomGap: content && lane ? rect(content).bottom - rect(lane).bottom : null,
+        classes: blocks(slide).map(block => block.className)
+      }
+    })
+    const expected = { groups: [["Alignment stack", "Subtitle"]], lanes: [["Footer"]], flushBottom: true }
+    await expect.poll(async () => {
+      const measurements = await inspect()
+      return { groups: measurements.groups, lanes: measurements.lanes, flushBottom: measurements.flushBottom }
+    }).toEqual(expected)
+
+    const measurements = await inspect()
+    expect(measurements.blockGap).toBeLessThan(8)
+    expect(Math.abs(measurements.laneBottomGap)).toBeLessThanOrEqual(1)
+    expect(measurements.classes[0]).toContain("position-center position-middle")
+    expect(measurements.classes[1]).toContain("position-center position-top")
+    expect(measurements.classes[2]).toContain("position-right position-bottom")
+  }
+
+  async assertColumnSlidePositionDocking() {
+    const inspect = () => this.page.evaluate(() => {
+      const slide = document.querySelector("#desktop-preview .slide")
+      const regions = [...(slide?.querySelectorAll(".slide-region") || [])]
+      const left = regions[0]
+      const group = left?.querySelector(".slide-middle-group.flush-bottom")
+      const lane = left?.querySelector(".slide-bottom-lane")
+      const blockText = element => [...(element?.querySelectorAll(".slide-block") || [])]
+        .map(block => block.textContent.trim()).join(" ")
+      const rect = element => element.getBoundingClientRect()
+      return {
+        regionCount: regions.length,
+        leftGroup: blockText(group),
+        leftLane: blockText(lane),
+        rightHasPlacement: Boolean(regions[1]?.querySelector(".slide-middle-group, .slide-bottom-lane")),
+        dockGap: group && lane ? rect(lane).top - rect(group).bottom : null,
+        laneBottomGap: left && lane ? rect(left).bottom - rect(lane).bottom : null
+      }
+    })
+    await expect.poll(async () => {
+      const measurements = await inspect()
+      return {
+        regionCount: measurements.regionCount,
+        leftGroup: measurements.leftGroup,
+        leftLane: measurements.leftLane,
+        rightHasPlacement: measurements.rightHasPlacement
+      }
+    }).toEqual({ regionCount: 2, leftGroup: "Left stack", leftLane: "Left footer", rightHasPlacement: false })
+
+    const measurements = await inspect()
+    expect(Math.abs(measurements.dockGap)).toBeLessThanOrEqual(1)
+    expect(Math.abs(measurements.laneBottomGap)).toBeLessThanOrEqual(1)
   }
 
   constructor(page) {
@@ -1039,4 +1106,8 @@ test("appearance persists through the shared editing flow", async ({ page }) => 
 
 test("shared Art semantics render consistently in the web app", async ({ page }) => {
   await artRenderingWorkflow(new WebEditorUi(page))
+})
+
+test("slide position stacks and lanes align in the web preview", async ({ page }) => {
+  await slidePositionGrammarWorkflow(new WebEditorUi(page))
 })

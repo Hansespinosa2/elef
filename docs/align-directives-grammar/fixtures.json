@@ -1,0 +1,107 @@
+{
+  "version": 1,
+  "fixtures": [
+    {
+      "id": "F-01",
+      "source": ":::align{middle center}\n# Title",
+      "expected": { "layout": "body", "middleGroups": [["Title"]], "bottomLanes": [], "warningPatterns": [], "blockClasses": { "Title": ["position-center", "position-middle"] } },
+      "geometry": ["group marginTop == group marginBottom (±1px)"]
+    },
+    {
+      "id": "F-02",
+      "source": ":::align{middle center}\n# Title\n\n:::align{center}\nSubtitle",
+      "expected": { "layout": "statement", "middleGroups": [["Title", "Subtitle"]], "bottomLanes": [], "warningPatterns": [], "blockClasses": { "Title": ["position-center", "position-middle"], "Subtitle": ["position-center", "position-top"] } },
+      "geometry": ["group marginTop == group marginBottom (±1px)", "vertical gap between the two blocks < 8px"]
+    },
+    {
+      "id": "F-03",
+      "source": ":::align{center}\nKicker\n\n:::align{middle center}\n# Title\n\n:::align{center}\nSubtitle",
+      "expected": { "layout": "body", "middleGroups": [["Title", "Subtitle"]], "bottomLanes": [], "warningPatterns": [], "blockClasses": { "Kicker": ["position-center", "position-top"] } },
+      "geometry": ["Kicker top edge == content top edge (±1px)", "group marginTop == group marginBottom (±1px)"]
+    },
+    {
+      "id": "F-04",
+      "source": ":::align{middle center}\n# Title\n\n:::align{center}\nSubtitle\n\nBody text",
+      "expected": { "layout": "body", "middleGroups": [["Title", "Subtitle", "Body text"]], "bottomLanes": [], "warningPatterns": [], "blockClasses": { "Body text": ["position-left", "position-top"] } },
+      "geometry": ["group marginTop == group marginBottom (±1px)", "Body text left edge == content left edge (±1px)"]
+    },
+    {
+      "id": "F-05",
+      "source": ":::align{middle center}\n# First\n\n:::align{middle center}\n# Second",
+      "expected": { "layout": "statement", "middleGroups": [["First", "Second"]], "bottomLanes": [], "warningPatterns": [], "blockClasses": {} },
+      "geometry": ["group marginTop == group marginBottom (±1px)"]
+    },
+    {
+      "id": "F-06",
+      "source": ":::align{middle center}\n# Title\n\n:::align{top center}\nSubtitle",
+      "expected": { "layout": "statement", "middleGroups": [["Title", "Subtitle"]], "bottomLanes": [], "warningPatterns": [], "blockClasses": {} },
+      "geometry": ["vertical gap between the two blocks < 8px"]
+    },
+    {
+      "id": "F-07",
+      "source": ":::align{bottom center}\nBottom line\n\n:::align{middle center}\n# Title\n\n:::align{center}\nSubtitle",
+      "expected": { "layout": "body", "middleGroups": [["Bottom line", "Title", "Subtitle"]], "bottomLanes": [], "warningPatterns": [], "blockClasses": {} },
+      "geometry": ["group marginTop == group marginBottom (±1px)", "gaps between consecutive blocks < 8px"]
+    },
+    {
+      "id": "F-08",
+      "source": ":::align{bottom center}\nLine one\n\n:::align{bottom center}\nLine two\n\n:::align{bottom center}\nLine three",
+      "expected": { "layout": "body", "middleGroups": [], "bottomLanes": [["Line one", "Line two", "Line three"]], "warningPatterns": [], "blockClasses": {} },
+      "geometry": ["lane bottom edge == content bottom edge (±1px)", "gaps between consecutive lane blocks < 8px"]
+    },
+    {
+      "id": "F-09",
+      "source": ":::align{bottom left}\nLeft foot\n\n:::align{bottom right}\nRight foot",
+      "expected": { "layout": "body", "middleGroups": [], "bottomLanes": [["Left foot", "Right foot"]], "warningPatterns": [], "blockClasses": {} },
+      "geometry": ["lane bottom edge == content bottom edge (±1px)", "block[1] top edge > block[0] bottom edge"]
+    },
+    {
+      "id": "F-10",
+      "source": ":::align{bottom center}\nBottom line\n\n:::align{center}\nMiddle text\n\n:::align{middle center}\n# Title",
+      "expected": { "layout": "body", "middleGroups": [["Title"]], "bottomLanes": [], "warningPatterns": ["trailing bottom"], "blockClasses": { "Bottom line": ["position-center", "position-top"], "Middle text": ["position-center", "position-top"] } },
+      "geometry": []
+    },
+    {
+      "id": "F-11",
+      "source": ":::align{middle center}\n# Title\n\n:::align{bottom center}\nFooter",
+      "expected": { "layout": "statement", "middleGroups": [["Title"]], "bottomLanes": [["Footer"]], "warningPatterns": [], "flushBottom": true, "blockClasses": {} },
+      "geometry": ["lane bottom edge == content bottom edge (±1px)"]
+    },
+    {
+      "id": "F-12",
+      "source": ":::align{middle center}\n# Deck title\n\n## Left\n\nLeft text here.\n\n## Right\n\nRight text here.",
+      "expected": { "layout": "two-column", "middleGroups": [], "bottomLanes": [], "warningPatterns": [], "blockClasses": { "Deck title": ["position-center", "position-top"] } },
+      "geometry": ["Deck title top edge == content top edge (±1px)"]
+    },
+    {
+      "id": "F-13",
+      "source": "# Deck title\n\n:::align{middle center}\n## Left\n\nLeft text here.\n\n## Right\n\nRight text here.",
+      "expected": { "layout": "two-column", "middleGroups": [["Left", "Left text here."]], "bottomLanes": [], "regionPlacements": [{ "middleGroups": [["Left", "Left text here."]], "bottomLanes": [] }, { "middleGroups": [], "bottomLanes": [] }], "warningPatterns": [], "blockClasses": {} },
+      "geometry": []
+    },
+    {
+      "id": "F-14",
+      "source": "# T\n\n## L\n\nL text.\n\n:::align{bottom right}\nL foot.\n\n## R\n\nR text here.",
+      "expected": { "layout": "two-column", "middleGroups": [], "bottomLanes": [["L foot."]], "regionPlacements": [{ "middleGroups": [], "bottomLanes": [["L foot."]] }, { "middleGroups": [], "bottomLanes": [] }], "warningPatterns": [], "blockClasses": {} },
+      "geometry": ["left lane bottom edge == left region bottom edge (±1px)"]
+    },
+    {
+      "id": "F-15",
+      "source": "# Title\n\n:::align{center}",
+      "expected": { "layout": "body", "middleGroups": [], "bottomLanes": [], "warningPatterns": ["dangling directive"], "blockClasses": { "Title": ["position-left", "position-top"] } },
+      "geometry": ["1 slide block rendered"]
+    },
+    {
+      "id": "F-16",
+      "source": ":::align{middle center}\n# Untitled Document\n\n:::align {center}\nStart writing Markdown here.",
+      "expected": { "layout": "statement", "middleGroups": [["Untitled Document", "Start writing Markdown here."]], "bottomLanes": [], "warningPatterns": [], "blockClasses": {} },
+      "geometry": ["title block center Y within 50px of slide center Y", "vertical gap between title and subtitle < 8px"]
+    },
+    {
+      "id": "F-17",
+      "source": "# Deck title\n\n## Left\n\n:::align{middle center}\nLeft stack\n\n:::align{bottom center}\nLeft footer\n\n## Right\n\nRight text",
+      "expected": { "layout": "two-column", "middleGroups": [["Left stack"]], "bottomLanes": [["Left footer"]], "regionPlacements": [{ "middleGroups": [["Left stack"]], "bottomLanes": [["Left footer"]] }, { "middleGroups": [], "bottomLanes": [] }], "warningPatterns": [], "flushBottom": true, "blockClasses": {} },
+      "geometry": ["gap between flushed stack and lane <= 1px", "left lane bottom edge == left region bottom edge (±1px)"]
+    }
+  ]
+}

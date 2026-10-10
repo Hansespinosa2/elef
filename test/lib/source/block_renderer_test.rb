@@ -144,7 +144,7 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
     pos_staged = Position.new("center", "middle", true)
     assert_equal "position-center position-middle position-vertical", Source::BlockRenderer.position_classes(pos_staged)
 
-    assert_equal "", Source::BlockRenderer.position_classes(nil)
+    assert_equal "position-left position-top", Source::BlockRenderer.position_classes(nil)
   end
 
   test "maps document position metadata to its content block in the editable preview" do

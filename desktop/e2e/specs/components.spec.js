@@ -2,6 +2,10 @@ import { expect, test } from "@playwright/test"
 import { readFile } from "node:fs/promises"
 import { renderPreview } from "../../../app/javascript/lib/renderer.js"
 
+const slidePositionFixtures = JSON.parse(
+  await readFile(new URL("../../../docs/align-directives-grammar/fixtures.json", import.meta.url), "utf8")
+).fixtures
+
 async function readApplicationStylesheet() {
   const index = await readFile(new URL("../../../app/assets/stylesheets/application.css", import.meta.url), "utf8")
   const layerOrder = index.match(/^\s*@layer [^;]+;/m)?.[0]
@@ -102,6 +106,104 @@ test("shared rendering styles preserve slide layouts and document typography", a
       expect(measured.web.styles[".document-surface h1"].size).toBe("48px")
       expect(measured.web.styles[".document-surface p"].lineHeight).toBe("28.8px")
     }
+  }
+})
+
+test("alignment geometry follows independent expectations in both static host stylesheets", async ({ page }) => {
+  const styles = await hostStylesheets()
+  const html = slidePositionFixtures.map(fixture => renderPreview({
+    source: fixture.source,
+    title: fixture.id,
+    allowRemoteMedia: false
+  }).html).join("")
+
+  await page.setViewportSize({ width: 1440, height: 900 })
+  for (const [host, css] of Object.entries(styles)) {
+    await page.setContent(`<!doctype html><html><head><style>${css}\n*{box-sizing:border-box}body{margin:0}.fixture-root{width:1280px}</style></head><body><main class="fixture-root">${html}</main></body></html>`)
+    const rendered = await page.evaluate(() => {
+      const rect = element => {
+        const bounds = element.getBoundingClientRect()
+        return { top: bounds.top, bottom: bounds.bottom, left: bounds.left, right: bounds.right, height: bounds.height }
+      }
+      const label = block => block.textContent.trim().replace(/\s+/g, " ")
+      return [...document.querySelectorAll(".slide-frame > .slide")].map(slide => {
+        slide.style.setProperty("--slide-scale", "1")
+        const content = slide.querySelector(".slide-content")
+        const blocks = [...slide.querySelectorAll(".slide-block")]
+        const groups = [...slide.querySelectorAll(".slide-middle-group")]
+        const lanes = [...slide.querySelectorAll(".slide-bottom-lane")]
+        return {
+          blocks: blocks.map(block => ({ label: label(block), ...rect(block) })),
+          regions: [...slide.querySelectorAll(".slide-region")].map(region => ({
+            middleGroups: [...region.querySelectorAll(".slide-middle-group")].map(group => [...group.querySelectorAll(".slide-block")].map(label)),
+            bottomLanes: [...region.querySelectorAll(".slide-bottom-lane")].map(lane => [...lane.querySelectorAll(".slide-block")].map(label))
+          })),
+          content: rect(content),
+          slide: rect(slide),
+          groups: groups.map(group => {
+            const parent = group.parentElement
+            const previous = group.previousElementSibling
+            const next = group.nextElementSibling
+            const innerBlocks = [...group.querySelectorAll(".slide-block")]
+            const previousMargin = previous ? parseFloat(getComputedStyle(previous).marginBottom) || 0 : 0
+            const nextMargin = next ? parseFloat(getComputedStyle(next).marginTop) || 0 : 0
+            return {
+              topMargin: rect(group).top - (previous ? rect(previous).bottom + previousMargin : rect(parent).top),
+              bottomMargin: (next ? rect(next).top - nextMargin : rect(parent).bottom) - rect(group).bottom,
+              gaps: innerBlocks.slice(1).map((block, index) => rect(block).top - rect(innerBlocks[index]).bottom)
+            }
+          }),
+          lanes: lanes.map(lane => {
+            const parent = lane.parentElement
+            const innerBlocks = [...lane.querySelectorAll(".slide-block")]
+            return {
+              bottomGap: rect(parent).bottom - rect(lane).bottom,
+              gaps: innerBlocks.slice(1).map((block, index) => rect(block).top - rect(innerBlocks[index]).bottom)
+            }
+          })
+        }
+      })
+    })
+
+    expect(rendered, `${host} fixture count`).toHaveLength(slidePositionFixtures.length)
+    slidePositionFixtures.forEach((fixture, index) => {
+      const actual = rendered[index]
+      if (fixture.expected.regionPlacements) {
+        expect(actual.regions, `${host} ${fixture.id} region placements`).toEqual(fixture.expected.regionPlacements)
+      }
+      if (fixture.geometry.some(assertion => assertion.includes("group marginTop"))) {
+        actual.groups.forEach(group => expect(Math.abs(group.topMargin - group.bottomMargin), `${host} ${fixture.id} group margins`).toBeLessThanOrEqual(1))
+      }
+      if (fixture.geometry.some(assertion => assertion.includes("gap between") || assertion.includes("gaps between"))) {
+        for (const gap of [...actual.groups.flatMap(group => group.gaps), ...actual.lanes.flatMap(lane => lane.gaps)]) {
+          expect(gap, `${host} ${fixture.id} block gap`).toBeLessThan(8)
+        }
+      }
+      if (fixture.geometry.some(assertion => assertion.includes("lane bottom edge"))) {
+        actual.lanes.forEach(lane => expect(Math.abs(lane.bottomGap), `${host} ${fixture.id} lane bottom pin`).toBeLessThanOrEqual(1))
+      }
+      if (fixture.geometry.some(assertion => assertion.includes("top edge == content top edge"))) {
+        const text = fixture.id === "F-03" ? "Kicker" : "Deck title"
+        const block = actual.blocks.find(candidate => candidate.label.includes(text))
+        expect(block, `${host} ${fixture.id} top-pinned block`).toBeTruthy()
+        expect(Math.abs(block.top - actual.content.top), `${host} ${fixture.id} top pin`).toBeLessThanOrEqual(1)
+      }
+      if (fixture.id === "F-04") {
+        const block = actual.blocks.find(candidate => candidate.label.includes("Body text"))
+        expect(Math.abs(block.left - actual.content.left), `${host} F-04 default horizontal alignment`).toBeLessThanOrEqual(1)
+      }
+      if (fixture.id === "F-09") {
+        const [first, second] = actual.blocks.filter(block => block.label.includes("Left foot") || block.label.includes("Right foot"))
+        expect(second.top, `${host} F-09 footer row separation`).toBeGreaterThan(first.bottom)
+      }
+      if (fixture.id === "F-15") expect(actual.blocks, `${host} F-15 rendered block count`).toHaveLength(1)
+      if (fixture.id === "F-16") {
+        const title = actual.blocks.find(block => block.label.includes("Untitled Document"))
+        const subtitle = actual.blocks.find(block => block.label.includes("Start writing Markdown here."))
+        expect(Math.abs((title.top + title.height / 2) - (actual.slide.top + actual.slide.height / 2)), `${host} F-16 title center`).toBeLessThanOrEqual(50)
+        expect(subtitle.top - title.bottom, `${host} F-16 title/subtitle gap`).toBeLessThan(8)
+      }
+    })
   }
 })
 

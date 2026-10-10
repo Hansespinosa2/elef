@@ -1,3 +1,5 @@
+import { slidePositionClasses, slidePositionLayout } from "#elef/slide-position-layout"
+
 const PX_PER_INCH = 96
 const REMOTE_FONT_FALLBACK = "Arial"
 let pptxLibraryPromise
@@ -74,10 +76,10 @@ export function slideMarkup(slide, model) {
     ? `<div class="slide-margin slide-margin-top" aria-hidden="true">${margin.subsection ? `<span class="slide-margin-subsection">${escapeHtml(slide.subsection || "")}</span>` : ""}${margin.section ? `<span class="slide-margin-section">${escapeHtml(slide.section || "")}</span>` : ""}</div>`
     : ""
   const titlePosition = slide.title_position
-  const titleClasses = titlePosition ? `position-${titlePosition.horizontal} position-${titlePosition.vertical}` : ""
+  const titleClasses = slidePositionClasses(titlePosition, slide.title_html ? "top" : null)
   const content = slide.title_html
-    ? `<div class="slide-content"><div class="slide-title slide-block ${titleClasses}">${slide.title_html}</div><div class="slide-regions">${slide.regions.map((region) => `<div class="slide-region">${region.map(blockMarkup).join("")}</div>`).join("")}</div></div>`
-    : `<div class="slide-content">${slide.blocks.length ? slide.blocks.map(blockMarkup).join("") : '<p class="empty-slide">Empty slide</p>'}</div>`
+    ? `<div class="slide-content"><div class="slide-title slide-block ${titleClasses}">${slide.title_html}</div><div class="slide-regions">${slide.regions.map((region) => `<div class="slide-region">${positionedBlockMarkup(region)}</div>`).join("")}</div></div>`
+    : `<div class="slide-content">${slide.blocks.length ? positionedBlockMarkup(slide.blocks) : '<p class="empty-slide">Empty slide</p>'}</div>`
   const footnote = margin.footnote && slide.footnote_html
     ? `<span class="slide-margin-footnote"><span class="slide-margin-footnote-marker">*</span><span class="slide-margin-footnote-text">${slide.footnote_html}</span></span>`
     : ""
@@ -88,9 +90,26 @@ export function slideMarkup(slide, model) {
 }
 
 export function blockMarkup(block) {
-  const position = block.position
-  const classes = position ? `position-${position.horizontal} position-${position.vertical}` : ""
+  const classes = slidePositionClasses(block.position)
   return `<div class="slide-block ${classes}">${block.html}</div>`
+}
+
+function positionedBlockMarkup(blocks) {
+  const placement = slidePositionLayout(blocks)
+  return placement.entries.map((entry) => {
+    const grouped = entry.type !== "block"
+    const content = blocks.slice(entry.start, entry.end).map((block, offset) => {
+      const index = entry.start + offset
+      const position = block.position
+        ? { ...block.position, vertical: placement.verticals[index] }
+        : { horizontal: "left", vertical: placement.verticals[index] }
+      const markup = blockMarkup({ ...block, position })
+      return grouped ? `<div class="slide-block-item">${markup}</div>` : markup
+    }).join("")
+    if (entry.type === "middle") return `<div class="slide-middle-group${entry.flushBottom ? " flush-bottom" : ""}">${content}</div>`
+    if (entry.type === "bottom") return `<div class="slide-bottom-lane">${content}</div>`
+    return content
+  }).join("")
 }
 
 export function escapeHtml(value) {

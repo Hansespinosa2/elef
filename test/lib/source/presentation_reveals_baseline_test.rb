@@ -3,7 +3,7 @@ require "test_helper"
 class PresentationRevealsBaselineTest < ActiveSupport::TestCase
   BASELINE_PATH = Rails.root.join("test/javascript/fixtures/slide-reveals-no-step-baseline.json")
 
-  test "an unchanged deck keeps its pre-feature Rails slide HTML and editor map" do
+  test "an unchanged reveal deck gets explicit position defaults and retains its editor map" do
     baseline = JSON.parse(File.read(BASELINE_PATH), symbolize_names: true)
     document = Source::Document.parse(baseline.fetch(:source), source_name: "Reveal baseline", mode: :presentation)
     presentation = Struct.new(:id, :slides).new(nil, document.slides)
@@ -17,7 +17,14 @@ class PresentationRevealsBaselineTest < ActiveSupport::TestCase
       }
     )
 
-    assert_equal normalize_template_markers(baseline.fetch(:first_slide_html)), normalize_template_markers(html)
+    fragment = Nokogiri::HTML5.fragment(html)
+    assert_equal ["Baseline visual contract"], fragment.css(".slide-title h1").map { |node| node.text.strip }
+    assert_equal %w[slide-title slide-block position-left position-top], fragment.at_css(".slide-title")["class"].split
+    blocks = fragment.css(".slide-block")
+    assert_equal 5, blocks.length
+    assert blocks.all? { |block| block.classes.include?("position-left") && block.classes.include?("position-top") }
+    assert_equal ["Left", "A paragraph with formatting.", "Right", "first", "second"],
+      fragment.css(".slide-region .slide-block").flat_map { |block| block.css("h2,p,li").map { |node| node.text.strip } }
     assert_equal baseline.fetch(:editor_map), Source::Document.editor_map(
       baseline.fetch(:source),
       source_name: "Reveal baseline",
