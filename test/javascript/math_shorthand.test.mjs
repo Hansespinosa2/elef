@@ -668,6 +668,28 @@ test("keeps dollar-pairing behavior independent from shorthand commits", () => {
   }
 })
 
+test("Backspace removes an empty math delimiter pair but leaves escaped and code pairs untouched", () => {
+  const pair = createMathEditor("prefix\n\n$$", "prefix\n\n$$".length - 1)
+  const deletion = pressMathKey(pair, "Backspace")
+
+  assert.equal(deletion.defaultPrevented, true)
+  assert.equal(pair.editor.value, "prefix\n\n")
+  assert.equal(pair.editor.selectionStart, pair.editor.value.length)
+
+  for (const source of ["\\$$", "`$$`", "```text\n$$\n```"]) {
+    const context = createMathEditor(source, source.indexOf("$$") + 1)
+    const event = pressMathKey(context, "Backspace")
+
+    assert.equal(event.defaultPrevented, false, source)
+    assert.equal(context.editor.value, source, source)
+  }
+
+  const evenEscapes = createMathEditor("\\\\$$", 3)
+  const evenEscapeDeletion = pressMathKey(evenEscapes, "Backspace")
+  assert.equal(evenEscapeDeletion.defaultPrevented, true)
+  assert.equal(evenEscapes.editor.value, "\\\\")
+})
+
 test("pairs, promotes, and skips math delimiters without touching code or escapes", () => {
   assert.equal(math.mathDollarAction("text", 4), "pair")
   assert.equal(math.mathDollarAction("$$", 1), "promote")

@@ -53,4 +53,86 @@ abort "deployment authorization requires only scoped read access plus ref-write 
     "pull-requests" => "read"
   }
 
-puts "CI runs all required checks once per PR and verifies them before publishing"
+run_steps = jobs.flat_map do |job_name, job|
+  job.fetch("steps", []).filter_map do |step|
+    [job_name, step["run"]] if step["run"]
+  end
+end
+
+{
+  "npm run test:javascript" => "desktop-fast",
+  "npm test --prefix desktop/frontend" => "desktop-fast",
+  "npm run test:unit --prefix desktop/e2e" => "desktop-fast",
+  "cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked" => "desktop-fast"
+}.each do |command, expected_job|
+  matches = run_steps.flat_map do |job_name, run|
+    Array.new(run.scan(Regexp.new(Regexp.escape(command))).length, job_name)
+  end
+  abort "#{command} must run exactly once in #{expected_job}, found #{matches}" unless
+    matches == [expected_job]
+end
+
+abort "the explicit JavaScript file block must stay removed" if
+  workflow.to_s.include?("node test/javascript/")
+
+runner_source = File.read(File.expand_path("../../desktop/e2e/run.mjs", __dir__))
+abort "the runner must keep one sequential shared-web phase" unless
+  runner_source.scan('["test", "--project=web"]').length == 1 &&
+    runner_source.include?('env.ELEF_E2E_SKIP_WEB !== "1"')
+web_phase = runner_source.index('const webResult = spawnSync(playwright, ["test", "--project=web"]')
+native_phase = runner_source.index('const desktopResult = spawnSync(webdriverio, ["run", "wdio.conf.js"]')
+updater_gate = native_phase && runner_source.index('if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {', native_phase)
+updater_phase = updater_gate && runner_source.index('const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"]', updater_gate)
+final_source_assertion = runner_source.index('assert.equal(normalizeLineEndings(desktopSource), expectedDesktopSource)')
+abort "the runner must preserve web, native, updater, and final source assertion order" unless
+  web_phase && native_phase && updater_gate && updater_phase && final_source_assertion &&
+    web_phase < native_phase && native_phase < updater_gate && updater_gate < updater_phase &&
+    updater_phase < final_source_assertion
+abort "web and desktop scenarios must retain their shared final-source parity gate" unless
+  runner_source.include?('const expectedDesktopSource = expectedSharedSource') &&
+    runner_source.include?('const expectedWebSource = expectedSharedSource') &&
+    runner_source.include?('assert.equal(normalizeLineEndings(desktopSource), expectedDesktopSource)') &&
+    runner_source.include?('assert.equal(normalizeLineEndings(JSON.parse(savedSource)), expectedWebSource)')
+mac_desktop_run = jobs.fetch("desktop-macos").fetch("steps").find do |step|
+  step.fetch("name", "").include?("macOS native and updater scenarios")
+end
+abort "macOS must run the shared scenario adapter without repeating Chromium web scenarios" unless
+  mac_desktop_run&.dig("env", "ELEF_E2E_SKIP_WEB") == "1"
+
+sqlite_run = jobs.fetch("sqlite-test").fetch("steps").find { |step| step["name"] == "Run SQLite compatibility tests" }
+abort "PR SQLite must run only the documented differential matrix" unless
+  sqlite_run.fetch("run", "").include?("bin/rails test test/sqlite_compatibility_test.rb") &&
+    !sqlite_run.fetch("run", "").include?("db:test:prepare test")
+
+sqlite_workflow = YAML.load_file(File.expand_path("../../.github/workflows/sqlite-compatibility.yml", __dir__))
+sqlite_events = sqlite_workflow["on"] || sqlite_workflow[true]
+full_sqlite_commands = sqlite_workflow.fetch("jobs").values.flat_map { |job| job.fetch("steps", []) }.filter_map { |step| step["run"] }
+abort "the full SQLite suite must run on dev pushes, on a schedule, and manually" unless
+  sqlite_events.dig("push", "branches") == ["dev"] && sqlite_events.key?("schedule") &&
+    sqlite_events.key?("workflow_dispatch") &&
+    full_sqlite_commands.any? { |run| run.include?("bin/rails db:test:prepare test") }
+
+performance_workflow = YAML.load_file(File.expand_path("../../.github/workflows/native-performance.yml", __dir__))
+performance_events = performance_workflow["on"] || performance_workflow[true]
+abort "native performance must remain outside PR authorization" unless
+  performance_events.dig("push", "branches") == ["dev"] && performance_events.key?("schedule") &&
+    performance_events.key?("workflow_dispatch") && !performance_events.key?("pull_request") &&
+    performance_workflow.fetch("jobs").values.flat_map { |job| job.fetch("steps", []) }.any? do |step|
+      step.fetch("run", "").include?("--launch-count 10 --report-runner")
+    end
+abort "native benchmark must not run in a required CI job" if workflow.to_s.include?("benchmark-native.mjs")
+
+attestation_step = attestation.fetch("steps").find { |step| step["name"] == "Record the tested source tree" }
+attestation_run = attestation_step.fetch("run", "")
+abort "the attestation must name the required CI jobs and non-gating measurement policy" unless
+  attestation_run.include?("schema_version: $schema_version") &&
+    attestation_run.include?("required_jobs: $required_jobs") &&
+    attestation_run.include?("non_gating_measurements: $non_gating_measurements") &&
+    attestation_run.include?('["native-performance"]')
+verifier = File.read(File.expand_path("../../scripts/verify-deployment-authorization", __dir__))
+abort "the verifier must validate the benchmark policy and required-job manifest" unless
+  verifier.include?(".schema_version == 2") &&
+    verifier.include?(".required_jobs == $required_jobs") &&
+    verifier.include?('.non_gating_measurements == ["native-performance"]')
+
+puts "CI keeps all required checks, runs pure unit suites once, and verifies the attested tree before publishing"

@@ -44,6 +44,7 @@ pin "lib/art_layout", to: "lib/art_layout.js"
 pin "lib/editor_block_ranges", to: "lib/editor_block_ranges.js"
 pin "lib/editor_controller_lookup", to: "lib/editor_controller_lookup.js"
 pin "lib/editor_view", to: "lib/editor_view.js"
+pin "lib/pptx_export", to: "lib/pptx_export.js"
 pin "#elef/preview-sanitizer", to: "lib/preview_sanitizer.js"
 pin "#elef/art-source", to: "art_source.bundle.js"
 pin "lib/library_view", to: "lib/library_view.js"
@@ -60,6 +61,7 @@ pin "lib/authoring_settings_dialog", to: "lib/authoring_settings_dialog.js"
 pin "lib/rails_authoring_settings_transport", to: "lib/rails_authoring_settings_transport.js"
 pin "lib/editor_ready", to: "lib/editor_ready.js"
 pin "lib/conflict_dialog", to: "lib/conflict_dialog.js"
+pin "lib/bug_report_response", to: "lib/bug_report_response.js"
 pin "markdown-it" # @14.3.2
 pin "entities" # @4.5.0
 pin "linkify-it" # @5.0.2

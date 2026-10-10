@@ -121,7 +121,7 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
-  test "card previews are scaled from their design size by the presentation canvas controller" do
+  test "card preview markup exposes presentation canvas dimensions and stage" do
     Document.create!(title: "Scaled document", source: "# Scaled document")
     Presentation.create!(title: "Scaled deck", source: "# Scaled deck")
 

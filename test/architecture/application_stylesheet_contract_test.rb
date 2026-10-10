@@ -21,10 +21,14 @@ class ApplicationStylesheetContractTest < ActiveSupport::TestCase
     source = Rails.root.join("app/assets/stylesheets/application.css").read
     imports = source.lines.grep(/^\s*@import\b/)
     index_rules = source.sub(%r{^/\*[\s\S]*?\*/\s*}, "").lines.reject { |line| line.strip.empty? }
+    component_stylesheets = Rails.root.glob("app/assets/stylesheets/components/*.css")
+      .map { |path| path.basename.to_s }
+      .sort
+    imported_component_stylesheets = imports.filter_map do |line|
+      line.match(%r{@import url\("\./components/([^\"]+\.css)"\)})&.captures&.first
+    end.sort
 
-    # Elef Art adds one shared component partial to the existing stylesheet index.
-    assert_equal 13, imports.size
-    assert_includes imports.join, 'url("./components/art.css")'
+    assert_equal component_stylesheets, imported_component_stylesheets
     imports.each do |line|
       assert_match(/\A\s*@import url\("\.\/[^"\n]+\.css"\) layer\(elef-[a-z-]+\);\s*\z/, line)
     end

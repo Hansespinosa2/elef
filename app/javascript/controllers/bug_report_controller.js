@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { formatReproductionSteps, sharedBugReportRecorder } from "bug_report_events"
+import { bugReportErrorMessage } from "lib/bug_report_response"
 
 export default class extends Controller {
   static targets = ["dialog", "form", "expected", "actual", "steps", "error", "submit", "success", "issueLink"]
@@ -70,7 +71,7 @@ export default class extends Controller {
         body: JSON.stringify(body)
       })
       const result = await response.json().catch(() => ({}))
-      if (!response.ok) throw new Error(result.error || "The issue could not be created. Your report is still here; please try again.")
+      if (!response.ok) throw new Error(bugReportErrorMessage(response.status, result))
 
       this.formTarget.hidden = true
       this.successTarget.hidden = false

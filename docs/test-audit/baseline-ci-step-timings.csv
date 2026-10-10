@@ -1,0 +1,158 @@
+run_id,run_attempt,head_sha,job,job_conclusion,step,step_conclusion,elapsed_seconds
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Set up job,success,7.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Checkout code,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Set up Node,success,3.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Set up Rust,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Set up Ruby,success,7.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Cache Rust build artifacts,success,117.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Install Linux desktop build dependencies,success,74.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Install frontend dependencies,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Install Rails-owned frontend dependencies,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Install shared scenario dependencies,success,3.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Audit desktop JavaScript dependencies,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Install pinned Cargo audit tool,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Audit desktop Rust dependencies,success,4.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Build Rails Tailwind stylesheet,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Verify the Rails Tailwind artifact is current,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Build the Rails-owned renderer,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Verify the Rails renderer bundle is current,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Test Rails-owned frontend modules,success,4.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Test desktop frontend adapters,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Bundle the desktop frontend,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Check command allowlist and CSP,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Check Rust formatting,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Lint desktop Rust workspace,success,8.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Test desktop Rust workspace,success,22.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Prepare the isolated Rails E2E database,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Install headless browser and system dependencies,success,13.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Build test-only N-1 and N desktop updater packages,success,213.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Run shared scenarios with external network blocked,success,256.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Summarize failed Linux desktop scenarios,skipped,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Preserve Linux desktop scenario diagnostics,skipped,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Build the release binary for native performance measurements,success,41.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Record hosted Linux release performance over 20 fresh processes,success,121.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Preserve native Linux performance samples,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Build Linux desktop package,success,94.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Post Cache Rust build artifacts,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Post Set up Node,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Post Checkout code,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop,success,Complete job,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Set up job,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Initialize containers,success,22.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Checkout code,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Set up Ruby,success,8.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Build Tailwind CSS,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Verify the shared Tailwind artifact is current,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Run tests,success,12.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Run deterministic JavaScript unit tests,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Check repository launchers and deployment files,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Post Checkout code,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Stop containers,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,test,success,Complete job,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_js,success,Set up job,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_js,success,Checkout code,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_js,success,Set up Ruby,success,6.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_js,success,Scan for security vulnerabilities in JavaScript dependencies,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_js,success,Post Checkout code,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_js,success,Complete job,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_ruby,success,Set up job,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_ruby,success,Checkout code,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_ruby,success,Set up Ruby,success,5.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_ruby,success,Scan for known security vulnerabilities in gems used,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_ruby,success,Post Checkout code,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,scan_ruby,success,Complete job,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,production-smoke,success,Set up job,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,production-smoke,success,Checkout code,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,production-smoke,success,Validate production Compose configuration,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,production-smoke,success,Build production image,success,83.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,production-smoke,success,Boot and smoke-test production stack,success,18.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,production-smoke,success,Post Checkout code,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,production-smoke,success,Complete job,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Set up job,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Checkout code,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Set up Node,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Set up Rust,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Cache Rust build artifacts,success,4.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Install frontend dependencies,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Install Rails-owned frontend dependencies,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Run the fast desktop unit tier,success,11.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Post Cache Rust build artifacts,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Post Set up Node,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Post Checkout code,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-fast,success,Complete job,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,sqlite-test,success,Set up job,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,sqlite-test,success,Checkout code,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,sqlite-test,success,Set up Ruby,success,5.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,sqlite-test,success,Build Tailwind CSS,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,sqlite-test,success,Run SQLite compatibility tests,success,12.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,sqlite-test,success,Post Checkout code,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,sqlite-test,success,Complete job,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Set up job,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Checkout code,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Set up Node,success,4.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Set up Rust,success,11.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Set up Ruby,success,11.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Cache Rust build artifacts,success,61.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Install frontend dependencies,success,3.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Install Rails-owned frontend dependencies,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Install shared scenario dependencies,success,6.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Audit desktop JavaScript dependencies,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Build Rails Tailwind stylesheet,success,4.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Verify the Rails Tailwind artifact is current,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Build the Rails-owned renderer,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Verify the Rails renderer bundle is current,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Test Rails-owned frontend modules,success,6.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Test desktop frontend adapters,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Bundle the desktop frontend,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Check command allowlist and CSP,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Check Rust formatting,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Lint desktop Rust workspace,success,41.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Test desktop Rust workspace,success,73.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Prepare the isolated Rails E2E database,success,4.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Install headless web browser,success,12.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Build test-only N-1 and N desktop updater packages,success,134.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Run shared web and desktop scenarios,success,308.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Summarize failed macOS desktop scenarios,skipped,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Preserve macOS desktop scenario diagnostics,skipped,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Build the release binary for native performance measurements,success,98.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Record hosted macOS release performance over 20 fresh processes,success,168.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Preserve native macOS performance samples,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Build Apple Silicon desktop package,success,69.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Post Cache Rust build artifacts,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Post Set up Node,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Post Checkout code,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,desktop-macos,success,Complete job,success,4.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,renderer-macos,success,Set up job,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,renderer-macos,success,Check out source,success,3.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,renderer-macos,success,Set up Ruby and install the locked bundle,success,13.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,renderer-macos,success,Set up Node,success,3.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,renderer-macos,success,Install Rails-owned frontend dependencies,success,3.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,renderer-macos,success,Build the shared renderer bundle,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,renderer-macos,success,Verify the Rails renderer bundle is current,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,renderer-macos,success,Exercise Rails rendering on Apple Silicon macOS,success,15.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,renderer-macos,success,Post Set up Node,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,renderer-macos,success,Post Check out source,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,renderer-macos,success,Complete job,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,development-smoke,success,Set up job,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,development-smoke,success,Checkout code,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,development-smoke,success,Validate development Compose configuration,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,development-smoke,success,Build development image,success,65.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,development-smoke,success,Prepare and smoke-test development stack,success,12.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,development-smoke,success,Post Checkout code,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,development-smoke,success,Complete job,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,system-test,success,Set up job,success,1.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,system-test,success,Initialize containers,success,25.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,system-test,success,Checkout code,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,system-test,success,Set up Ruby,success,7.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,system-test,success,Build Tailwind CSS,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,system-test,success,Run System Tests,success,434.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,system-test,success,Keep screenshots from failed system tests,skipped,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,system-test,success,Post Checkout code,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,system-test,success,Stop containers,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,system-test,success,Complete job,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,record-ci-attestation,success,Set up job,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,record-ci-attestation,success,Check out the exact pull request test candidate,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,record-ci-attestation,success,Record the tested source tree,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,record-ci-attestation,success,Upload the deployment attestation,success,2.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,record-ci-attestation,success,Post Check out the exact pull request test candidate,success,0.0
+37952940986,1,d258818ab0d057d15500828d89cec86c96148c84,record-ci-attestation,success,Complete job,success,0.0

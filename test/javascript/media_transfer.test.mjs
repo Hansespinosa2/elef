@@ -54,6 +54,82 @@ test("isMediaTransferTypes defensively handles non-Array DOMStringList objects w
   assert.equal(isMediaTransferTypes(domStringListText), false)
 })
 
+test("filesFromTransfer prefers the file list and reads items only as a fallback", () => {
+  const media = new mediaModule.default()
+  const listed = { name: "same.png" }
+  const duplicate = { name: "same.png" }
+  let duplicateReads = 0
+
+  assert.deepEqual(media.filesFromTransfer({
+    files: [listed],
+    items: [{ kind: "file", getAsFile() { duplicateReads += 1; return duplicate } }]
+  }), [listed])
+  assert.equal(duplicateReads, 0)
+
+  const fallback = { name: "fallback.png" }
+  assert.deepEqual(media.filesFromTransfer({
+    files: [],
+    items: [
+      { kind: "string", getAsFile() { throw new Error("string items are ignored") } },
+      { kind: "file", getAsFile: () => null },
+      { kind: "file", getAsFile: () => fallback }
+    ]
+  }), [fallback])
+})
+
+test("sourceDragOver accepts a DOMStringList Files transfer and marks it for copying", () => {
+  const media = new mediaModule.default()
+  const surface = {
+    classList: { classes: new Set(), add(value) { this.classes.add(value) } },
+    closest() { return this }
+  }
+  const editor = { editingMode: "source", view: {} }
+  media.element = {
+    dataset: { editorMode: "source" },
+    querySelector: () => ({ editorController: editor })
+  }
+  const types = { 0: "Files", length: 1, item: () => "Files" }
+  const event = {
+    currentTarget: surface,
+    dataTransfer: { types, dropEffect: "none" },
+    prevented: false,
+    preventDefault() { this.prevented = true }
+  }
+
+  media.sourceDragOver(event)
+
+  assert.equal(event.prevented, true)
+  assert.equal(event.dataTransfer.dropEffect, "copy")
+  assert.equal(surface.classList.classes.has("is-media-drop-target"), true)
+})
+
+test("pasting a file outside the editor does not intercept the event or upload it", () => {
+  const media = new mediaModule.default()
+  const originalDocument = globalThis.document
+  const editor = { editingMode: "source", view: {}, selectionStart: 0, selectionEnd: 0 }
+  let uploadAttempts = 0
+  globalThis.document = { activeElement: null }
+  media.element = {
+    dataset: { editorMode: "source" },
+    querySelector: () => ({ editorController: editor })
+  }
+  media.upload = () => { uploadAttempts += 1 }
+  const event = {
+    target: { closest: () => null },
+    clipboardData: { files: [{ name: "title-paste.png" }], items: [] },
+    prevented: false,
+    preventDefault() { this.prevented = true }
+  }
+
+  try {
+    media.paste(event)
+    assert.equal(event.prevented, false)
+    assert.equal(uploadAttempts, 0)
+  } finally {
+    globalThis.document = originalDocument
+  }
+})
+
 test("urlFromTransfer extracts URLs from text/uri-list including comments", () => {
   const transfer = {
     getData: (type) => (type === "text/uri-list" ? "# comment line\r\nhttps://example.com/photo.png\r\nhttps://example.com/other.png" : "")

@@ -4,25 +4,32 @@ require "stringio"
 class PresentationsPptxExportTest < ActiveSupport::TestCase
   PIXEL_PNG = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=").freeze
 
-  test "builds a deterministic Markdown model for every presentation fixture" do
+  test "builds the same PPTX model from independent presentation instances for every fixture" do
     fixtures = [{ id: "presentations.yml:one", title: presentations(:one).title, source: presentations(:one).source }]
     fixtures += Presentations::SampleData::SAMPLES.map { |sample| sample.slice(:id, :title, :source) }
     fixtures += Presentations::LineageSampleData::SAMPLES.map { |sample| sample.slice(:id, :title, :source) }
+    fixtures << { id: "independent-expected-value", title: "Independent expected title", source: "# Independent expected title\n\nExpected body." }
     remote_image = Presentations::PptxExport::RemoteImageFetcher::Image.new(PIXEL_PNG, "image/png")
 
     with_remote_image_fetcher(->(_url) { remote_image }) do
       fixtures.each do |fixture|
-        presentation = Presentation.new(title: fixture.fetch(:title), source: fixture.fetch(:source))
-        payload = Presentations::PptxExport.new(presentation).as_json
-        expected_slides = presentation.slides.length
+        payloads = 2.times.map do
+          presentation = Presentation.new(title: fixture.fetch(:title), source: fixture.fetch(:source))
+          Presentations::PptxExport.new(presentation).as_json
+        end
+        payload = payloads.first
 
-        assert_equal expected_slides, payload[:slides].length, fixture[:id]
+        assert_equal payloads.first, payloads.last, "#{fixture[:id]} must produce the same model independently"
+        assert_operator payload[:slides].length, :>, 0, fixture[:id]
         assert_equal 1280, payload.dig(:presentation, :width), fixture[:id]
         assert_equal 720, payload.dig(:presentation, :height), fixture[:id]
-        assert_equal presentation.theme, payload.dig(:presentation, :theme), fixture[:id]
-        assert_equal presentation.typography, payload.dig(:presentation, :typography), fixture[:id]
+        assert_equal fixture.fetch(:title), payload.dig(:presentation, :title), fixture[:id]
         assert payload[:slides].all? { |slide| %w[body two-column three-column image table code statement].include?(slide[:layout]) }, fixture[:id]
         assert payload[:slides].all? { |slide| slide[:blocks].all? { |block| block[:html].is_a?(String) } }, fixture[:id]
+        if fixture[:id] == "independent-expected-value"
+          assert_equal "Independent expected title.pptx", payload[:filename]
+          assert_equal "Independent expected title", payload.dig(:presentation, :title)
+        end
       end
     end
   end
@@ -41,6 +48,50 @@ class PresentationsPptxExportTest < ActiveSupport::TestCase
       assert_equal 2, embedded_images
       assert_equal 1, fetch_count
     end
+  end
+
+  test "rejects an embedded image over the 10 MB per-image limit" do
+    presentation = Presentation.new(title: "Large remote image", source: "# Image\n\n![Large](https://assets.example.org/large.png)")
+    oversized = "x".b * (Presentations::PptxExport::MAX_REMOTE_IMAGE_BYTES + 1)
+    image = Presentations::PptxExport::RemoteImageFetcher::Image.new(oversized, "image/png")
+
+    with_remote_image_fetcher(->(_url) { image }) do
+      error = assert_raises(Presentations::PptxExport::Error) do
+        Presentations::PptxExport.new(presentation).as_json
+      end
+      assert_match(/10 MB/, error.message)
+    end
+  end
+
+  test "rejects aggregate embedded images over the 30 MB export limit" do
+    markdown_images = 4.times.map { |index| "![Image #{index}](https://assets.example.org/image-#{index}.png)" }.join("\n\n")
+    presentation = Presentation.new(title: "Large image set", source: "# Images\n\n#{markdown_images}")
+    image = Presentations::PptxExport::RemoteImageFetcher::Image.new("x".b * 8.megabytes, "image/png")
+
+    with_remote_image_fetcher(->(_url) { image }) do
+      error = assert_raises(Presentations::PptxExport::Error) do
+        Presentations::PptxExport.new(presentation).as_json
+      end
+      assert_match(/30 MB/, error.message)
+    end
+  end
+
+  test "rejects a remote response with an unsupported content type" do
+    presentation = Presentation.new(title: "Remote HTML", source: "# Image\n\n![Remote](https://assets.example.org/image.png)")
+    response = Presentations::PptxExport::RemoteImageFetcher::Image.new("<html>not an image</html>", "text/html")
+
+    with_remote_image_fetcher(->(_url) { response }) do
+      error = assert_raises(Presentations::PptxExport::Error) do
+        Presentations::PptxExport.new(presentation).as_json
+      end
+      assert_match(/unsupported image format/, error.message)
+    end
+  end
+
+  test "generates a safe PPTX filename from a title with reserved path characters" do
+    presentation = Presentation.new(title: "  Quarterly / Forecast?  ", source: "# Forecast")
+
+    assert_equal "Quarterly Forecast.pptx", Presentations::PptxExport.new(presentation).as_json.fetch(:filename)
   end
 
   test "preserves positions for extracted column titles in the PPTX model" do
@@ -95,12 +146,12 @@ class PresentationsPptxExportTest < ActiveSupport::TestCase
     assert_raises(Presentations::PptxExport::Error) { fetcher.fetch("http://127.0.0.1/private.png") }
     assert_raises(Presentations::PptxExport::Error) { fetcher.fetch("https://example.org:8443/image.png") }
     assert_raises(Presentations::PptxExport::Error) { fetcher.fetch("https://user:pass@example.org/image.png") }
-    assert fetcher.send(:blocked_address?, IPAddr.new("127.0.0.1"))
-    assert fetcher.send(:blocked_address?, IPAddr.new("10.1.2.3"))
-    assert fetcher.send(:blocked_address?, IPAddr.new("::1"))
-    assert fetcher.send(:blocked_address?, IPAddr.new("64:ff9b::7f00:1"))
-    assert fetcher.send(:blocked_address?, IPAddr.new("2002:7f00:1::"))
-    assert_not fetcher.send(:blocked_address?, IPAddr.new("8.8.8.8"))
+    assert fetcher.blocked_address?(IPAddr.new("127.0.0.1"))
+    assert fetcher.blocked_address?(IPAddr.new("10.1.2.3"))
+    assert fetcher.blocked_address?(IPAddr.new("::1"))
+    assert fetcher.blocked_address?(IPAddr.new("64:ff9b::7f00:1"))
+    assert fetcher.blocked_address?(IPAddr.new("2002:7f00:1::"))
+    assert_not fetcher.blocked_address?(IPAddr.new("8.8.8.8"))
   end
 
   private

@@ -2906,6 +2906,83 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn archive_import_rejects_oversized_extraction_before_writing_files() {
+        let (temp, library) = library();
+        let archive_path = temp.path().join("oversized.elef");
+        let options = SimpleFileOptions::default()
+            .compression_method(CompressionMethod::Deflated)
+            .last_modified_time(DateTime::default());
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("presentation.md", options).unwrap();
+        zip.write_all(b"# Small compressed member").unwrap();
+        let mut bytes = zip.finish().unwrap().into_inner();
+        set_first_central_entry_uncompressed_size(
+            &mut bytes,
+            (MAX_ARCHIVE_UNCOMPRESSED_BYTES + 1) as u32,
+        );
+        fs::write(&archive_path, bytes).unwrap();
+
+        assert!(matches!(
+            library.import_elef(&archive_path, None),
+            Err(CoreError::TooLarge)
+        ));
+        assert!(!temp.path().join("oversized").exists());
+    }
+
+    #[test]
+    fn archive_import_rejects_malformed_manifest() {
+        let (temp, library) = library();
+        let archive_path = temp.path().join("malformed-manifest.elef");
+        let options = SimpleFileOptions::default()
+            .compression_method(CompressionMethod::Deflated)
+            .last_modified_time(DateTime::default());
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("presentation.md", options).unwrap();
+        zip.write_all(b"# Deck").unwrap();
+        zip.start_file(MANIFEST_FILE, options).unwrap();
+        zip.write_all(b"{ definitely not json").unwrap();
+        fs::write(&archive_path, zip.finish().unwrap().into_inner()).unwrap();
+
+        assert!(matches!(
+            library.import_elef(&archive_path, None),
+            Err(CoreError::InvalidInput)
+        ));
+        assert!(!temp.path().join("malformed-manifest").exists());
+    }
+
+    #[test]
+    fn archive_import_rejects_malicious_member_filenames() {
+        let (temp, library) = library();
+        let options = SimpleFileOptions::default()
+            .compression_method(CompressionMethod::Deflated)
+            .last_modified_time(DateTime::default());
+
+        for (index, name) in [
+            "C:/outside.md",
+            "nested\\..\\outside.md",
+            "/absolute.md",
+            "control/\u{7f}name.md",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let archive_path = temp.path().join(format!("malicious-{index}.elef"));
+            let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+            zip.start_file(name, options).unwrap();
+            zip.write_all(b"# Payload").unwrap();
+            fs::write(&archive_path, zip.finish().unwrap().into_inner()).unwrap();
+
+            assert!(
+                matches!(
+                    library.import_elef(&archive_path, None),
+                    Err(CoreError::PathRejected)
+                ),
+                "archive member path should be rejected: {name:?}"
+            );
+        }
+    }
+
     #[cfg(unix)]
     #[test]
     fn archive_import_rejects_symlink_entries() {
@@ -3035,7 +3112,8 @@ mod tests {
                     .into_iter()
                     .find(|summary| summary.name == "Crash fixture")
                     .unwrap();
-                library.open_deck(&deck.id).unwrap();
+                let reopened = library.open_deck(&deck.id).unwrap();
+                assert_eq!(reopened.source, expected);
                 assert!(fs::read_dir(&deck_path).unwrap().all(|entry| {
                     !entry
                         .unwrap()
@@ -3150,5 +3228,14 @@ mod tests {
             .expect("zip central directory entry");
         bytes[offset + 5] = 3;
         bytes[offset + 38..offset + 42].copy_from_slice(&(0o120777_u32 << 16).to_le_bytes());
+    }
+
+    fn set_first_central_entry_uncompressed_size(bytes: &mut [u8], size: u32) {
+        let signature = [0x50, 0x4b, 0x01, 0x02];
+        let offset = bytes
+            .windows(signature.len())
+            .position(|window| window == signature)
+            .expect("zip central directory entry");
+        bytes[offset + 24..offset + 28].copy_from_slice(&size.to_le_bytes());
     }
 }

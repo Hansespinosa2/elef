@@ -8,9 +8,11 @@ import { desktopCommand } from "./offline-macos.js"
 import { readWebdriverValue, reserveWebdriverPort, webdriverElementPath } from "./webdriver-port.js"
 import { percentile95 } from "../../app/javascript/lib/performance_measurement.js"
 import { LIBRARY_RENDER_BATCH_SIZE } from "../../app/javascript/lib/incremental_list.js"
+import { parseLaunchCount } from "./native-benchmark-config.js"
 
 const binary = process.argv[process.argv.indexOf("--binary") + 1]
 const reportOnly = process.argv.includes("--report-runner")
+const launchCount = parseLaunchCount(process.argv.slice(2))
 if (!process.argv.includes("--binary") || !binary || !path.isAbsolute(binary)) {
   throw new Error("Provide --binary with the absolute path to a release build with the webdriver feature.")
 }
@@ -27,7 +29,7 @@ const source = Array.from({ length: 100 }, (_, index) =>
 const samples = { coldStart: [], open100Slides: [], warmLibrary: [] }
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 const report = { platform: process.platform, architecture: process.arch, release: os.release(),
-  protocol: `20 fresh release processes; 1000 deck index; first ${LIBRARY_RENDER_BATCH_SIZE} cards; one 50 MiB deck; painted operation timings`,
+  protocol: `${launchCount} fresh release processes; 1000 deck index; first ${LIBRARY_RENDER_BATCH_SIZE} cards; one 50 MiB deck; painted operation timings`,
   samples, inputPreservedRuns: 0 }
 report.renderedLibraryCards = []
 report.bootstrapStageRuns = []
@@ -49,7 +51,7 @@ try {
       await writeFile(path.join(folder, "images/scale-fixture.bin"), Buffer.alloc(50 * 1024 * 1024))
     }
   }
-  for (let run = 0; run < 20; run += 1) {
+  for (let run = 0; run < launchCount; run += 1) {
     const folder = path.join(library, "0000 Large presentation")
     await writeFile(path.join(folder, "presentation.md"), source)
     const env = { ...process.env, ELEF_E2E_LIBRARY_ROOT: library, TAURI_WEBDRIVER_PORT: await reserveWebdriverPort() }
@@ -142,7 +144,7 @@ try {
       const quitDeadline = Date.now() + 10_000
       while (!exitResult && Date.now() < quitDeadline) await pause(50)
       assert.deepEqual(exitResult, { code: 0, signal: null }, "The measured process must exit through its native window-close guard")
-      process.stdout.write(`Native release performance run ${run + 1}/20 completed.\n`)
+      process.stdout.write(`Native release performance run ${run + 1}/${launchCount} completed.\n`)
     } catch (error) {
       throw new Error(`Native release performance run ${run + 1} during ${operation}: ${error.message}; backend: ${backendOutput}`)
     } finally {
@@ -164,10 +166,10 @@ try {
     }
   }
   for (const name of ["library-status", "initial-library-render", "editor-ready", "initial-paint", "native-ready-ack"]) {
-    assert.equal(bootstrapStageSamples.get(name)?.length, 20, `Expected 20 native startup measurements for ${name}`)
+    assert.equal(bootstrapStageSamples.get(name)?.length, launchCount, `Expected ${launchCount} native startup measurements for ${name}`)
   }
   report.p95BootstrapStageMilliseconds = Object.fromEntries([...bootstrapStageSamples]
-    .filter(([, values]) => values.length >= 20)
+    .filter(([, values]) => values.length >= launchCount)
     .map(([name, values]) => [name, percentile95(values)]))
   const openStageSamples = new Map()
   for (const trace of report.openTraceRuns) {
@@ -182,10 +184,10 @@ try {
     }
   }
   for (const name of ["readDeck", "prepareDeck", "editorReady", "loadDocument", "deckViewSetup", "previewRefresh"]) {
-    assert.equal(openStageSamples.get(name)?.length, 20, `Expected 20 native open measurements for ${name}`)
+    assert.equal(openStageSamples.get(name)?.length, launchCount, `Expected ${launchCount} native open measurements for ${name}`)
   }
   report.p95OpenStageMilliseconds = Object.fromEntries([...openStageSamples]
-    .filter(([, values]) => values.length >= 20)
+    .filter(([, values]) => values.length >= launchCount)
     .map(([name, values]) => [name, percentile95(values)]))
   const navigationStageSamples = new Map()
   for (const navigation of report.frontendNavigationRuns) {
@@ -196,7 +198,7 @@ try {
     }
   }
   report.p95NavigationStageMilliseconds = Object.fromEntries([...navigationStageSamples]
-    .filter(([, values]) => values.length >= 20)
+    .filter(([, values]) => values.length >= launchCount)
     .map(([name, values]) => [name, percentile95(values)]))
   const previewStagePairs = [
     ["render", "render-start", "render-ready"],
@@ -222,10 +224,10 @@ try {
     }
   }
   for (const name of ["render", "previewInstall", "previewEvents", "slideOverview", "slideOverviewScale", "slideOverflow"]) {
-    assert.equal(previewStageSamples.get(name)?.length, 20, `Expected 20 native render measurements for ${name}`)
+    assert.equal(previewStageSamples.get(name)?.length, launchCount, `Expected ${launchCount} native render measurements for ${name}`)
   }
   report.p95PreviewStageMilliseconds = Object.fromEntries([...previewStageSamples]
-    .filter(([, values]) => values.length >= 20)
+    .filter(([, values]) => values.length >= launchCount)
     .map(([name, values]) => [name, percentile95(values)]))
 report.budgetsMilliseconds = { coldStart: 1500, open100Slides: 300, warmLibrary: 500 }
 report.misses = Object.entries(report.budgetsMilliseconds).filter(([name, budget]) => report.p95Milliseconds[name] >= budget).map(([name]) => name)

@@ -81,9 +81,9 @@ function focusDesktopWindow() {
 
 function sendNativeKey(key, { activate = true } = {}) {
   const linuxKeys = {
-    Escape: "Escape", Enter: "Return", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End"
+    Escape: "Escape", Enter: "Return", Backspace: "BackSpace", ArrowRight: "Right", ArrowLeft: "Left", Home: "Home", End: "End"
   }
-  const macKeyCodes = { Escape: 53, Enter: 36, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119 }
+  const macKeyCodes = { Escape: 53, Enter: 36, Backspace: 51, ArrowRight: 124, ArrowLeft: 123, Home: 115, End: 119 }
   if (process.platform === "linux") {
     if (activate) focusDesktopWindow()
     const nativeKey = linuxKeys[key]
@@ -279,7 +279,7 @@ class DesktopEditorUi {
   }
 
   constructor() {
-    this.rejectExternalMedia = true
+    this.externalMediaPolicy = "reject-remote"
     this.activeDeckTitle = null
   }
 
@@ -396,6 +396,16 @@ class DesktopEditorUi {
   }
 
   async enterPresentationMode() {
+    const geometry = await browser.execute(() => {
+      const slide = document.querySelector("#desktop-preview .slide-frame > .slide")
+      if (!slide) return null
+      const style = getComputedStyle(slide)
+      return { width: style.width, height: style.height, overflow: style.overflow }
+    })
+    if (geometry?.width !== "1280px" || geometry.height !== "720px" || geometry.overflow !== "hidden") {
+      throw new Error(`The native presentation preview violated its 16:9 canvas contract: ${JSON.stringify(geometry)}`)
+    }
+
     const started = await browser.executeAsync(done => {
       const start = window.__elefPresentationTestHooks?.start
       if (!start) return done({ error: "The presentation shell is unavailable" })
@@ -594,6 +604,12 @@ class DesktopEditorUi {
       timeoutMsg: "The source editor did not finish restoring after the mode switch"
     })
     await this.waitForEditorModeTransition()
+    await browser.waitUntil(async () => browser.execute(() =>
+      document.querySelector("#desktop-editor-field")?.editorController?.editingMode === "source"
+    ), {
+      timeout: 5_000,
+      timeoutMsg: "The desktop CodeMirror controller did not enter source mode"
+    })
     const editor = await $("#deck-source-editor .cm-content")
     await editor.waitForDisplayed()
     // Tauri's embedded WebDriver cannot reliably focus CodeMirror on CI. Use
@@ -607,20 +623,19 @@ class DesktopEditorUi {
       const mathPalette = globalThis.Stimulus?.getControllerForElementAndIdentifier(field, "math-shortcut-palette")
       // A full-buffer test edit replaces the current authoring context too.
       // End any tab-stop session left by a previous snippet before placing the
-      // caret at the new buffer end and refreshing the palettes.
+      // caret at the new buffer end; the input event refreshes palettes normally.
       snippetPalette?.endStops()
       mathPalette?.endStops()
       controller.replaceRange(nextSource, 0, controller.value.length)
       controller.setSelectionRange(nextSource.length)
-      snippetPalette?.refresh()
-      mathPalette?.refresh()
       return {
         source: controller.sourceValue,
         selectionStart: controller.selectionStart,
-        selectionEnd: controller.selectionEnd
+        selectionEnd: controller.selectionEnd,
+        editingMode: controller.editingMode
       }
     }, source)
-    if (updated?.source !== source || updated.selectionStart !== source.length || updated.selectionEnd !== source.length) {
+    if (updated?.source !== source || updated.selectionStart !== source.length || updated.selectionEnd !== source.length || updated.editingMode !== "source") {
       throw new Error(`The desktop editor did not accept the shared scenario source at the end of the buffer: ${JSON.stringify(updated)}`)
     }
   }
@@ -684,20 +699,17 @@ class DesktopEditorUi {
         })
       }
 
-      const outcome = await browser.execute(() => {
+      focusDesktopWindow()
+      sendNativeKey("Backspace")
+      await browser.waitUntil(async () => browser.execute(expected => {
         const controller = document.querySelector("#desktop-editor-field")?.editorController
-        const event = new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, cancelable: true })
-        controller.dom.dispatchEvent(event)
-        return {
-          source: controller.value,
-          anchor: controller.selectionStart,
-          head: controller.selectionEnd,
-          prevented: event.defaultPrevented
-        }
+        return controller?.value === expected
+          && controller.selectionStart === expected.length
+          && controller.selectionEnd === expected.length
+      }, source), {
+        timeout: 5_000,
+        timeoutMsg: "A real Backspace key did not delete both characters of the empty dollar pair"
       })
-      if (outcome?.source !== source || outcome.anchor !== source.length || outcome.head !== source.length || !outcome.prevented) {
-        throw new Error(`Backspace did not delete both characters of the empty dollar pair: ${JSON.stringify(outcome)}`)
-      }
     } finally {
       if (restoreNormalMode) {
         sendNativeKey("Escape")
@@ -894,11 +906,29 @@ class DesktopEditorUi {
       document.addEventListener("keydown", handler, true)
       window.__elefDisplayMathKeys = { events, handler }
     }, mode)
+    const expectedKeys = ["$", "$", "Enter"]
     let keys
+    let keyWaitError = null
     try {
       typeNativeText("$")
       typeNativeText("$")
       sendNativeKey("Enter", { activate: false })
+      try {
+        await browser.waitUntil(async () => {
+          const inputKeys = await browser.execute(() =>
+            (window.__elefDisplayMathKeys?.events || [])
+              .filter(({ key }) => key !== "Shift")
+              .map(({ key }) => key)
+          )
+          return JSON.stringify(inputKeys) === JSON.stringify(expectedKeys)
+        }, {
+          timeout: 2_000,
+          interval: 50,
+          timeoutMsg: "The native Enter key event did not reach the display-math editor"
+        })
+      } catch (error) {
+        keyWaitError = error.message
+      }
     } finally {
       keys = await browser.execute(() => {
         const capture = window.__elefDisplayMathKeys
@@ -907,11 +937,11 @@ class DesktopEditorUi {
         return capture?.events || []
       })
     }
-    const expectedKeys = ["$", "$", "Enter"]
     const inputKeys = keys.filter(({ key }) => key !== "Shift")
     if (JSON.stringify(inputKeys.map(({ key }) => key)) !== JSON.stringify(expectedKeys) ||
       keys.some(({ trusted, inEditor }) => !trusted || !inEditor)) {
-      throw new Error(`Display-math input did not reach the editor as the expected trusted keys: ${JSON.stringify(keys)}`)
+      const waitDiagnostic = keyWaitError ? `; event wait: ${keyWaitError}` : ""
+      throw new Error(`Display-math input did not reach the editor as the expected trusted keys: ${JSON.stringify(keys)}${waitDiagnostic}`)
     }
   }
 
@@ -1104,10 +1134,22 @@ class DesktopEditorUi {
     const result = await browser.executeAsync(done => {
       const controller = document.querySelector("#desktop-editor-form")?.previewController
       if (!controller) return done({ error: "The desktop preview controller is unavailable" })
-      controller.refresh().then(rendered => done({ rendered }), error => done({ error: error.message }))
+      const wasRunning = Boolean(controller.requestController)
+      controller.refresh().then(rendered => done({
+        rendered: rendered === true,
+        queued: wasRunning && rendered === false
+      }), error => done({ error: error.message }))
     })
     if (result?.error) throw new Error(result.error)
-    if (!result?.rendered) throw new Error("The desktop preview did not render the latest saved source")
+    if (!result?.rendered && !result?.queued) throw new Error("The desktop preview did not render or queue the latest saved source")
+    await browser.waitUntil(async () => browser.execute(() => {
+      const form = document.querySelector("#desktop-editor-form")
+      return Boolean(form && form.dataset.previewProjectionStale !== "true")
+    }), {
+      timeout: 20_000,
+      interval: 50,
+      timeoutMsg: "The desktop preview did not render the latest saved source"
+    })
   }
 
   async showSourceMode() {

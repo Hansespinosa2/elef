@@ -1,13 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
-
-const layoutSource = (await readFile(new URL("../../app/javascript/lib/slide_position_layout.js", import.meta.url), "utf8"))
-  .replace(/^export /gm, "")
-const source = (await readFile(new URL("../../app/javascript/controllers/pptx_export_controller.js", import.meta.url), "utf8"))
-  .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
-  .replace('import { slidePositionClasses, slidePositionLayout } from "#elef/slide-position-layout"', layoutSource)
-const pptx = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
+import * as pptx from "../../app/javascript/lib/pptx_export.js"
 
 const {
   blockMarkup,
@@ -156,7 +149,7 @@ test("gradientBackground returns a base64 svg for every known theme", () => {
   }
 })
 
-test("blockMarkup keeps the html and emits position classes only when positioned", () => {
+test("blockMarkup keeps html and applies explicit or default position classes", () => {
   assert.equal(blockMarkup({ html: "<p>Hi</p>", position: { horizontal: "start", vertical: "middle" } }), '<div class="slide-block position-start position-middle"><p>Hi</p></div>')
   assert.equal(blockMarkup({ html: "<p>Hi</p>", position: null }), '<div class="slide-block position-left position-top"><p>Hi</p></div>')
 })

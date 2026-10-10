@@ -532,6 +532,31 @@ test("draft recovery leaves edits made while the editor connects untouched", asy
   assert.deepEqual(status, [])
 })
 
+test("draft reads fall back to local storage when IndexedDB throws", async () => {
+  const record = {
+    key: "presentation:1:identity",
+    snapshot: "# Browser copy",
+    values: ["Storage fallback", "# Browser copy"],
+    updatedAt: 123
+  }
+  const originalWindow = globalThis.window
+  globalThis.window = {
+    localStorage: { getItem: key => key === "draft-key" ? JSON.stringify(record) : null }
+  }
+
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    database: Promise.resolve({ transaction() { throw new Error("IndexedDB unavailable") } }),
+    storageKey: () => "draft-key"
+  })
+
+  try {
+    assert.deepEqual(await controller.readDraft(record.key), record)
+  } finally {
+    globalThis.window = originalWindow
+  }
+})
+
 test("typing during a Rails conflict preserves the conflict message", () => {
   const sourceField = { name: "document[source]", value: "local edit" }
   const status = []

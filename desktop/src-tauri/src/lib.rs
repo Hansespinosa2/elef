@@ -171,6 +171,48 @@ impl Drop for UpdateLease<'_> {
     }
 }
 
+fn validate_update_version(version: &str) -> Result<(), CommandError> {
+    if version.len() <= 64
+        && !version.is_empty()
+        && version
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b".+-".contains(&byte))
+    {
+        Ok(())
+    } else {
+        Err(CommandError::new(
+            "invalid_input",
+            "Choose a valid update version.",
+            false,
+        ))
+    }
+}
+
+fn acquire_update_lease(
+    update_installing: &std::sync::atomic::AtomicBool,
+) -> Result<UpdateLease<'_>, CommandError> {
+    if update_installing
+        .compare_exchange(
+            false,
+            true,
+            std::sync::atomic::Ordering::Acquire,
+            std::sync::atomic::Ordering::Relaxed,
+        )
+        .is_err()
+    {
+        return Err(CommandError::new(
+            "invalid_input",
+            "An update is already being installed.",
+            false,
+        ));
+    }
+    Ok(UpdateLease(update_installing))
+}
+
+fn requested_update_matches(requested: &str, offered: &str) -> bool {
+    requested == offered
+}
+
 fn installed_application(app: &AppHandle) -> Result<(PathBuf, PathBuf), CommandError> {
     #[cfg(target_os = "linux")]
     if let Some(path) = app.env().appimage {
@@ -242,35 +284,8 @@ async fn install_update(
     version: String,
     on_progress: tauri::ipc::Channel<serde_json::Value>,
 ) -> Result<bool, CommandError> {
-    if version.len() > 64
-        || version.is_empty()
-        || !version
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || b".+-".contains(&byte))
-    {
-        return Err(CommandError::new(
-            "invalid_input",
-            "Choose a valid update version.",
-            false,
-        ));
-    }
-    if state
-        .update_installing
-        .compare_exchange(
-            false,
-            true,
-            std::sync::atomic::Ordering::Acquire,
-            std::sync::atomic::Ordering::Relaxed,
-        )
-        .is_err()
-    {
-        return Err(CommandError::new(
-            "invalid_input",
-            "An update is already being installed.",
-            false,
-        ));
-    }
-    let _lease = UpdateLease(&state.update_installing);
+    validate_update_version(&version)?;
+    let _lease = acquire_update_lease(&state.update_installing)?;
     let (live, relative_executable) = installed_application(&app)?;
     let confirmed = confirm_native_action(
         &app,
@@ -308,7 +323,7 @@ async fn install_update(
         .ok_or_else(|| {
             CommandError::new("not_found", "This update is no longer available.", false)
         })?;
-    if update.version != version {
+    if !requested_update_matches(&version, &update.version) {
         return Err(CommandError::new(
             "conflict",
             "The available update changed. Check for updates again.",
@@ -1131,7 +1146,7 @@ fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     Ok(menu)
 }
 
-pub fn run() {
+pub fn run(context: tauri::Context<tauri::Wry>) {
     let updater = tauri_plugin_updater::Builder::new();
     #[cfg(feature = "webdriver")]
     let updater = match std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY") {
@@ -1239,7 +1254,7 @@ pub fn run() {
             install_update,
             confirm_app_ready,
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building Elef Desktop");
 
     app.run(|app, event| {
@@ -1306,6 +1321,76 @@ fn queue_open_files(state: &DesktopState, paths: impl IntoIterator<Item = PathBu
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn update_version_validation_accepts_safe_versions_and_rejects_invalid_input() {
+        assert!(validate_update_version("0.2.0").is_ok());
+        assert!(validate_update_version("2.0.0-rc.1+build.4").is_ok());
+        for invalid in ["", "../0.2.0", "0.2.0/evil", "0.2.0\\evil", "0.2.0?x"] {
+            assert_eq!(
+                validate_update_version(invalid).unwrap_err().code,
+                "invalid_input",
+                "invalid version should be rejected: {invalid:?}"
+            );
+        }
+        assert!(validate_update_version(&"a".repeat(65)).is_err());
+    }
+
+    #[test]
+    fn update_install_lease_rejects_concurrent_work_and_releases_after_drop() {
+        let installing = std::sync::atomic::AtomicBool::new(false);
+        let lease = acquire_update_lease(&installing).unwrap();
+        assert!(matches!(
+            acquire_update_lease(&installing),
+            Err(error) if error.code == "invalid_input"
+        ));
+        drop(lease);
+        assert!(acquire_update_lease(&installing).is_ok());
+    }
+
+    #[test]
+    fn update_install_requires_the_checked_release_version_to_match_exactly() {
+        assert!(requested_update_matches("0.2.0", "0.2.0"));
+        assert!(!requested_update_matches("0.2.0", "0.2.1"));
+        assert!(!requested_update_matches("0.2.0", "v0.2.0"));
+    }
+
+    #[test]
+    fn production_capability_denies_custom_ipc_from_remote_content() {
+        let app = tauri::test::mock_builder()
+            .manage(DesktopState::default())
+            .invoke_handler(tauri::generate_handler![pending_open_elef_count])
+            .build(tauri::generate_context!())
+            .unwrap();
+        app.state::<DesktopState>()
+            .open_files
+            .lock()
+            .unwrap()
+            .push_back(PathBuf::from("/tmp/pending.elef"));
+        let webview = tauri::WebviewWindowBuilder::new(&app, "main", Default::default())
+            .build()
+            .unwrap();
+        let request = |url: &str| tauri::webview::InvokeRequest {
+            cmd: "pending_open_elef_count".into(),
+            callback: tauri::ipc::CallbackFn(0),
+            error: tauri::ipc::CallbackFn(1),
+            url: url.parse().unwrap(),
+            body: tauri::ipc::InvokeBody::default(),
+            headers: Default::default(),
+            invoke_key: tauri::test::INVOKE_KEY.to_string(),
+        };
+
+        assert!(
+            tauri::test::get_ipc_response(&webview, request("https://untrusted.example/")).is_err()
+        );
+        let local = if cfg!(any(windows, target_os = "android")) {
+            "http://tauri.localhost"
+        } else {
+            "tauri://localhost"
+        };
+        let response = tauri::test::get_ipc_response(&webview, request(local)).unwrap();
+        assert_eq!(response.deserialize::<usize>().unwrap(), 1);
+    }
 
     #[test]
     fn cli_open_file_queue_accepts_arguments_with_or_without_argv_zero() {

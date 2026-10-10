@@ -13,6 +13,9 @@ class SnippetTest < ActiveSupport::TestCase
     Snippet.create!(name: "Bold", trigger: "bold", description: "Markdown emphasis", category: "Markdown", body: "**x**")
 
     assert_equal ["beq"], Snippet.search("latex eq").map(&:trigger)
+    assert_equal ["beq"], Snippet.search("LATEX EQ").map(&:trigger)
+    assert_equal Snippet.ordered.to_a, Snippet.search(" \t ")
+    assert_empty Snippet.search("no-such-snippet-term")
   end
 
   test "expands placeholders into text and ordered tab stops" do

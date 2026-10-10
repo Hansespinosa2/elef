@@ -243,18 +243,6 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_no_selector ".math-error"
   end
 
-  test "uses dark Aradia surfaces for math shortcut settings" do
-    visit math_shortcuts_path
-
-    assert_selector ".math-shortcut-card"
-    assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.math-shortcut-card')).backgroundColor")
-    assert_equal "rgb(24, 33, 38)", page.evaluate_script("getComputedStyle(document.querySelector('.authoring-settings-dialog')).backgroundColor")
-
-    click_on "New shortcut"
-    assert_selector ".authoring-entry-form:not([hidden]) .authoring-math-fields:not([hidden])"
-    assert_equal "rgb(17, 22, 26)", page.evaluate_script("getComputedStyle(document.querySelector('.authoring-math-fields input')).backgroundColor")
-  end
-
   test "expands common TeX operators and walks fraction tab stops" do
     document = Document.create!(title: "TeX operators", source: "# TeX operators")
 

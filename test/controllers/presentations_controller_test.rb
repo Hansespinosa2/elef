@@ -2,6 +2,20 @@ require "test_helper"
 require "tempfile"
 
 class PresentationsControllerTest < ActionDispatch::IntegrationTest
+  test "presentation preview keeps the saved record untouched" do
+    presentation = presentations(:one)
+
+    post preview_presentation_path(presentation), params: {
+      presentation: { title: "Draft", source: "# Draft" }, revision: 12
+    }, as: :json
+
+    assert_response :success
+    assert_equal 12, response.parsed_body["revision"]
+    assert_includes response.parsed_body["html"], "Draft"
+    assert_equal "Demo Deck", presentation.reload.title
+    assert_equal "# One\n\nBody\n---\n# Two", presentation.source
+  end
+
   test "rename preserves the all-library view and rejects arbitrary destinations" do
     work = presentations(:one)
     get root_path
@@ -137,7 +151,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-release-warning", text: /newer changes/
   end
 
-  test "editor wires autosave and keeps new presentations client-only until creation" do
+  test "editor markup configures autosave and keeps new presentations client-only" do
     get edit_presentation_path(presentations(:one))
     assert_select "form.visual-editor-form"
     assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
@@ -150,6 +164,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "presentation[theme]", config.fetch("themeName")
     assert_equal "presentation[typography]", config.fetch("typographyName")
     assert config.fetch("persisted")
+    media_controllers = css_select("[data-editor-form-controllers]").first["data-editor-form-controllers"].split.count("media")
+    assert_equal 1, media_controllers
     assert_select 'button[data-dirty-navigation]', text: "Present"
     assert_select "a[href='#{print_presentation_path(presentations(:one))}']", text: "Print draft / save PDF"
     get new_presentation_path
@@ -222,6 +238,33 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     end
     assert_response :unprocessable_content
     assert_equal "Choose an image or MP4 video.", response.parsed_body["error"]
+  end
+
+  test "copies an uploaded asset to the presentation folder before its Markdown is saved" do
+    presentation = Presentation.create!(title: "Immediate folder upload", source: "# Upload")
+    bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+
+    Tempfile.create(["folder-upload", ".png"]) do |file|
+      file.binmode
+      file.write(bytes)
+      file.rewind
+      upload = Rack::Test::UploadedFile.new(file.path, "image/png")
+      post upload_asset_presentation_path(presentation), params: { file: upload }, headers: { "Accept" => "application/json" }
+    end
+
+    assert_response :created
+    filename = presentation.assets.blobs.last.filename.to_s
+    asset_path = presentation.storage_dir.join("assets", filename)
+    assert File.file?(asset_path), "the upload action must sync the asset before a later source save"
+    assert_equal bytes, File.binread(asset_path)
+
+    source = "# Upload\n\n#{response.parsed_body.fetch("source")}"
+    patch presentation_path(presentation), params: { presentation: { source: source } }, as: :json
+    assert_response :ok
+    assert_equal source, File.read(presentation.storage_dir.join("source.md"))
+    assert_includes File.read(presentation.storage_dir.join("presentation.md")), "assets/#{filename}"
+  ensure
+    Presentations::FolderSync.remove!(presentation) if presentation
   end
 
   test "print view selects the latest draft or published release" do
@@ -547,6 +590,53 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# One\n---\n# Two", presentation.source
   end
 
+  test "start creates a default presentation and redirects to its editor" do
+    assert_difference("Presentation.count", 1) do
+      post start_presentations_path
+    end
+
+    presentation = Presentation.order(:id).last
+    assert_redirected_to edit_presentation_path(presentation)
+    assert_equal "New presentation started.", flash[:notice]
+    assert_equal Presentation::DEFAULT_SOURCE, presentation.source
+  end
+
+  test "exports a presentation as a downloadable Elef archive" do
+    presentation = Presentation.create!(title: "Exported deck", source: "# Exported deck\n\nArchive content")
+
+    get export_presentation_path(presentation)
+
+    assert_response :success
+    assert_equal "application/zip", response.media_type
+    assert_match(/attachment; filename=\"exported-deck-elef-work\.zip\"/, response.headers.fetch("Content-Disposition"))
+    Zip::File.open_buffer(response.body) do |zip|
+      manifest = JSON.parse(zip.read("manifest.json"))
+      assert_equal "presentation", manifest.dig("work", "kind")
+      assert_includes zip.read("presentation.md"), "# Exported deck"
+    end
+  end
+
+  test "imports an uploaded Elef archive through the presentation endpoint" do
+    source = Presentation.create!(title: "Imported deck", source: "# Imported deck\n\nArchive content")
+    package = WorkPackage::Exporter.call(source)
+
+    Tempfile.create(["presentation-package", ".elef"]) do |file|
+      file.binmode
+      file.write(package)
+      file.rewind
+      upload = Rack::Test::UploadedFile.new(file.path, "application/zip")
+
+      assert_difference("Presentation.count", 1) do
+        post import_presentations_path, params: { package: upload }
+      end
+    end
+
+    imported = Presentation.order(:id).last
+    assert_redirected_to edit_presentation_path(imported)
+    assert_equal "# Imported deck\n\nArchive content", imported.source
+    assert_equal "Presentation imported.", flash[:notice]
+  end
+
   test "updates source only on explicit save request" do
     presentation = presentations(:one)
 
@@ -586,6 +676,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     get presentation_path(presentation)
     assert_response :success
+    assert_select "body.elef-app"
     assert_select ".presentation-surface"
     assert_select ".slides-typography-book"
     assert_select ".slide", 2
@@ -729,9 +820,50 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get presentation_path(presentation)
 
     assert_response :success
-    assert_select '[aria-label="Markdown warnings"]', text: /directive/
+    assert_select '[aria-label="Markdown warnings"]', text: /Unknown or malformed presentation directive was removed\./
     assert_select ".slide", text: /Content/
     refute_includes response.body, ":::unknown"
+  end
+
+  test "presentation editor renders left alignment as the default for an unaligned block" do
+    presentation = Presentation.create!(title: "Default alignment", source: "# Slide\n\nPlain block")
+
+    get edit_presentation_path(presentation)
+
+    assert_response :success
+    projection = editor_host_config.fetch("previewHtml")
+    assert_match(/<select[^>]*data-presentation-editor-align[^>]*>[\s\S]*?<option value=\"left\" selected>Left<\/option>/, projection)
+    refute_match(/<option value=\"\"><\/option>/, projection)
+  end
+
+  test "presentation rendering keeps position modifiers on the Art block" do
+    presentation = Presentation.create!(
+      title: "Positioned Art",
+      source: "# Positioned Art\n\n## Context\n\n- One input\n\n## Art block\n\n:::position{middle right}\n:::art\n- Alpha\n- Beta"
+    )
+
+    get present_presentation_path(presentation)
+
+    assert_response :success
+    assert_select ".slide-region[data-art-host='fixed'] > .slide-middle-group > .slide-block-item > .slide-region-block.position-right.position-middle > .slide-block.position-right.position-middle [data-elef-art-root][data-art-mode='peers']"
+  end
+
+  test "print output preserves attached media in the Art fallback" do
+    media_bytes = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=")
+    media_digest = Digest::SHA256.hexdigest(media_bytes)
+    presentation = Presentation.create!(
+      title: "Art unsupported media",
+      source: ":::art\n- Research\n  ![Mockup](elef-asset:#{media_digest})"
+    )
+    presentation.assets.attach(io: StringIO.new(media_bytes), filename: "mockup.png", content_type: "image/png")
+    presentation.assets.blobs.last.update!(metadata: presentation.assets.blobs.last.metadata.merge("elef_sha256" => media_digest))
+
+    get print_presentation_path(presentation)
+
+    assert_response :success
+    assert_select ".presentation-print [data-elef-art-root][data-art-status='fallback-unsupported'][data-art-layout='plain-list']"
+    assert_select ".presentation-print [data-elef-art-root] img.presentation-media[src='/presentations/#{presentation.id}/assets/#{media_digest}'][alt='Mockup']"
+    assert_select ".presentation-print [data-elef-art-root] .elef-art-list > li", text: "Research"
   end
 
   test "create responds to JSON format with edit and upload urls" do

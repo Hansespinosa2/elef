@@ -34,13 +34,17 @@ export async function slidePositionGrammarWorkflow(ui) {
     await ui.showSourceMode()
     await ui.replaceSource(SLIDE_POSITION_SOURCE)
     await ui.waitForSaved(SLIDE_POSITION_SOURCE)
+    await ui.refreshPreview()
     await ui.showVisualMode()
+    await ui.waitForPreview("Footer")
     await ui.assertSlidePositionGrammar()
 
     await ui.showSourceMode()
     await ui.replaceSource(COLUMN_DOCKING_SOURCE)
     await ui.waitForSaved(COLUMN_DOCKING_SOURCE)
+    await ui.refreshPreview()
     await ui.showVisualMode()
+    await ui.waitForPreview("Left footer")
     await ui.assertColumnSlidePositionDocking()
   } finally {
     await ui.showSourceMode()

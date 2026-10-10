@@ -33,7 +33,7 @@ class SourceArtIntegrationTest < ActiveSupport::TestCase
     assert_equal ["Prototype", "Validate"], root_list.xpath("./li[2]/ul/li").map(&:text)
   end
 
-  test "saved document resolution and rendering use shared recursive Art semantics" do
+  test "the Ruby document renderer resolves recursive Art directives" do
     source = <<~MARKDOWN
       :::art
       3. Research

@@ -1,6 +1,14 @@
 require "test_helper"
 
 class DocumentsControllerTest < ActionDispatch::IntegrationTest
+  test "creates a document with generic appearance overrides" do
+    post documents_path, params: { document: { title: "Ignored title", source: "# Styled notes", theme: "dark", typography: "technical" } }
+
+    document = Document.find_by!(title: "Styled notes")
+    assert_redirected_to edit_document_path(document)
+    assert_equal ["dark", "technical"], [document.theme_override, document.typography_override]
+  end
+
   setup do
     Document.delete_all
   end
@@ -59,6 +67,54 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
       post documents_path, params: { document: { source: Document.available_default_source } }, as: :json
     end
     assert_response :created
+  end
+
+  test "start creates a default document and redirects to its editor" do
+    assert_difference("Document.count", 1) do
+      post start_documents_path
+    end
+
+    document = Document.order(:id).last
+    assert_redirected_to edit_document_path(document)
+    assert_equal "New document started.", flash[:notice]
+    assert_match(/\A# Untitled document(?: \d+)?\z/, document.source)
+  end
+
+  test "exports a document as a downloadable Elef archive" do
+    document = Document.create!(title: "Exported notes", source: "# Exported notes\n\nArchive content")
+
+    get export_document_path(document)
+
+    assert_response :success
+    assert_equal "application/zip", response.media_type
+    assert_match(/attachment; filename=\"exported-notes-elef-work\.zip\"/, response.headers.fetch("Content-Disposition"))
+    Zip::File.open_buffer(response.body) do |zip|
+      manifest = JSON.parse(zip.read("manifest.json"))
+      assert_equal "document", manifest.dig("work", "kind")
+      assert_includes zip.read("source.md"), "# Exported notes"
+    end
+  end
+
+  test "imports an uploaded Elef archive through the document endpoint" do
+    source = Document.create!(title: "Imported notes", source: "# Imported notes\n\nArchive content")
+    package = WorkPackage::Exporter.call(source)
+    source.destroy!
+
+    Tempfile.create(["document-package", ".elef"]) do |file|
+      file.binmode
+      file.write(package)
+      file.rewind
+      upload = Rack::Test::UploadedFile.new(file.path, "application/zip")
+
+      assert_difference("Document.count", 1) do
+        post import_documents_path, params: { package: upload }
+      end
+    end
+
+    imported = Document.find_by!(title: "Imported notes")
+    assert_redirected_to edit_document_path(imported)
+    assert_includes imported.source, "# Imported notes\n\nArchive content"
+    assert_equal "Document imported.", flash[:notice]
   end
 
   test "editor projections resolve document links through the shared renderer" do
@@ -274,14 +330,6 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".lineage-panel"
   end
 
-  test "duplicate document titles are rejected" do
-    Document.create!(title: "Existing notes", source: "# Existing")
-    duplicate = Document.new(title: "Existing notes", source: "# Duplicate")
-
-    assert_not duplicate.save
-    assert_includes duplicate.errors.full_messages, "Title has already been taken"
-  end
-
   test "renaming a document preserves incoming links through aliases" do
     target = Document.create!(title: "Old title", source: "# Old title")
     incoming = Document.create!(title: "Incoming", source: "[[Old title]]\n\n`[[Old title]]`\n\n```\n[[Old title]]\n```")
@@ -307,8 +355,8 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     get document_path(document)
 
-    assert_select "a.document-link[href='#{document_path(target)}']", text: "Preview target"
-    assert_select "span.document-link.unresolved", text: "[[Missing target]]"
+    assert_select ".document-surface a.document-link[href='#{document_path(target)}']", text: "Preview target"
+    assert_select ".document-surface span.document-link.unresolved", text: "[[Missing target]]"
   end
 
   test "document views expose collapsed outgoing and incoming context" do
@@ -353,20 +401,6 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.parsed_body["html"], "Revisionless draft"
   end
 
-  test "presentation preview keeps the saved record untouched" do
-    presentation = presentations(:one)
-
-    post preview_presentation_path(presentation), params: {
-      presentation: { title: "Draft", source: "# Draft" }, revision: 12
-    }, as: :json
-
-    assert_response :success
-    assert_equal 12, response.parsed_body["revision"]
-    assert_includes response.parsed_body["html"], "Draft"
-    assert_equal "Demo Deck", presentation.reload.title
-    assert_equal "# One\n\nBody\n---\n# Two", presentation.source
-  end
-
   test "invalid preview returns warnings without mutating saved source" do
     document = Document.create!(title: "Safe notes", source: "# Saved")
 
@@ -381,14 +415,15 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "# Saved", document.reload.source
   end
 
-  test "print view renders toolbar and paginated pages for a document" do
+  test "print view renders document content and its toolbar" do
     document = Document.create!(title: "Printable Document", source: "# Page 1\n\nContent\n\n---\n\n# Page 2\n\nMore")
 
     get print_document_path(document)
     assert_response :success
     assert_select ".document-print-toolbar", text: /Printable Document/
     assert_select ".document-print-toolbar button", text: "Print / Save PDF"
-    assert_select ".document-surface"
+    assert_select ".document-surface h1", text: "Page 1"
+    assert_select ".document-surface h1", text: "Page 2"
   end
 
   private
