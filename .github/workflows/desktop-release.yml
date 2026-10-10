@@ -35,8 +35,68 @@ concurrency:
   queue: max
 
 jobs:
+  verify-coordinator:
+    name: Verify exact-SHA release coordinator trust
+    if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      trusted_tool_sha: ${{ steps.verify.outputs.trusted_tool_sha }}
+    steps:
+      - name: Check out current main history as data
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: main-history
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the authoritative Pages ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Select the latest trusted verifier, using the event SHA only for initial bootstrap
+        id: select-verifier
+        env:
+          GITHUB_SHA: ${{ github.sha }}
+        run: |
+          verifier_sha="$(jq -r '[.processed_merges[]? | select(.gate == "passed" and (.sha | test("^[a-f0-9]{40}$"; "i")) and (.main_order | type == "number"))] | sort_by(.main_order) | last | .sha // empty' pages/desktop/stable/state.json)"
+          if [[ -z "$verifier_sha" ]]; then verifier_sha="$GITHUB_SHA"; fi
+          [[ "$verifier_sha" =~ ^[a-fA-F0-9]{40}$ ]]
+          printf 'verifier_sha=%s\n' "$verifier_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the trusted verifier revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.select-verifier.outputs.verifier_sha }}
+          path: verifier
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify event owner approval and exact-SHA Gate A using trusted code
+        id: verify
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: node verifier/desktop/scripts/verify_release_coordinator.mjs current main-history pages
+
   reconcile:
     name: Reconcile desktop release state
+    needs: verify-coordinator
     if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -46,6 +106,7 @@ jobs:
       GITHUB_API_URL: ${{ github.api_url }}
       GITHUB_REPOSITORY: ${{ github.repository }}
     outputs:
+      trusted_tool_sha: ${{ needs.verify-coordinator.outputs.trusted_tool_sha }}
       macos_candidate: ${{ steps.publish.outputs.macos_candidate }}
       linux_candidate: ${{ steps.publish.outputs.linux_candidate }}
       aur_candidate: ${{ steps.publish.outputs.aur_candidate }}
@@ -56,12 +117,20 @@ jobs:
       contents: write
       pull-requests: read
     steps:
-      - name: Check out current main history
+      - name: Check out verified release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.verify-coordinator.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Check out current main history as reconciliation data
         uses: actions/checkout@v7
         with:
           ref: main
           path: source
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Check out the authoritative Pages state branch
         uses: actions/checkout@v7
@@ -100,7 +169,7 @@ jobs:
           DESKTOP_RELEASE_MINOR: ${{ github.event.inputs.minor }}
           DESKTOP_RELEASE_VERSIONS: ${{ github.event.inputs.versions }}
           DESKTOP_RELEASE_REASON: ${{ github.event.inputs.reason }}
-        run: node source/desktop/scripts/publish_desktop_release_state.mjs pages source
+        run: node tooling/desktop/scripts/publish_desktop_release_state.mjs pages source
 
       - name: Notify on terminal Gate A failures
         if: steps.publish.outputs.failed_gate_count != '0'
@@ -120,8 +189,9 @@ jobs:
       - name: Check out release source and scripts
         uses: actions/checkout@v7
         with:
-          ref: main
-          path: source
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
       - name: Check out the current release ledger
         uses: actions/checkout@v7
         with:
@@ -138,7 +208,7 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           MACOS_CANDIDATE: ${{ needs.reconcile.outputs.macos_candidate }}
           LINUX_CANDIDATE: ${{ needs.reconcile.outputs.linux_candidate }}
-        run: node source/desktop/scripts/prepare_desktop_releases.mjs pages
+        run: node tooling/desktop/scripts/prepare_desktop_releases.mjs pages
 
   linux-release:
     name: Build and publish Arch x86-64 release
@@ -160,8 +230,9 @@ jobs:
       - name: Check out release tooling
         uses: actions/checkout@v7
         with:
-          ref: main
-          path: source
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
       - name: Check out the reserved release source
         uses: actions/checkout@v7
         with:
@@ -200,7 +271,7 @@ jobs:
           RELEASE_SOURCE_SHA: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).main_sha }}
           RELEASE_PR: ${{ fromJSON(needs.reconcile.outputs.linux_candidate).pr }}
         run: |
-          node source/desktop/scripts/prepare_linux_release_assets.mjs \
+          node tooling/desktop/scripts/prepare_linux_release_assets.mjs \
             "$RELEASE_VERSION" "$RELEASE_SOURCE_SHA" "$RELEASE_PR" \
             "$GITHUB_WORKSPACE/build-source/desktop/target/arch-release" \
             "$GITHUB_WORKSPACE/build-source/desktop/target/arch-release/assets.json"
@@ -219,7 +290,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
-        run: node source/desktop/scripts/publish_desktop_platform.mjs pages build-source/desktop/target/arch-release/assets.json
+        run: node tooling/desktop/scripts/publish_desktop_platform.mjs pages build-source/desktop/target/arch-release/assets.json
       - name: Create a Pages writer token for the failure ledger update
         if: failure()
         id: pages-writer-failure-token
@@ -239,7 +310,7 @@ jobs:
           category=publication_failed
           if [[ "${{ steps.build.outcome }}" == failure ]]; then category=build_failed; fi
           if [[ "${{ steps.prepare-assets.outcome }}" == failure ]]; then category=asset_verification_failed; fi
-          node source/desktop/scripts/record_desktop_platform_failure.mjs pages "$RELEASE_VERSION" linux_asset "$category"
+          node tooling/desktop/scripts/record_desktop_platform_failure.mjs pages "$RELEASE_VERSION" linux_asset "$category"
       - name: Preserve Arch release build evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -270,8 +341,9 @@ jobs:
       - name: Check out release tooling
         uses: actions/checkout@v7
         with:
-          ref: main
-          path: source
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
       - name: Check out the reserved release source
         uses: actions/checkout@v7
         with:
@@ -313,7 +385,7 @@ jobs:
         env:
           DESKTOP_RELEASE_TAG: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).tag }}
           TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
-        run: node source/desktop/scripts/prepare-updater-config.mjs "$GITHUB_WORKSPACE/build-source/desktop/src-tauri/tauri.release.generated.conf.json"
+        run: node tooling/desktop/scripts/prepare-updater-config.mjs "$GITHUB_WORKSPACE/build-source/desktop/src-tauri/tauri.release.generated.conf.json"
       - name: Build ad-hoc signed Apple Silicon DMG and Tauri updater archive
         id: build
         env:
@@ -342,7 +414,7 @@ jobs:
           RELEASE_SOURCE_SHA: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).main_sha }}
           RELEASE_PR: ${{ fromJSON(needs.reconcile.outputs.macos_candidate).pr }}
         run: |
-          node source/desktop/scripts/prepare_macos_release_assets.mjs \
+          node tooling/desktop/scripts/prepare_macos_release_assets.mjs \
             "$RELEASE_VERSION" "$RELEASE_SOURCE_SHA" "$RELEASE_PR" \
             "$GITHUB_WORKSPACE/build-source/desktop/src-tauri/target/release/bundle" \
             "$GITHUB_WORKSPACE/build-source/desktop/target/macos-release/assets.json"
@@ -363,7 +435,7 @@ jobs:
           TAURI_UPDATER_PUBKEY: ${{ vars.TAURI_UPDATER_PUBKEY }}
           CARGO_TARGET_DIR: ${{ github.workspace }}/build-source/desktop/target/signature-verifier
           ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
-        run: node source/desktop/scripts/publish_desktop_platform.mjs pages build-source/desktop/target/macos-release/assets.json
+        run: node tooling/desktop/scripts/publish_desktop_platform.mjs pages build-source/desktop/target/macos-release/assets.json
       - name: Create a Pages writer token for the failure ledger update
         if: failure()
         id: pages-writer-failure-token
@@ -383,7 +455,7 @@ jobs:
           category=publication_failed
           if [[ "${{ steps.build.outcome }}" == failure ]]; then category=build_failed; fi
           if [[ "${{ steps.prepare-assets.outcome }}" == failure ]]; then category=signature_invalid; fi
-          node source/desktop/scripts/record_desktop_platform_failure.mjs pages "$RELEASE_VERSION" macos "$category"
+          node tooling/desktop/scripts/record_desktop_platform_failure.mjs pages "$RELEASE_VERSION" macos "$category"
       - name: Preserve macOS release build evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -419,8 +491,9 @@ jobs:
       - name: Check out release tooling
         uses: actions/checkout@v7
         with:
-          ref: main
-          path: source
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
       - name: Check out the current release ledger
         uses: actions/checkout@v7
         with:
@@ -442,7 +515,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           AUR_ACCOUNT_NAME: ${{ vars.AUR_ACCOUNT_NAME }}
-        run: node source/desktop/scripts/prepare_desktop_aur.mjs pages "$GITHUB_WORKSPACE/aur-candidate.json" "$GITHUB_WORKSPACE/aur-package"
+        run: node tooling/desktop/scripts/prepare_desktop_aur.mjs pages "$GITHUB_WORKSPACE/aur-candidate.json" "$GITHUB_WORKSPACE/aur-package"
       - name: Generate .SRCINFO as an unprivileged user in the pinned Arch environment
         run: |
           docker run --rm --pull=always \
@@ -473,7 +546,7 @@ jobs:
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
           ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
-        run: node source/desktop/scripts/publish_desktop_aur.mjs pages "$GITHUB_WORKSPACE/aur-candidate.json" "$GITHUB_WORKSPACE/aur-package"
+        run: node tooling/desktop/scripts/publish_desktop_aur.mjs pages "$GITHUB_WORKSPACE/aur-candidate.json" "$GITHUB_WORKSPACE/aur-package"
       - name: Create a Pages writer token for the failure ledger update
         if: failure()
         id: pages-writer-failure-token
@@ -491,7 +564,7 @@ jobs:
           ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-failure-token.outputs.token || steps.pages-writer-token.outputs.token }}
         run: |
           version="$(node -e 'process.stdout.write(JSON.parse(process.env.RELEASE_CANDIDATE).version)')"
-          node source/desktop/scripts/record_desktop_platform_failure.mjs pages "$version" aur aur_push_failed
+          node tooling/desktop/scripts/record_desktop_platform_failure.mjs pages "$version" aur aur_push_failed
       - name: Preserve generated AUR metadata evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -515,8 +588,9 @@ jobs:
       - name: Check out release tooling
         uses: actions/checkout@v7
         with:
-          ref: main
-          path: source
+          ref: ${{ needs.reconcile.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
       - name: Check out the latest authoritative ledger
         uses: actions/checkout@v7
         with:
@@ -539,4 +613,4 @@ jobs:
           AUR_RELEASE_VERSION: ${{ needs.aur-release.outputs.release_version }}
           DESKTOP_RELEASE_ACTION: ${{ needs.reconcile.outputs.release_action }}
           DESKTOP_RELEASE_VERSIONS: ${{ needs.reconcile.outputs.control_versions }}
-        run: node source/desktop/scripts/finalize_desktop_release_notes.mjs pages
+        run: node tooling/desktop/scripts/finalize_desktop_release_notes.mjs pages

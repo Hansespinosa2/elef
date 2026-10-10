@@ -27,9 +27,66 @@ concurrency:
   queue: max
 
 jobs:
+  resolve-tooling:
+    name: Resolve trusted emergency-control tooling
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: read
+      pull-requests: read
+    outputs:
+      trusted_tool_sha: ${{ steps.verify.outputs.trusted_tool_sha }}
+    steps:
+      - name: Check out current main history as data
+        uses: actions/checkout@v7
+        with:
+          ref: main
+          path: main-history
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check out the authoritative Pages ledger
+        uses: actions/checkout@v7
+        with:
+          ref: gh-pages
+          path: pages
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Select the latest recorded trusted release tooling
+        id: select-verifier
+        run: |
+          verifier_sha="$(jq -r '[.processed_merges[]? | select(.gate == "passed" and (.sha | test("^[a-f0-9]{40}$"; "i")) and (.main_order | type == "number"))] | sort_by(.main_order) | last | .sha // empty' pages/desktop/stable/state.json)"
+          [[ "$verifier_sha" =~ ^[a-fA-F0-9]{40}$ ]]
+          printf 'verifier_sha=%s\n' "$verifier_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Check out the trusted verifier revision
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.select-verifier.outputs.verifier_sha }}
+          path: verifier
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify owner dispatch and select the latest Gate-A-passed tooling
+        id: verify
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: node verifier/desktop/scripts/verify_release_coordinator.mjs latest main-history pages
+
   control:
     name: Update release eligibility under publication lock
-    if: github.ref == 'refs/heads/main'
+    needs: resolve-tooling
+    if: needs.resolve-tooling.result == 'success' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: desktop-release-state
@@ -41,7 +98,14 @@ jobs:
       contents: write
       pull-requests: read
     steps:
-      - name: Check out trusted release control code
+      - name: Check out verified release tooling
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve-tooling.outputs.trusted_tool_sha }}
+          path: tooling
+          persist-credentials: false
+
+      - name: Check out current main history as control data
         uses: actions/checkout@v7
         with:
           ref: main
@@ -92,7 +156,7 @@ jobs:
           DESKTOP_RELEASE_VERSIONS: ${{ inputs.versions }}
           DESKTOP_RELEASE_REASON: ${{ inputs.reason }}
           ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
-        run: node source/desktop/scripts/publish_desktop_release_state.mjs pages source
+        run: node tooling/desktop/scripts/publish_desktop_release_state.mjs pages source
 
       - name: Publish current release warning and recovery guidance
         env:
@@ -100,4 +164,4 @@ jobs:
           GITHUB_REPOSITORY: ${{ github.repository }}
           DESKTOP_RELEASE_ACTION: ${{ inputs.action }}
           DESKTOP_RELEASE_VERSIONS: ${{ inputs.versions }}
-        run: node source/desktop/scripts/finalize_desktop_release_notes.mjs pages
+        run: node tooling/desktop/scripts/finalize_desktop_release_notes.mjs pages
