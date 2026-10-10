@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { $, browser } from "@wdio/globals"
 import { exportAndVerifyDiagnostics } from "./diagnostics-archive.js"
+import { sendNativeText } from "./native-keyboard.js"
 import {
   STABLE_PROFILE_DECK_TITLE,
   STABLE_PROFILE_EDITED_SOURCE,
@@ -123,7 +124,7 @@ describe("Stable profile exclusions", () => {
       editor.view.dispatch({ selection: { anchor: editor.sourceValue.length } })
       editor.focus()
     })
-    await browser.keys("[[")
+    await sendNativeText("[[")
     await browser.waitUntil(async () => browser.execute(source =>
       document.querySelector("#desktop-editor-field")?.editorController?.sourceValue === source,
     STABLE_PROFILE_KEYBOARD_SOURCE), {

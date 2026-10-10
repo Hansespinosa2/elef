@@ -14,6 +14,7 @@ import { runPackagedUpdateSmoke } from "./packaged-update-smoke.js"
 import { installMacDmgFixture } from "./install-macos-dmg-fixture.js"
 import { createDesktopAppEnvironment } from "./desktop-app-environment.js"
 import { runStableProfileSmoke } from "./stable-profile-smoke.js"
+import { runIdentityIsolationSmoke } from "./identity-isolation-smoke.js"
 import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
@@ -362,6 +363,18 @@ try {
         data: isolatedData,
         cache: isolatedCache
       }
+    })
+    await runIdentityIsolationSmoke({
+      e2eRoot,
+      repoRoot,
+      env,
+      isolatedDirectories: {
+        home: isolatedHome,
+        config: isolatedConfig,
+        data: isolatedData,
+        cache: isolatedCache
+      },
+      temporaryRoot
     })
   }
 

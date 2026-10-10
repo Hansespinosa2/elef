@@ -78,6 +78,22 @@
       "note": "Use the isolated CI harness; this can start Rails on port 3000 and must not run against the user's occupied development endpoint. A failed run records observed_exit_code=1 but remains unverified until all shared scenarios pass."
     },
     {
+      "id": "profile_identity_isolation",
+      "command": "npm test --prefix desktop/e2e",
+      "test_name": "Stable and Dev identity probes run concurrently and restore separate persisted library-root.json selections",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "status": "IN_PROGRESS",
+      "platforms": [
+        "Hosted macOS ARM64",
+        "Hosted Linux x86-64"
+      ],
+      "covers": [
+        "pre_release_app_state"
+      ],
+      "note": "The CI harness builds WebDriver-only probes with production Stable and repository Dev identifiers, seeds distinct library selections under the disposable CI home, and launches both apps at once to verify app-data and single-instance isolation."
+    },
+    {
       "id": "packaged_n_minus_1_to_n_update",
       "command": "ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix desktop/e2e",
       "expected_exit_code": 0,

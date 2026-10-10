@@ -21,12 +21,14 @@ const [stable, dev] = await Promise.all([
   readMetafile(stableMetafilePath, "Stable"),
   readMetafile(devMetafilePath, "Dev")
 ])
-const [stableConfig, devConfig, e2eConfig, stableE2eConfig, stableUpdaterFixtureConfig, stableCapability, devCapability, macUpdaterCapability, nativeSource, buildRsSource, packageConfig] = await Promise.all([
+const [stableConfig, devConfig, e2eConfig, stableE2eConfig, stableUpdaterFixtureConfig, stableIdentityConfig, devIdentityConfig, stableCapability, devCapability, macUpdaterCapability, nativeSource, buildRsSource, packageConfig] = await Promise.all([
   readJson(path.join(tauriRoot, "tauri.conf.json")),
   readJson(path.join(tauriRoot, "tauri.dev.conf.json")),
   readJson(path.join(tauriRoot, "tauri.e2e.conf.json")),
   readJson(path.join(tauriRoot, "tauri.e2e-stable.conf.json")),
   readJson(path.join(tauriRoot, "tauri.e2e-stable-updater.conf.json")),
+  readJson(path.join(tauriRoot, "tauri.e2e-stable-identity.conf.json")),
+  readJson(path.join(tauriRoot, "tauri.e2e-dev-identity.conf.json")),
   readJson(path.join(tauriRoot, "capabilities/main.json")),
   readJson(path.join(tauriRoot, "capabilities/main-dev.json")),
   readJson(path.join(tauriRoot, "capabilities/macos-updater.json")),
@@ -41,15 +43,23 @@ assert.equal(stableConfig.identifier, "com.elef.desktop", "Stable must retain it
 assert.equal(devConfig.identifier, "com.elef.desktop.dev", "repository Dev needs a separate app-data and single-instance identity")
 assert.equal(e2eConfig.identifier, "com.elef.desktop.e2e", "E2E must use disposable app state")
 assert.equal(stableE2eConfig.identifier, "com.elef.desktop.e2e.stable", "Stable E2E must use isolated app state")
+assert.equal(stableIdentityConfig.identifier, stableConfig.identifier, "the Stable identity probe must use the production Stable app-data and single-instance identity")
+assert.equal(devIdentityConfig.identifier, devConfig.identifier, "the Dev identity probe must use the repository Dev app-data and single-instance identity")
 assert.equal(stableUpdaterFixtureConfig.identifier, stableConfig.identifier, "the packaged Stable updater fixture must exercise the production Stable identifier")
 assert.equal(devConfig.bundle?.active, false, "repository Dev must not produce an installable bundle")
 assert.equal(stableE2eConfig.bundle?.active, false, "Stable profile tests must not produce a second installer")
+assert.equal(stableIdentityConfig.bundle?.active, false, "Stable identity probes must not produce a second installer")
+assert.equal(devIdentityConfig.bundle?.active, false, "Dev identity probes must not produce an installer")
 assert.equal(devConfig.build.frontendDist, "../frontend/dist-dev")
 assert.equal(stableE2eConfig.build.frontendDist, "../frontend/dist-e2e-stable")
+assert.equal(stableIdentityConfig.build.frontendDist, "../frontend/dist-e2e-stable")
+assert.equal(devIdentityConfig.build.frontendDist, "../frontend/dist-dev")
 assert.deepEqual(devConfig.app.security.capabilities, ["main-dev-capability"])
 assert.deepEqual(stableConfig.app.security.capabilities, ["main-capability", "macos-updater-capability"])
 assert.deepEqual(e2eConfig.app.security.capabilities, ["main-dev-capability", "e2e-webdriver"])
 assert.deepEqual(stableE2eConfig.app.security.capabilities, ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"])
+assert.deepEqual(stableIdentityConfig.app.security.capabilities, ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"])
+assert.deepEqual(devIdentityConfig.app.security.capabilities, ["main-dev-capability", "e2e-webdriver"])
 assert.deepEqual(stableUpdaterFixtureConfig.app.security.capabilities,
   ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"],
   "the installed Stable updater fixture must use Stable's native command permissions")
@@ -61,6 +71,8 @@ assert.equal(stableUpdaterFixtureConfig.plugins.updater.dangerousInsecureTranspo
 assert.equal(stableUpdaterFixtureConfig.app.withGlobalTauri, true,
   "only the test-only Stable updater bundle may expose Tauri globals for its smoke harness")
 assert.deepEqual(devConfig.plugins.updater.endpoints, [], "Dev must not inherit the public Stable update feed")
+assert.deepEqual(stableIdentityConfig.plugins.updater.endpoints, [], "the Stable identity probe must not contact the public updater")
+assert.deepEqual(devIdentityConfig.plugins.updater.endpoints, [], "the Dev identity probe must not contact the public updater")
 assert.match(packageConfig.scripts["tauri:dev"], /--features desktop-dev --config src-tauri\/tauri\.dev\.conf\.json/)
 assert.match(nativeSource, /#\[cfg\(feature = "desktop-dev"\)\]\s+#\[tauri::command\]\s+fn document_graph/)
 assert.match(nativeSource, /#\[cfg\(any\(\s*target_os = "macos",\s*all\(feature = "desktop-dev", feature = "webdriver"\)\s*\)\)\]\s+#\[tauri::command\]\s+async fn install_update/)
@@ -76,6 +88,7 @@ assert.match(await readFile(path.join(tauriRoot, "Cargo.toml"), "utf8"), /webdri
 assert.match(await readFile(path.join(tauriRoot, "src/lib.rs"), "utf8"), /#\[cfg\(any\(\s*target_os = "macos",\s*all\(feature = "desktop-dev", feature = "webdriver"\)\s*\)\)\]\s+use tauri_plugin_updater::UpdaterExt/, "Linux Stable WebDriver must not compile updater code")
 const e2eRunnerSource = await readFile(path.join(e2eRoot, "run.mjs"), "utf8")
 assert.match(e2eRunnerSource, /runStableProfileSmoke/, "the hosted native E2E runner must execute Stable profile negatives")
+assert.match(e2eRunnerSource, /runIdentityIsolationSmoke/, "the hosted native E2E runner must exercise real Stable and Dev identities")
 assert.match(e2eRunnerSource, /installMacDmgFixture\(env\.ELEF_E2E_STABLE_DMG/, "macOS CI must install and test the packaged Stable DMG")
 assert.match(e2eRunnerSource, /if \(process\.platform === "darwin"\) \{\s+const upgradedEnv/s,
   "only macOS may run the installed self-updater transition; Linux upgrades through its package manager")
@@ -85,7 +98,11 @@ assert.match(await readFile(path.join(e2eRoot, "packaged-update-smoke.js"), "utf
   "the packaged Stable transition must preserve the previous app-state fixture")
 const stableE2eSource = await readFile(path.join(e2eRoot, "stable-exclusions.spec.js"), "utf8")
 assert.match(stableE2eSource, /document_graph|document-link-palette|visual-editor|slide-overview/, "Stable runtime exclusions need negative assertions")
-assert.match(stableE2eSource, /browser\.keys\("\[\["\)/, "Stable runtime E2E must type the excluded document-link trigger through the focused WebDriver session")
+assert.match(stableE2eSource, /sendNativeText\("\[\["\)/,
+  "Stable runtime E2E must type the excluded document-link trigger through native keyboard input")
+const nativeKeyboardSource = await readFile(path.join(e2eRoot, "native-keyboard.js"), "utf8")
+assert.match(nativeKeyboardSource, /xdotool.*type/)
+assert.match(nativeKeyboardSource, /keystroke/)
 assert.match(stableE2eSource, /process\.platform === "linux"/, "Linux Stable runtime must exercise its package-manager-only updater boundary")
 assert.match(stableE2eSource, /\["stage_update", "install_update"\]/, "Linux Stable must attempt both updater IPC commands")
 assert.match(stableE2eSource, /notRegistered = new RegExp/, "Linux Stable updater checks must recognize missing commands")

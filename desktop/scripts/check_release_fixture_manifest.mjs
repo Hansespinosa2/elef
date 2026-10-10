@@ -31,6 +31,7 @@ const requiredCheckIds = [
   "manifest_integrity",
   "source_storage_fixture_round_trip",
   "full_web_desktop_parity",
+  "profile_identity_isolation",
   "packaged_n_minus_1_to_n_update",
   "arch_native_package_install_upgrade",
   "diagnostics_privacy"
@@ -112,12 +113,16 @@ assert.match(unknownSource, /^:::future-directive/m)
 assert.equal(STABLE_PROFILE_SOURCE, unknownSource, "Stable profile runtime smoke must use the manifested unsupported-source fixture")
 assert.match(unknownSource, /\[Elef documentation\]\(https:\/\/example\.com\/docs\)/)
 
-const [runtimeRunner, webSpec, desktopSpec, stableSpec, stableSmoke] = await Promise.all([
+const [runtimeRunner, webSpec, desktopSpec, stableSpec, stableSmoke, identitySmoke, identitySpec, stableIdentityConfig, devIdentityConfig] = await Promise.all([
   readFile(path.join(repoRoot, "desktop/e2e/run.mjs"), "utf8"),
   readFile(path.join(repoRoot, "desktop/e2e/specs/web.spec.js"), "utf8"),
   readFile(path.join(repoRoot, "desktop/e2e/specs/desktop.spec.js"), "utf8"),
   readFile(path.join(repoRoot, "desktop/e2e/stable-exclusions.spec.js"), "utf8"),
-  readFile(path.join(repoRoot, "desktop/e2e/stable-profile-smoke.js"), "utf8")
+  readFile(path.join(repoRoot, "desktop/e2e/stable-profile-smoke.js"), "utf8"),
+  readFile(path.join(repoRoot, "desktop/e2e/identity-isolation-smoke.js"), "utf8"),
+  readFile(path.join(repoRoot, "desktop/e2e/identity-isolation.spec.js"), "utf8"),
+  readFile(path.join(repoRoot, "desktop/src-tauri/tauri.e2e-stable-identity.conf.json"), "utf8"),
+  readFile(path.join(repoRoot, "desktop/src-tauri/tauri.e2e-dev-identity.conf.json"), "utf8")
 ])
 assert.match(runtimeRunner, /rich\.assets\.attach/, "Rails rich fixture must attach the checked-in local image")
 assert.match(runtimeRunner, /RICH_RENDERING_SOURCE/, "native rich fixture must be seeded from its checked-in source")
@@ -128,6 +133,14 @@ assert.match(stableSpec, /export_elef/, "Stable runtime must export the unsuppor
 assert.match(stableSpec, /renders and presents the rich local fixture offline in Stable/)
 assert.match(stableSpec, /RICH_RENDERING_SOURCE/, "Stable runtime must consume the manifested rich-rendering fixture")
 assert.match(stableSmoke, /unzip/, "the Stable archive must be checked after native export")
+assert.match(runtimeRunner, /runIdentityIsolationSmoke/, "the hosted runner must launch both production identities")
+assert.match(identitySmoke, /com\.elef\.desktop/)
+assert.match(identitySmoke, /com\.elef\.desktop\.dev/)
+assert.match(identitySmoke, /Promise\.allSettled\(identityFixtures\.map\(profile => runProfile\(profile\)\)\)/,
+  "Stable and Dev must be running concurrently during the identity assertion")
+assert.match(identitySpec, /get_library_status/)
+assert.match(stableIdentityConfig, /"identifier": "com\.elef\.desktop"/)
+assert.match(devIdentityConfig, /"identifier": "com\.elef\.desktop\.dev"/)
 
 const historicalPath = resolveFixturePath("historical_file_format", 0)
 await assert.rejects(stat(path.join(path.dirname(historicalPath), "elef.json")), { code: "ENOENT" }, "historical sample must remain a pre-manifest deck")

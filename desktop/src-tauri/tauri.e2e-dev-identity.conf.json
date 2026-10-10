@@ -1,0 +1,23 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Elef Dev Identity E2E",
+  "identifier": "com.elef.desktop.dev",
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": ["main-dev-capability", "e2e-webdriver"]
+    }
+  },
+  "build": {
+    "frontendDist": "../frontend/dist-dev",
+    "beforeBuildCommand": "cd ../frontend && npm run build -- --profile=dev"
+  },
+  "bundle": {
+    "active": false
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": []
+    }
+  }
+}
