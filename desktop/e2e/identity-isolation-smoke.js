@@ -45,7 +45,7 @@ export async function runIdentityIsolationSmoke({ e2eRoot, repoRoot, env, isolat
     "Stable and Dev identity probes must use separate disposable libraries")
 
   const binaryPath = path.join(repoRoot, "desktop/target/debug/elef-desktop")
-  for (const profile of profiles) {
+  for (const profile of identityFixtures) {
     const buildEnv = { ...process.env, ELEF_DESKTOP_PROFILE: profile.name.toLowerCase() }
     if (profile.name === "Stable") buildEnv.ELEF_E2E_BUILD = "1"
     else delete buildEnv.ELEF_E2E_BUILD
