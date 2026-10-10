@@ -19,6 +19,27 @@ The #136 blockers remain binding: its save/snapshot behavior must preserve the e
 
 The GitHub App, Actions variables/secrets, branch rulesets, and Pages configuration are repository-level settings, so changing the code PR's base does not require recreating them. The update-only App bypass remains scoped to `gh-pages`; verify the Pages source is still the `gh-pages` root immediately before first publication (the earlier Settings UI showed a feature-branch source, while later API/readback reported `gh-pages`).
 
+## Addendum — refreshed PR state and integration plan (2026-10-10)
+
+This read-only review supersedes the earlier SHA, readiness, and conflict-count snapshots above. The live `refs/pull/136/head` and refreshed PR API agree on #136 head `b3190433ef30bec2c6f989794a92a959a038417c`; #136 is still open and draft, targets `dev`, and reports `mergeable=false` / `dirty`. Current `dev` is `769cc79028813d0d4fd0651952739d9008626847`; `main` is `41d89fa92a34274d1f2c155d7ae560d728c87fca`. The PR's recorded `26d6ad2` base is its old common point with `dev`, not the current `dev` tip. GitHub compare data reports #136 is 310 commits ahead and 130 behind current `dev`; it reports only the `normalize` and `description` checks passing, with no product Gate A evidence. The branch is not ready to merge.
+
+The refreshed comparison also shows `dev` and `main` have diverged: `dev` is 63 commits ahead and `main` is 5 commits behind their `2dc9ba7` common point. At the review snapshot, #147 was open against `main` at `b003f88`; this worktree then pushed `51f1226`, a STATUS-only update, and a live ref check confirmed that as #147's new head. No release code changed in that status commit. The earlier #147 workflow run `38060948532` was still running at the agent's snapshot on `b003f88`; that is not evidence for `51f1226`. Do not infer exact-head validation from it.
+
+The earlier 98/172 conflict previews, 61 overlapping paths, and their `83d7959`/`f36294f` endpoints are historical only. No current overlap count or merge preview has been verified for `b319043` and the latest #147 head. Recalculate after #136 lands, using its resulting `dev` SHA and the then-current #147 branch.
+
+### Recommended sequence
+
+1. Wait for #136 to leave draft, reconcile with then-current `dev`, resolve the save/close and shared-ownership constraints, pass its exact-head product gates, and receive owner approval. The owner merges #136 into `dev`; record the resulting SHA as `D`.
+2. Fetch `dev@D` and preview the combined tree. Merge `dev@D` into the release integration branch and resolve conflicts by current code ownership. Use a merge to preserve the existing release history; do not rebase the long release branch. If that merge makes #147's review diff noisy or includes main-only changes that cannot be explained cleanly, create a continuation branch from `D` and open a dev-based PR containing only the release changes.
+3. Retarget #147 to `dev` only after reviewing the resulting diff. Run all required Gate A checks on the exact combined PR head, including Rails ownership/parity, Stable/Dev profile behavior, save and source compatibility, native packaging/updater flows, and release-workflow permissions. The owner reviews and merges the release work into `dev`.
+4. Open a separate owner-reviewed `dev`→`main` promotion PR and merge it with GitHub's merge-commit method. Run Gate A again against the exact resulting `main` SHA. That approved PR and SHA are the release unit consumed by the coordinator; the merge into `dev` itself does not reserve or publish a release.
+
+### Branches, profiles, and GitHub setup
+
+This sequence does not require #147 to target `main` during feature integration. Stable still builds only from approved code that reaches `main`, while #147 can enter `dev` first. Branches represent integration and promotion stages; the desktop build profile controls which experimental desktop capabilities are present. A common source tree can produce repository Dev with experimental features and Stable with the excluded features removed, while Rails retains its full feature set. The initial choice to target #147 at `main` came from my mistaken reading of “Stable from main” as requiring the feature PR itself to target `main`; it does not.
+
+Changing PR bases does not require reinstalling the GitHub App or recreating repository variables, environment secrets, Pages, or rulesets. Keep release credentials restricted to their protected environments; do not grant them to `dev`. The App token mint and trusted Pages ledger write/readback remain unproven and must be validated before publication.
+
 ## Recommendation
 
 Wait for #136. Then integrate #147 once against the refactor as merged into `dev`, using a merge-based operation rather than replaying the release commits. After review and owner approval in `dev`, promote `dev` to `main` with an owner-approved merge-commit PR. Stable publication remains gated on the exact main promotion SHA and full post-merge Gate A.
