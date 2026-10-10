@@ -85,7 +85,7 @@ assert.match(await readFile(path.join(e2eRoot, "packaged-update-smoke.js"), "utf
   "the packaged Stable transition must preserve the previous app-state fixture")
 const stableE2eSource = await readFile(path.join(e2eRoot, "stable-exclusions.spec.js"), "utf8")
 assert.match(stableE2eSource, /document_graph|document-link-palette|visual-editor|slide-overview/, "Stable runtime exclusions need negative assertions")
-assert.match(stableE2eSource, /sourceInput\.keys\("\[\["\)/, "Stable runtime E2E must type the excluded document-link trigger")
+assert.match(stableE2eSource, /browser\.keys\("\[\["\)/, "Stable runtime E2E must type the excluded document-link trigger through the focused WebDriver session")
 assert.match(stableE2eSource, /process\.platform === "linux"/, "Linux Stable runtime must exercise its package-manager-only updater boundary")
 assert.match(stableE2eSource, /\["stage_update", "install_update"\]/, "Linux Stable must attempt both updater IPC commands")
 assert.match(stableE2eSource, /notRegistered = new RegExp/, "Linux Stable updater checks must recognize missing commands")
