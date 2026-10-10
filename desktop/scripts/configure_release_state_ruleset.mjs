@@ -34,7 +34,7 @@ if (currentMatches.length !== 1) throw new Error(`exactly one ${RELEASE_STATE_RU
 assertRepositorySummary(currentMatches[0])
 const matching = ghJson(["api", `repos/${repository}/rulesets/${currentMatches[0].id}?includes_parents=true`])
 validateReleaseStateRulesetCollection([matching], appId, repository)
-process.stdout.write(`${mode === "--apply" ? "Configured" : "Verified"} ${RELEASE_STATE_RULESET_NAME} (${matching.id}) for refs/heads/gh-pages.\n`)
+process.stdout.write(`${mode === "--apply" ? "Configured" : "Verified"} ${RELEASE_STATE_RULESET_NAME} (${matching.id}) for refs/heads/gh-pages; updated_at=${matching.updated_at}.\n`)
 
 function assertRepositorySummary(rule) {
   if (rule.source_type !== "Repository" || rule.source?.toLowerCase() !== repository.toLowerCase()) {

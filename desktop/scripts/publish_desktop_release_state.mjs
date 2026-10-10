@@ -19,6 +19,7 @@ await verifyReleaseStateWriterPolicy({
   repository: requiredEnv("GITHUB_REPOSITORY"),
   appId: requiredEnv("ELEF_RELEASE_STATE_APP_ID"),
   token: requiredEnv("ELEF_RELEASE_STATE_PUSH_TOKEN"),
+  expectedUpdatedAt: requiredEnv("ELEF_RELEASE_STATE_RULESET_UPDATED_AT"),
   apiUrl: process.env.GITHUB_API_URL
 })
 const result = await publishPagesStateWithRetry({

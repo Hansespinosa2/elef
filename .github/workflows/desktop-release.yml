@@ -128,6 +128,7 @@ jobs:
     environment: desktop-release-state
     env:
       ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
       GITHUB_API_URL: ${{ github.api_url }}
       GITHUB_REPOSITORY: ${{ github.repository }}
     outputs:
@@ -223,7 +224,8 @@ jobs:
     timeout-minutes: 5
     environment: desktop-release-state
     permissions:
-      contents: write
+      contents: read
+      issues: write
     steps:
       - name: Check out trusted release tooling
         uses: actions/checkout@v7
@@ -276,10 +278,27 @@ jobs:
             echo "::error title=Unacknowledged Gate A failure::Ledger records failed_gate for exact main SHA $failed_sha; repair this merge with a new owner-approved PR."
           done < <(jq -r '.[]' <<< "$FAILED_NOTIFICATION_SHAS")
 
-      - name: Acknowledge emitted failure alerts with a Pages compare-and-swap
+      - name: Create or confirm owner-assigned Gate A issue notices
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_API_URL: ${{ github.api_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          DESKTOP_FAILED_GATE_NOTIFICATION_SHAS: ${{ needs.reconcile.outputs.failed_notification_shas }}
+          DESKTOP_RELEASE_FAILURE_ONLY: ${{ needs.reconcile.outputs.failure_only }}
+          DESKTOP_RELEASE_FAILURE_SHA: ${{ needs.reconcile.outputs.failure_sha }}
+          DESKTOP_RELEASE_FAILURE_SHA_RECORDED: ${{ needs.reconcile.outputs.failure_sha_recorded }}
+          DESKTOP_RELEASE_PENDING_SHA: ${{ needs.reconcile.outputs.pending_sha }}
+          DESKTOP_RELEASE_PENDING_REASON: ${{ needs.reconcile.outputs.pending_reason }}
+        run: node tooling/desktop/scripts/notify_desktop_gate_failures.mjs
+
+      - name: Acknowledge owner-assigned issue notices with a Pages compare-and-swap
         if: needs.reconcile.outputs.failed_notification_shas != '[]'
         env:
           ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+          ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
           ELEF_RELEASE_STATE_PUSH_TOKEN: ${{ steps.pages-writer-token.outputs.token }}
           GITHUB_API_URL: ${{ github.api_url }}
           GITHUB_REPOSITORY: ${{ github.repository }}
@@ -334,6 +353,7 @@ jobs:
     environment: desktop-release-state
     env:
       ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
       GITHUB_API_URL: ${{ github.api_url }}
       GITHUB_REPOSITORY: ${{ github.repository }}
     permissions:
@@ -447,6 +467,7 @@ jobs:
     environment: desktop-release-signing
     env:
       ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
       GITHUB_API_URL: ${{ github.api_url }}
       GITHUB_REPOSITORY: ${{ github.repository }}
     permissions:
@@ -599,6 +620,7 @@ jobs:
     environment: desktop-aur-publishing
     env:
       ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
       GITHUB_API_URL: ${{ github.api_url }}
       GITHUB_REPOSITORY: ${{ github.repository }}
     permissions:

@@ -106,6 +106,7 @@ jobs:
     environment: desktop-release-state
     env:
       ELEF_RELEASE_STATE_APP_ID: ${{ vars.ELEF_RELEASE_STATE_APP_ID }}
+      ELEF_RELEASE_STATE_RULESET_UPDATED_AT: ${{ vars.ELEF_RELEASE_STATE_RULESET_UPDATED_AT }}
       GITHUB_API_URL: ${{ github.api_url }}
       GITHUB_REPOSITORY: ${{ github.repository }}
     permissions:

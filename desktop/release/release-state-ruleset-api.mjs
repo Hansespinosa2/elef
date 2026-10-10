@@ -1,9 +1,10 @@
-import { RELEASE_STATE_RULESET_NAME, validateReleaseStateRulesetCollection } from "./release-state-ruleset.mjs"
+import { RELEASE_STATE_RULESET_NAME, validateReleaseStateWriterRulesetReadback } from "./release-state-ruleset.mjs"
 
 export async function verifyReleaseStateWriterPolicy({
   repository,
   appId,
   token,
+  expectedUpdatedAt,
   apiUrl = "https://api.github.com/",
   fetchImpl = globalThis.fetch
 }) {
@@ -30,7 +31,7 @@ export async function verifyReleaseStateWriterPolicy({
   if (!Number.isSafeInteger(summary.id) || summary.id < 1) throw new Error("GitHub returned an invalid release-state ruleset ID")
 
   const ruleset = await requestJson(new URL(`repos/${repository}/rulesets/${summary.id}?includes_parents=true`, baseUrl), headers, fetchImpl)
-  validateReleaseStateRulesetCollection([ruleset], appId, repository)
+  validateReleaseStateWriterRulesetReadback(ruleset, appId, repository, expectedUpdatedAt)
   return { id: ruleset.id, name: ruleset.name }
 }
 

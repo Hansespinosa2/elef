@@ -5,6 +5,7 @@
 /.github/workflows/desktop-release.yml @Hansespinosa2
 /.github/workflows/desktop-release-controls.yml @Hansespinosa2
 /desktop/release/ @Hansespinosa2
+/desktop/release/gate-failure-notifier.mjs @Hansespinosa2
 /desktop/scripts/check_release_ci.mjs @Hansespinosa2
 /desktop/scripts/finalize_desktop_release_notes.mjs @Hansespinosa2
 /desktop/scripts/prepare_desktop_releases.mjs @Hansespinosa2
@@ -15,3 +16,4 @@
 /desktop/scripts/record_desktop_platform_failure.mjs @Hansespinosa2
 /desktop/scripts/verify_release_coordinator.mjs @Hansespinosa2
 /desktop/scripts/acknowledge_desktop_gate_failures.mjs @Hansespinosa2
+/desktop/scripts/notify_desktop_gate_failures.mjs @Hansespinosa2
