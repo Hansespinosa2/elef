@@ -17,6 +17,11 @@ const webRoot = path.join(repoRoot, "apps", "web")
 const seedCode = [
   `Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all`,
   `Document.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document)}).destroy_all`,
+  // Local reruns share one sqlite file (and `bin/check all` runs twice per
+  // invariant 15), so the seeder removes its own fixed titles first; CI
+  // instead tears down by id after the run.
+  `Presentation.where(title: ["E2E seed", "E2E conflict", "E2E hostile"]).destroy_all`,
+  `Document.where(title: ["E2E document", "E2E linked"]).destroy_all`,
   `presentation = Presentation.create!(title: "E2E seed", source: "# Before E2E\\n\\nSeed paragraph.\\n\\nSee [[E2E linked]].\\n")`,
   `conflict = Presentation.create!(title: "E2E conflict", source: "# Before conflict test\\n\\nSeed paragraph.\\n")`,
   `hostile = Presentation.create!(title: "E2E hostile", source: ${JSON.stringify(hostileSource)})`,

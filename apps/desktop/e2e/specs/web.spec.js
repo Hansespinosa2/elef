@@ -17,7 +17,7 @@ import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
 import { renderPreviewCore } from "@elef/renderer"
-import { editorChrome } from "../../../../apps/web/app/javascript/lib/preview_chrome.js"
+import { editorChrome } from "@elef/editor-runtime/editor-chrome"
 
 const renderPreview = input => renderPreviewCore(input, { chrome: editorChrome })
 

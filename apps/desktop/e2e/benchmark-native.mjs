@@ -6,7 +6,7 @@ import path from "node:path"
 import { randomUUID } from "node:crypto"
 import { desktopCommand } from "./offline-macos.js"
 import { readWebdriverValue, reserveWebdriverPort, webdriverElementPath } from "./webdriver-port.js"
-import { percentile95 } from "../../../apps/web/app/javascript/lib/performance_measurement.js"
+import { percentile95 } from "@elef/editor-runtime/test-internals"
 import { readFileSync } from "node:fs"
 
 // The render batch is owned by the shared client (LibraryApp); the plain-node
