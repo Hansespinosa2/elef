@@ -262,22 +262,28 @@ export function moveBlock(
   return `${source.slice(0, slideRange.start)}${body}${source.slice(slideRange.end)}`
 }
 
+const ALIGNMENT_HORIZONTAL = ["left", "center", "right"]
+const ALIGNMENT_VERTICAL = ["top", "middle", "bottom"]
+
+// Single alignment-value parser (the map path delegates here): order-free,
+// case-insensitive, clamped to the vocabulary. center is horizontal-only —
+// there is no vertical center and no legacy transpose, so older
+// center-center sources read horizontal-center/top.
 export function parseAlignment(value?: string | null): Alignment {
   if (!value) return { horizontal: "left", vertical: "top", verticalExplicit: false }
-  const parts = value.trim().split(/\s+/)
-  let vertical = "top"
-  let horizontal = "left"
+  const parts = value.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return { horizontal: "left", vertical: "top", verticalExplicit: false }
   if (parts.length === 1) {
     const only = parts[0] ?? ""
-    if (["left", "center", "right"].includes(only)) horizontal = only
-    else if (["top", "middle", "bottom"].includes(only)) vertical = only
-  } else if (parts.length >= 2) {
-    const first = parts[0] ?? ""
-    const second = parts[1] ?? ""
-    vertical = first === "center" ? "middle" : first
-    horizontal = second
+    if (ALIGNMENT_HORIZONTAL.includes(only)) return { horizontal: only, vertical: "top", verticalExplicit: false }
+    if (ALIGNMENT_VERTICAL.includes(only)) return { horizontal: "left", vertical: only, verticalExplicit: only !== "top" }
+    return { horizontal: "left", vertical: "top", verticalExplicit: false }
   }
-  return { horizontal, vertical, verticalExplicit: vertical !== "top" }
+  const horizontal = parts.find((part) => ALIGNMENT_HORIZONTAL.includes(part)) ?? "left"
+  const vertical = parts.find((part) => ALIGNMENT_VERTICAL.includes(part)) ?? "top"
+  // Found-based like the map path (a stated top counts as explicit here,
+  // unlike the pinned single-value default above).
+  return { horizontal, vertical, verticalExplicit: parts.some((part) => ALIGNMENT_VERTICAL.includes(part)) }
 }
 
 // Shared span math for replacing one `:::align{…}` directive line: absorbs the

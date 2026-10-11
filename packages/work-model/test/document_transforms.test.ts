@@ -205,6 +205,9 @@ test("alignment parsing keeps the presentation grammar", () => {
   assert.deepEqual(parseAlignment("bottom right"), { horizontal: "right", vertical: "bottom", verticalExplicit: true })
   assert.deepEqual(parseAlignment("top"), { horizontal: "left", vertical: "top", verticalExplicit: false })
   assert.deepEqual(parseAlignment("middle"), { horizontal: "left", vertical: "middle", verticalExplicit: true })
+  assert.deepEqual(parseAlignment("center center"), { horizontal: "center", vertical: "top", verticalExplicit: false })
+  assert.deepEqual(parseAlignment("Middle Center"), { horizontal: "center", vertical: "middle", verticalExplicit: true })
+  assert.deepEqual(parseAlignment("right top"), { horizontal: "right", vertical: "top", verticalExplicit: true })
 })
 
 test("directive line spans absorb the line ending or synthesize one", () => {

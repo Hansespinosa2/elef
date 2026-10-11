@@ -1,4 +1,5 @@
 import { ART_DIAGNOSTICS, analyzeArtList, resolveArtBindings, type ArtBindings, type ArtBoundaryMap, type ArtDiagnostic, type ArtListAnalysis } from "./art_source.js"
+import { parseAlignment } from "./document_transforms.js"
 import { slidePositionLayout } from "./slide_position_layout.js"
 
 export interface SourceRange {
@@ -1293,11 +1294,15 @@ function markdownBlocks(markdown: string, artResolution: ArtBindings, sourceBoun
 function positionFromBlock(block: string): SourcePosition | null {
   const match = /^\s*:::(align|position)[ \t]*\{([^}]*)\}\s*$/.exec(block)
   if (!match) return null
-  const values = (match[2] ?? "").split(/\s+/).filter(Boolean).map(value => value.toLowerCase())
-  const horizontal = values.find(value => POSITION_VOCABULARY.horizontal.includes(value))
-  const vertical = values.find(value => POSITION_VOCABULARY.vertical.includes(value))
-  if (!horizontal && !vertical) return null
-  return { horizontal: horizontal || "left", vertical: vertical || "top", vertical_explicit: Boolean(vertical) }
+  const raw = match[2] ?? ""
+  const values = raw.toLowerCase().split(/\s+/).filter(Boolean)
+  const horizontalFound = values.some(value => POSITION_VOCABULARY.horizontal.includes(value))
+  const verticalFound = values.some(value => POSITION_VOCABULARY.vertical.includes(value))
+  if (!horizontalFound && !verticalFound) return null
+  // Single parser: horizontal/vertical come from parseAlignment; explicit keeps
+  // the map's found-based formula so render output is unchanged.
+  const parsed = parseAlignment(raw)
+  return { horizontal: parsed.horizontal, vertical: parsed.vertical, vertical_explicit: verticalFound }
 }
 
 function artDiagnosticMessage(code: string): string {

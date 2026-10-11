@@ -94,12 +94,15 @@ Rails system tests use Selenium in headless mode. Keep browser automation headle
 
 ## Generated assets and review
 
-When changing the renderer or styles, rebuild the relevant artifact and inspect its diff:
+JavaScript tests run against committed `dist/` bundles, and `bin/check quick` does not rebuild them. `bin/check affected` rebuilds every bundle and fails on any diff, so always run it before handoff. When changing package sources or styles, rebuild the relevant artifacts and inspect the diff yourself first:
 
 ~~~sh
 npm run renderer:build
+npm run build --prefix packages/client
+npm run build --prefix packages/editor-runtime
+npm run build --prefix packages/work-model
 bin/rails tailwindcss:build
-git diff -- apps/web/app/assets/builds/tailwind.css packages/renderer/dist/elef-renderer.bundle.js
+git diff -- apps/web/app/assets/builds/tailwind.css packages/renderer/dist/ packages/client/dist/ packages/editor-runtime/dist/ packages/work-model/dist/
 ~~~
 
 CI checks that these generated files match their sources, checks the one-way frontend ownership and Tauri capability/CSP contracts, runs Rails tests with PostgreSQL and SQLite, runs Rails system tests, and builds/tests desktop on Linux and macOS. Re-run the smallest relevant check after the final edit; report the exact tier and platform actually exercised.

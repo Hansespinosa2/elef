@@ -226,9 +226,13 @@ AFFECTED_RAILS_TESTS = (
 AFFECTED_COMMANDS_1 = (
     *QUICK_COMMANDS_1,
     "npm run renderer:build",
-    "git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js",
+    "git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js",
     "npm run build --prefix packages/client",
     "git diff --exit-code -- packages/client/dist/",
+    "npm run build --prefix packages/editor-runtime",
+    "git diff --exit-code -- packages/editor-runtime/dist/",
+    "npm run build --prefix packages/work-model",
+    "git diff --exit-code -- packages/work-model/dist/",
     "apps/web/bin/rails tailwindcss:build",
     "git diff --exit-code -- apps/web/app/assets/builds/tailwind.css",
     "apps/web/bin/rails db:test:prepare",
@@ -364,7 +368,7 @@ def check_contracts_fresh() -> None:
 
 def check_renderer_fresh() -> None:
     run_step("npm run renderer:build")
-    run_step("git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js")
+    run_step("git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js")
 
 
 def run_fresh() -> None:

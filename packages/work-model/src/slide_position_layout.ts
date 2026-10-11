@@ -5,7 +5,9 @@
 //
 // Grammar sketch (owner of :::align / :::position semantics; the two names
 // are aliases): values are whitespace-separated and case-insensitive,
-// horizontal left/center/right, vertical top/middle/bottom. A directive
+// horizontal left/center/right, vertical top/middle/bottom. center is
+// horizontal-only with no legacy transpose: older center-center sources
+// read horizontal-center/top. A directive
 // binds exactly the block below it; a dangling directive is dropped with a
 // warning, and blocks default to explicit left top. A middle block anchors
 // a stack absorbing following top/middle and preceding bottom blocks
