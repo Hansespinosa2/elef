@@ -16,14 +16,16 @@ await mkdir(output, { recursive: true })
 // or release publication is involved in these isolated test packages.
 for (const [name, version] of [["n", "0.2.0"], ["n-1", "0.1.0"]]) {
   execFileSync("npm", ["run", "tauri:build", "--prefix", "apps/desktop/frontend", "--",
-    "--debug", "--features", "webdriver", "--bundles", platform === "darwin" ? "app" : "appimage",
+    "--debug", "--features", "desktop-dev,webdriver", "--bundles", platform === "darwin" ? "app" : "appimage",
     "--config", "src-tauri/tauri.e2e.conf.json", "--config", JSON.stringify({ version })], {
     cwd: repo, env: { ...process.env, ELEF_E2E_BUILD: "1" }, stdio: "inherit"
   })
   const folder = path.join(output, name)
   await mkdir(folder)
   if (platform === "darwin") {
-    const bundle = path.join(target, "debug/bundle/macos/Elef.app")
+    // The Dev e2e config brands the bundle "Elef E2E"; the fixture folder
+    // keeps the plain name the installed-update flow expects.
+    const bundle = path.join(target, "debug/bundle/macos/Elef E2E.app")
     await cp(bundle, path.join(folder, "Elef.app"), { recursive: true, verbatimSymlinks: true })
     if (name === "n") execFileSync("tar", ["-czf", path.join(output, "update.tar.gz"), "-C", folder, "Elef.app"])
   } else {

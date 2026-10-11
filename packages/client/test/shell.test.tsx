@@ -87,3 +87,30 @@ test("shell adopts host slot templates and gates the graph panel on the document
     shell.unmount();
   }
 });
+
+test("graphEnabled false omits the graph panel element while the default keeps it", async () => {
+  const host = typedHost();
+  const without = await mountInto(host, { initialUrl: "/documents", graphEnabled: false });
+  try {
+    assert.equal(
+      without.element.querySelector("#document-graph-view"),
+      null,
+      "hosts without graph support get no graph panel element",
+    );
+    assert.ok(
+      without.element.querySelector("#work-list"),
+      "the work list still renders without the graph panel",
+    );
+  } finally {
+    without.shell.unmount();
+  }
+  const implicit = await mountInto(host, { initialUrl: "/documents" });
+  try {
+    assert.ok(
+      implicit.element.querySelector("#document-graph-view"),
+      "existing hosts keep the graph panel by default",
+    );
+  } finally {
+    implicit.shell.unmount();
+  }
+});

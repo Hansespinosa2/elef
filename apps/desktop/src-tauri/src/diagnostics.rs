@@ -20,10 +20,14 @@ pub(crate) fn record_diagnostic(
     let _ = local_store::diagnostics::append_event(&data_dir.join("logs"), &event);
 }
 
-// TODO(slice-A): return Dev under the desktop-dev feature once the
-// Stable/Dev profile split lands. Every current build is Stable-equivalent.
+// Diagnostics carry the profile that produced them: repository-Dev builds
+// (desktop-dev feature) report Dev, every other build reports Stable.
 fn event_profile() -> EventProfile {
-    EventProfile::Stable
+    if cfg!(feature = "desktop-dev") {
+        EventProfile::Dev
+    } else {
+        EventProfile::Stable
+    }
 }
 
 pub(crate) fn record_command_result<T>(

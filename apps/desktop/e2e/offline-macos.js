@@ -7,6 +7,17 @@ import { fileURLToPath } from "node:url"
 const directory = path.dirname(fileURLToPath(import.meta.url))
 const profile = path.join(directory, "offline-macos.sb")
 
+const shellQuote = value => `'${value.replaceAll("'", "'\\''")}'`
+
+export function offlineMacAppLauncherScript(binaryPath) {
+  return [
+    "#!/bin/sh",
+    "set -eu",
+    `exec /usr/bin/sandbox-exec -f ${shellQuote(profile)} ${shellQuote(binaryPath)} "$@"`,
+    ""
+  ].join("\n")
+}
+
 export function desktopCommand(command, args = []) {
   if (process.env.ELEF_E2E_OFFLINE !== "1") return { command, args }
   assert.equal(process.platform, "darwin", "Seatbelt offline mode requires macOS")

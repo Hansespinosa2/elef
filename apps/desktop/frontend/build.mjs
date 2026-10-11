@@ -6,19 +6,54 @@ import { build } from "esbuild"
 const frontendRoot = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(frontendRoot, "../../..")
 const e2eBuild = process.env.ELEF_E2E_BUILD === "1"
-const output = path.join(frontendRoot, e2eBuild ? "dist-e2e" : "dist")
+const profileArgument = process.argv.find(argument => argument.startsWith("--profile="))?.slice("--profile=".length)
+const profileIndex = process.argv.indexOf("--profile")
+const separatedProfileArgument = profileIndex >= 0 ? process.argv[profileIndex + 1] : null
+const profile = process.env.ELEF_DESKTOP_PROFILE || profileArgument || separatedProfileArgument || (e2eBuild ? "dev" : "stable")
+if (!["stable", "dev"].includes(profile)) throw new Error(`Unknown desktop profile: ${profile}`)
+const outputName = e2eBuild
+  ? profile === "stable" ? "dist-e2e-stable" : "dist-e2e"
+  : profile === "stable" ? "dist" : "dist-dev"
+const output = path.join(frontendRoot, outputName)
 const assets = path.join(output, "assets")
+const isStableProfile = profile === "stable"
+// Profile-selected desktop modules. The Stable variants omit the excluded
+// slices (graph transport command, source-only controller registration,
+// null graph runtime); Dev keeps the full surface. The updater runtime
+// alias lands with the macOS updater boundary (slice B).
+const desktopProfileModules = {
+  "#desktop/file-library-transport": isStableProfile
+    ? path.join(frontendRoot, "src/file-library-transport-stable.js")
+    : path.join(frontendRoot, "src/file-library-transport.js"),
+  "#desktop/editor-runtime": path.join(frontendRoot, `src/editor-runtime-${profile}.js`),
+  "#desktop/document-graph-runtime": path.join(frontendRoot, `src/document-graph-runtime-${profile}.js`)
+}
+// The Stable profile resolves the bare workspace specifiers below to the
+// Stable dist variants those packages build from their stable entries;
+// subpath imports keep resolving to the shared dists.
+const stableProfileDists = {
+  client: path.join(repoRoot, "packages", "client", "dist", "elef-client.stable.js"),
+  "editor-runtime": path.join(repoRoot, "packages", "editor-runtime", "dist", "index.stable.js"),
+  "work-model": path.join(repoRoot, "packages", "work-model", "dist", "elef-work-model.stable.js")
+}
 await rm(output, { recursive: true, force: true })
 await mkdir(assets, { recursive: true })
 const appSourceAlias = {
   name: "app-source-alias",
   setup(context) {
+    context.onResolve({ filter: /^#desktop\// }, ({ path: importPath }) => {
+      const modulePath = desktopProfileModules[importPath]
+      if (!modulePath) throw new Error(`Unknown desktop profile module ${importPath} for ${profile}.`)
+      return { path: modulePath }
+    })
     context.onResolve({ filter: /^[^./]/ }, async (args) => {
       if (args.pluginData?.desktopSharedDependencyResolution) return
       // Monorepo packages are first-party source, not declared dependencies:
       // resolve the package barrel directly so Rails and desktop share one copy.
       const workspaceMatch = /^@elef\/([^/]+)(\/[^/]+)?$/.exec(args.path)
       if (workspaceMatch) {
+        const stableDist = isStableProfile && !workspaceMatch[2] ? stableProfileDists[workspaceMatch[1]] : undefined
+        if (stableDist) return { path: stableDist }
         // The client ships a committed self-contained dist (React included)
         // that both hosts consume byte-identically, following the renderer
         // precedent; the desktop never re-bundles client source. The deferred
@@ -73,9 +108,14 @@ const frontendResult = await build({
   chunkNames: "chunks/[name]-[hash]",
   minify: true,
   metafile: true,
-  define: { __ELEF_E2E__: JSON.stringify(e2eBuild) },
+  define: {
+    __ELEF_E2E__: JSON.stringify(e2eBuild),
+    __ELEF_DESKTOP_PROFILE__: JSON.stringify(profile),
+    __ELEF_DESKTOP_PLATFORM__: JSON.stringify(process.platform === "darwin" ? "macos" : process.platform)
+  },
   plugins: [appSourceAlias]
 })
+await writeFile(path.join(assets, "app.metafile.json"), `${JSON.stringify(frontendResult.metafile, null, 2)}\n`)
 
 // CodeMirror extensions use instanceof checks across package boundaries. A second
 // copy of one of these packages makes extensions created by the shared-runtime
@@ -130,7 +170,16 @@ const desktopHost = await readFile(path.join(repoRoot, "apps/web/app/views/deskt
 // The authoring dialog renders through the shared client now (same DOM
 // contract the web pages use), so the host ships a mount point instead of
 // inlining server-rendered dialog markup.
-const indexHtml = desktopHost
+let indexHtml = desktopHost
+if (isStableProfile) {
+  // The Stable profile opens every work in source mode; the runtime
+  // configures the same value, so this only sets the pre-JS shell default.
+  const shellDefault = 'data-editor-mode="visual"'
+  if (indexHtml.split(shellDefault).length !== 2) {
+    throw new Error("The desktop host shell default changed; update the Stable profile rewrite.")
+  }
+  indexHtml = indexHtml.replace(shellDefault, 'data-editor-mode="source"')
+}
 if (!indexHtml.includes('id="authoring-settings-mount"')) {
   throw new Error("The desktop host must provide the shared authoring dialog mount point.")
 }

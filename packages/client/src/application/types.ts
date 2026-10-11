@@ -64,6 +64,11 @@ export interface ElefMountOptions {
   readonly operationNotice?: (operation: LibraryOperation, work: WorkSummary) => string | null;
   readonly updater?: UpdaterSeam;
   readonly authoring?: AuthoringSeam;
+  // Host capability declaration for the document-graph panel slot. Hosts
+  // without graph support (the Stable desktop profile) pass false and the
+  // client omits the panel element entirely; default true keeps every
+  // existing host unchanged. Never host-name branching: a capability flag.
+  readonly graphEnabled?: boolean;
   readonly onLibraryEvent?: (event: {
     readonly type: LibraryOperation;
     readonly work: WorkSummary;

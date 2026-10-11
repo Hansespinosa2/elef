@@ -1,7 +1,9 @@
+#[cfg(feature = "desktop-dev")]
+use local_store::DocumentGraphDocument;
 use local_store::diagnostics::EventCode;
 use local_store::{
-    DocumentGraphDocument, FileEvent, MergeOutcome, OpenWorkFolder, RestoreOutcome, SaveResult,
-    SnapshotInfo, SourceSnapshot, WorkFolderPreview, WorkFolderSummary,
+    FileEvent, MergeOutcome, OpenWorkFolder, RestoreOutcome, SaveResult, SnapshotInfo,
+    SourceSnapshot, WorkFolderPreview, WorkFolderSummary,
 };
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -23,6 +25,7 @@ pub(crate) fn list_work_folders(
     Ok(state.current_library()?.list_work_folders()?)
 }
 
+#[cfg(feature = "desktop-dev")]
 #[tauri::command]
 pub(crate) fn document_graph(
     state: State<'_, DesktopState>,

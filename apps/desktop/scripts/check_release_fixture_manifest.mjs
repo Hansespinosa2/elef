@@ -11,11 +11,7 @@ import {
 } from "../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
 import { PIXEL_PNG_BYTES } from "../../../apps/web/test/e2e/scenarios/media-fixture.js"
 import { RICH_RENDERING_SOURCE } from "../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
-// TODO(slice-A): import STABLE_PROFILE_SOURCE from
-// ../e2e/stable-profile-fixture.js and assert the Stable runtime consumes the
-// manifested unknown-directive bytes, plus the Stable-spec/smoke and
-// identity-isolation assertions below. Those files land with the
-// Stable/Dev profile slice; this checker covers the fixture-owned half.
+import { STABLE_PROFILE_SOURCE } from "../e2e/stable-profile-fixture.js"
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..")
 const manifestPath = path.join(repoRoot, "apps/desktop/release-test-manifest.json")
@@ -114,8 +110,7 @@ assert.deepEqual(richImage.subarray(0, 8), Buffer.from([137, 80, 78, 71, 13, 10,
 assert.deepEqual(PIXEL_PNG_BYTES, richImage, "runtime media uploads must use the manifested image bytes")
 assert.match(unknownSource, /\[\[Future Release Notes\]\]/)
 assert.match(unknownSource, /^:::future-directive/m)
-// TODO(slice-A): assert STABLE_PROFILE_SOURCE equals unknownSource once the
-// Stable profile fixture lands, so the Stable runtime consumes these bytes.
+assert.equal(STABLE_PROFILE_SOURCE, unknownSource, "the Stable runtime must consume the manifested unknown-directive source fixture")
 assert.match(unknownSource, /\[Elef documentation\]\(https:\/\/example\.com\/docs\)/)
 
 const [runtimeRunner, webSpec, desktopSpec] = await Promise.all([
@@ -127,11 +122,26 @@ assert.match(runtimeRunner, /rich\.assets\.attach/, "Rails rich fixture must att
 assert.match(runtimeRunner, /RICH_RENDERING_SOURCE/, "native rich fixture must be seeded from its checked-in source")
 assert.match(webSpec, /richRenderingMediaWorkflow\(new WebEditorUi\(page\)\)/)
 assert.match(desktopSpec, /richRenderingMediaWorkflow\(new DesktopEditorUi\(\)\)/)
-// TODO(slice-A): extend the spec/runner wiring assertions above with the
-// Stable-exclusion spec (STABLE_PROFILE_SOURCE, export_elef, rich offline
-// rendering), the Stable archive unzip check, the identity-isolation smoke
-// (concurrent Stable+Dev launch, expected roots), and the Stable/Dev
-// identity config identifiers.
+const [stableSpec, stableSmoke, identitySpec, identitySmoke] = await Promise.all([
+  readFile(path.join(repoRoot, "apps/desktop/e2e/stable-exclusions.spec.js"), "utf8"),
+  readFile(path.join(repoRoot, "apps/desktop/e2e/stable-profile-smoke.js"), "utf8"),
+  readFile(path.join(repoRoot, "apps/desktop/e2e/identity-isolation.spec.js"), "utf8"),
+  readFile(path.join(repoRoot, "apps/desktop/e2e/identity-isolation-smoke.js"), "utf8")
+])
+assert.match(stableSpec, /STABLE_PROFILE_SOURCE/, "the Stable spec must open the Stable unknown-directive fixture")
+assert.match(stableSpec, /export_elef/, "the Stable spec must export the unsupported-source fixture")
+assert.match(stableSpec, /RICH_RENDERING_TITLE/, "the Stable spec must render the manifested rich fixture")
+assert.match(stableSpec, /exportAndVerifyDiagnostics\(browser, "stable"\)/, "the Stable spec must verify the Stable diagnostics archive")
+assert.match(stableSmoke, /ELEF_E2E_EXPORT_PATH/, "the Stable smoke must capture the exported archive path")
+assert.match(stableSmoke, /\bunzip\b/, "the Stable smoke must unzip-verify the exported archive against the edited source")
+assert.match(runtimeRunner, /runStableProfileSmoke/, "the e2e runner must invoke the Stable profile smoke")
+assert.match(runtimeRunner, /runIdentityIsolationSmoke/, "the e2e runner must invoke the identity isolation smoke")
+assert.match(identitySmoke, /Promise\.allSettled/, "the identity probes must launch concurrently")
+assert.match(identitySpec, /ELEF_E2E_IDENTITY_EXPECTED_ROOT/, "the identity spec must pin the per-identity library root")
+const stableIdentityConf = JSON.parse(await readFile(path.join(repoRoot, "apps/desktop/src-tauri/tauri.e2e-stable-identity.conf.json"), "utf8"))
+const devIdentityConf = JSON.parse(await readFile(path.join(repoRoot, "apps/desktop/src-tauri/tauri.e2e-dev-identity.conf.json"), "utf8"))
+assert.equal(stableIdentityConf.identifier, "com.elef.desktop", "the Stable identity probe must use the production identifier")
+assert.equal(devIdentityConf.identifier, "com.elef.desktop.dev", "the Dev identity probe must use the Dev identifier")
 
 const historicalPath = resolveFixturePath("historical_file_format", 0)
 await assert.rejects(stat(path.join(path.dirname(historicalPath), "elef.json")), { code: "ENOENT" }, "historical sample must remain a pre-manifest work folder")

@@ -237,14 +237,28 @@ function renderEditorView(container, config) {
   }
   container.replaceChildren(template.content);
   const mountedRoot = container.querySelector(".editor-shell");
+  const desktopFeatures = config.desktopFeatures || {};
   configureEditorKind(mountedRoot, config.kind, {
     documentTitles: config.documentTitles,
     sourceName: config.sourceName,
-    showTitle: config.showTitle
+    showTitle: config.showTitle,
+    documentLinksEnabled: desktopFeatures.documentLinks !== false,
+    visualEditingEnabled: desktopFeatures.visualEditing !== false,
+    presentationEditingEnabled: desktopFeatures.presentationEditing !== false,
+    slideOverviewEnabled: desktopFeatures.slideOverview !== false
   });
   return mountedRoot;
 }
-function configureEditorKind(root, kind, { documentTitles = [], sourceName, showTitle = false, formControllers } = {}) {
+function configureEditorKind(root, kind, {
+  documentTitles = [],
+  sourceName,
+  showTitle = false,
+  formControllers,
+  documentLinksEnabled = true,
+  visualEditingEnabled = true,
+  presentationEditingEnabled = true,
+  slideOverviewEnabled = true
+} = {}) {
   if (!root?.querySelector) throw new TypeError("Editor kind needs a rendered editor view");
   if (!["document", "presentation"].includes(kind)) throw new TypeError("Editor view needs a supported work kind");
   const isDocument = kind === "document";
@@ -253,15 +267,17 @@ function configureEditorKind(root, kind, { documentTitles = [], sourceName, show
   const sourceInput = root.querySelector("[data-editor-target='input']");
   const controllerNames = ["editor", "snippet-palette", "math-shorthand", "math-shortcut-palette", "mermaid-assist"];
   const documentLinkActions = ["input->document-link-palette#input", "keydown->document-link-palette#keydown"];
-  root.setAttribute("aria-label", `Visual ${kind} editor`);
+  root.setAttribute("aria-label", `${visualEditingEnabled ? "Visual" : "Source"} ${kind} editor`);
   root.querySelector('[data-editor-view-target="kindBadge"]').textContent = isDocument ? "Document" : "Presentation";
   root.querySelector('[data-editor-view-target="titleField"]').hidden = isDocument || !showTitle;
-  sourceField.dataset.controller = [...controllerNames, ...isDocument ? ["document-link-palette"] : []].join(" ");
-  sourceField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles);
+  const useDocumentLinks = isDocument && documentLinksEnabled;
+  sourceField.dataset.controller = [...controllerNames, ...useDocumentLinks ? ["document-link-palette"] : []].join(" ");
+  if (useDocumentLinks) sourceField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles);
+  else delete sourceField.dataset.documentLinkPaletteTitlesValue;
   sourceInput.name = sourceName || `${kind}[source]`;
   const actions = new Set((sourceInput.dataset.action || "").split(/\s+/).filter(Boolean));
   for (const action of documentLinkActions) actions.delete(action);
-  if (isDocument) {
+  if (useDocumentLinks) {
     sourceSurface.dataset.documentLinkPaletteTarget = "editor";
     sourceInput.dataset.documentLinkPaletteTarget = "editor";
     documentLinkActions.forEach((action) => actions.add(action));
@@ -269,22 +285,53 @@ function configureEditorKind(root, kind, { documentTitles = [], sourceName, show
   } else {
     delete sourceSurface.dataset.documentLinkPaletteTarget;
     delete sourceInput.dataset.documentLinkPaletteTarget;
-    sourceField.dataset.presentationEditorTarget = "source";
+    if (isDocument || !presentationEditingEnabled) delete sourceField.dataset.presentationEditorTarget;
+    else sourceField.dataset.presentationEditorTarget = "source";
+    if (!documentLinksEnabled) {
+      root.querySelectorAll("[data-document-link-palette-target]").forEach((element) => element.removeAttribute("data-document-link-palette-target"));
+      root.querySelector("[aria-label='Document link suggestions']")?.remove();
+    }
   }
   sourceInput.dataset.action = [...actions].join(" ");
-  root.querySelector(".editor-mode-hint").textContent = isDocument ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist." : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab.";
+  const hint = root.querySelector(".editor-mode-hint");
+  if (visualEditingEnabled && documentLinksEnabled) {
+    hint.textContent = isDocument ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist." : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab.";
+  } else if (isDocument) {
+    hint.textContent = "Markdown source stays canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist.";
+  } else {
+    hint.textContent = "Markdown source stays canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab.";
+  }
+  ;
   root.querySelector('[data-editor-view-target="mediaButton"]').textContent = isDocument ? "Add image" : "Add image or MP4";
   root.querySelector('[data-editor-view-target="mediaInput"]').setAttribute("accept", isDocument ? "image/*" : "image/*,video/mp4");
-  root.querySelector('[data-editor-view-target="presentationTools"]').hidden = isDocument;
-  root.querySelector('[data-editor-view-target="slideOverview"]').hidden = isDocument;
-  root.querySelector("[data-presentation-editor-target='status']").hidden = isDocument;
+  const presentationTools = root.querySelector('[data-editor-view-target="presentationTools"]');
+  if (presentationTools) presentationTools.hidden = isDocument || !presentationEditingEnabled;
+  const slideOverview = root.querySelector('[data-editor-view-target="slideOverview"]');
+  if (slideOverview) slideOverview.hidden = isDocument || !slideOverviewEnabled;
+  const presentationStatus = root.querySelector("[data-presentation-editor-target='status']");
+  if (presentationStatus) presentationStatus.hidden = isDocument || !presentationEditingEnabled;
+  if (!visualEditingEnabled) {
+    root.querySelector("[data-editor-target='visualButton']")?.remove();
+    root.querySelector("[data-editor-target='sourceButton']")?.remove();
+    root.querySelector(".editor-mode-switch")?.removeAttribute("role");
+    root.querySelector(".editor-mode-switch")?.removeAttribute("aria-label");
+    root.querySelector("[data-editor-view-target='editingMode']").textContent = "Source";
+    root.querySelector("[data-visual-editor-target='projection']")?.removeAttribute("data-visual-editor-target");
+  }
+  if (!presentationEditingEnabled) presentationTools?.remove();
+  if (!slideOverviewEnabled) slideOverview?.remove();
   const form = root.closest("form");
   if (form) {
     form.dataset.visualEditorKindValue = kind;
     const formActions = new Set((form.dataset.action || "").split(/\s+/).filter(Boolean));
     const projectionKeydown = "keydown->visual-editor#projectionKeydown";
     formActions.delete(projectionKeydown);
-    if (isDocument) formActions.add(projectionKeydown);
+    if (isDocument && visualEditingEnabled) formActions.add(projectionKeydown);
+    if (!slideOverviewEnabled) {
+      for (const action of ["input->slide-overview#sourceChanged", "change->slide-overview#sourceChanged", "preview:updated->slide-overview#previewUpdated"]) {
+        formActions.delete(action);
+      }
+    }
     form.dataset.action = [...formActions].join(" ");
     if (formControllers !== void 0) form.dataset.controller = formControllers;
   }

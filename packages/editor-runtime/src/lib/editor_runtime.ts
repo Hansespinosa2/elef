@@ -1,4 +1,5 @@
 import { application } from "../controllers/application.js"
+import { installEditorRuntimeErrorHook } from "./editor_runtime_errors.js"
 import appearanceController from "../controllers/appearance_controller.js"
 import artLayoutController from "../controllers/art_layout_controller.js"
 import documentLinkPaletteController from "../controllers/document_link_palette_controller.js"
@@ -14,24 +15,7 @@ import slideOverviewController from "../controllers/slide_overview_controller.js
 import snippetPaletteController from "../controllers/snippet_palette_controller.js"
 import visualEditorController from "../controllers/visual_editor_controller.js"
 
-if ((typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__)) {
-  const handleError = application.handleError.bind(application)
-  application.handleError = (error: any, message: any, detail: any) => {
-    globalThis.__elefE2EControllerErrors ||= []
-    globalThis.__elefE2EControllerErrors.push({
-      message: String(message),
-      identifier: detail?.identifier || "",
-      elementId: detail?.element?.id || "",
-      errorName: error?.name || "",
-      errorMessage: error?.message || String(error),
-      causeName: error?.cause?.name || "",
-      causeMessage: error?.cause?.message || "",
-      errorStack: error?.stack || "",
-      causeStack: error?.cause?.stack || ""
-    })
-    handleError(error, message, detail)
-  }
-}
+installEditorRuntimeErrorHook(application)
 
 let editorRuntimeRegistered = false
 

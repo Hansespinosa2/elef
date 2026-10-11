@@ -1963,7 +1963,7 @@ class DesktopLibraryUi {
       const busNames = execFileSync("busctl", ["--user", "list", "--no-legend"], { encoding: "utf8" })
       singleInstanceOwner = busNames
         .split("\n")
-        .find(line => line.startsWith("org.com_elef_desktop.SingleInstance ")) || "not registered"
+        .find(line => line.startsWith("org.com_elef_desktop_e2e.SingleInstance ")) || "not registered"
       if (singleInstanceOwner === "not registered") {
         throw new Error("The running desktop app did not register its Linux single-instance D-Bus name")
       }

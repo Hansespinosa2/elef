@@ -27,3 +27,7 @@ export { applyEditorSource } from "./lib/editor_source.js";
 export { waitForEditorController } from "./lib/editor_ready.js";
 export { presentConflictDialog } from "./lib/conflict_dialog.js";
 export { mountHostPresentationEditor } from "./lib/presentation_editor_host.js";
+// Graph cache factory for the desktop Dev document-graph runtime (the
+// profile-selected module assembles build + cache + view pieces that the
+// Stable entry omits entirely). Web and Stable hosts never import this.
+export { createDocumentGraphCache } from "./lib/document_graph_cache.js";

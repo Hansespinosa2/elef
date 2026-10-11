@@ -315,13 +315,15 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
         >
           {notice}
         </div>
-        <section
-          id="document-graph-view"
-          className="document-graph-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5"
-          data-client-slot-target="graph"
-          hidden
-          aria-labelledby="document-graph-heading"
-        />
+        {options.graphEnabled !== false && (
+          <section
+            id="document-graph-view"
+            className="document-graph-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5"
+            data-client-slot-target="graph"
+            hidden
+            aria-labelledby="document-graph-heading"
+          />
+        )}
         <div data-client-slot-target="lineage" />
         <section
           id="work-list"

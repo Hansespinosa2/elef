@@ -151,6 +151,18 @@ export interface EditorViewConfig {
   documentTitles?: unknown;
   showTitle?: boolean;
   ids?: EditorViewIds;
+  desktopFeatures?: DesktopFeatures | undefined;
+}
+
+// Profile-driven editor capabilities. Every flag defaults to enabled when
+// absent, so hosts that never set desktopFeatures (Rails, repository Dev)
+// render exactly what they render today; the Stable desktop profile passes
+// all false and the view omits the excluded entry points from the DOM.
+export interface DesktopFeatures {
+  visualEditing?: boolean | undefined;
+  presentationEditing?: boolean | undefined;
+  slideOverview?: boolean | undefined;
+  documentLinks?: boolean | undefined;
 }
 
 export function installPreviewHtml(container: Element, html: string): void {
@@ -286,10 +298,15 @@ export function renderEditorView(container: Element | null, config: EditorViewCo
   }
   container.replaceChildren(template.content)
   const mountedRoot = container.querySelector(".editor-shell")
+  const desktopFeatures: DesktopFeatures = config.desktopFeatures || {}
   configureEditorKind(mountedRoot, config.kind, {
     documentTitles: config.documentTitles,
     sourceName: config.sourceName,
-    showTitle: config.showTitle
+    showTitle: config.showTitle,
+    documentLinksEnabled: desktopFeatures.documentLinks !== false,
+    visualEditingEnabled: desktopFeatures.visualEditing !== false,
+    presentationEditingEnabled: desktopFeatures.presentationEditing !== false,
+    slideOverviewEnabled: desktopFeatures.slideOverview !== false
   })
   return mountedRoot
 }
@@ -299,9 +316,17 @@ export interface EditorKindOptions {
   sourceName?: string | undefined;
   showTitle?: boolean | undefined;
   formControllers?: string | undefined;
+  documentLinksEnabled?: boolean | undefined;
+  visualEditingEnabled?: boolean | undefined;
+  presentationEditingEnabled?: boolean | undefined;
+  slideOverviewEnabled?: boolean | undefined;
 }
 
-export function configureEditorKind(root: Element | null, kind: string, { documentTitles = [], sourceName, showTitle = false, formControllers }: EditorKindOptions = {}) {
+export function configureEditorKind(root: Element | null, kind: string, {
+  documentTitles = [], sourceName, showTitle = false, formControllers,
+  documentLinksEnabled = true, visualEditingEnabled = true,
+  presentationEditingEnabled = true, slideOverviewEnabled = true
+}: EditorKindOptions = {}) {
   if (!root?.querySelector) throw new TypeError("Editor kind needs a rendered editor view")
   if (!["document", "presentation"].includes(kind)) throw new TypeError("Editor view needs a supported work kind")
 
@@ -312,16 +337,18 @@ export function configureEditorKind(root: Element | null, kind: string, { docume
   const controllerNames = ["editor", "snippet-palette", "math-shorthand", "math-shortcut-palette", "mermaid-assist"]
   const documentLinkActions = ["input->document-link-palette#input", "keydown->document-link-palette#keydown"]
 
-  root.setAttribute("aria-label", `Visual ${kind} editor`)
+  root.setAttribute("aria-label", `${visualEditingEnabled ? "Visual" : "Source"} ${kind} editor`)
   ;(root.querySelector('[data-editor-view-target="kindBadge"]') as Element).textContent = isDocument ? "Document" : "Presentation"
   ;(root.querySelector('[data-editor-view-target="titleField"]') as HTMLElement).hidden = isDocument || !showTitle
-  sourceField.dataset.controller = [...controllerNames, ...(isDocument ? ["document-link-palette"] : [])].join(" ")
-  sourceField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
+  const useDocumentLinks = isDocument && documentLinksEnabled
+  sourceField.dataset.controller = [...controllerNames, ...(useDocumentLinks ? ["document-link-palette"] : [])].join(" ")
+  if (useDocumentLinks) sourceField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
+  else delete sourceField.dataset.documentLinkPaletteTitlesValue
   sourceInput.name = sourceName || `${kind}[source]`
 
   const actions = new Set((sourceInput.dataset.action || "").split(/\s+/).filter(Boolean))
   for (const action of documentLinkActions) actions.delete(action)
-  if (isDocument) {
+  if (useDocumentLinks) {
     sourceSurface.dataset.documentLinkPaletteTarget = "editor"
     sourceInput.dataset.documentLinkPaletteTarget = "editor"
     documentLinkActions.forEach(action => actions.add(action))
@@ -329,18 +356,43 @@ export function configureEditorKind(root: Element | null, kind: string, { docume
   } else {
     delete sourceSurface.dataset.documentLinkPaletteTarget
     delete sourceInput.dataset.documentLinkPaletteTarget
-    sourceField.dataset.presentationEditorTarget = "source"
+    if (isDocument || !presentationEditingEnabled) delete sourceField.dataset.presentationEditorTarget
+    else sourceField.dataset.presentationEditorTarget = "source"
+    if (!documentLinksEnabled) {
+      root.querySelectorAll("[data-document-link-palette-target]").forEach(element => element.removeAttribute("data-document-link-palette-target"))
+      root.querySelector("[aria-label='Document link suggestions']")?.remove()
+    }
   }
   sourceInput.dataset.action = [...actions].join(" ")
 
-  ;(root.querySelector(".editor-mode-hint") as Element).textContent = isDocument
-    ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist."
-    : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab."
+  const hint = root.querySelector(".editor-mode-hint") as Element
+  if (visualEditingEnabled && documentLinksEnabled) {
+    hint.textContent = isDocument
+      ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist."
+      : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab."
+  } else if (isDocument) {
+    hint.textContent = "Markdown source stays canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist."
+  } else {
+    hint.textContent = "Markdown source stays canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab."
+  }
   ;(root.querySelector('[data-editor-view-target="mediaButton"]') as Element).textContent = isDocument ? "Add image" : "Add image or MP4"
   ;(root.querySelector('[data-editor-view-target="mediaInput"]') as Element).setAttribute("accept", isDocument ? "image/*" : "image/*,video/mp4")
-  ;(root.querySelector('[data-editor-view-target="presentationTools"]') as HTMLElement).hidden = isDocument
-  ;(root.querySelector('[data-editor-view-target="slideOverview"]') as HTMLElement).hidden = isDocument
-  ;(root.querySelector("[data-presentation-editor-target='status']") as HTMLElement).hidden = isDocument
+  const presentationTools = root.querySelector('[data-editor-view-target="presentationTools"]') as HTMLElement | null
+  if (presentationTools) presentationTools.hidden = isDocument || !presentationEditingEnabled
+  const slideOverview = root.querySelector('[data-editor-view-target="slideOverview"]') as HTMLElement | null
+  if (slideOverview) slideOverview.hidden = isDocument || !slideOverviewEnabled
+  const presentationStatus = root.querySelector("[data-presentation-editor-target='status']") as HTMLElement | null
+  if (presentationStatus) presentationStatus.hidden = isDocument || !presentationEditingEnabled
+  if (!visualEditingEnabled) {
+    root.querySelector("[data-editor-target='visualButton']")?.remove()
+    root.querySelector("[data-editor-target='sourceButton']")?.remove()
+    root.querySelector(".editor-mode-switch")?.removeAttribute("role")
+    root.querySelector(".editor-mode-switch")?.removeAttribute("aria-label")
+    ;(root.querySelector("[data-editor-view-target='editingMode']") as Element).textContent = "Source"
+    root.querySelector("[data-visual-editor-target='projection']")?.removeAttribute("data-visual-editor-target")
+  }
+  if (!presentationEditingEnabled) presentationTools?.remove()
+  if (!slideOverviewEnabled) slideOverview?.remove()
 
   const form = root.closest("form")
   if (form) {
@@ -348,7 +400,12 @@ export function configureEditorKind(root: Element | null, kind: string, { docume
     const formActions = new Set((form.dataset.action || "").split(/\s+/).filter(Boolean))
     const projectionKeydown = "keydown->visual-editor#projectionKeydown"
     formActions.delete(projectionKeydown)
-    if (isDocument) formActions.add(projectionKeydown)
+    if (isDocument && visualEditingEnabled) formActions.add(projectionKeydown)
+    if (!slideOverviewEnabled) {
+      for (const action of ["input->slide-overview#sourceChanged", "change->slide-overview#sourceChanged", "preview:updated->slide-overview#previewUpdated"]) {
+        formActions.delete(action)
+      }
+    }
     form.dataset.action = [...formActions].join(" ")
     if (formControllers !== undefined) form.dataset.controller = formControllers
   }

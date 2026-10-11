@@ -51,7 +51,7 @@ desktop_ui_extensions = {
     ".html", ".htm", ".css", ".scss", ".sass", ".less",
     ".jsx", ".tsx", ".vue", ".svelte",
 }
-generated_directories = {"node_modules", "dist", "dist-e2e", "target"}
+generated_directories = {"node_modules", "dist", "dist-dev", "dist-e2e", "dist-e2e-stable", "target"}
 desktop_ui_files = []
 for directory, subdirectories, filenames in os.walk(desktop_root):
     subdirectories[:] = [name for name in subdirectories if name not in generated_directories]
@@ -461,8 +461,12 @@ assert '"apps/web/app/views/shared/_authoring_settings_dialog.html.erb"' not in 
 assert '"lib/library_card"' not in desktop_application, "desktop must not keep the retired card renderer"
 assert "export function cardDomId" in client_library_card, "desktop library cards must be owned by the shared client"
 assert '"./editor_controller_lookup.js"' in desktop_application, "desktop editor lookup must use the package-owned controller helper"
-assert '"@elef/work-model"' in desktop_application and "buildDocumentGraph" in desktop_application, (
+dev_graph_runtime = (ROOT / "apps/desktop/frontend/src/document-graph-runtime-dev.js").read_text()
+assert '"@elef/work-model"' in dev_graph_runtime and "buildDocumentGraph" in dev_graph_runtime, (
     "desktop graph construction must consume the shared work-model resolver"
+)
+assert "documentGraphRuntime" in desktop_application, (
+    "desktop graph construction must receive the profile-selected runtime as an injected input"
 )
 assert '"ElefRenderer.buildDocumentGraph"' in (ROOT / "apps/web/app/lib/source/javascript_renderer.rb").read_text(), (
     "Rails graph construction must use the same app-owned resolver"
@@ -512,7 +516,7 @@ assert 'import("../controllers/' not in editor_runtime, (
 )
 assert 'import("controllers/document_graph_controller")' not in editor_runtime, "the retired Stimulus graph controller must not load on demand"
 assert "loadLibraryRuntime" not in editor_runtime, "no host may keep the retired graph controller loader"
-assert "renderGraphView" in desktop_application and "GraphController" in desktop_application, (
+assert "renderGraphView" in dev_graph_runtime and "GraphController" in dev_graph_runtime, (
     "desktop graph rendering must use the shared client graph module"
 )
 assert 'from "@elef/editor-runtime/worker"' in (ROOT / "apps/desktop/frontend/src/renderer-worker.js").read_text(), (
@@ -550,11 +554,25 @@ assert 'pin "@elef/editor-runtime", to: "editor-runtime/dist/index.js"' in impor
 )
 assert '"lib/presentation_navigation"' not in client_presentation, "the shared controller must not keep host-owned key mapping"
 for shared_module in (
-    "work_open_flow", "document_graph_cache", "editor_ready",
+    "work_open_flow", "editor_ready",
     "feature_flags", "performance_measurement", "renderer_worker_client",
     "request_identity", "editor_binding",
 ):
     assert f'"./{shared_module}.js"' in desktop_application, f"desktop application must consume packages/editor-runtime/src/lib/{shared_module}.ts"
+assert '"@elef/editor-runtime"' in dev_graph_runtime and "createDocumentGraphCache" in dev_graph_runtime, (
+    "the Dev graph runtime must consume the shared cache factory from the editor-runtime barrel"
+)
+stable_editor_runtime = (ROOT / "packages/editor-runtime/src/lib/editor_runtime_stable.ts").read_text()
+assert 'register("editor", editorController)' in stable_editor_runtime, (
+    "the Stable registration must mount the retained source editor synchronously"
+)
+assert 'import("../controllers/' not in stable_editor_runtime, (
+    "the Stable registration must not lazily import controllers"
+)
+for excluded in ("visual-editor", "slide-overview", "document-link-palette"):
+    assert f'register("{excluded}"' not in stable_editor_runtime, (
+        f"the Stable registration must not mount the excluded {excluded} controller"
+    )
 desktop_boot = (ROOT / "apps/desktop/frontend/src/main.js").read_text()
 assert '"@elef/editor-runtime"' in desktop_boot, (
     "desktop boot must consume the shared editor runtime package"
@@ -640,8 +658,15 @@ desktop_source_reasons = {
     "authoring-registry-loader.js": "loads the library's native authoring-registry commands",
     "bootstrap-flow.js": "orders native app startup and its readiness handshake",
     "close-flow.js": "coordinates native window close with the save transport",
+    "desktop-profile.js": "derives the Stable/Dev feature and flag inputs from the build-defined profile",
     "diagnostic-failures.js": "reports preview and startup failures to fixed native diagnostics commands",
-    "file-library-transport.js": "maps named app operations to the native file-library command surface",
+    "document-graph-runtime-dev.js": "assembles the shared graph pieces for the Dev profile",
+    "document-graph-runtime-stable.js": "withholds the graph runtime from the Stable profile",
+    "editor-runtime-dev.js": "registers the full controller set for the Dev profile",
+    "editor-runtime-stable.js": "registers the source-only controller set for the Stable profile",
+    "file-library-transport-base.js": "maps the profile-shared operations to the native file-library command surface",
+    "file-library-transport-stable.js": "re-exports the graph-free transport for the Stable profile",
+    "file-library-transport.js": "extends the shared transport base with the Dev-only graph reader",
     "main.js": "boots the shared application with Tauri services and native lifecycle",
     "media-transport.js": "adapts browser media fetches to Tauri IPC and asset protocols",
     "preview-transport.js": "adapts the shared renderer to the desktop preview endpoint",

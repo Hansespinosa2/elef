@@ -172,26 +172,42 @@ assert "renderLibraryCard" not in desktop_application and "renderLibraryCard" no
 for retired in ("apps/web/app/javascript/lib/library_view.js", "apps/web/app/javascript/lib/library_card.js", "apps/web/app/views/library/_work_card.html.erb"):
     assert not (REPO_ROOT / retired).exists(), f"retired library implementation must stay deleted: {retired}"
 assert "renderGraphView" in graph_view and "GraphController" in graph_controller, "the shared client must own graph rendering and interaction"
-assert "renderGraphView" in desktop_application and "GraphController" in desktop_application, "desktop must render the graph through the shared client module"
+dev_graph_runtime = (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "document-graph-runtime-dev.js").read_text()
+stable_graph_runtime = (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "document-graph-runtime-stable.js").read_text()
+assert "renderGraphView" in dev_graph_runtime and "GraphController" in dev_graph_runtime and '"@elef/client"' in dev_graph_runtime, "the Dev graph runtime must assemble the shared client graph pieces"
+assert "buildDocumentGraph" in dev_graph_runtime and '"@elef/work-model"' in dev_graph_runtime, "the Dev graph runtime must build from the shared work-model resolver"
+assert "documentGraphRuntime = null" in stable_graph_runtime, "the Stable graph runtime must be null"
+assert "documentGraphRuntime" in desktop_application, "desktop must receive the graph runtime as an injected input"
+static_imports = [line for line in desktop_application.splitlines() if line.startswith("import ") and "import type" not in line]
+assert not any("GraphController" in line or "renderGraphView" in line or "buildDocumentGraph" in line or "createDocumentGraphCache" in line or "mountHostPresentationEditor" in line for line in static_imports), "the shared desktop application must receive excluded slices as injected inputs, never static imports"
 assert "renderGraphView" in web_controller and "GraphController" in web_controller, "Rails must render the graph through the shared client module"
 assert "document-graph-node" not in graph_partial, "Rails must not keep a second document graph node template"
 assert 'data-controller="document-graph"' not in graph_partial, "Rails must not keep the retired Stimulus graph mount"
 assert "createElementNS" not in desktop_application and "document-graph-node" not in desktop_application, "desktop must not keep a second document graph node template"
 
 declared = command_names(build_source, r"macro_rules! command_list \{(.*?)\$\(\$extra\)")
-test_only_commands = set()
+assert "document_graph" not in declared, "the graph command must not be in the production command base"
+matrix_commands = set()
 for command_call in re.findall(r"command_list!\((.*?)\)", build_source):
-    test_only_commands.update(re.findall(r'"([a-z_]+)"', command_call))
-assert test_only_commands == {"export_diagnostics_fixture"}, (
-    f"only the diagnostics export fixture may be a test-only command: {sorted(test_only_commands)}"
+    matrix_commands.update(re.findall(r'"([a-z_]+)"', command_call))
+assert matrix_commands == {"document_graph", "export_diagnostics_fixture"}, (
+    f"only the Dev graph command and the diagnostics fixture may extend the base list: {sorted(matrix_commands)}"
+)
+assert 'std::env::var_os("CARGO_FEATURE_DESKTOP_DEV").is_some()' in build_source, (
+    "the graph command must be gated on the desktop-dev feature"
 )
 assert 'std::env::var_os("CARGO_FEATURE_WEBDRIVER").is_some()' in build_source, (
     "test-only commands must be gated on the WebDriver feature"
 )
+assert "(desktop_dev, webdriver)" in build_source, "build.rs must gate commands on the desktop-dev and webdriver matrix"
+assert '(true, true) => command_list!("document_graph", "export_diagnostics_fixture")' in build_source, "the Dev e2e matrix cell must grant the graph command and the fixture"
+assert '(true, false) => command_list!("document_graph")' in build_source, "the Dev matrix cell must grant only the graph command"
+assert '(false, true) => command_list!("export_diagnostics_fixture")' in build_source, "the Stable e2e matrix cell must grant only the fixture"
+assert "(false, false) => command_list!()" in build_source, "the Stable matrix cell must grant no extra commands"
 shared_command_references = sorted(
     f"{source_file.relative_to(REPO_ROOT)} -> {command}"
     for source_file in app_javascript_source.rglob("*.js")
-    for command in declared
+    for command in declared | {"document_graph"}
     if re.search(rf"(?<![\w])['\"]{re.escape(command)}['\"]", source_file.read_text())
 )
 assert not shared_command_references, (
@@ -207,11 +223,20 @@ handler_match = re.search(
 if not handler_match:
     raise AssertionError("could not find Tauri invoke handler")
 registered = set(re.findall(r"^\s*([a-z_]+),\s*$", handler_match.group(1), re.MULTILINE))
-assert '#[cfg(feature = "webdriver")]\n    let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));' in app_source, (
-    "the diagnostics export fixture must be registered only in WebDriver builds"
+assert '#[cfg(all(feature = "desktop-dev", feature = "webdriver"))]\n    let builder = builder.invoke_handler(app_commands!(document_graph, export_diagnostics_fixture));' in app_source, (
+    "the Dev WebDriver build must register the graph command and the fixture"
 )
-assert '#[cfg(not(feature = "webdriver"))]\n    let builder = builder.invoke_handler(app_commands!());' in app_source, (
+assert '#[cfg(all(feature = "desktop-dev", not(feature = "webdriver")))]\n    let builder = builder.invoke_handler(app_commands!(document_graph));' in app_source, (
+    "the Dev build must register only the graph command beyond the base list"
+)
+assert '#[cfg(all(not(feature = "desktop-dev"), feature = "webdriver"))]\n    let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));' in app_source, (
+    "the Stable WebDriver build must register only the fixture beyond the base list"
+)
+assert '#[cfg(all(not(feature = "desktop-dev"), not(feature = "webdriver")))]\n    let builder = builder.invoke_handler(app_commands!());' in app_source, (
     "production builds must register only the base command list"
+)
+assert '#[cfg(feature = "desktop-dev")]\nuse crate::work_folders::document_graph;' in app_source, (
+    "the graph command import must exist only under desktop-dev"
 )
 permissions = set(capability["permissions"])
 allowed = {
@@ -223,6 +248,14 @@ allowed = {
 
 assert declared == registered, f"build ACL and runtime invoke handler differ: {declared ^ registered}"
 assert declared == allowed, f"capability command permissions differ: {declared ^ allowed}"
+dev_capability = json.loads((TAURI_ROOT / "capabilities" / "main-dev.json").read_text())
+dev_allowed = {
+    permission.removeprefix("allow-").replace("-", "_")
+    for permission in dev_capability["permissions"]
+    if permission.startswith("allow-")
+    and not permission.startswith("core:")
+}
+assert dev_allowed == declared | {"document_graph"}, f"the Dev capability must add exactly the graph command: {dev_allowed ^ (declared | {'document_graph'})}"
 assert "core:default" not in permissions, "use only the individual core permissions needed"
 assert {permission for permission in permissions if permission.startswith("core:")} == {
     "core:event:allow-listen",
@@ -235,7 +268,7 @@ assert {permission for permission in permissions if permission.startswith("core:
 assert "await this.destroy();" in (REPO_ROOT / "apps/desktop/frontend/node_modules/@tauri-apps/api/window.js").read_text(), "recheck window permissions when the close-listener implementation changes"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
 assert config["app"]["security"]["capabilities"] == ["main-capability"], "production must not attach the E2E WebDriver capability"
-assert e2e_config["app"]["security"]["capabilities"] == ["main-capability", "e2e-webdriver"], "the test build must attach only the production and E2E capabilities"
+assert e2e_config["app"]["security"]["capabilities"] == ["main-dev-capability", "e2e-webdriver"], "the Dev test build must attach only the Dev and E2E capabilities"
 e2e_updater = e2e_config["plugins"]["updater"]
 assert e2e_updater["endpoints"] == ["http://127.0.0.1:8888/manifest"], "the E2E updater fixture must stay loopback-only"
 assert e2e_updater.get("dangerousInsecureTransportProtocol") is True, "only the release-mode E2E fixture may opt into its loopback HTTP updater"
@@ -261,6 +294,8 @@ assert all(url.startswith("https://") for url in config["plugins"]["updater"]["e
 assert not config["plugins"]["updater"].get("dangerousInsecureTransportProtocol"), "production must reject HTTP updater endpoints"
 tauri_manifest = (TAURI_ROOT / "Cargo.toml").read_text()
 assert 'webdriver = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]' in tauri_manifest, "WebdriverIO plugins must remain opt-in"
+assert "desktop-dev = []" in tauri_manifest, "the Dev profile must stay an explicit Cargo feature"
+assert not re.search(r"^default\s*=.*\bdesktop-dev\b", tauri_manifest, re.MULTILINE), "production's default Cargo features must exclude the Dev profile"
 assert not re.search(r'^default\s*=.*\bwebdriver\b', tauri_manifest, re.MULTILINE), "production's default Cargo features must exclude WebDriver"
 assert '#[cfg(feature = "webdriver")]\n    let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());' in app_source, "production builds must not register the WebDriver plugin"
 assert '#[cfg(feature = "webdriver")]\n    let builder = builder.plugin(tauri_plugin_wdio::init());' in app_source, "the WebdriverIO command plugin must be test-only"
@@ -276,7 +311,7 @@ assert feature_flags == {
 }, f"desktop deferred-feature defaults must stay explicitly off: {feature_flags}"
 for flag in feature_flags:
     assert re.search(rf"\| `{flag}` \| off \| on \|", feature_flags_doc), f"{flag} is missing from the feature register"
-assert "applyDesktopFeatureFlags(document)" in desktop_application, "the shared application must apply feature flags at startup"
+assert "applyDesktopFeatureFlags(document, featureFlags)" in desktop_application, "the shared application must apply the host feature flags at startup"
 assert re.search(r"def editor_map\([^)]*\).*?Source::JavascriptRenderer\.editor_map", document_model, re.DOTALL), "Rails editor maps must delegate to the shared JavaScript implementation"
 assert '"ElefRenderer.buildEditorMap"' in javascript_renderer, "the Rails wrapper must call the shared map exported by the renderer bundle"
 assert "buildEditorMap" in renderer_global and "buildEditorStructure" in renderer_global, "the renderer bundle must expose the shared editor map and structure"

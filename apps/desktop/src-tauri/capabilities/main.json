@@ -19,7 +19,6 @@
     "allow-read-authoring-registries",
     "allow-write-authoring-registry",
     "allow-list-work-folders",
-    "allow-document-graph",
     "allow-create-work-folder",
     "allow-open-work-folder",
     "allow-read-work-folder-preview",

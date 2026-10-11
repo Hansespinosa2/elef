@@ -1,10 +1,7 @@
 import { createWorkOpenFlow, prepareWorkOpen } from "./work_open_flow.js"
 import { measurePaintedAction } from "./performance_measurement.js"
 import { editorFor } from "./editor_controller_lookup.js"
-import { mountHostPresentationEditor } from "./presentation_editor_host.js"
-import { createDocumentGraphCache } from "./document_graph_cache.js"
 import { createRequestGuard } from "./request_identity.js"
-import { buildDocumentGraph } from "@elef/work-model"
 import { waitForEditorController } from "./editor_ready.js"
 import { createWorkSession, createTitleSaveFlow } from "@elef/client"
 import { createCodeMirrorBinding } from "./editor_binding.js"
@@ -12,7 +9,8 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, renderEditorView } from "./editor_view.js"
-import { CREATE_WORK_EVENT, GraphController, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute, renderGraphView } from "@elef/client"
+import { CREATE_WORK_EVENT, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client"
+import type { GraphController } from "@elef/client"
 
 export interface WorkFolder {
   id: string;
@@ -68,6 +66,18 @@ export interface DesktopPlatform {
   authoringTransport?: any;
   updaterSeam?: any;
   recordBootstrapFailure?: any;
+  // Stable/Dev profile contract (desktop entry/build boundary only; no Rails
+  // behavior varies by profile). features selects the capability subset,
+  // featureFlags the deferred-feature flag values, and the two runtimes carry
+  // the excluded feature implementations: the Dev entry injects the real
+  // runtimes, the Stable entry injects null, so the Stable bundle never
+  // imports the excluded slices.
+  profile?: any;
+  features?: any;
+  featureFlags?: any;
+  documentGraphRuntime?: any;
+  presentationEditorRuntime?: any;
+  updateEnabled?: any;
 }
 
 interface StageMeasurement {
@@ -89,10 +99,26 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
     mediaUrlsForWorkFolder, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
-    registerEditorRuntime, recordBootstrapFailure
+    registerEditorRuntime, recordBootstrapFailure,
+    features, featureFlags, documentGraphRuntime, presentationEditorRuntime,
+    updateEnabled = true
   } = platform
 
-  applyDesktopFeatureFlags(document)
+  const desktopFeatures = Object.freeze({
+    visualEditing: features?.visualEditing !== false,
+    presentationEditing: features?.presentationEditing !== false,
+    slideOverview: features?.slideOverview !== false,
+    documentGraph: features?.documentGraph !== false && Boolean(documentGraphRuntime),
+    documentLinks: features?.documentLinks !== false
+  })
+  const editorFormControllers = [
+    "preview",
+    ...(desktopFeatures.visualEditing ? ["visual-editor"] : []),
+    ...(desktopFeatures.slideOverview ? ["slide-overview"] : []),
+    "media"
+  ].join(" ")
+  applyDesktopFeatureFlags(document, featureFlags)
+  if (!updateEnabled) document.querySelector("#check-for-updates")?.remove()
 
   const renderer = createRendererClient()
   const readPreviewTrace = installFetchTransport({
@@ -110,13 +136,14 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     kind: "presentation",
     source: "",
     sourceName: "presentation[source]",
-    mode: "visual",
+    mode: desktopFeatures.visualEditing ? "visual" : "source",
     visualDisabled: true,
     visualDisabledMessage: "Open a Work to render its preview",
     showTitle: true,
     showSubmit: false,
     showSaveStatus: false,
     persisted: false,
+    desktopFeatures,
     authoringRegistry: desktopAuthoringRegistry(),
     documentTitles: [],
     ids: {
@@ -174,12 +201,14 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} }
   let workFolders: WorkFolder[] = []
   let activeWorkFolder: WorkFolder | null = null
-  let presentationEditorHandle: ReturnType<typeof mountHostPresentationEditor> | null = null
+  let presentationEditorHandle: any = null
   let saveFlow: any = null
   let sessionStatusKind = "clean"
   let lastSourceFile: string | null = null
   let e2eNextSaveDelayMs = 0
-  const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await fileLibrary.readDocumentGraph()))
+  const documentGraphCache = desktopFeatures.documentGraph
+    ? documentGraphRuntime.createCache(async () => documentGraphRuntime.build(await fileLibrary.readDocumentGraph()))
+    : null
   let pendingUpdate: any = null
   let updateInstalling = false
   let libraryStatusLoaded = false
@@ -250,7 +279,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
         await new Promise(resolve => setTimeout(resolve, delay))
       }
       const result = await transport.saveSource(id, source)
-      if (isDocument) documentGraphCache.invalidate()
+      if (isDocument) documentGraphCache?.invalidate()
       return result
     }
   }
@@ -297,7 +326,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       if (snapshot.removed || !activeWorkFolder) return
       if (activeWorkFolder.source_file === "document.md" &&
           (snapshot.baseline.revision !== activeWorkFolder.content_hash || snapshot.sourceFile !== activeWorkFolder.source_file)) {
-        documentGraphCache.invalidate()
+        documentGraphCache?.invalidate()
       }
     })
     const editor = editorFor(elements.editorField)
@@ -526,11 +555,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   async function documentGraphData(): Promise<any> {
-    return documentGraphCache.get()
+    return documentGraphCache?.get() || { nodes: [], edges: [] }
   }
 
   async function previewDocumentNodes(source: string): Promise<any[]> {
-    if (!source.includes("[[")) return []
+    if (!desktopFeatures.documentGraph || !source.includes("[[")) return []
     try {
       return (await documentGraphData()).nodes
     } catch (_error) {
@@ -545,7 +574,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   const graphRequests = createRequestGuard()
   let graphController: GraphController | null = null
   async function showDocumentGraph(): Promise<void> {
-    if (!library) return
+    if (!library || !desktopFeatures.documentGraph) return
     const request = graphRequests.request()
     try {
       const graph = await documentGraphData()
@@ -555,8 +584,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       const slot = mount.querySelector("#document-graph-view") as HTMLElement | null
       if (!slot) return
       graphController?.destroy()
-      renderGraphView(slot, graph)
-      graphController = new GraphController(slot, graph, { onOpenWork: (id: string) => void openWork(id) })
+      documentGraphRuntime.renderGraphView(slot, graph)
+      graphController = new documentGraphRuntime.GraphController(slot, graph, { onOpenWork: (id: string) => void openWork(id) })
       // The client hides the panel when the filter leaves documents; the host
       // unhides it once populated. Re-read the settled filter here so a slow
       // load racing a tab switch lands in the correct state.
@@ -574,7 +603,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
         loadDesktopAuthoringRegistry()
       ])
       workFolders = listedWorkFolders.map(ensureWorkFolderHash)
-      documentGraphCache.invalidate()
+      documentGraphCache?.invalidate()
       libraryHost?.noteListedWorkFolders(listedWorkFolders)
       await shell.refresh()
       if (currentFilter() === "documents") await showDocumentGraph()
@@ -598,7 +627,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       library = selected
       libraryHost?.noteRootChanged()
       await loadDesktopAuthoringRegistry()
-      documentGraphCache.invalidate()
+      documentGraphCache?.invalidate()
       libraryConfig = selected.config || libraryConfig
       workFolders = selected.work_folders.map(ensureWorkFolderHash)
       applyTheme(libraryConfig.theme)
@@ -647,7 +676,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
           prepare: work => measureOpenStage("prepareWork", async () => {
             await registerEditorRuntime()
             let documentTitles: string[] = []
-            if (work.source_file === "document.md" || work.source.includes("[[")) {
+            if (desktopFeatures.documentGraph && (work.source_file === "document.md" || work.source.includes("[["))) {
               try {
                 const graph = await documentGraphData()
                 documentTitles = work.source_file === "document.md" ? graph.nodes.map((node: any) => node.title) : []
@@ -670,7 +699,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       const isDocument = work.source_file === "document.md"
       if (work.id !== id) {
         workFolders = workFolders.map(item => item.id === id ? { ...item, id: work.id } : item)
-        documentGraphCache.invalidate()
+        documentGraphCache?.invalidate()
         void shell.refresh()
       }
       // All asynchronous work is finished. Installing the buffer and changing
@@ -683,14 +712,18 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
           documentTitles,
           sourceName: isDocument ? "document[source]" : "presentation[source]",
           showTitle: true,
-          formControllers: "preview visual-editor slide-overview media"
+          formControllers: editorFormControllers,
+          documentLinksEnabled: desktopFeatures.documentLinks,
+          visualEditingEnabled: desktopFeatures.visualEditing,
+          presentationEditingEnabled: desktopFeatures.presentationEditing,
+          slideOverviewEnabled: desktopFeatures.slideOverview
         })
         const editor = await measureOpenStage("editorReady", () => editorFor(elements.editorField)?.editorReady
           ? editorFor(elements.editorField)
           : waitForEditorController(elements.editorField, editorFor))
         measureOpenStage("loadDocument", () => {
           editor.loadDocument(work.source)
-          editor.setEditingMode("visual", { restoreCaret: false })
+          editor.setEditingMode(desktopFeatures.visualEditing ? "visual" : "source", { restoreCaret: false })
         })
       } catch (error) {
         elements.editorInput.disabled = true
@@ -704,8 +737,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       if (isDocument) {
         presentationEditorHandle?.destroy()
         presentationEditorHandle = null
-      } else if (!presentationEditorHandle) {
-        presentationEditorHandle = mountHostPresentationEditor(elements.editorForm)
+      } else if (desktopFeatures.presentationEditing && presentationEditorRuntime && !presentationEditorHandle) {
+        presentationEditorHandle = presentationEditorRuntime.mount(elements.editorForm)
       }
     const viewSetupStartedAt = (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) ? performance.now() : null
       transport.activateWorkFolder(work, id)
@@ -723,10 +756,12 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       elements.editorForm.dataset.mediaWorkKindValue = work.source_file === "document.md" ? "document" : "presentation"
       elements.editorForm.dataset.mediaUploadUrlValue = mediaUrls.uploadUrl
       elements.editorForm.dataset.mediaAssetBaseUrlValue = mediaUrls.assetBaseUrl
-      elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
-      const visualButton = document.querySelector("#visual-mode") as HTMLButtonElement
-      visualButton.disabled = true
-      visualButton.title = "Rendering preview…"
+      if (desktopFeatures.documentLinks) elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
+      const visualButton = document.querySelector("#visual-mode") as HTMLButtonElement | null
+      if (visualButton && desktopFeatures.visualEditing) {
+        visualButton.disabled = true
+        visualButton.title = "Rendering preview…"
+      }
       elements.editorInput.disabled = false
       shellElement<HTMLElement>("#work-id").textContent = work.id
       elements.editorForm.dataset.loadedWorkId = work.id
@@ -1230,6 +1265,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     libraryHost = createLibraryHost(status)
     shell = await mountElef(mount, libraryHost, {
       initialUrl: location.href,
+      graphEnabled: desktopFeatures.documentGraph,
       // The desktop has no URL routing: work targets open in the embedded
       // editor, tab targets only move the location hash for deep-linking.
       navigate: target => {
@@ -1279,7 +1315,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       await measureBootstrapStage("editor-runtime", () => registerEditorRuntime())
       configureEditorKind(elements.editorField.closest(".editor-shell"), "presentation", {
         showTitle: true,
-        formControllers: "preview visual-editor slide-overview media"
+        formControllers: editorFormControllers,
+        documentLinksEnabled: desktopFeatures.documentLinks,
+        visualEditingEnabled: desktopFeatures.visualEditing,
+        presentationEditingEnabled: desktopFeatures.presentationEditing,
+        slideOverviewEnabled: desktopFeatures.slideOverview
       })
       await measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor))
     },

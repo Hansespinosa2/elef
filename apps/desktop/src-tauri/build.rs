@@ -9,7 +9,6 @@ fn main() {
                 "read_authoring_registries",
                 "write_authoring_registry",
                 "list_work_folders",
-                "document_graph",
                 "create_work_folder",
                 "open_work_folder",
                 "read_work_folder_preview",
@@ -41,15 +40,19 @@ fn main() {
             ]
         };
     }
-    // Test-only commands never ship in production builds. The architecture
-    // checker asserts this split: the macro base matches the production
-    // capability, extras match only the E2E capability.
-    let app_commands: &'static [&'static str] =
-        if std::env::var_os("CARGO_FEATURE_WEBDRIVER").is_some() {
-            command_list!("export_diagnostics_fixture")
-        } else {
-            command_list!()
-        };
+    // Test-only commands never ship in production builds, and the Dev-only
+    // document graph never ships without the desktop-dev feature. The
+    // architecture checker asserts this split: the macro base matches the
+    // production capability, document_graph matches only the Dev capability,
+    // and the fixture matches only the E2E capabilities.
+    let desktop_dev = std::env::var_os("CARGO_FEATURE_DESKTOP_DEV").is_some();
+    let webdriver = std::env::var_os("CARGO_FEATURE_WEBDRIVER").is_some();
+    let app_commands: &'static [&'static str] = match (desktop_dev, webdriver) {
+        (true, true) => command_list!("document_graph", "export_diagnostics_fixture"),
+        (true, false) => command_list!("document_graph"),
+        (false, true) => command_list!("export_diagnostics_fixture"),
+        (false, false) => command_list!(),
+    };
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(app_commands));
     tauri_build::try_build(attributes).expect("failed to build Tauri application manifest");

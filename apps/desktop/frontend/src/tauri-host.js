@@ -4,7 +4,7 @@
 // delete is dialog-mediated in production, so automation runs with
 // deleteProgrammatic: false. Exported bytes come from the e2e harness export
 // file; import takes archive bytes through import_elef_bytes.
-import { createPortSession } from "@elef/client";
+import { createPortSession } from "@elef/client/port-session";
 
 export const tauriPolicy = {
   deleteProgrammatic: false,

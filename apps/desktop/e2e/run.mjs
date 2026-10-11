@@ -10,7 +10,10 @@ import { SHARED_LIBRARY_CREATE_DELETE_TITLES } from "../../../apps/web/test/e2e/
 import { CONFLICT_BASELINE_SOURCE, CONFLICT_WORK_NAME, CONFLICT_SOURCE_FILE } from "../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
 import { RICH_RENDERING_SOURCE, RICH_RENDERING_TITLE } from "../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
 import { runNativeQuitSmokes } from "./native-quit-smoke.js"
+import { createDesktopAppEnvironment } from "./desktop-app-environment.js"
 import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
+import { runStableProfileSmoke } from "./stable-profile-smoke.js"
+import { runIdentityIsolationSmoke } from "./identity-isolation-smoke.js"
 import { e2eDocumentSource, e2eLinkedDocumentSource, hostileSource } from "./fixtures/seeds.mjs"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
@@ -19,6 +22,18 @@ const releaseFixtureRoot = path.join(repoRoot, "apps/web/test/fixtures/desktop/r
 const richRenderingImage = await readFile(path.join(releaseFixtureRoot, "images/release-pixel.png"))
 const temporaryRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), "elef-desktop-e2e-")))
 const libraryRoot = path.join(temporaryRoot, "Elef")
+// The desktop app resolves its user directories from the process
+// environment, so every app launch gets disposable directories: no run may
+// read or write the developer's real home, config, data, or cache.
+const isolatedHome = path.join(temporaryRoot, "home")
+const isolatedConfig = path.join(temporaryRoot, "config")
+const isolatedData = path.join(temporaryRoot, "data")
+const isolatedCache = path.join(temporaryRoot, "cache")
+for (const directory of [isolatedHome, isolatedConfig, isolatedData, isolatedCache]) {
+  await mkdir(directory, { recursive: true })
+}
+const isolatedDirectories = { home: isolatedHome, config: isolatedConfig, data: isolatedData, cache: isolatedCache }
+const desktopEnv = () => createDesktopAppEnvironment(env, isolatedDirectories)
 const seedWorkFolder = path.join(libraryRoot, "E2E seed")
 const richRenderingWorkFolder = path.join(libraryRoot, RICH_RENDERING_TITLE)
 const conflictWorkFolder = path.join(libraryRoot, CONFLICT_WORK_NAME)
@@ -269,11 +284,11 @@ try {
     updaterServer.once("error", reject)
     updaterServer.once("exit", code => reject(new Error(`Updater fixture server exited before readiness (${code})`)))
   }), 10_000, "Updater fixture server did not start")
-  if (process.env.CI) await runNativeQuitSmokes(env)
+  if (process.env.CI) await runNativeQuitSmokes(desktopEnv())
   const desktopResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
     cwd: e2eRoot,
     env: {
-      ...desktopAppEnvironment(env),
+      ...desktopAppEnvironment(desktopEnv()),
       TAURI_WEBDRIVER_PORT: process.env.TAURI_WEBDRIVER_PORT || "4445"
     },
     stdio: "inherit"
@@ -283,7 +298,7 @@ try {
   if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {
     if (process.platform === "linux") await prepareInstalledAppImage()
     const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
-      cwd: e2eRoot, env: { ...desktopAppEnvironment(env), ELEF_E2E_VERIFY_UPGRADED: "1" }, stdio: "inherit"
+      cwd: e2eRoot, env: { ...desktopAppEnvironment(desktopEnv()), ELEF_E2E_VERIFY_UPGRADED: "1" }, stdio: "inherit"
     })
     if (upgradedResult.error) throw upgradedResult.error
     if (upgradedResult.status !== 0) throw new Error("The installed update did not launch and preserve the work")
@@ -314,6 +329,12 @@ try {
     const savedSource = persisted.match(/^ELEF_E2E_SOURCE=(.*)$/m)?.[1]
     assert.ok(savedSource, "Rails fixture command should return the persisted source")
     assert.equal(normalizeLineEndings(JSON.parse(savedSource)), expectedWebSource)
+  }
+  // The profile smokes build and probe the Stable and identity-split
+  // binaries; CI-only, like the native quit smokes.
+  if (process.env.CI) {
+    await runStableProfileSmoke(desktopEnv())
+    await runIdentityIsolationSmoke(desktopEnv())
   }
 } finally {
   if (updaterServer) {

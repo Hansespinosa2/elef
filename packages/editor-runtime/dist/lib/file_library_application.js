@@ -1,10 +1,7 @@
 import { createWorkOpenFlow, prepareWorkOpen } from "./work_open_flow.js";
 import { measurePaintedAction } from "./performance_measurement.js";
 import { editorFor } from "./editor_controller_lookup.js";
-import { mountHostPresentationEditor } from "./presentation_editor_host.js";
-import { createDocumentGraphCache } from "./document_graph_cache.js";
 import { createRequestGuard } from "./request_identity.js";
-import { buildDocumentGraph } from "@elef/work-model";
 import { waitForEditorController } from "./editor_ready.js";
 import { createWorkSession, createTitleSaveFlow } from "@elef/client";
 import { createCodeMirrorBinding } from "./editor_binding.js";
@@ -12,7 +9,7 @@ import { presentConflictDialog } from "./conflict_dialog.js";
 import { createRendererClient } from "./renderer_worker_client.js";
 import { applyDesktopFeatureFlags } from "./feature_flags.js";
 import { configureEditorKind, renderEditorView } from "./editor_view.js";
-import { CREATE_WORK_EVENT, GraphController, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute, renderGraphView } from "@elef/client";
+import { CREATE_WORK_EVENT, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client";
 function ensureWorkFolderHash(workFolder) {
   workFolder.content_hash ??= "";
   return workFolder;
@@ -38,9 +35,28 @@ function startFileLibraryApplication(platform) {
     loadDesktopAuthoringRegistry,
     quietSavePolicy,
     registerEditorRuntime,
-    recordBootstrapFailure
+    recordBootstrapFailure,
+    features,
+    featureFlags,
+    documentGraphRuntime,
+    presentationEditorRuntime,
+    updateEnabled = true
   } = platform;
-  applyDesktopFeatureFlags(document);
+  const desktopFeatures = Object.freeze({
+    visualEditing: features?.visualEditing !== false,
+    presentationEditing: features?.presentationEditing !== false,
+    slideOverview: features?.slideOverview !== false,
+    documentGraph: features?.documentGraph !== false && Boolean(documentGraphRuntime),
+    documentLinks: features?.documentLinks !== false
+  });
+  const editorFormControllers = [
+    "preview",
+    ...desktopFeatures.visualEditing ? ["visual-editor"] : [],
+    ...desktopFeatures.slideOverview ? ["slide-overview"] : [],
+    "media"
+  ].join(" ");
+  applyDesktopFeatureFlags(document, featureFlags);
+  if (!updateEnabled) document.querySelector("#check-for-updates")?.remove();
   const renderer = createRendererClient();
   const readPreviewTrace = installFetchTransport({
     renderer,
@@ -56,13 +72,14 @@ function startFileLibraryApplication(platform) {
     kind: "presentation",
     source: "",
     sourceName: "presentation[source]",
-    mode: "visual",
+    mode: desktopFeatures.visualEditing ? "visual" : "source",
     visualDisabled: true,
     visualDisabledMessage: "Open a Work to render its preview",
     showTitle: true,
     showSubmit: false,
     showSaveStatus: false,
     persisted: false,
+    desktopFeatures,
     authoringRegistry: desktopAuthoringRegistry(),
     documentTitles: [],
     ids: {
@@ -118,7 +135,7 @@ function startFileLibraryApplication(platform) {
   let sessionStatusKind = "clean";
   let lastSourceFile = null;
   let e2eNextSaveDelayMs = 0;
-  const documentGraphCache = createDocumentGraphCache(async () => buildDocumentGraph(await fileLibrary.readDocumentGraph()));
+  const documentGraphCache = desktopFeatures.documentGraph ? documentGraphRuntime.createCache(async () => documentGraphRuntime.build(await fileLibrary.readDocumentGraph())) : null;
   let pendingUpdate = null;
   let updateInstalling = false;
   let libraryStatusLoaded = false;
@@ -179,7 +196,7 @@ function startFileLibraryApplication(platform) {
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
       const result = await transport.saveSource(id, source);
-      if (isDocument) documentGraphCache.invalidate();
+      if (isDocument) documentGraphCache?.invalidate();
       return result;
     }
   };
@@ -227,7 +244,7 @@ function startFileLibraryApplication(platform) {
     session.onExternalChange((snapshot) => {
       if (snapshot.removed || !activeWorkFolder) return;
       if (activeWorkFolder.source_file === "document.md" && (snapshot.baseline.revision !== activeWorkFolder.content_hash || snapshot.sourceFile !== activeWorkFolder.source_file)) {
-        documentGraphCache.invalidate();
+        documentGraphCache?.invalidate();
       }
     });
     const editor = editorFor(elements.editorField);
@@ -444,10 +461,10 @@ function startFileLibraryApplication(platform) {
     return mount.querySelector("[data-library-tab][aria-current='page']")?.dataset.libraryTab ?? "all";
   }
   async function documentGraphData() {
-    return documentGraphCache.get();
+    return documentGraphCache?.get() || { nodes: [], edges: [] };
   }
   async function previewDocumentNodes(source) {
-    if (!source.includes("[[")) return [];
+    if (!desktopFeatures.documentGraph || !source.includes("[[")) return [];
     try {
       return (await documentGraphData()).nodes;
     } catch (_error) {
@@ -457,7 +474,7 @@ function startFileLibraryApplication(platform) {
   const graphRequests = createRequestGuard();
   let graphController = null;
   async function showDocumentGraph() {
-    if (!library) return;
+    if (!library || !desktopFeatures.documentGraph) return;
     const request = graphRequests.request();
     try {
       const graph = await documentGraphData();
@@ -465,8 +482,8 @@ function startFileLibraryApplication(platform) {
       const slot = mount.querySelector("#document-graph-view");
       if (!slot) return;
       graphController?.destroy();
-      renderGraphView(slot, graph);
-      graphController = new GraphController(slot, graph, { onOpenWork: (id) => void openWork(id) });
+      documentGraphRuntime.renderGraphView(slot, graph);
+      graphController = new documentGraphRuntime.GraphController(slot, graph, { onOpenWork: (id) => void openWork(id) });
       slot.hidden = currentFilter() !== "documents";
     } catch (error) {
       showError(error);
@@ -480,7 +497,7 @@ function startFileLibraryApplication(platform) {
         loadDesktopAuthoringRegistry()
       ]);
       workFolders = listedWorkFolders.map(ensureWorkFolderHash);
-      documentGraphCache.invalidate();
+      documentGraphCache?.invalidate();
       libraryHost?.noteListedWorkFolders(listedWorkFolders);
       await shell.refresh();
       if (currentFilter() === "documents") await showDocumentGraph();
@@ -503,7 +520,7 @@ function startFileLibraryApplication(platform) {
       library = selected;
       libraryHost?.noteRootChanged();
       await loadDesktopAuthoringRegistry();
-      documentGraphCache.invalidate();
+      documentGraphCache?.invalidate();
       libraryConfig = selected.config || libraryConfig;
       workFolders = selected.work_folders.map(ensureWorkFolderHash);
       applyTheme(libraryConfig.theme);
@@ -546,7 +563,7 @@ function startFileLibraryApplication(platform) {
           prepare: (work2) => measureOpenStage("prepareWork", async () => {
             await registerEditorRuntime();
             let documentTitles2 = [];
-            if (work2.source_file === "document.md" || work2.source.includes("[[")) {
+            if (desktopFeatures.documentGraph && (work2.source_file === "document.md" || work2.source.includes("[["))) {
               try {
                 const graph = await documentGraphData();
                 documentTitles2 = work2.source_file === "document.md" ? graph.nodes.map((node) => node.title) : [];
@@ -568,7 +585,7 @@ function startFileLibraryApplication(platform) {
       const isDocument = work.source_file === "document.md";
       if (work.id !== id) {
         workFolders = workFolders.map((item) => item.id === id ? { ...item, id: work.id } : item);
-        documentGraphCache.invalidate();
+        documentGraphCache?.invalidate();
         void shell.refresh();
       }
       closeSession();
@@ -578,12 +595,16 @@ function startFileLibraryApplication(platform) {
           documentTitles,
           sourceName: isDocument ? "document[source]" : "presentation[source]",
           showTitle: true,
-          formControllers: "preview visual-editor slide-overview media"
+          formControllers: editorFormControllers,
+          documentLinksEnabled: desktopFeatures.documentLinks,
+          visualEditingEnabled: desktopFeatures.visualEditing,
+          presentationEditingEnabled: desktopFeatures.presentationEditing,
+          slideOverviewEnabled: desktopFeatures.slideOverview
         });
         const editor = await measureOpenStage("editorReady", () => editorFor(elements.editorField)?.editorReady ? editorFor(elements.editorField) : waitForEditorController(elements.editorField, editorFor));
         measureOpenStage("loadDocument", () => {
           editor.loadDocument(work.source);
-          editor.setEditingMode("visual", { restoreCaret: false });
+          editor.setEditingMode(desktopFeatures.visualEditing ? "visual" : "source", { restoreCaret: false });
         });
       } catch (error) {
         elements.editorInput.disabled = true;
@@ -593,8 +614,8 @@ function startFileLibraryApplication(platform) {
       if (isDocument) {
         presentationEditorHandle?.destroy();
         presentationEditorHandle = null;
-      } else if (!presentationEditorHandle) {
-        presentationEditorHandle = mountHostPresentationEditor(elements.editorForm);
+      } else if (desktopFeatures.presentationEditing && presentationEditorRuntime && !presentationEditorHandle) {
+        presentationEditorHandle = presentationEditorRuntime.mount(elements.editorForm);
       }
       const viewSetupStartedAt = typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__ ? performance.now() : null;
       transport.activateWorkFolder(work, id);
@@ -612,10 +633,12 @@ function startFileLibraryApplication(platform) {
       elements.editorForm.dataset.mediaWorkKindValue = work.source_file === "document.md" ? "document" : "presentation";
       elements.editorForm.dataset.mediaUploadUrlValue = mediaUrls.uploadUrl;
       elements.editorForm.dataset.mediaAssetBaseUrlValue = mediaUrls.assetBaseUrl;
-      elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles);
+      if (desktopFeatures.documentLinks) elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles);
       const visualButton = document.querySelector("#visual-mode");
-      visualButton.disabled = true;
-      visualButton.title = "Rendering preview\u2026";
+      if (visualButton && desktopFeatures.visualEditing) {
+        visualButton.disabled = true;
+        visualButton.title = "Rendering preview\u2026";
+      }
       elements.editorInput.disabled = false;
       shellElement("#work-id").textContent = work.id;
       elements.editorForm.dataset.loadedWorkId = work.id;
@@ -1073,6 +1096,7 @@ function startFileLibraryApplication(platform) {
     libraryHost = createLibraryHost(status);
     shell = await mountElef(mount, libraryHost, {
       initialUrl: location.href,
+      graphEnabled: desktopFeatures.documentGraph,
       // The desktop has no URL routing: work targets open in the embedded
       // editor, tab targets only move the location hash for deep-linking.
       navigate: (target) => {
@@ -1114,7 +1138,11 @@ function startFileLibraryApplication(platform) {
       await measureBootstrapStage("editor-runtime", () => registerEditorRuntime());
       configureEditorKind(elements.editorField.closest(".editor-shell"), "presentation", {
         showTitle: true,
-        formControllers: "preview visual-editor slide-overview media"
+        formControllers: editorFormControllers,
+        documentLinksEnabled: desktopFeatures.documentLinks,
+        visualEditingEnabled: desktopFeatures.visualEditing,
+        presentationEditingEnabled: desktopFeatures.presentationEditing,
+        slideOverviewEnabled: desktopFeatures.slideOverview
       });
       await measureBootstrapStage("editor-ready", () => waitForEditorController(elements.editorField, editorFor));
     },

@@ -99,10 +99,12 @@ JavaScript tests run against committed `dist/` bundles, and `bin/check quick` do
 ~~~sh
 npm run renderer:build
 npm run build --prefix packages/client
-npm run build --prefix packages/editor-runtime
 npm run build --prefix packages/work-model
+npm run build --prefix packages/editor-runtime
 bin/rails tailwindcss:build
 git diff -- apps/web/app/assets/builds/tailwind.css packages/renderer/dist/ packages/client/dist/ packages/editor-runtime/dist/ packages/work-model/dist/
 ~~~
+
+The package order matters: the editor-runtime Stable entry bundles the Stable client and work-model dists, so those two must be built first on a fresh checkout.
 
 CI checks that these generated files match their sources, checks the one-way frontend ownership and Tauri capability/CSP contracts, runs Rails tests with PostgreSQL and SQLite, runs Rails system tests, and builds/tests desktop on Linux and macOS. Re-run the smallest relevant check after the final edit; report the exact tier and platform actually exercised.

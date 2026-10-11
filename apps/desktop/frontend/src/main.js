@@ -10,12 +10,15 @@ import { createTransportAdapter } from "./transport-adapter.js"
 import { createMediaFetch, mediaUrlsForWorkFolder } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
 import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "./update-flow.js"
-import { createFileLibraryTransport } from "./file-library-transport.js"
+import { createFileLibraryTransport } from "#desktop/file-library-transport"
+import { presentationEditorRuntime, registerEditorRuntime } from "#desktop/editor-runtime"
+import { documentGraphRuntime } from "#desktop/document-graph-runtime"
+import { desktopFeatureFlags, desktopFeatures, desktopProfile } from "./desktop-profile.js"
 import { createTauriHost } from "./tauri-host.js"
 import { createTauriAuthoringTransport } from "./tauri-authoring-transport.js"
 import { createDesktopUpdaterSeam } from "./update-flow.js"
 import builtInRegistry from "../../../../apps/web/app/javascript/data/default_authoring_registry.json"
-import { mergeAuthoringRegistryEntries, registerEditorRuntime, startFileLibraryApplication } from "@elef/editor-runtime"
+import { mergeAuthoringRegistryEntries, startFileLibraryApplication } from "@elef/editor-runtime"
 import { createQuietSavePolicy } from "./quiet-save-policy.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import "../../../../apps/web/app/assets/stylesheets/application.css"
@@ -26,6 +29,11 @@ const nativeFetch = globalThis.fetch.bind(globalThis)
 
 startFileLibraryApplication({
   fileLibrary,
+  profile: desktopProfile,
+  features: desktopFeatures,
+  featureFlags: desktopFeatureFlags,
+  documentGraphRuntime,
+  presentationEditorRuntime,
   createLibraryHost: (initialStatus) => createTauriHost({ invoke, initialStatus }),
   listen,
   getCurrentWindow,

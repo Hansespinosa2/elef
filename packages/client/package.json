@@ -29,6 +29,10 @@
       "types": "./src/ui/sanitize.ts",
       "default": "./dist/sanitize.js"
     },
+    "./port-session": {
+      "types": "./src/session/port_session.ts",
+      "default": "./dist/port-session.js"
+    },
     "./presentation-chrome": {
       "types": "./src/features/presentation/chrome.ts",
       "default": "./dist/presentation-chrome.js"

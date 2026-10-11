@@ -28,9 +28,11 @@ use crate::library::{
 use crate::menus::build_menu;
 use crate::state::DesktopState;
 use crate::updates::{confirm_app_ready, install_update};
+#[cfg(feature = "desktop-dev")]
+use crate::work_folders::document_graph;
 use crate::work_folders::{
-    confirm_discard_unsaved_changes, create_work_folder, delete_work_folder, document_graph,
-    list_snapshots, list_work_folders, merge_external_change, open_work_folder, poll_file_events,
+    confirm_discard_unsaved_changes, create_work_folder, delete_work_folder, list_snapshots,
+    list_work_folders, merge_external_change, open_work_folder, poll_file_events,
     read_source_snapshot, read_work_folder_preview, rename_work_folder, restore_snapshot,
     save_source, take_snapshot,
 };
@@ -45,7 +47,6 @@ macro_rules! app_commands {
             read_authoring_registries,
             write_authoring_registry,
             list_work_folders,
-            document_graph,
             create_work_folder,
             open_work_folder,
             read_work_folder_preview,
@@ -105,9 +106,13 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
     #[cfg(feature = "webdriver")]
     let builder = builder.plugin(tauri_plugin_wdio::init());
 
-    #[cfg(feature = "webdriver")]
+    #[cfg(all(feature = "desktop-dev", feature = "webdriver"))]
+    let builder = builder.invoke_handler(app_commands!(document_graph, export_diagnostics_fixture));
+    #[cfg(all(feature = "desktop-dev", not(feature = "webdriver")))]
+    let builder = builder.invoke_handler(app_commands!(document_graph));
+    #[cfg(all(not(feature = "desktop-dev"), feature = "webdriver"))]
     let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));
-    #[cfg(not(feature = "webdriver"))]
+    #[cfg(all(not(feature = "desktop-dev"), not(feature = "webdriver")))]
     let builder = builder.invoke_handler(app_commands!());
 
     let app = builder
