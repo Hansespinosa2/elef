@@ -37,10 +37,10 @@ Capability keys come from the `HostCapabilities` interface
 
 - Capability: `nativeMenus`.
 - Concrete reason: the desktop renders OS menus through Tauri
-  (`apps/desktop/src-tauri/src/lib.rs`); browsers expose no OS menu API, so the web
+  (`apps/desktop/src-tauri/src/menus.rs`); browsers expose no OS menu API, so the web
   app renders menus in-DOM.
 - Supported side: desktop menu integration in the Tauri shell
-  (`apps/desktop/src-tauri/src/lib.rs`).
+  (`apps/desktop/src-tauri/src/menus.rs`).
 - Disabled side: the web app renders menus in-DOM with no native menu surface
   (`apps/desktop/e2e/specs/web.spec.js`, "the web app without a nativeMenus
   capability renders menus in-DOM": opens the New menu, asserts 2 in-DOM
