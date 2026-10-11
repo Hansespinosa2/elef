@@ -683,7 +683,7 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: true
-      - name: Verify the merged PR's seven CI checks and tested tree
+      - name: Verify the merged PR's eleven CI checks and tested tree
         env:
           DEPLOYMENT_REMOTE: origin
         run: tooling/release/verify-deployment-authorization
