@@ -13,8 +13,14 @@ await mkdir(output, { recursive: true })
 
 // Linux upgrades through its package manager: the desktop never self-installs
 // there, so Linux builds no install fixtures. Download verification runs
-// against the fixture server's in-memory signed bytes instead.
+// against the fixture server's in-memory signed bytes instead. The plain Dev
+// e2e debug binary the scenarios drive is still built here.
 if (platform === "linux") {
+  execFileSync("npm", ["run", "tauri:build", "--prefix", "apps/desktop/frontend", "--",
+    "--debug", "--features", "desktop-dev,webdriver", "--no-bundle",
+    "--config", "src-tauri/tauri.e2e.conf.json"], {
+    cwd: repo, env: { ...process.env, ELEF_E2E_BUILD: "1" }, stdio: "inherit"
+  })
   process.stdout.write("Skipped updater install fixtures on Linux: package-managed, no self-install.\n")
   process.exit(0)
 }
