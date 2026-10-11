@@ -127,10 +127,28 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         true,
         None::<&str>,
     )?;
+    let export_diagnostics = MenuItem::with_id(
+        app,
+        "export-diagnostics",
+        "Export Diagnostics…",
+        true,
+        None::<&str>,
+    )?;
+    let help_separator = PredefinedMenuItem::separator(app)?;
     let help = if cfg!(target_os = "macos") {
-        Submenu::with_items(app, "Help", true, &[&check_updates])?
+        Submenu::with_items(
+            app,
+            "Help",
+            true,
+            &[&check_updates, &help_separator, &export_diagnostics],
+        )?
     } else {
-        Submenu::with_items(app, "Help", true, &[&about, &settings, &check_updates])?
+        Submenu::with_items(
+            app,
+            "Help",
+            true,
+            &[&about, &settings, &help_separator, &export_diagnostics],
+        )?
     };
 
     let menu = if cfg!(target_os = "macos") {

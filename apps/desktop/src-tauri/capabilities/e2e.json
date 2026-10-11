@@ -7,6 +7,7 @@
     "wdio:default",
     "wdio-webdriver:default",
     "updater:allow-download",
+    "allow-export-diagnostics-fixture",
     "core:app:allow-version",
     "core:window:allow-is-fullscreen"
   ]

@@ -43,6 +43,9 @@
     "allow-resolve-import-conflict",
     "allow-install-update",
     "allow-confirm-discard-unsaved-changes",
+    "allow-export-diagnostics",
+    "allow-record-preview-failure",
+    "allow-record-bootstrap-failure",
     "updater:allow-check",
     "process:allow-restart",
     "allow-confirm-app-ready"

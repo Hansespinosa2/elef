@@ -1,3 +1,4 @@
+use local_store::diagnostics::EventCode;
 use local_store::{
     DocumentGraphDocument, FileEvent, MergeOutcome, OpenWorkFolder, RestoreOutcome, SaveResult,
     SnapshotInfo, SourceSnapshot, WorkFolderPreview, WorkFolderSummary,
@@ -6,6 +7,7 @@ use serde::Serialize;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::MessageDialogKind;
 
+use crate::diagnostics::record_command_result;
 use crate::dialogs::confirm_native_action;
 use crate::error::CommandError;
 use crate::state::DesktopState;
@@ -39,18 +41,30 @@ pub(crate) fn create_work_folder(
 
 #[tauri::command]
 pub(crate) fn open_work_folder(
+    app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
 ) -> Result<OpenWorkFolder, CommandError> {
-    Ok(state.current_library()?.open_work_folder(&id)?)
+    let result = state
+        .current_library()
+        .and_then(|library| library.open_work_folder(&id).map_err(CommandError::from));
+    record_command_result(&app, EventCode::Open, &result);
+    result
 }
 
 #[tauri::command]
 pub(crate) fn read_work_folder_preview(
+    app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
 ) -> Result<WorkFolderPreview, CommandError> {
-    Ok(state.current_library()?.read_work_folder_preview(&id)?)
+    let result = state.current_library().and_then(|library| {
+        library
+            .read_work_folder_preview(&id)
+            .map_err(CommandError::from)
+    });
+    record_command_result(&app, EventCode::Render, &result);
+    result
 }
 
 #[tauri::command]
@@ -104,14 +118,19 @@ pub(crate) async fn confirm_discard_unsaved_changes(app: AppHandle) -> Result<bo
 }
 #[tauri::command]
 pub(crate) fn save_source(
+    app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
     source: String,
     base_hash: String,
 ) -> Result<SaveResult, CommandError> {
-    Ok(state
-        .current_library()?
-        .save_source(&id, &source, &base_hash)?)
+    let result = state.current_library().and_then(|library| {
+        library
+            .save_source(&id, &source, &base_hash)
+            .map_err(CommandError::from)
+    });
+    record_command_result(&app, EventCode::Save, &result);
+    result
 }
 
 #[tauri::command]

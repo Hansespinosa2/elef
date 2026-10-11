@@ -31,6 +31,7 @@ test("the file library transport keeps native command names and payloads at the 
   await transport.resolveImportConflict("keep_both")
   await transport.pendingOpenedElefCount()
   await transport.confirmAppReady()
+  await transport.exportDiagnostics()
 
   assert.deepEqual(calls, [
     ["get_library_status", undefined],
@@ -50,6 +51,7 @@ test("the file library transport keeps native command names and payloads at the 
     ["import_opened_elef", undefined],
     ["resolve_import_conflict", { resolution: "keep_both" }],
     ["pending_open_elef_count", undefined],
-    ["confirm_app_ready", undefined]
+    ["confirm_app_ready", undefined],
+    ["export_diagnostics", undefined]
   ])
 })

@@ -67,6 +67,7 @@ export interface DesktopPlatform {
   registerEditorRuntime: any;
   authoringTransport?: any;
   updaterSeam?: any;
+  recordBootstrapFailure?: any;
 }
 
 interface StageMeasurement {
@@ -88,7 +89,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
     mediaUrlsForWorkFolder, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
-    registerEditorRuntime
+    registerEditorRuntime, recordBootstrapFailure
   } = platform
 
   applyDesktopFeatureFlags(document)
@@ -1140,6 +1141,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     if (action === "import-elef") return importWork()
     if (action === "settings") return showSettings()
     if (action === "check-for-updates") return checkForUpdates(true)
+    if (action === "export-diagnostics") return fileLibrary.exportDiagnostics()
     if (action === "about") return elements.aboutDialog.showModal()
     if (action === "start-presentation") return startPresentation()
     if (action === "print") return printCurrentWork()
@@ -1289,6 +1291,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
         .catch(showError)
       startupUpdateCheck.schedule(10_000)
     }
-  }).catch(showError)
+  }).catch((error: any) => {
+    recordBootstrapFailure?.()
+    showError(error)
+  })
 
 }

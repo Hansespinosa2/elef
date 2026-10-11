@@ -32,3 +32,41 @@ test("preview transport awaits source-aware document context before rendering", 
   assert.deepEqual(renderInput.documentNodes, documentNodes)
   assert.strictEqual(await response.json(), renderedPreview)
 })
+
+test("preview transport reports render failures without changing the error response", async () => {
+  let failures = 0
+  const previewFetch = createPreviewFetch({
+    renderer: {
+      async render() {
+        throw new Error("renderer exploded")
+      }
+    },
+    onFailure: () => { failures += 1 }
+  })
+  const body = new FormData()
+  body.set("presentation[source]", "# Failing")
+
+  const response = await previewFetch("elef-preview://localhost/work-id", { method: "POST", body })
+
+  assert.equal(failures, 1)
+  assert.equal(response.status, 422)
+  assert.deepEqual(await response.json(), { html: null, warnings: ["renderer exploded"], editor_map: null })
+})
+
+test("preview transport survives a throwing failure callback", async () => {
+  const previewFetch = createPreviewFetch({
+    renderer: {
+      async render() {
+        throw new Error("renderer exploded")
+      }
+    },
+    onFailure: () => { throw new Error("diagnostics exploded") }
+  })
+  const body = new FormData()
+  body.set("presentation[source]", "# Failing")
+
+  const response = await previewFetch("elef-preview://localhost/work-id", { method: "POST", body })
+
+  assert.equal(response.status, 422)
+  assert.deepEqual(await response.json(), { html: null, warnings: ["renderer exploded"], editor_map: null })
+})

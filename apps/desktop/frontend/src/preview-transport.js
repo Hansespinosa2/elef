@@ -1,4 +1,4 @@
-export function createPreviewFetch({ renderer, getContext = () => ({}), fetchImpl = globalThis.fetch.bind(globalThis), onEvent = () => {} }) {
+export function createPreviewFetch({ renderer, getContext = () => ({}), fetchImpl = globalThis.fetch.bind(globalThis), onEvent = () => {}, onFailure = () => {} }) {
   const trace = (event) => {
     try {
       onEvent({ time: performance.now(), ...event })
@@ -35,6 +35,11 @@ export function createPreviewFetch({ renderer, getContext = () => ({}), fetchImp
       trace({ stage: "render-ready", hasHtml: typeof result?.html === "string" })
       return jsonResponse(result)
     } catch (error) {
+      try {
+        onFailure()
+      } catch (_diagnosticError) {
+        // Diagnostics must never change preview behavior.
+      }
       trace({ stage: "error", name: error?.name || "Error", message: error?.message || String(error) })
       return jsonResponse({ html: null, warnings: [error.message || "Preview could not be rendered."], editor_map: null }, 422)
     }

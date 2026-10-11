@@ -1,10 +1,12 @@
 use std::fs::{self, File};
 use std::path::{Path, PathBuf};
 
+use local_store::diagnostics::EventCode;
 use local_store::{CoreError, ImportResolution, ImportResult, Library};
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 
+use crate::diagnostics::{record_bool_command_result, record_command_result};
 use crate::dialogs::confirm_native_action;
 use crate::error::CommandError;
 use crate::state::{
@@ -13,6 +15,17 @@ use crate::state::{
 
 async fn export_elef_impl(
     app: AppHandle,
+    state: State<'_, DesktopState>,
+    id: String,
+    use_native_dialog: bool,
+) -> Result<bool, CommandError> {
+    let result = export_elef_inner(&app, state, id, use_native_dialog).await;
+    record_bool_command_result(&app, EventCode::Export, &result);
+    result
+}
+
+async fn export_elef_inner(
+    app: &AppHandle,
     state: State<'_, DesktopState>,
     id: String,
     use_native_dialog: bool,
@@ -91,57 +104,66 @@ pub(crate) async fn import_elef(
     app: AppHandle,
     state: State<'_, DesktopState>,
 ) -> Result<Option<ImportResult>, CommandError> {
-    let Some(selection) = app
-        .dialog()
-        .file()
-        .set_title("Import Elef Work")
-        .add_filter("Elef Work", &["elef"])
-        .blocking_pick_file()
-    else {
-        return Ok(None);
-    };
-    let archive_path = selection
-        .into_path()
-        .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
-    let library = state.current_library()?;
-    import_archive(&state, &library, archive_path, false)
+    let result = (|| {
+        let Some(selection) = app
+            .dialog()
+            .file()
+            .set_title("Import Elef Work")
+            .add_filter("Elef Work", &["elef"])
+            .blocking_pick_file()
+        else {
+            return Ok(None);
+        };
+        let archive_path = selection
+            .into_path()
+            .map_err(|_| CommandError::new("invalid_input", "Choose a local file.", false))?;
+        let library = state.current_library()?;
+        import_archive(&state, &library, archive_path, false)
+    })();
+    record_command_result(&app, EventCode::Import, &result);
+    result
 }
 
 #[tauri::command]
 pub(crate) fn import_opened_elef(
+    app: AppHandle,
     state: State<'_, DesktopState>,
 ) -> Result<Option<ImportResult>, CommandError> {
-    if state
-        .open_files
-        .lock()
-        .expect("opened file queue poisoned")
-        .is_empty()
-    {
-        return Ok(None);
-    }
-    let library = state.current_library()?;
-    let archive_path = state
-        .open_files
-        .lock()
-        .expect("opened file queue poisoned")
-        .pop_front();
-    let Some(archive_path) = archive_path else {
-        return Ok(None);
-    };
-    if state
-        .pending_import
-        .lock()
-        .expect("pending import lock poisoned")
-        .is_some()
-    {
-        state
+    let result = (|| {
+        if state
             .open_files
             .lock()
             .expect("opened file queue poisoned")
-            .push_front(archive_path);
-        return Ok(None);
-    }
-    import_archive(&state, &library, archive_path, false)
+            .is_empty()
+        {
+            return Ok(None);
+        }
+        let library = state.current_library()?;
+        let archive_path = state
+            .open_files
+            .lock()
+            .expect("opened file queue poisoned")
+            .pop_front();
+        let Some(archive_path) = archive_path else {
+            return Ok(None);
+        };
+        if state
+            .pending_import
+            .lock()
+            .expect("pending import lock poisoned")
+            .is_some()
+        {
+            state
+                .open_files
+                .lock()
+                .expect("opened file queue poisoned")
+                .push_front(archive_path);
+            return Ok(None);
+        }
+        import_archive(&state, &library, archive_path, false)
+    })();
+    record_command_result(&app, EventCode::Import, &result);
+    result
 }
 
 #[tauri::command]
@@ -185,6 +207,16 @@ pub(crate) async fn resolve_import_conflict(
     state: State<'_, DesktopState>,
     resolution: String,
 ) -> Result<Option<ImportResult>, CommandError> {
+    let result = resolve_import_conflict_inner(&app, state, resolution).await;
+    record_command_result(&app, EventCode::Import, &result);
+    result
+}
+
+async fn resolve_import_conflict_inner(
+    app: &AppHandle,
+    state: State<'_, DesktopState>,
+    resolution: String,
+) -> Result<Option<ImportResult>, CommandError> {
     if resolution == "cancel" {
         if let Some(pending) = take_pending_import(&state) {
             discard_pending_import(&pending);
@@ -223,7 +255,7 @@ pub(crate) async fn resolve_import_conflict(
             Err(error) => return Err(error.into()),
         };
         let confirmed = confirm_native_action(
-            &app,
+            app,
             format!("Move “{preview}” to the system Trash and replace it with the imported Work?"),
             "Replace existing Work",
             MessageDialogKind::Warning,
@@ -277,10 +309,13 @@ fn write_elef_archive(
 }
 #[tauri::command]
 pub(crate) fn import_elef_bytes(
+    app: AppHandle,
     state: State<'_, DesktopState>,
     bytes: Vec<u8>,
 ) -> Result<Option<ImportResult>, CommandError> {
-    import_elef_bytes_impl(&state, &bytes)
+    let result = import_elef_bytes_impl(&state, &bytes);
+    record_command_result(&app, EventCode::Import, &result);
+    result
 }
 
 fn import_elef_bytes_impl(

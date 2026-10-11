@@ -5,6 +5,7 @@ import { relaunch } from "@tauri-apps/plugin-process"
 import { check as checkUpdater } from "@tauri-apps/plugin-updater"
 import { completeBootstrap } from "./bootstrap-flow.js"
 import { createCloseFlow } from "./close-flow.js"
+import { createDiagnosticFailures } from "./diagnostic-failures.js"
 import { createTransportAdapter } from "./transport-adapter.js"
 import { createMediaFetch, mediaUrlsForWorkFolder } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
@@ -20,6 +21,7 @@ import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./author
 import "../../../../apps/web/app/assets/stylesheets/application.css"
 
 const fileLibrary = createFileLibraryTransport({ invoke })
+const diagnosticFailures = createDiagnosticFailures(invoke)
 const nativeFetch = globalThis.fetch.bind(globalThis)
 
 startFileLibraryApplication({
@@ -37,6 +39,7 @@ startFileLibraryApplication({
     globalThis.fetch = createPreviewFetch({
       ...options,
       fetchImpl: mediaFetch,
+      onFailure: diagnosticFailures.recordPreviewFailure,
       onEvent: __ELEF_E2E__ ? event => {
         previewTrace.push(event)
         if (previewTrace.length > 512) previewTrace.shift()
@@ -60,5 +63,6 @@ startFileLibraryApplication({
   }),
   updaterSeam: createDesktopUpdaterSeam({ check: () => checkUpdater({ timeout: 10_000 }) }),
   quietSavePolicy: createQuietSavePolicy(),
+  recordBootstrapFailure: diagnosticFailures.recordBootstrapFailure,
   registerEditorRuntime
 })

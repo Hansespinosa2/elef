@@ -1,3 +1,4 @@
+pub mod diagnostics;
 pub mod update_install;
 
 mod archives;

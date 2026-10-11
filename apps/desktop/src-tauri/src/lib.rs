@@ -1,5 +1,6 @@
 mod archives;
 mod assets;
+mod diagnostics;
 mod dialogs;
 mod error;
 mod library;
@@ -17,6 +18,9 @@ use crate::archives::{
     resolve_import_conflict,
 };
 use crate::assets::{asset_protocol_response, list_media, remove_media, upload_asset};
+#[cfg(feature = "webdriver")]
+use crate::diagnostics::export_diagnostics_fixture;
+use crate::diagnostics::{export_diagnostics, record_bootstrap_failure, record_preview_failure};
 use crate::library::{
     choose_library_root, get_library_status, read_authoring_registries, read_library_config,
     restore_library_root, write_authoring_registry, write_library_config,
@@ -30,6 +34,49 @@ use crate::work_folders::{
     read_source_snapshot, read_work_folder_preview, rename_work_folder, restore_snapshot,
     save_source, take_snapshot,
 };
+
+macro_rules! app_commands {
+    ($($extra:ident),* $(,)?) => {
+        tauri::generate_handler![
+            choose_library_root,
+            get_library_status,
+            read_library_config,
+            write_library_config,
+            read_authoring_registries,
+            write_authoring_registry,
+            list_work_folders,
+            document_graph,
+            create_work_folder,
+            open_work_folder,
+            read_work_folder_preview,
+            read_source_snapshot,
+            rename_work_folder,
+            delete_work_folder,
+            save_source,
+            poll_file_events,
+            take_snapshot,
+            list_snapshots,
+            restore_snapshot,
+            merge_external_change,
+            upload_asset,
+            list_media,
+            remove_media,
+            import_elef_bytes,
+            export_elef,
+            import_elef,
+            import_opened_elef,
+            pending_open_elef_count,
+            resolve_import_conflict,
+            install_update,
+            confirm_app_ready,
+            confirm_discard_unsaved_changes,
+            export_diagnostics,
+            record_preview_failure,
+            record_bootstrap_failure,
+            $($extra),*
+        ]
+    };
+}
 
 pub fn run(context: tauri::Context<tauri::Wry>) {
     let updater = tauri_plugin_updater::Builder::new();
@@ -57,6 +104,11 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
     let builder = builder.plugin(tauri_plugin_wdio_webdriver::init());
     #[cfg(feature = "webdriver")]
     let builder = builder.plugin(tauri_plugin_wdio::init());
+
+    #[cfg(feature = "webdriver")]
+    let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));
+    #[cfg(not(feature = "webdriver"))]
+    let builder = builder.invoke_handler(app_commands!());
 
     let app = builder
         .register_asynchronous_uri_scheme_protocol("elefasset", |context, request, responder| {
@@ -90,7 +142,7 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
             let id = event.id().as_ref();
             match id {
                 "open-work" | "refresh-library" | "save" | "export-elef" | "import-elef"
-                | "print" | "settings" | "check-for-updates" => {
+                | "print" | "settings" | "check-for-updates" | "export-diagnostics" => {
                     let _ = app.emit("desktop-menu-action", id);
                 }
                 "quit" => {
@@ -114,40 +166,6 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
                 _ => {}
             }
         })
-        .invoke_handler(tauri::generate_handler![
-            choose_library_root,
-            get_library_status,
-            read_library_config,
-            write_library_config,
-            read_authoring_registries,
-            write_authoring_registry,
-            list_work_folders,
-            document_graph,
-            create_work_folder,
-            open_work_folder,
-            read_work_folder_preview,
-            read_source_snapshot,
-            rename_work_folder,
-            delete_work_folder,
-            save_source,
-            poll_file_events,
-            take_snapshot,
-            list_snapshots,
-            restore_snapshot,
-            merge_external_change,
-            upload_asset,
-            list_media,
-            remove_media,
-            import_elef_bytes,
-            export_elef,
-            import_elef,
-            import_opened_elef,
-            pending_open_elef_count,
-            resolve_import_conflict,
-            install_update,
-            confirm_app_ready,
-            confirm_discard_unsaved_changes,
-        ])
         .build(context)
         .expect("error while building Elef Desktop");
 

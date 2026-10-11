@@ -18,6 +18,7 @@ export function createFileLibraryTransport({ invoke }) {
     resolveImportConflict: resolution => invoke("resolve_import_conflict", { resolution }),
     pendingOpenedElefCount: () => invoke("pending_open_elef_count"),
     confirmAppReady: () => invoke("confirm_app_ready"),
-    confirmDiscardUnsavedChanges: () => invoke("confirm_discard_unsaved_changes")
+    confirmDiscardUnsavedChanges: () => invoke("confirm_discard_unsaved_changes"),
+    exportDiagnostics: () => invoke("export_diagnostics")
   }
 }

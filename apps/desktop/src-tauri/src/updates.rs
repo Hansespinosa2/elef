@@ -2,12 +2,14 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+use local_store::diagnostics::{EventCode, EventResult};
 #[cfg(target_os = "linux")]
 use tauri::Manager;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::MessageDialogKind;
 use tauri_plugin_updater::UpdaterExt;
 
+use crate::diagnostics::{record_bool_command_result, record_diagnostic};
 use crate::dialogs::confirm_native_action;
 use crate::error::CommandError;
 use crate::state::DesktopState;
@@ -18,10 +20,27 @@ pub(crate) async fn confirm_app_ready(
     window: tauri::WebviewWindow,
     state: State<'_, DesktopState>,
 ) -> Result<usize, CommandError> {
-    let url = window.url().map_err(|_| update_install_error())?;
+    let url = match window.url() {
+        Ok(url) => url,
+        Err(_) => {
+            record_diagnostic(
+                &app,
+                EventCode::Startup,
+                EventResult::Failure,
+                Some("internal"),
+            );
+            return Err(update_install_error());
+        }
+    };
     let local_origin = url.scheme() == "tauri" && url.host_str() == Some("localhost")
         || matches!(url.scheme(), "http" | "https") && url.host_str() == Some("tauri.localhost");
     if window.label() != "main" || !local_origin {
+        record_diagnostic(
+            &app,
+            EventCode::Startup,
+            EventResult::Failure,
+            Some("unsupported"),
+        );
         return Err(CommandError::new(
             "unsupported",
             "Application readiness was rejected.",
@@ -48,6 +67,7 @@ pub(crate) async fn confirm_app_ready(
     } else {
         0
     };
+    record_diagnostic(&app, EventCode::Startup, EventResult::Success, None);
     Ok(removed)
 }
 
@@ -138,6 +158,17 @@ fn update_install_error() -> CommandError {
 }
 #[tauri::command]
 pub(crate) async fn install_update(
+    app: AppHandle,
+    state: State<'_, DesktopState>,
+    version: String,
+    on_progress: tauri::ipc::Channel<serde_json::Value>,
+) -> Result<bool, CommandError> {
+    let result = install_update_inner(app.clone(), state, version, on_progress).await;
+    record_bool_command_result(&app, EventCode::UpdateActivation, &result);
+    result
+}
+
+async fn install_update_inner(
     app: AppHandle,
     state: State<'_, DesktopState>,
     version: String,

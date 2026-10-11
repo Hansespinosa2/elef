@@ -178,7 +178,16 @@ assert "document-graph-node" not in graph_partial, "Rails must not keep a second
 assert 'data-controller="document-graph"' not in graph_partial, "Rails must not keep the retired Stimulus graph mount"
 assert "createElementNS" not in desktop_application and "document-graph-node" not in desktop_application, "desktop must not keep a second document graph node template"
 
-declared = command_names(build_source, r"let app_commands = &\[(.*?)\];")
+declared = command_names(build_source, r"macro_rules! command_list \{(.*?)\$\(\$extra\)")
+test_only_commands = set()
+for command_call in re.findall(r"command_list!\((.*?)\)", build_source):
+    test_only_commands.update(re.findall(r'"([a-z_]+)"', command_call))
+assert test_only_commands == {"export_diagnostics_fixture"}, (
+    f"only the diagnostics export fixture may be a test-only command: {sorted(test_only_commands)}"
+)
+assert 'std::env::var_os("CARGO_FEATURE_WEBDRIVER").is_some()' in build_source, (
+    "test-only commands must be gated on the WebDriver feature"
+)
 shared_command_references = sorted(
     f"{source_file.relative_to(REPO_ROOT)} -> {command}"
     for source_file in app_javascript_source.rglob("*.js")
@@ -191,13 +200,19 @@ assert not shared_command_references, (
 )
 assert not re.search(r"\binvoke\s*\(", desktop_application), "Shared application logic must not call raw Tauri IPC"
 handler_match = re.search(
-    r"\.invoke_handler\(tauri::generate_handler!\[(.*?)\]\)",
+    r"tauri::generate_handler!\[(.*?)\$\(\$extra\)",
     app_source,
     re.DOTALL,
 )
 if not handler_match:
     raise AssertionError("could not find Tauri invoke handler")
 registered = set(re.findall(r"^\s*([a-z_]+),\s*$", handler_match.group(1), re.MULTILINE))
+assert '#[cfg(feature = "webdriver")]\n    let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));' in app_source, (
+    "the diagnostics export fixture must be registered only in WebDriver builds"
+)
+assert '#[cfg(not(feature = "webdriver"))]\n    let builder = builder.invoke_handler(app_commands!());' in app_source, (
+    "production builds must register only the base command list"
+)
 permissions = set(capability["permissions"])
 allowed = {
     permission.removeprefix("allow-").replace("-", "_")
@@ -229,9 +244,13 @@ assert set(e2e_capability["permissions"]) == {
     "wdio:default",
     "wdio-webdriver:default",
     "updater:allow-download",
+    "allow-export-diagnostics-fixture",
     "core:app:allow-version",
     "core:window:allow-is-fullscreen",
 }, "only the test-only capability may expose WebdriverIO and fixture downloads"
+assert "allow-export-diagnostics-fixture" not in permissions, (
+    "the diagnostics export fixture must stay out of the production capability"
+)
 assert e2e_config["app"].get("withGlobalTauri") is True, "global Tauri access is enabled only for the test-only WebdriverIO build"
 assert config["app"].get("withGlobalTauri") is not True, "production must not expose the global Tauri API"
 production_frontend = (REPO_ROOT / "apps/desktop/frontend/dist/assets/app.js").read_text()
@@ -315,6 +334,7 @@ for menu_action in (
     "print",
     "settings",
     "check-for-updates",
+    "export-diagnostics",
 ):
     assert menu_action in app_source, f"native menu action {menu_action!r} is not wired"
 
