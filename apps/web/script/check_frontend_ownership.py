@@ -643,7 +643,7 @@ desktop_source_reasons = {
     "main.js": "boots the shared application with Tauri services and native lifecycle",
     "media-transport.js": "adapts browser media fetches to Tauri IPC and asset protocols",
     "preview-transport.js": "adapts the shared renderer to the desktop preview endpoint",
-    "quiet_save_policy.js": "declares desktop quiet-save timing injected into the shared session factory",
+    "quiet-save-policy.js": "declares desktop quiet-save timing injected into the shared session factory",
     "renderer-worker.js": "starts the packaged renderer bundle in a Web Worker",
     "tauri-authoring-transport.js": "implements the shared authoring-registry seam over native registry commands",
     "tauri-host.js": "implements the ElefHost contract over Tauri invoke for the desktop shell",

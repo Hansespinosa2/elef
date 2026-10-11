@@ -28,7 +28,7 @@ const rootPackage = JSON.parse(await read("package.json"))
 const appearanceController = await read("packages/editor-runtime/src/controllers/appearance_controller.ts")
 const autosaveController = await read("apps/web/app/javascript/controllers/autosave_controller.js")
 const workSession = await read("packages/client/src/session/work_session.ts")
-const quietSavePolicy = await read("apps/desktop/frontend/src/quiet_save_policy.js")
+const quietSavePolicy = await read("apps/desktop/frontend/src/quiet-save-policy.js")
 const { document } = parseHTML(page)
 // The empty-library call to action is client-owned now; the host template
 // carries no empty-action slot. Assert the shared button classes in the

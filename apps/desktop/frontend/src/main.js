@@ -15,7 +15,7 @@ import { createTauriAuthoringTransport } from "./tauri-authoring-transport.js"
 import { createDesktopUpdaterSeam } from "./update-flow.js"
 import builtInRegistry from "../../../../apps/web/app/javascript/data/default_authoring_registry.json"
 import { mergeAuthoringRegistryEntries, registerEditorRuntime, startFileLibraryApplication } from "@elef/editor-runtime"
-import { createQuietSavePolicy } from "./quiet_save_policy.js"
+import { createQuietSavePolicy } from "./quiet-save-policy.js"
 import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./authoring-registry-loader.js"
 import "../../../../apps/web/app/assets/stylesheets/application.css"
 

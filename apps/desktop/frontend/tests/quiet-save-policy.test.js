@@ -1,7 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 
-import { QUIET_SAVE_DISK_BUDGET_MS, QUIET_SAVE_SNAPSHOT_INTERVAL_MS, createQuietSavePolicy } from "../src/quiet_save_policy.js"
+import { QUIET_SAVE_DISK_BUDGET_MS, QUIET_SAVE_SNAPSHOT_INTERVAL_MS, createQuietSavePolicy } from "../src/quiet-save-policy.js"
 
 test("quiet-save policy keeps the autosave delay inside the disk budget", () => {
   const policy = createQuietSavePolicy()
