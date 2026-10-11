@@ -37,6 +37,8 @@ The Tauri configuration runs the shared frontend build before dev and production
 
 Built artifacts install without the dev harness. On Linux, make the AppImage executable and launch it; if FUSE is unavailable, install the distribution's FUSE 2 compatibility package (`fuse2` on Arch) or fall back to `./Elef.AppImage --appimage-extract-and-run`. On macOS, the unsigned test build trips Gatekeeper on first launch; use the per-app Open Anyway exception in System Settings → Privacy & Security only for a build from a trusted source. If macOS reports the app damaged or containing malware, stop and rebuild rather than excepting it.
 
+Tagging and publishing a release (draft → publish, Gate A, emergency block) is documented in [Desktop release operations](desktop/release-operations.md); installing and using a published release is documented in [Install and use Elef Desktop](desktop/install-and-use.md).
+
 ## Check tiers
 
 `bin/check` is the canonical entry point. Tiers nest: each tier runs everything below it plus its own scope.

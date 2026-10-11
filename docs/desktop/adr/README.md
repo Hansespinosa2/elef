@@ -15,6 +15,7 @@ These records capture why load-bearing choices were made and whether their accep
 | [010](010-portable-document-links.md) | Portable document-link metadata | Accepted | — |
 | [011](011-neutral-editor-runtime-package.md) | Shared editor shell in a neutral package | Accepted | — |
 | [012](012-deck-to-work-rename.md) | Retired container term (`deck`) replaced by Work and WorkFolder | Accepted | — |
+| [013](013-release-constitution-amendments.md) | Tag-driven desktop release with amended constitution terms | Accepted | — |
 
 Accepted decisions are stable records. Change one with a dated amendment or a new ADR that supersedes it; do not erase its history. Proposed records may be updated as evidence arrives. ADRs explain decisions rather than serve as implementation plans.
 
