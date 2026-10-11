@@ -19,7 +19,7 @@
     },
     "./preview-core": {
       "types": "./src/features/library/preview-core.ts",
-      "default": "./src/features/library/preview-core.ts"
+      "default": "./dist/preview-core.js"
     },
     "./vim-preferences": {
       "types": "./src/features/settings/vimPreferences.ts",
