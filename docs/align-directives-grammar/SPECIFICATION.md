@@ -1,6 +1,6 @@
 # Elef Slide Position/Alignment Grammar — Specification v1.0
 
-**Status:** decided by owner (Andres) through elicitation on 2026-10-09.
+**Status:** normative - enforced by apps/web/test/javascript/renderer_alignment_grammar.test.js and apps/desktop/e2e/specs/components.spec.js via fixtures.json; decided by owner (Andres) through elicitation on 2026-10-09.
 **Visual references:** the elicitation mockups (`elef-align-grammar-*.html`) were
 working files and are not retained in the repository; this spec is authoritative.
 If a mockup resurfaces and disagrees with this spec, reconcile toward this spec

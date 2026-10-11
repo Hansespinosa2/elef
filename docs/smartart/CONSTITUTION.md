@@ -14,6 +14,7 @@
 **Doctrine:** semantic input → geometric output\
 **Repository:** `Hansespinosa2/elef`\
 **Target lineage:** current `dev`
+**Status:** normative - enforced by apps/web/script/check_art_traceability.py (CI fast desktop unit tier, .github/workflows/ci.yml) against docs/smartart/VERIFICATION.json.
 
 ---
 

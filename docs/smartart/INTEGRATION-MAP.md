@@ -3,6 +3,8 @@
 Implementation map for [Constitution v6.0](CONSTITUTION.md). Paths are current;
 when Art code moves, update this map in the same commit.
 
+**Status:** normative - enforced by apps/web/script/check_art_traceability.py via docs/smartart/VERIFICATION.json (ART-ARCH-003/004 doc: references require the "Current integration points" marker below).
+
 ## Current integration points
 
 | Concern | Current implementation | Art integration |
