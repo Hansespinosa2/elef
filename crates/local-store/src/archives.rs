@@ -419,7 +419,9 @@ mod tests {
     use std::fs;
     use std::io::Cursor;
     use std::io::Write;
+    use std::path::Path;
 
+    use tempfile::TempDir;
     use uuid::Uuid;
     use zip::CompressionMethod;
     use zip::DateTime;
@@ -680,5 +682,126 @@ mod tests {
             .position(|window| window == signature)
             .expect("zip central directory entry");
         bytes[offset + 24..offset + 28].copy_from_slice(&size.to_le_bytes());
+    }
+
+    #[test]
+    fn release_compatibility_fixtures_open_save_and_archive_round_trip_source_bytes() {
+        let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .join("apps/web/test/fixtures/desktop/release");
+        let cases = [
+            (
+                "Basic document",
+                "document.md",
+                fixtures.join("basic-document.md"),
+                false,
+                false,
+            ),
+            (
+                "Basic presentation",
+                "presentation.md",
+                fixtures.join("basic-presentation.md"),
+                false,
+                false,
+            ),
+            (
+                "Rich rendering media",
+                "presentation.md",
+                fixtures.join("rich-rendering-media.md"),
+                true,
+                false,
+            ),
+            (
+                "Unsupported source",
+                "document.md",
+                fixtures.join("unknown-directives.md"),
+                false,
+                false,
+            ),
+            (
+                "Historical presentation",
+                "talk.md",
+                fixtures.join("historical-no-manifest/Legacy presentation/talk.md"),
+                false,
+                true,
+            ),
+        ];
+
+        for (name, source_file, fixture_source, with_media, historical) in cases {
+            let source_bytes = fs::read(&fixture_source).unwrap();
+            let temp = TempDir::new().unwrap();
+            let library_root = temp.path().join("library");
+            let work_folder_path = library_root.join(name);
+            fs::create_dir_all(&work_folder_path).unwrap();
+            fs::write(work_folder_path.join(source_file), &source_bytes).unwrap();
+            if !historical {
+                fs::write(
+                    work_folder_path.join(MANIFEST_FILE),
+                    br#"{"id":"550e8400-e29b-41d4-a716-446655440000","schema_version":1}"#,
+                )
+                .unwrap();
+            }
+            if with_media {
+                let image_directory = work_folder_path.join("images");
+                fs::create_dir(&image_directory).unwrap();
+                fs::copy(
+                    fixtures.join("images/release-pixel.png"),
+                    image_directory.join("release-pixel.png"),
+                )
+                .unwrap();
+            }
+
+            let library = Library::open(&library_root).unwrap();
+            let summary = library
+                .list_work_folders()
+                .unwrap()
+                .into_iter()
+                .find(|work_folder| work_folder.name == name)
+                .unwrap();
+            let opened = library.open_work_folder(&summary.id).unwrap();
+            assert_eq!(
+                opened.source.as_bytes(),
+                source_bytes,
+                "open changed {name} source"
+            );
+            let saved = library
+                .save_source(&opened.id, &opened.source, &opened.content_hash)
+                .unwrap();
+            let reopened = library.open_work_folder(&opened.id).unwrap();
+            assert_eq!(
+                reopened.source.as_bytes(),
+                source_bytes,
+                "save/reopen changed {name} source"
+            );
+            assert_eq!(saved.content_hash, reopened.content_hash);
+
+            let archive_path = temp.path().join("fixture.elef");
+            let mut archive = Cursor::new(Vec::new());
+            library.export_elef(&opened.id, &mut archive).unwrap();
+            fs::write(&archive_path, archive.into_inner()).unwrap();
+            let imported_root = temp.path().join("imported-library");
+            fs::create_dir(&imported_root).unwrap();
+            let imported_library = Library::open(&imported_root).unwrap();
+            let imported = imported_library.import_elef(&archive_path, None).unwrap();
+            let imported_snapshot = imported_library
+                .read_source_snapshot(&imported.work_folder.id)
+                .unwrap();
+            assert_eq!(
+                imported_snapshot.source.as_bytes(),
+                source_bytes,
+                "archive import changed {name} source"
+            );
+            if with_media {
+                assert_eq!(
+                    fs::read(
+                        imported_root
+                            .join(&imported.work_folder.name)
+                            .join("images/release-pixel.png")
+                    )
+                    .unwrap(),
+                    fs::read(fixtures.join("images/release-pixel.png")).unwrap()
+                );
+            }
+        }
     }
 }

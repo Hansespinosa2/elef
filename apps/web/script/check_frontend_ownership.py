@@ -333,6 +333,7 @@ shared_workflows = {
     "libraryDeepLinksWorkflow",
     "mathInputWorkflow",
     "presentationModeWorkflow",
+    "richRenderingMediaWorkflow",
     "slidePositionGrammarWorkflow",
     "snippetInsertWorkflow",
     "vimRelativeLineNumbersWorkflow",

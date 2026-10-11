@@ -4,7 +4,7 @@ import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appe
 import { libraryAndGraphWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-create-delete.js"
 import { libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
-import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
+import { externalEditConflictWorkflow, CONFLICT_WORK_NAME, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
 import { hostileWorkNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-work.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-settings.js"
@@ -16,6 +16,7 @@ import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.j
 import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scenarios/slide-position-grammar.js"
 import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
 import { artRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/art-rendering.js"
+import { richRenderingMediaWorkflow, RICH_RENDERING_TITLE } from "../../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
@@ -127,8 +128,10 @@ class WebEditorUi {
     const isDocument = title === "E2E document"
     const id = isDocument
       ? process.env.ELEF_E2E_DOCUMENT_ID
-      : title === "E2E conflict"
+      : title === CONFLICT_WORK_NAME
       ? process.env.ELEF_E2E_CONFLICT_PRESENTATION_ID
+      : title === RICH_RENDERING_TITLE
+        ? process.env.ELEF_E2E_RICH_PRESENTATION_ID
       : title === "E2E hostile"
         ? process.env.ELEF_E2E_HOSTILE_PRESENTATION_ID
         : process.env.ELEF_E2E_PRESENTATION_ID
@@ -688,6 +691,17 @@ class WebEditorUi {
     )).toBe(true)
   }
 
+  async assertRichRenderingMedia() {
+    const preview = this.page.locator(".editor-projection.preview-pane")
+    await expect(preview.locator(".slides-theme-dark.slides-typography-technical")).toBeVisible()
+    await expect.poll(() => preview.locator(".katex").count()).toBeGreaterThan(0)
+    await expect.poll(() => preview.locator("pre.mermaid svg").count()).toBe(1)
+    await expect.poll(() => preview.locator("[data-elef-art-root]").count()).toBe(1)
+    await expect.poll(() => preview.locator("img").evaluateAll(images =>
+      images.some(image => image.complete && image.naturalWidth > 0)
+    )).toBe(true)
+  }
+
   async waitForPreview(text) {
     await expect.poll(() => renderedTextWithoutEditorControls(
       this.page.locator(".editor-projection.preview-pane")
@@ -812,6 +826,11 @@ class WebEditorUi {
   }
 
   async assertPersistedSource(source, workId = this.activeWorkId || process.env.ELEF_E2E_PRESENTATION_ID) {
+    const persisted = await this.readStoredSource(workId)
+    expect(normalizeLineEndings(persisted)).toBe(normalizeLineEndings(source))
+  }
+
+  async readStoredSource(workId = this.activeWorkId || process.env.ELEF_E2E_PRESENTATION_ID) {
     const id = Number(workId)
     const model = String(workId) === String(process.env.ELEF_E2E_DOCUMENT_ID) ? "Document" : "Presentation"
     const serialized = execFileSync("bin/rails", [
@@ -823,7 +842,7 @@ class WebEditorUi {
       encoding: "utf8"
     }).match(/^ELEF_E2E_PERSISTED_SOURCE=(.*)$/m)?.[1]
     expect(serialized).toBeTruthy()
-    expect(normalizeLineEndings(JSON.parse(serialized))).toBe(normalizeLineEndings(source))
+    return JSON.parse(serialized)
   }
 }
 
@@ -1241,6 +1260,10 @@ test("the source editor has matching styles in Rails and the desktop asset bundl
 
 test("shared Art semantics render consistently in the web app", async ({ page }) => {
   await artRenderingWorkflow(new WebEditorUi(page))
+})
+
+test("the rich release fixture renders, presents, saves, and reopens in the web app", async ({ page }) => {
+  await richRenderingMediaWorkflow(new WebEditorUi(page))
 })
 
 test("slide position stacks and lanes align in the web preview", async ({ page }) => {

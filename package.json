@@ -7,7 +7,8 @@
   ],
   "scripts": {
     "renderer:build": "node packages/renderer/build.mjs",
-    "test:javascript": "node --test apps/web/test/javascript/*.test.js apps/web/test/javascript/*.test.mjs apps/web/test/javascript/shared/*.test.js"
+    "test:javascript": "node --test apps/web/test/javascript/*.test.js apps/web/test/javascript/*.test.mjs apps/web/test/javascript/shared/*.test.js",
+    "check:release-fixtures": "node apps/desktop/scripts/check_release_fixture_manifest.mjs"
   },
   "devDependencies": {
     "@codemirror/commands": "6.11.1",

@@ -7,16 +7,21 @@ import { fileURLToPath } from "node:url"
 import { createHash, randomUUID } from "node:crypto"
 import { PIXEL_PNG_MARKDOWN } from "../../../apps/web/test/e2e/scenarios/media-fixture.js"
 import { SHARED_LIBRARY_CREATE_DELETE_TITLES } from "../../../apps/web/test/e2e/scenarios/library-create-delete.js"
+import { CONFLICT_BASELINE_SOURCE, CONFLICT_WORK_NAME, CONFLICT_SOURCE_FILE } from "../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
+import { RICH_RENDERING_SOURCE, RICH_RENDERING_TITLE } from "../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
 import { runNativeQuitSmokes } from "./native-quit-smoke.js"
 import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
 import { e2eDocumentSource, e2eLinkedDocumentSource, hostileSource } from "./fixtures/seeds.mjs"
 
 const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.resolve(e2eRoot, "../../..")
+const releaseFixtureRoot = path.join(repoRoot, "apps/web/test/fixtures/desktop/release")
+const richRenderingImage = await readFile(path.join(releaseFixtureRoot, "images/release-pixel.png"))
 const temporaryRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), "elef-desktop-e2e-")))
 const libraryRoot = path.join(temporaryRoot, "Elef")
 const seedWorkFolder = path.join(libraryRoot, "E2E seed")
-const conflictWorkFolder = path.join(libraryRoot, "E2E conflict")
+const richRenderingWorkFolder = path.join(libraryRoot, RICH_RENDERING_TITLE)
+const conflictWorkFolder = path.join(libraryRoot, CONFLICT_WORK_NAME)
 const hostileWorkFolder = path.join(libraryRoot, "E2E hostile")
 const archiveFixture = path.join(temporaryRoot, "E2E archive seed")
 const importArchive = path.join(temporaryRoot, "E2E archive seed.elef")
@@ -159,8 +164,12 @@ try {
     id: "a3d0f020-6605-4f9e-a96d-d825ee4b13f1",
     schema_version: 1
   }))
+  await mkdir(path.join(richRenderingWorkFolder, "images"), { recursive: true })
+  await writeFile(path.join(richRenderingWorkFolder, "presentation.md"), RICH_RENDERING_SOURCE)
+  await writeFile(path.join(richRenderingWorkFolder, "images/release-pixel.png"), richRenderingImage)
+  await writeFile(path.join(richRenderingWorkFolder, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
   await mkdir(conflictWorkFolder, { recursive: true })
-  await writeFile(path.join(conflictWorkFolder, "presentation.md"), "# Before conflict test\n\nSeed paragraph.\n")
+  await writeFile(path.join(conflictWorkFolder, CONFLICT_SOURCE_FILE), CONFLICT_BASELINE_SOURCE)
   await writeFile(path.join(conflictWorkFolder, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
   await mkdir(hostileWorkFolder, { recursive: true })
   await writeFile(path.join(hostileWorkFolder, "presentation.md"), hostileSource)
@@ -212,12 +221,16 @@ try {
     if (componentsResult.error) throw componentsResult.error
     if (componentsResult.status !== 0) throw new Error("Static browser component checks failed with status " + componentsResult.status)
 
+    const richImagePath = path.join(releaseFixtureRoot, "images/release-pixel.png")
     const seeded = runRails(
-      `Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all; Document.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document)}).destroy_all; presentation = Presentation.create!(title: ${JSON.stringify(webTitle)}, source: "# Before E2E\\n\\nSeed paragraph.\\n\\nSee [[E2E linked]].\\n"); conflict = Presentation.create!(title: "E2E conflict", source: "# Before conflict test\\n\\nSeed paragraph.\\n"); hostile = Presentation.create!(title: "E2E hostile", source: ${JSON.stringify(hostileSource)}); document = Document.create!(source: ${JSON.stringify(e2eDocumentSource)}); linked = Document.create!(source: ${JSON.stringify(e2eLinkedDocumentSource)}); puts "ELEF_E2E_PRESENTATION_ID=#{presentation.id}"; puts "ELEF_E2E_CONFLICT_PRESENTATION_ID=#{conflict.id}"; puts "ELEF_E2E_HOSTILE_PRESENTATION_ID=#{hostile.id}"; puts "ELEF_E2E_DOCUMENT_IDS=#{[document.id, linked.id].join(',')}"`
+      `Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all; Presentation.where(title: ${JSON.stringify(RICH_RENDERING_TITLE)}).destroy_all; Document.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document)}).destroy_all; presentation = Presentation.create!(title: ${JSON.stringify(webTitle)}, source: "# Before E2E\\n\\nSeed paragraph.\\n\\nSee [[E2E linked]].\\n"); rich = Presentation.create!(title: ${JSON.stringify(RICH_RENDERING_TITLE)}, source: ${JSON.stringify(RICH_RENDERING_SOURCE)}); File.open(${JSON.stringify(richImagePath)}, "rb") { |image| rich.assets.attach(io: image, filename: "release-pixel.png", content_type: "image/png") }; conflict = Presentation.create!(title: ${JSON.stringify(CONFLICT_WORK_NAME)}, source: ${JSON.stringify(CONFLICT_BASELINE_SOURCE)}); hostile = Presentation.create!(title: "E2E hostile", source: ${JSON.stringify(hostileSource)}); document = Document.create!(source: ${JSON.stringify(e2eDocumentSource)}); linked = Document.create!(source: ${JSON.stringify(e2eLinkedDocumentSource)}); puts "ELEF_E2E_PRESENTATION_ID=#{presentation.id}"; puts "ELEF_E2E_RICH_PRESENTATION_ID=#{rich.id}"; puts "ELEF_E2E_CONFLICT_PRESENTATION_ID=#{conflict.id}"; puts "ELEF_E2E_HOSTILE_PRESENTATION_ID=#{hostile.id}"; puts "ELEF_E2E_DOCUMENT_IDS=#{[document.id, linked.id].join(',')}"`
     )
     const id = seeded.match(/^ELEF_E2E_PRESENTATION_ID=(\d+)$/m)?.[1]
     assert.match(id, /^\d+$/, "Rails fixture command should return the presentation id")
     presentationId = id
+    const richPresentationId = seeded.match(/^ELEF_E2E_RICH_PRESENTATION_ID=(\d+)$/m)?.[1]
+    assert.match(richPresentationId, /^\d+$/, "Rails fixture command should return the rich presentation id")
+    env.ELEF_E2E_RICH_PRESENTATION_ID = richPresentationId
     const conflictId = seeded.match(/^ELEF_E2E_CONFLICT_PRESENTATION_ID=(\d+)$/m)?.[1]
     assert.match(conflictId, /^\d+$/, "Rails fixture command should return the conflict presentation id")
     env.ELEF_E2E_CONFLICT_PRESENTATION_ID = conflictId
@@ -295,7 +308,7 @@ try {
     "Exporting a work must preserve every file byte, including its manifest and uploaded image")
   if (presentationId) {
     const persisted = runRails(
-      "presentation = Presentation.find(" + presentationId + "); puts \"ELEF_E2E_SOURCE=#{presentation.source.to_json}\"; presentation.destroy!; Presentation.where(title: " + JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation) + ").destroy_all; Presentation.where(id: [" + [Number(env.ELEF_E2E_CONFLICT_PRESENTATION_ID), Number(hostilePresentationId)].join(",") + "]).destroy_all; Document.where(title: " + JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document) + ").destroy_all; Document.where(id: [" + documentIds.map(Number).join(",") + "]).destroy_all"
+      "presentation = Presentation.find(" + presentationId + "); puts \"ELEF_E2E_SOURCE=#{presentation.source.to_json}\"; presentation.destroy!; Presentation.where(title: " + JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation) + ").destroy_all; Presentation.where(id: [" + [Number(env.ELEF_E2E_RICH_PRESENTATION_ID), Number(env.ELEF_E2E_CONFLICT_PRESENTATION_ID), Number(hostilePresentationId)].join(",") + "]).destroy_all; Document.where(title: " + JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document) + ").destroy_all; Document.where(id: [" + documentIds.map(Number).join(",") + "]).destroy_all"
     )
     const savedSource = persisted.match(/^ELEF_E2E_SOURCE=(.*)$/m)?.[1]
     assert.ok(savedSource, "Rails fixture command should return the persisted source")
@@ -313,6 +326,9 @@ try {
   if (presentationId) {
     try {
       runRails(`Presentation.find_by(id: ${presentationId})&.destroy!`)
+      if (env.ELEF_E2E_RICH_PRESENTATION_ID) {
+        runRails(`Presentation.find_by(id: ${Number(env.ELEF_E2E_RICH_PRESENTATION_ID)})&.destroy!`)
+      }
       runRails(`Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all`)
       runRails(`Presentation.find_by(id: ${Number(hostilePresentationId)})&.destroy!`)
       if (env.ELEF_E2E_CONFLICT_PRESENTATION_ID) {

@@ -8,7 +8,7 @@ import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appe
 import { libraryAndGraphWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-create-delete.js"
 import { libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
-import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
+import { externalEditConflictWorkflow, CONFLICT_WORK_NAME, CONFLICT_SOURCE_FILE, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
 import { hostileWorkNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-work.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-settings.js"
@@ -20,6 +20,7 @@ import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.j
 import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scenarios/slide-position-grammar.js"
 import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
 import { artRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/art-rendering.js"
+import { richRenderingMediaWorkflow } from "../../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
 import { createHash } from "node:crypto"
 import { answerMacNativeDialog } from "../mac-native-dialog.js"
 
@@ -675,6 +676,13 @@ class DesktopEditorUi {
     return browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue ?? "")
   }
 
+  async readStoredSource() {
+    const workTitle = this.activeWorkTitle || "E2E seed"
+    const sourceFile = workTitle === "E2E document" ? "document.md" : "presentation.md"
+    const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, workTitle, sourceFile)
+    return readFile(sourcePath, "utf8")
+  }
+
   async setCaretPosition(position) {
     const selection = await browser.execute(offset => {
       const controller = document.querySelector("#desktop-editor-field")?.editorController
@@ -1237,6 +1245,24 @@ class DesktopEditorUi {
     })
   }
 
+  async assertRichRenderingMedia() {
+    await browser.waitUntil(async () => browser.execute(() => {
+      const preview = document.querySelector("#desktop-preview")
+      const image = [...(preview?.querySelectorAll("img") || [])]
+        .some(candidate => candidate.complete && candidate.naturalWidth > 0)
+      return Boolean(
+        preview?.querySelector(".slides-theme-dark.slides-typography-technical") &&
+        preview.querySelectorAll(".katex").length >= 2 &&
+        preview.querySelector("pre.mermaid svg") &&
+        preview.querySelectorAll("[data-elef-art-root]").length === 1 &&
+        image
+      )
+    }), {
+      timeout: 15_000,
+      timeoutMsg: "The rich release fixture did not render its theme, math, Mermaid, Art, and local image"
+    })
+  }
+
   async readArtSemantics() {
     return browser.execute(() => [...document.querySelectorAll("#desktop-preview [data-elef-art-root]")].map(root => {
       const list = root.querySelector(":scope > .elef-art-list")
@@ -1393,7 +1419,7 @@ class DesktopEditorUi {
   }
 
   async writeExternalSource(source) {
-    await writeFile(path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E conflict", "presentation.md"), source)
+    await writeFile(path.join(process.env.ELEF_E2E_LIBRARY_ROOT, CONFLICT_WORK_NAME, CONFLICT_SOURCE_FILE), source)
   }
 
   async waitForConflict() {
@@ -2244,6 +2270,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("renders shared Art list semantics in the Tauri binary", async () => {
     await artRenderingWorkflow(new DesktopEditorUi())
+  })
+
+  it("renders, presents, saves, and reopens the rich release fixture", async () => {
+    await richRenderingMediaWorkflow(new DesktopEditorUi())
   })
 
   it("runs the shared external-edit conflict flow in the desktop binary", async () => {
