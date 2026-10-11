@@ -132,7 +132,7 @@ def run_desktop_e2e() -> float:
     build_elapsed = run_build_step(
         "desktop e2e debug build",
         ["npm", "run", "tauri:build", "--prefix", "apps/desktop/frontend", "--",
-         "--debug", "--no-bundle", "--features", "webdriver",
+         "--debug", "--no-bundle", "--features", "desktop-dev,webdriver",
          "--config", "src-tauri/tauri.e2e.conf.json"],
         # The e2e Tauri config reads frontendDist dist-e2e, which build.mjs
         # only emits under this flag.

@@ -22,6 +22,7 @@ import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scen
 import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
 import { artRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/art-rendering.js"
 import { richRenderingMediaWorkflow } from "../../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
+import { setupRichRenderingWork, teardownRichRenderingWork } from "../seed-rich-rendering.mjs"
 import { createHash } from "node:crypto"
 import { answerMacNativeDialog } from "../mac-native-dialog.js"
 
@@ -2274,7 +2275,23 @@ describe("desktop binary workflows and native boundaries", () => {
   })
 
   it("renders, presents, saves, and reopens the rich release fixture", async () => {
-    await richRenderingMediaWorkflow(new DesktopEditorUi())
+    const root = process.env.ELEF_E2E_LIBRARY_ROOT
+    if (!(await $("#library-view").isDisplayed())) {
+      await $("#back-to-library").click()
+      await $("#library-view").waitForDisplayed()
+    }
+    await setupRichRenderingWork(root)
+    await $("#refresh-library").click()
+    try {
+      await richRenderingMediaWorkflow(new DesktopEditorUi())
+    } finally {
+      if (!(await $("#library-view").isDisplayed())) {
+        await $("#back-to-library").click()
+        await $("#library-view").waitForDisplayed()
+      }
+      await teardownRichRenderingWork(root)
+      await $("#refresh-library").click()
+    }
   })
 
   it("runs the shared external-edit conflict flow in the desktop binary", async () => {

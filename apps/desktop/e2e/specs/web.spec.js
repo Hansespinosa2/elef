@@ -16,7 +16,7 @@ import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.j
 import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scenarios/slide-position-grammar.js"
 import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
 import { artRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/art-rendering.js"
-import { richRenderingMediaWorkflow, RICH_RENDERING_TITLE } from "../../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
+import { richRenderingMediaWorkflow, RICH_RENDERING_SOURCE, RICH_RENDERING_TITLE } from "../../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
@@ -1263,7 +1263,26 @@ test("shared Art semantics render consistently in the web app", async ({ page })
 })
 
 test("the rich release fixture renders, presents, saves, and reopens in the web app", async ({ page }) => {
-  await richRenderingMediaWorkflow(new WebEditorUi(page))
+  const pixelPath = path.resolve(process.cwd(), "../../../apps/web/test/fixtures/desktop/release/images/release-pixel.png")
+  const created = execFileSync("bin/rails", ["runner", "-e", "test",
+    `rich = Presentation.create!(title: ${JSON.stringify(RICH_RENDERING_TITLE)}, source: ${JSON.stringify(RICH_RENDERING_SOURCE)}); File.open(${JSON.stringify(pixelPath)}, "rb") { |image| rich.assets.attach(io: image, filename: "release-pixel.png", content_type: "image/png") }; puts "ELEF_E2E_RICH_ID=#{rich.id}"`
+  ], {
+    cwd: path.resolve(process.cwd(), "../../../apps/web"),
+    env: { ...process.env, RAILS_ENV: "test" },
+    encoding: "utf8"
+  }).match(/^ELEF_E2E_RICH_ID=(\d+)$/m)?.[1]
+  expect(created).toBeTruthy()
+  process.env.ELEF_E2E_RICH_PRESENTATION_ID = created
+  try {
+    await richRenderingMediaWorkflow(new WebEditorUi(page))
+  } finally {
+    execFileSync("bin/rails", ["runner", "-e", "test", `Presentation.find_by(id: ${Number(created)})&.destroy!`], {
+      cwd: path.resolve(process.cwd(), "../../../apps/web"),
+      env: { ...process.env, RAILS_ENV: "test" },
+      stdio: "pipe"
+    })
+    delete process.env.ELEF_E2E_RICH_PRESENTATION_ID
+  }
 })
 
 test("slide position stacks and lanes align in the web preview", async ({ page }) => {
