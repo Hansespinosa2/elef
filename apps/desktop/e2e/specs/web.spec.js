@@ -19,28 +19,7 @@ import { artRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/ar
 import { execFileSync } from "node:child_process"
 import path from "node:path"
 import { readFile } from "node:fs/promises"
-import { renderPreviewCore } from "@elef/renderer"
-import { editorChrome } from "@elef/editor-runtime/editor-chrome"
-
-const renderPreview = input => renderPreviewCore(input, { chrome: editorChrome })
-
-async function readApplicationStylesheet() {
-  const index = await readFile(new URL("../../../../apps/web/app/assets/stylesheets/application.css", import.meta.url), "utf8")
-  const layerOrder = index.match(/^\s*@layer [^;]+;/m)?.[0]
-  const imports = [...index.matchAll(/^\s*@import url\("\.\/([^"\n]+\.css)"\) layer\(([^)]+)\);\s*$/gm)]
-  const partials = await Promise.all(imports.map(([, path]) =>
-    readFile(new URL(`../../../../apps/web/app/assets/stylesheets/${path}`, import.meta.url), "utf8")
-  ))
-
-  if (!layerOrder || imports.length === 0) throw new Error("Could not resolve the layered application stylesheet")
-
-  return [
-    layerOrder,
-    ...imports.map(([, , layer], index) => `@layer ${layer} {\n${partials[index]}\n}`)
-  ].join("\n")
-}
-
-const applicationStylesheet = await readApplicationStylesheet()
+import { readHostStylesheets, renderPreview } from "./shared_helpers.js"
 
 function normalizeLineEndings(source) {
   return source.replace(/\r\n|\r/g, "\n")
@@ -1191,13 +1170,7 @@ test("appearance persists through the shared editing flow", async ({ page }) => 
 })
 
 test("shared rendering styles preserve slide layouts and document typography", async ({ page }) => {
-  const styles = {
-    web: (await readFile(new URL("../../../../apps/web/app/assets/builds/tailwind.css", import.meta.url), "utf8")) +
-      applicationStylesheet,
-    desktop: (await readFile(new URL("../../../../apps/web/app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
-      (await readFile(new URL("../../frontend/dist/assets/tailwind.css", import.meta.url), "utf8")) +
-      (await readFile(new URL("../../frontend/dist/assets/app.css", import.meta.url), "utf8"))
-  }
+  const styles = await readHostStylesheets()
   const fixtures = [
     { kind: "presentation", source: "# Roadmap\n\n## First\n\nFirst column.\n\n## Second\n\nSecond column.\n", style: { theme: "light", typography: "book" } },
     { kind: "presentation", source: "# Theme\n\nDark presentation text.\n", style: { theme: "dark", typography: "technical" } },
@@ -1239,13 +1212,7 @@ test("the source editor has matching styles in Rails and the desktop asset bundl
 
   const editorHtml = await page.locator(".editor-shell").evaluate(element => element.outerHTML)
   const codeMirrorStyles = await page.locator("head style").evaluateAll(styles => styles.map(style => style.textContent).join("\n"))
-  const stylesheets = {
-    web: (await readFile(new URL("../../../../apps/web/app/assets/builds/tailwind.css", import.meta.url), "utf8")) +
-      applicationStylesheet,
-    desktop: (await readFile(new URL("../../../../apps/web/app/assets/stylesheets/file_library_host.css", import.meta.url), "utf8")) +
-      (await readFile(new URL("../../frontend/dist/assets/tailwind.css", import.meta.url), "utf8")) +
-      (await readFile(new URL("../../frontend/dist/assets/app.css", import.meta.url), "utf8"))
-  }
+  const stylesheets = await readHostStylesheets()
   const measured = {}
   for (const [target, css] of Object.entries(stylesheets)) {
     await page.setContent(`<!doctype html><html data-theme="dark"><head><style>${css}</style><style>${codeMirrorStyles}</style></head><body class="elef-app"><main class="app-shell mx-auto max-w-[1440px] p-[clamp(1rem,4vw,3rem)]"><form class="visual-editor-form" data-editor-mode="source">${editorHtml}</form></main></body></html>`)
