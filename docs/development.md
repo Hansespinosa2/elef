@@ -69,7 +69,7 @@ cargo fmt --manifest-path Cargo.toml --all -- --check
 cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
 ~~~
 
-Package TypeScript holds the strictest bar: `strict` + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` (see `tsconfig.base.json`). Run the owning package's `typecheck` script for every package you touch — the `npm test` runners bundle with esbuild and do not typecheck. `bin/check quick` runs the contracts and client typechecks only; work-model, renderer, and editor-runtime typechecks run solely when invoked directly. Contortion guard: write explicit narrowing guards instead of `!` assertions; a per-file documented relaxation needs a recorded justification and stays the exception, never the pattern.
+Package TypeScript holds the strictest bar: `strict` + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` (see `tsconfig.base.json`). Run the owning package's `typecheck` script for every package you touch — the `npm test` runners bundle with esbuild and do not typecheck. `bin/check quick` runs the typecheck for every TypeScript package (contracts, client, work-model, renderer, editor-runtime). Contortion guard: write explicit narrowing guards instead of `!` assertions; a per-file documented relaxation needs a recorded justification and stays the exception, never the pattern.
 
 ## Web and desktop parity
 
