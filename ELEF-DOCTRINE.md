@@ -1,43 +1,33 @@
 # Elef Doctrine
 
-These principles describe how creating and presenting with Elef should feel: direct, welcoming, discoverable, and faithful to the author's intent.
+## 1. Expression sharpens understanding
 
-## 1. A movement made is a moment wasted
+We often think we understand something until we try to explain it. Choosing a title, drawing a diagram, or structuring an argument forces us to identify what matters, revealing how little we actually know. Revision is therefore more than polishing an idea for others. The brutal chiseling of an idea is often what creates our very cognitive model of it. Elef should make it effortless to write, rearrange, experiment, and revise.
 
-Optimize aggressively for the keyboard, and make every keystroke earn its place. Frequent actions should be close at hand, while shortcuts should remove friction instead of adding ceremony. The mouse remains welcome, but the fastest path should let focused authors keep their attention on the work.
+## 2. Your attention is not free
 
-## 2. A beautifully tall ceiling
+Every feature, interaction, and decision demanded by software consumes some of its user's limited attention. Elef should minimize that cost so authors can concentrate on their ideas rather than the tool they use to express them. Even useful features must earn their place by providing more value than the complexity they introduce.
 
-Let people grow from first draft to confident mastery without outgrowing Elef. Deeper controls and useful key bindings should make real tasks faster as soon as they are learned, and mastery should feel joyful: the author is capable, in command, and delighted by what the tool makes possible.
+## 3. Write what you mean
 
-## 3. A gently rising floor
+Our ideas have their own structures, relationships, and distinctions, independently of the tools we use to express them. Yet those tools often force us to translate our intentions into commands and manipulations that have little to do with the ideas themselves. **Elef places the burden of that translation on the software, not the author.**
 
-Make the first useful step obvious, then teach through use rather than homework. Buttons can pair a clear label or icon with their key binding, so clicking gets the job done and quietly teaches a faster path for next time. New capabilities should appear when they are relevant, with room to explore.
+## 4. The beauty of simplicity
 
-## 4. Welcome in
+The beauty of a work comes primarily from the clarity of its ideas, the precision of its language, and the care with which it is arranged. Fanciful ornamentation cannot rescue poor thinking, and excellent ideas should not need an afternoon of cosmetic adjustments.. Elef should provide beautiful, restrained defaults that reveal the quality of the content rather than compete with it.
 
-Meet people where they already work. Markdown, LaTeX, PowerPoint, Word, Google Docs, and Obsidian experts should feel at home, while newcomers should feel just as able to begin. Keep familiar strengths close and make the experience feel immediately freeing, whatever the author's starting point.
+## 5. A rising floor and a vaulted ceiling
 
-## 5. What you see is what you get
+Elef should be immediately useful to a beginner and extraordinarily powerful in the hands of an expert. The floor should rise through better defaults, discoverable capabilities, and learning that happens naturally through use, while the ceiling expands through a coherent and increasingly expressive authoring language. Mastery should unlock greater possibilities without imposing their complexity on those who do not need them.
 
-Keep the relationship between source, preview, saving, and export easy to understand. Familiar actions should behave predictably, with visible state when work is being saved or recovered. An author can download a tidy folder, inspect it, and understand the work without needing Elef to explain it.
+## 6. The reader matters
 
-## 6. Brain to keyboard
+We may write to clarify our own thinking, but we communicate with people who were not there as our ideas took shape. The reader was not there as our ideas took shape, and should not have to reconstruct our reasoning or search for the point. Respecting them means carefully choosing what to explain and how to do so. If it helps the audience understand, Elef should make it easier to shape a work around their needs, even when doing so demands more of its author.
 
-Keep the author's attention on the idea, not on operating the editor. As fluency grows, typing and arranging should feel direct enough that the tool fades into the act of thinking and making. Every interaction should help intent reach the page with less translation.
+## 7. Your work is yours
 
-## 7. Keyboard to eyes
+An author's ability to create, access, preserve, and share their work should not depend on the continued permission or availability of a software provider. Elef should favor portable, inspectable content and independent authoring over mandatory accounts, network connections, or proprietary lock-in. The application exists to serve the author's work, not to make that work dependent on the application.
 
-Let authors express meaning in semantic terms and let Elef turn it into deliberate visual structure: semantic input, geometric output. The author should be able to shape hierarchy and emphasis without manually fighting every coordinate, while retaining a clear path to refine the result.
+## 8. Power without magic
 
-## 8. Presentations are for you; Docs are for me
-
-Give each format the job its audience needs. A presentation helps a speaker guide attention in the room; a document helps a reader move at their own pace, find detail, and return to it later. Shared ideas can serve both without forcing both experiences to behave the same way.
-
-## 9. Nothing good is lost
-
-Make experimentation feel safe. Show whether work is saved, keep recoverable drafts when trouble interrupts, and make meaningful revisions available to restore. People can explore more freely when a mistake does not threaten the work they have already made.
-
-## 10. Let polish earn its place
-
-Every visual detail should orient, teach, reassure, or reduce effort. Keep the interface calm enough for ideas to lead, and make refinement serve comprehension rather than decoration. Delight belongs in the clarity and care of the whole experience.
+A powerful tool should not demand blind trust. When authors cannot anticipate the consequences of their actions or understand why something happened, automation undermines their control. Elef should make its behavior predictable, its rules understandable, and its results correctable, so authors can rely on the software without surrendering their judgment.
