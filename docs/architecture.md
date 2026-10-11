@@ -139,3 +139,11 @@ Ask "which row owns the state or behavior?" and put the change there; add a host
 - Tauri capabilities, content security policy, path handling, and untrusted content: [desktop security](desktop/security.md).
 - Architecture decisions and their status: [desktop ADR index](desktop/adr/README.md).
 - Product principles: [Elef Doctrine](../ELEF-DOCTRINE.md).
+
+## Verification homes
+
+- `spec/` owns what must be true: frozen machine-checked law (schemas plus fixtures, with a checker that reads them).
+- `tests/` owns cross-owner executable proof; single-owner tests live next to the code they cover.
+- `tooling/` owns repo-run scripts and release operations.
+
+Boundary rule: no prose in `spec/` unless a checker reads it; nothing in `tests/` that doesn't run. Normative prose lives in `docs/` with its enforcer named in a `Status:` header line.
