@@ -8,6 +8,7 @@ const e2eConfig = JSON.parse(await readFile(new URL("../../src-tauri/tauri.e2e.c
 const stableConfig = JSON.parse(await readFile(new URL("../../src-tauri/tauri.e2e-stable.conf.json", import.meta.url)))
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url)))
 const checkScript = await readFile(new URL("../../../../bin/check", import.meta.url), "utf8")
+const e2eStableCapabilities = await readFile(new URL("../../src-tauri/capabilities/e2e-stable.json", import.meta.url), "utf8")
 
 test("Tauri dev and production builds both rebuild the shared frontend", () => {
   const frontendBuild = "cd ../frontend && npm run build"
@@ -54,4 +55,9 @@ test("Dev, E2E, and Stable E2E builds keep distinct identities and frontends", (
 
 test("The desktop e2e debug build keeps the Dev feature for graph and updater coverage", () => {
   assert.match(checkScript, /"--features", "desktop-dev,webdriver"/)
+})
+
+test("The Stable E2E capability keeps the valid app version permission", () => {
+  assert.match(e2eStableCapabilities, /"core:app:allow-version"/)
+  assert.doesNotMatch(e2eStableCapabilities, /"core:window:allow-version"/)
 })

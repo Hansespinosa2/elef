@@ -13,7 +13,7 @@
   "permissions": [
     "core:default",
     "core:window:allow-set-fullscreen",
-    "core:window:allow-version",
+    "core:app:allow-version",
     "allow-export-diagnostics-fixture"
   ]
 }
