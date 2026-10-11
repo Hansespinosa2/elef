@@ -62,7 +62,7 @@
       "expected_exit_code": 0,
       "observed_exit_code": null,
       "status": "IN_PROGRESS",
-      "note": "On macOS, the harness mounts and verifies a test-only Stable-profile N-1 DMG using the production com.elef.desktop identifier, installs the app under a disposable test directory, then stages signed N and exercises cache persistence, feed block/outage, unsafe-save deferral, interrupted installation, safe quit/relaunch and source preservation. The loopback feed uses an ephemeral key and is not a public release test. The test-only WebDriver feature is required for its interruption failpoint. Linux runs download verification only and has no self-installer."
+      "note": "On macOS, the harness installs the Dev N-1 bundle, exercises the native install confirmation (cancel then accept) into the installed N, then relaunches and verifies version N with work preservation and receipt-matched backup cleanup; then it mounts and verifies a test-only Stable-profile N-1 DMG using the production com.elef.desktop identifier, installs the app under a disposable test directory, installs the signed stable-package N, and verifies the relaunched N preserves the pre-release library selection bytes and cleans its backup. The loopback feed uses an ephemeral key and is not a public release test. Updates install only during safe ordinary quit; the quit-time activation matrix is pinned by the close-flow unit suite. Linux runs download verification only and has no self-installer."
     },
     {
       "id": "arch_native_package_install_upgrade",
@@ -95,12 +95,11 @@
       "target/e2e-packages/n",
       "target/e2e-packages/update.tar.gz",
       "target/e2e-packages/stable-n-1/Elef-0.1.0.dmg",
-      "target/e2e-packages/stable-update.tar.gz",
-      "target/e2e-packages/update.AppImage"
+      "target/e2e-packages/stable-update.tar.gz"
     ],
     "status": "IN_PROGRESS",
     "observed_exit_code": null,
-    "limitation": "On macOS the generator also creates a Stable-profile test DMG and updater archive; those use the production Stable identifier but an ephemeral updater key and loopback feed. They do not establish that production signing secrets, public publication or a physical Mac rehearsal are available. Linux creates the Dev AppImage only for internal update-download checks; the Arch package lifecycle is exercised separately by arch_native_package_install_upgrade."
+    "limitation": "On macOS the generator also creates a Stable-profile test DMG and updater archive; those use the production Stable identifier but an ephemeral updater key and loopback feed. They do not establish that production signing secrets, public publication or a physical Mac rehearsal are available. Linux builds no install fixtures and runs download verification only against the fixture server's in-memory signed bytes; the Arch package lifecycle is exercised separately by arch_native_package_install_upgrade."
   },
   "fixtures": [
     {
@@ -227,10 +226,10 @@
       "expected_exit_code": 0,
       "observed_exit_code": null,
       "invariants": [
-        "On macOS, mount and verify the arm64 Stable-profile N-1 DMG with identifier com.elef.desktop, open the pre-release library-root.json selection, stage signed N, interrupt and restart before activation, then verify cached integrity metadata is reused without redownloading.",
-        "A dirty-save conflict keeps the old app open and preserves both external bytes and the local draft; a later ordinary quit installs and relaunches N with the saved library source.",
+        "On macOS, mount and verify the arm64 Stable-profile N-1 DMG with identifier com.elef.desktop, open the pre-release library-root.json selection, install signed N, then verify version N preserves the selection bytes and removes its receipt-matched previous-installation backup.",
+        "A dirty-save conflict keeps the old app open and defers the armed update; only a saved flush (or a clean quit) with an armed update installs and relaunches N. The close-flow unit suite pins the saved/failed/conflict/cancelled-install matrix.",
         "The packaged N-1/N smoke asserts the successful N relaunch removes exactly its receipt-matched previous-installation backup; later launches may report zero because cleanup already succeeded.",
-        "Invalid signature and version mismatch are rejected by the native install command; central block and interrupted activation still need packaged cases."
+        "Invalid signature and version mismatch are rejected by the native install command."
       ],
       "arch_linux_acceptance": {
         "command": "bash apps/desktop/scripts/arch_package_ci.sh",

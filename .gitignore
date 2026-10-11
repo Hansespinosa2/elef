@@ -34,6 +34,9 @@ packages/*/dist/*.metafile.json
 # Release builds merge this generated updater config over tauri.conf.json; it
 # carries the release version and lane and is regenerated every release.
 /apps/desktop/src-tauri/tauri.release.generated.conf.json
+# The Arch package gate generates the Linux release config per version; it is
+# regenerated every run.
+/apps/desktop/src-tauri/tauri.linux-release.generated.conf.json
 
 # Ignore all logfiles and tempfiles.
 /apps/web/log/*

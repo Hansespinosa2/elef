@@ -50,6 +50,7 @@ jobs:
           npm run test:javascript
           npm test --prefix apps/desktop/frontend
           npm run test:unit --prefix apps/desktop/e2e
+          npm run test:arch-package
           python3 apps/web/script/check_frontend_ownership.py
           python3 tooling/check_boundaries.py
           python3 tooling/check_boundaries.py --self-test
@@ -418,6 +419,35 @@ jobs:
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
         run: bin/check affected
+
+  arch-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Build and validate the Arch package in an official Arch container
+        env:
+          ELEF_BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          mkdir -p target
+          docker run --rm --pull=always \
+            --platform linux/amd64 \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env ELEF_BUILD_SHA \
+            ghcr.io/archlinux/archlinux@sha256:c556b483a8e653aa6389bb66263e1d96cd6e17c67ca5968c87495d313c4a2e93 \
+            bash apps/desktop/scripts/arch_package_ci.sh 2>&1 | tee target/arch-package-gate.log
+      - name: Preserve Arch package evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: arch-package-gate
+          path: |
+            target/arch-release/*
+            target/arch-package-gate.log
+          if-no-files-found: ignore
 
   desktop-macos:
     runs-on: macos-15
