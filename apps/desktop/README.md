@@ -1,5 +1,7 @@
 # Elef Desktop
 
+Reach for when: working in the desktop shell, adapters, or e2e harness.
+
 This directory contains the Tauri shell and file-backed runtime. Shared product UI and behavior live in `packages/client` (React) and `packages/editor-runtime` (Stimulus editor shell); both hosts consume those packages through their public entries, and no host imports from the other host. See the [architecture map](../../docs/architecture.md) and [development guide](../../docs/development.md).
 
 ## Local use

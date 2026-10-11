@@ -1,5 +1,7 @@
 # Development and testing
 
+Reach for when: setting up, choosing a check tier, or running the web/desktop suites.
+
 Use the smallest check that covers a change, then run the shared web/desktop flow when product behavior is shared. Keep test data disposable.
 
 ## Environment

@@ -1,5 +1,7 @@
 # Architecture
 
+Reach for when: deciding where code lives, adding a package, or crossing a host/package boundary.
+
 Elef is a Rails application with a Tauri desktop consumer. Shared product behavior lives in `packages/client` (host-neutral UI and feature workflows), `packages/work-model` (pure Work semantics), `packages/renderer` (deterministic projection), and `packages/editor-runtime` (shared Stimulus editor shell); Rails owns web hosting, persistence, and the web host adapters. The desktop packages the shared sources and adds native filesystem, window, lifecycle, and update adapters.
 
 ## System shape

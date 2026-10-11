@@ -1,5 +1,7 @@
 # Host differences inventory
 
+Reach for when: adding a behavior that differs between the web and desktop hosts.
+
 One Elef product, two hosts. Every entry below is a concrete platform or
 capability difference with a verifiable reason. Bare host-name preference
 ("it differs because the hosts differ") is rejected from this file (P10-03).

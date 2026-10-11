@@ -1,5 +1,7 @@
 # Desktop data format
 
+Reach for when: touching work folders, manifests, archives, or the desktop trust boundary.
+
 The desktop library is a user-owned directory tree. This document records the formats read and written by desktop code; changes to these contracts need matching Rust and fixture coverage.
 
 ## Work folders

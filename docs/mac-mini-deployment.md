@@ -1,5 +1,7 @@
 # Mac mini single-user deployment
 
+Reach for when: deploying or diagnosing the Mac mini dev/prod instances.
+
 Elef runs as two independent Compose instances on the Mac mini. Tailscale is
 the only network boundary. This is a private, single-user deployment.
 

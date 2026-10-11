@@ -1,5 +1,7 @@
 # Elef
 
+Reach for when: orienting on the product and finding the durable guides.
+
 Elef is a Markdown authoring and presentation application with a Rails web app and a Tauri desktop app for macOS and Linux.
 
 ## Data and products

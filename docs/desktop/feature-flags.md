@@ -1,5 +1,7 @@
 # Desktop feature flags
 
+Reach for when: touching revisions, lineage, or the desktop flag register.
+
 This small register records the deferred desktop features. The architecture checker reads these rows and verifies that both desktop defaults stay off; it is not a release roadmap.
 
 | Flag | Desktop | Web | Removal condition |

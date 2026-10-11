@@ -1,5 +1,7 @@
 # Elef Agent Instructions
 
+Reach for when: starting any task in this repo — routing, checks, and safety rules.
+
 Elef is a Markdown authoring and presentation app with a Rails web host and a Tauri desktop host. Shared behavior is implemented once and mounted by both hosts.
 
 ## Start here
