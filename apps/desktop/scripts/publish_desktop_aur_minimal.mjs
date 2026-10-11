@@ -32,6 +32,10 @@ const packageDirectory = path.resolve(packageDirectoryArgument)
 const { tag, version } = parseReleaseTag(process.env.DESKTOP_RELEASE_TAG || "")
 const repository = process.env.GITHUB_REPOSITORY || "Hansespinosa2/elef"
 if (repository.toLowerCase() !== "hansespinosa2/elef") throw new Error("AUR publishing is allowed only for the Elef release repository")
+if (!process.env.AUR_ACCOUNT_NAME && !process.env.AUR_SSH_PRIVATE_KEY) {
+  process.stdout.write("Skipping AUR publication: no AUR account is configured yet (set AUR_ACCOUNT_NAME and AUR_SSH_PRIVATE_KEY to enable pushes). The Arch release asset is unaffected.\n")
+  process.exit(0)
+}
 const githubToken = requiredEnv("GITHUB_TOKEN")
 const maintainer = requiredEnv("AUR_ACCOUNT_NAME")
 const privateKey = requiredEnv("AUR_SSH_PRIVATE_KEY")
