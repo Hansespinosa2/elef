@@ -6,5 +6,5 @@
 - [Data format](data-format.md): deck folders, manifests, library settings, and .elef archives.
 - [Transport boundary](transport-adapter.md): shared application integration with desktop commands and native services.
 - [Security model](security.md): webview capabilities, CSP, file boundaries, and import checks.
-- [Feature flags](delivery-plan.md): the two desktop features kept off and the CI-checked defaults.
+- [Feature flags](feature-flags.md): the two desktop features kept off and the CI-checked defaults.
 - [Decision records](adr/README.md): decisions, current status, and remaining acceptance evidence.
