@@ -676,6 +676,8 @@ desktop_source_reasons = {
     "tauri-host.js": "implements the ElefHost contract over Tauri invoke for the desktop shell",
     "transport-adapter.js": "maps Rails-shaped requests to native command calls",
     "update-flow.js": "drives the Tauri updater and native relaunch",
+    "update-runtime-disabled.js": "reports the package-managed updater boundary on Linux and repository Dev",
+    "update-runtime-macos.js": "drives the macOS-only signed update check, native confirmed install, and safe-quit arming",
 }
 actual_desktop_sources = {
     path.relative_to(desktop_sources).as_posix()

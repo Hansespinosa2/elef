@@ -40,7 +40,8 @@ function startFileLibraryApplication(platform) {
     featureFlags,
     documentGraphRuntime,
     presentationEditorRuntime,
-    updateEnabled = true
+    updateEnabled = true,
+    updateRuntime = null
   } = platform;
   const desktopFeatures = Object.freeze({
     visualEditing: features?.visualEditing !== false,
@@ -137,7 +138,6 @@ function startFileLibraryApplication(platform) {
   let e2eNextSaveDelayMs = 0;
   const documentGraphCache = desktopFeatures.documentGraph ? documentGraphRuntime.createCache(async () => documentGraphRuntime.build(await fileLibrary.readDocumentGraph())) : null;
   let pendingUpdate = null;
-  let updateInstalling = false;
   let libraryStatusLoaded = false;
   let processingOpenedFiles = false;
   let openFilesRequested = false;
@@ -168,7 +168,7 @@ function startFileLibraryApplication(platform) {
         onClose: closeAuthoringSettings,
         onSaved: setStatus
       },
-      updater: platform.updaterSeam
+      ...updateEnabled && platform.updaterSeam ? { updater: platform.updaterSeam } : {}
     });
     authoringHostDialog.showModal();
   }
@@ -455,7 +455,7 @@ function startFileLibraryApplication(platform) {
       shell.setFilter("all");
       void refreshLibrary();
     } else libraryShown = true;
-    void startupUpdateCheck.resume();
+    if (updateEnabled) void startupUpdateCheck.resume();
   }
   function currentFilter() {
     return mount.querySelector("[data-library-tab][aria-current='page']")?.dataset.libraryTab ?? "all";
@@ -838,8 +838,8 @@ function startFileLibraryApplication(platform) {
     }
   }
   async function checkForUpdates(showNoUpdate = true) {
+    if (!updateEnabled) return false;
     if (showNoUpdate) startupUpdateCheck.cancel();
-    if (updateInstalling) return false;
     try {
       const update = await checkForUpdate();
       if (!update) {
@@ -849,7 +849,7 @@ function startFileLibraryApplication(platform) {
       await pendingUpdate?.dispose().catch(() => {
       });
       pendingUpdate = update;
-      elements.updateVersion.textContent = "Version " + update.version + " is ready to install.";
+      elements.updateVersion.textContent = "Version " + update.version + " is ready to install on quit.";
       elements.updateNotes.textContent = update.notes;
       elements.updateProgress.textContent = "The update signature will be verified before installation.";
       elements.updateDialog.showModal();
@@ -859,31 +859,13 @@ function startFileLibraryApplication(platform) {
       return false;
     }
   }
-  async function installUpdate() {
-    if (!pendingUpdate || updateInstalling) return;
-    updateInstalling = true;
-    const button = document.querySelector("#install-update");
-    const later = document.querySelector("#update-later");
-    button.disabled = true;
-    later.disabled = true;
-    try {
-      const installed = await installPendingUpdate(pendingUpdate, {
-        prepare: async () => !hasUnsavedChanges() || await flushSave({ force: true }),
-        onProgress: (event) => {
-          if (event.event === "Started" || event.event === "Progress") {
-            elements.updateProgress.textContent = "Downloading update\u2026";
-          }
-          if (event.event === "Finished") elements.updateProgress.textContent = "Installing update\u2026";
-        }
-      });
-      if (!installed) elements.updateProgress.textContent = "Installation paused. Save your changes and choose Install to try again.";
-    } catch (_error) {
-      showError({ message: "The update could not be installed. Your current version is still available." });
-    } finally {
-      updateInstalling = false;
-      button.disabled = false;
-      later.disabled = false;
-    }
+  async function armUpdateForQuit() {
+    if (!pendingUpdate || !updateRuntime) return;
+    const update = pendingUpdate;
+    pendingUpdate = null;
+    updateRuntime.armPendingUpdate(update);
+    elements.updateDialog.close();
+    setStatus(`Elef will install version ${update.version} when you quit.`);
   }
   async function printCurrentWork() {
     if (!activeWorkFolder) {
@@ -1045,13 +1027,10 @@ function startFileLibraryApplication(platform) {
     elements.settingsDialog.close();
     void openAuthoringSettings();
   });
-  shellElement("#check-for-updates").addEventListener("click", () => void checkForUpdates(true));
-  shellElement("#install-update").addEventListener("click", () => void installUpdate());
+  if (updateEnabled) shellElement("#check-for-updates").addEventListener("click", () => void checkForUpdates(true));
+  shellElement("#install-update").addEventListener("click", () => void armUpdateForQuit());
   elements.presentationExit.addEventListener("click", () => void exitPresentation());
   shellElement("#update-later").addEventListener("click", () => elements.updateDialog.close());
-  elements.updateDialog.addEventListener("cancel", (event) => {
-    if (updateInstalling) event.preventDefault();
-  });
   elements.updateDialog.addEventListener("close", () => {
     const update = pendingUpdate;
     pendingUpdate = null;
@@ -1082,7 +1061,8 @@ function startFileLibraryApplication(platform) {
     flushForClose,
     close: () => getCurrentWindow().close(),
     confirmDiscard: () => fileLibrary.confirmDiscardUnsavedChanges(),
-    onError: showError
+    onError: showError,
+    updateRuntime
   }));
   window.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
@@ -1152,7 +1132,7 @@ function startFileLibraryApplication(platform) {
       void fileLibrary.pendingOpenedElefCount().then((count) => {
         if (count) void processOpenedFiles();
       }).catch(showError);
-      startupUpdateCheck.schedule(1e4);
+      if (updateEnabled) startupUpdateCheck.schedule(1e4);
     }
   }).catch((error) => {
     recordBootstrapFailure?.();

@@ -99,3 +99,110 @@ test("a failed visual-buffer flush prevents closing instead of losing pending in
   assert.equal(prevented, true)
   assert.equal(reported, true)
 })
+
+function armedUpdateRuntime({ install = async () => true } = {}) {
+  let armed = { version: "0.2.0", disposed: 0, dispose: async function () { this.disposed += 1 } }
+  let installs = 0
+  return {
+    runtime: {
+      peekArmedUpdate: () => armed,
+      takeArmedUpdate: () => {
+        const update = armed
+        armed = null
+        return update
+      },
+      armPendingUpdate: update => { armed = update },
+      clearArmedUpdate: () => {
+        if (armed) void armed.dispose()
+        armed = null
+      },
+      installPendingUpdate: async update => {
+        installs += 1
+        assert.equal(update.version, "0.2.0")
+        return install(update)
+      }
+    },
+    state: () => ({ armed: armed?.version ?? null, installs })
+  }
+}
+
+test("a clean quit with an armed update installs and relaunches instead of closing", async () => {
+  let closes = 0
+  let prevented = 0
+  const { runtime, state } = armedUpdateRuntime()
+  const request = createCloseFlow({
+    isDirty: () => false,
+    flushForClose: () => assert.fail("clean quit must not flush"),
+    close: () => { closes += 1 },
+    updateRuntime: runtime
+  })
+  await request({ preventDefault: () => { prevented += 1 } })
+  assert.equal(prevented, 1)
+  assert.equal(closes, 0)
+  assert.deepEqual(state(), { armed: null, installs: 1 })
+})
+
+test("a saved flush with an armed update installs and relaunches instead of closing", async () => {
+  let closes = 0
+  const { runtime, state } = armedUpdateRuntime()
+  const request = createCloseFlow({
+    isDirty: () => true,
+    flushForClose: async () => "saved",
+    close: () => { closes += 1 },
+    updateRuntime: runtime
+  })
+  await request({ preventDefault() {} })
+  assert.equal(closes, 0)
+  assert.deepEqual(state(), { armed: null, installs: 1 })
+})
+
+test("a cancelled safe-quit install disarms and the requested quit proceeds", async () => {
+  let closes = 0
+  const { runtime, state } = armedUpdateRuntime({ install: async () => false })
+  const request = createCloseFlow({
+    isDirty: () => true,
+    flushForClose: async () => "saved",
+    close: () => { closes += 1 },
+    updateRuntime: runtime
+  })
+  await request({ preventDefault() {} })
+  assert.equal(closes, 1)
+  assert.deepEqual(state(), { armed: null, installs: 1 })
+})
+
+test("a failed safe-quit install reports, disarms, and stays open", async () => {
+  let closes = 0
+  const errors = []
+  const failure = new Error("download failed")
+  const { runtime, state } = armedUpdateRuntime({ install: async () => { throw failure } })
+  const request = createCloseFlow({
+    isDirty: () => false,
+    flushForClose: () => assert.fail("clean quit must not flush"),
+    close: () => { closes += 1 },
+    onError: error => errors.push(error),
+    updateRuntime: runtime
+  })
+  await request({ preventDefault() {} })
+  assert.equal(closes, 0)
+  assert.deepEqual(errors, [failure])
+  assert.deepEqual(state(), { armed: null, installs: 1 })
+})
+
+test("an unsafe save with an armed update defers it and stays open without prompting", async () => {
+  for (const outcome of ["failed", "conflict"]) {
+    let closes = 0
+    let confirms = 0
+    const { runtime, state } = armedUpdateRuntime()
+    const request = createCloseFlow({
+      isDirty: () => true,
+      flushForClose: async () => outcome,
+      close: () => { closes += 1 },
+      confirmDiscard: () => { confirms += 1; return true },
+      updateRuntime: runtime
+    })
+    await request({ preventDefault() {} })
+    assert.equal(closes, 0, `${outcome} must stay open`)
+    assert.equal(confirms, 0, `${outcome} must not prompt`)
+    assert.deepEqual(state(), { armed: null, installs: 0 }, `${outcome} must defer the armed update`)
+  }
+})

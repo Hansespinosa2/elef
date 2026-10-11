@@ -15,7 +15,7 @@ function commandError(error) {
   return { code: "internal", message: String(error), retryable: false };
 }
 
-export function createTauriHost({ invoke, readExportFile, initialStatus }) {
+export function createTauriHost({ invoke, readExportFile, initialStatus, updaterEnabled = true }) {
   const baseHashes = new Map();
   // Boot snapshot reuse: the host already fetched get_library_status at
   // boot, so the client's first list serves it instead of paying two more
@@ -305,7 +305,7 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
       accounts: false,
       collaboration: false,
       entitlements: false,
-      updater: true,
+      updater: updaterEnabled,
       nativeMenus: true,
       localFilesystem: true,
     },

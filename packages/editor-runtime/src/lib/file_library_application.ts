@@ -59,6 +59,7 @@ export interface DesktopPlatform {
   checkForUpdate: any;
   createIdleUpdateCheck: any;
   installPendingUpdate: any;
+  updateRuntime?: any;
   desktopAuthoringRegistry: any;
   loadDesktopAuthoringRegistry: any;
   quietSavePolicy: any;
@@ -101,7 +102,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
     registerEditorRuntime, recordBootstrapFailure,
     features, featureFlags, documentGraphRuntime, presentationEditorRuntime,
-    updateEnabled = true
+    updateEnabled = true, updateRuntime = null
   } = platform
 
   const desktopFeatures = Object.freeze({
@@ -210,7 +211,6 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     ? documentGraphRuntime.createCache(async () => documentGraphRuntime.build(await fileLibrary.readDocumentGraph()))
     : null
   let pendingUpdate: any = null
-  let updateInstalling = false
   let libraryStatusLoaded = false
   let processingOpenedFiles = false
   let openFilesRequested = false
@@ -246,7 +246,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
         onClose: closeAuthoringSettings,
         onSaved: setStatus
       },
-      updater: platform.updaterSeam
+      ...(updateEnabled && platform.updaterSeam ? { updater: platform.updaterSeam } : {})
     })
     authoringHostDialog.showModal()
   }
@@ -545,7 +545,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       shell.setFilter("all")
       void refreshLibrary()
     } else libraryShown = true
-    void startupUpdateCheck.resume()
+    if (updateEnabled) void startupUpdateCheck.resume()
   }
 
   // The client owns the active tab; the host reads it back from the settled
@@ -981,8 +981,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   async function checkForUpdates(showNoUpdate = true): Promise<boolean> {
+    if (!updateEnabled) return false
     if (showNoUpdate) startupUpdateCheck.cancel()
-    if (updateInstalling) return false
     try {
       const update = await checkForUpdate()
       if (!update) {
@@ -991,7 +991,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       }
       await pendingUpdate?.dispose().catch(() => {})
       pendingUpdate = update
-      elements.updateVersion.textContent = "Version " + update.version + " is ready to install."
+      elements.updateVersion.textContent = "Version " + update.version + " is ready to install on quit."
       elements.updateNotes.textContent = update.notes
       elements.updateProgress.textContent = "The update signature will be verified before installation."
       elements.updateDialog.showModal()
@@ -1002,31 +1002,17 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
   }
 
-  async function installUpdate(): Promise<void> {
-    if (!pendingUpdate || updateInstalling) return
-    updateInstalling = true
-    const button = document.querySelector("#install-update") as HTMLButtonElement
-    const later = document.querySelector("#update-later") as HTMLButtonElement
-    button.disabled = true
-    later.disabled = true
-    try {
-      const installed = await installPendingUpdate(pendingUpdate, {
-        prepare: async () => !hasUnsavedChanges() || await flushSave({ force: true }),
-        onProgress: (event: any) => {
-          if (event.event === "Started" || event.event === "Progress") {
-            elements.updateProgress.textContent = "Downloading update…"
-          }
-          if (event.event === "Finished") elements.updateProgress.textContent = "Installing update…"
-        }
-      })
-      if (!installed) elements.updateProgress.textContent = "Installation paused. Save your changes and choose Install to try again."
-    } catch (_error) {
-      showError({ message: "The update could not be installed. Your current version is still available." })
-    } finally {
-      updateInstalling = false
-      button.disabled = false
-      later.disabled = false
-    }
+  // Safe-quit arming: the update installs only during a safe ordinary quit,
+  // after the quiet-save flush succeeds. Arming transfers the checked update
+  // into the update runtime (which owns the pending state); the dialog close
+  // handler then has nothing to dispose.
+  async function armUpdateForQuit(): Promise<void> {
+    if (!pendingUpdate || !updateRuntime) return
+    const update = pendingUpdate
+    pendingUpdate = null
+    updateRuntime.armPendingUpdate(update)
+    elements.updateDialog.close()
+    setStatus(`Elef will install version ${update.version} when you quit.`)
   }
 
   async function printCurrentWork(): Promise<void> {
@@ -1211,13 +1197,13 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     elements.settingsDialog.close()
     void openAuthoringSettings()
   })
-  shellElement<HTMLElement>("#check-for-updates").addEventListener("click", () => void checkForUpdates(true))
-  shellElement<HTMLElement>("#install-update").addEventListener("click", () => void installUpdate())
+  // The updater affordances exist only on updater-capable builds; the shell
+  // removes the check button where updates are disabled, so its listener is
+  // attached conditionally. The dialog itself stays in the DOM everywhere.
+  if (updateEnabled) shellElement<HTMLElement>("#check-for-updates").addEventListener("click", () => void checkForUpdates(true))
+  shellElement<HTMLElement>("#install-update").addEventListener("click", () => void armUpdateForQuit())
   elements.presentationExit.addEventListener("click", () => void exitPresentation())
   shellElement<HTMLElement>("#update-later").addEventListener("click", () => elements.updateDialog.close())
-  elements.updateDialog.addEventListener("cancel", event => {
-    if (updateInstalling) event.preventDefault()
-  })
   elements.updateDialog.addEventListener("close", () => {
     const update = pendingUpdate
     pendingUpdate = null
@@ -1247,7 +1233,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     flushForClose,
     close: () => getCurrentWindow().close(),
     confirmDiscard: () => fileLibrary.confirmDiscardUnsavedChanges(),
-    onError: showError
+    onError: showError,
+    updateRuntime
   }))
 
   window.addEventListener("keydown", event => {
@@ -1329,7 +1316,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       void fileLibrary.pendingOpenedElefCount()
         .then((count: any) => { if (count) void processOpenedFiles() })
         .catch(showError)
-      startupUpdateCheck.schedule(10_000)
+      if (updateEnabled) startupUpdateCheck.schedule(10_000)
     }
   }).catch((error: any) => {
     recordBootstrapFailure?.()

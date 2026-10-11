@@ -1,22 +1,20 @@
-import { Channel, invoke } from "@tauri-apps/api/core"
+import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow } from "@tauri-apps/api/window"
-import { relaunch } from "@tauri-apps/plugin-process"
-import { check as checkUpdater } from "@tauri-apps/plugin-updater"
 import { completeBootstrap } from "./bootstrap-flow.js"
 import { createCloseFlow } from "./close-flow.js"
 import { createDiagnosticFailures } from "./diagnostic-failures.js"
 import { createTransportAdapter } from "./transport-adapter.js"
 import { createMediaFetch, mediaUrlsForWorkFolder } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
-import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "./update-flow.js"
+import { createIdleUpdateCheck } from "./update-flow.js"
 import { createFileLibraryTransport } from "#desktop/file-library-transport"
+import { createDesktopUpdateRuntime } from "#desktop/update-runtime"
 import { presentationEditorRuntime, registerEditorRuntime } from "#desktop/editor-runtime"
 import { documentGraphRuntime } from "#desktop/document-graph-runtime"
 import { desktopFeatureFlags, desktopFeatures, desktopProfile } from "./desktop-profile.js"
 import { createTauriHost } from "./tauri-host.js"
 import { createTauriAuthoringTransport } from "./tauri-authoring-transport.js"
-import { createDesktopUpdaterSeam } from "./update-flow.js"
 import builtInRegistry from "../../../../apps/web/app/javascript/data/default_authoring_registry.json"
 import { mergeAuthoringRegistryEntries, startFileLibraryApplication } from "@elef/editor-runtime"
 import { createQuietSavePolicy } from "./quiet-save-policy.js"
@@ -24,6 +22,7 @@ import { desktopAuthoringRegistry, loadDesktopAuthoringRegistry } from "./author
 import "../../../../apps/web/app/assets/stylesheets/application.css"
 
 const fileLibrary = createFileLibraryTransport({ invoke })
+const updateRuntime = createDesktopUpdateRuntime({ invoke })
 const diagnosticFailures = createDiagnosticFailures(invoke)
 const nativeFetch = globalThis.fetch.bind(globalThis)
 
@@ -34,7 +33,9 @@ startFileLibraryApplication({
   featureFlags: desktopFeatureFlags,
   documentGraphRuntime,
   presentationEditorRuntime,
-  createLibraryHost: (initialStatus) => createTauriHost({ invoke, initialStatus }),
+  updateRuntime,
+  updateEnabled: updateRuntime.enabled,
+  createLibraryHost: (initialStatus) => createTauriHost({ invoke, initialStatus, updaterEnabled: updateRuntime.enabled }),
   listen,
   getCurrentWindow,
   completeBootstrap,
@@ -56,12 +57,9 @@ startFileLibraryApplication({
     return () => previewTrace.slice()
   },
   mediaUrlsForWorkFolder,
-  checkForUpdate: () => checkForDesktopUpdate(
-    () => checkUpdater({ timeout: 10_000 }),
-    (version, onProgress) => invoke("install_update", { version, onProgress: new Channel(onProgress) })
-  ),
+  checkForUpdate: updateRuntime.checkForUpdate,
   createIdleUpdateCheck,
-  installPendingUpdate: (update, options) => installDesktopUpdate(update, { ...options, relaunch }),
+  installPendingUpdate: updateRuntime.installPendingUpdate,
   desktopAuthoringRegistry,
   loadDesktopAuthoringRegistry,
   authoringTransport: createTauriAuthoringTransport({
@@ -69,7 +67,7 @@ startFileLibraryApplication({
     builtInEntries: builtInRegistry,
     mergeEntries: mergeAuthoringRegistryEntries
   }),
-  updaterSeam: createDesktopUpdaterSeam({ check: () => checkUpdater({ timeout: 10_000 }) }),
+  updaterSeam: updateRuntime.updaterSeam,
   quietSavePolicy: createQuietSavePolicy(),
   recordBootstrapFailure: diagnosticFailures.recordBootstrapFailure,
   registerEditorRuntime

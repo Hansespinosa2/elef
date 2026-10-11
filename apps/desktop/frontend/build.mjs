@@ -19,14 +19,25 @@ const assets = path.join(output, "assets")
 const isStableProfile = profile === "stable"
 // Profile-selected desktop modules. The Stable variants omit the excluded
 // slices (graph transport command, source-only controller registration,
-// null graph runtime); Dev keeps the full surface. The updater runtime
-// alias lands with the macOS updater boundary (slice B).
+// null graph runtime); Dev keeps the full surface. The updater runtime is
+// platform-selected on top: only Stable macOS and the loopback-only macOS
+// E2E bundle resolve the updater-capable runtime. Linux (either profile)
+// and repository Dev resolve the disabled runtime, so those bundles never
+// import the updater plugins; the native capability plus cfg gate denies
+// the commands as well (enforcement-by-capability plus cfg).
 const desktopProfileModules = {
   "#desktop/file-library-transport": isStableProfile
     ? path.join(frontendRoot, "src/file-library-transport-stable.js")
     : path.join(frontendRoot, "src/file-library-transport.js"),
   "#desktop/editor-runtime": path.join(frontendRoot, `src/editor-runtime-${profile}.js`),
-  "#desktop/document-graph-runtime": path.join(frontendRoot, `src/document-graph-runtime-${profile}.js`)
+  "#desktop/document-graph-runtime": path.join(frontendRoot, `src/document-graph-runtime-${profile}.js`),
+  "#desktop/update-runtime": profile === "stable" && process.platform === "darwin"
+    ? path.join(frontendRoot, "src/update-runtime-macos.js")
+    // The separate loopback-only E2E bundle tests safe restart updates without
+    // adding the updater to repository Dev or the production Linux profile.
+    : e2eBuild && process.platform === "darwin"
+      ? path.join(frontendRoot, "src/update-runtime-macos.js")
+      : path.join(frontendRoot, "src/update-runtime-disabled.js")
 }
 // The Stable profile resolves the bare workspace specifiers below to the
 // Stable dist variants those packages build from their stable entries;
