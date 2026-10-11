@@ -319,7 +319,10 @@ class WebEditorUi {
       controller.setSelectionRange(nextSource.length)
       return controller.sourceValue
     }, source)
-    expect(restoredSource).toBe(source)
+    // Compare modulo line endings: a save cycle can legitimately flip LF to
+    // CRLF (textarea post), while the restored bytes predate the save.
+    expect(restoredSource).not.toBeNull()
+    expect(normalizeLineEndings(restoredSource)).toBe(normalizeLineEndings(source))
   }
 
   async readSource() {
@@ -1276,7 +1279,11 @@ test("the rich release fixture renders, presents, saves, and reopens in the web 
   try {
     await richRenderingMediaWorkflow(new WebEditorUi(page))
   } finally {
-    execFileSync("bin/rails", ["runner", "-e", "test", `Presentation.find_by(id: ${Number(created)})&.destroy!`], {
+    // The workflow's last autosave can still be in flight: re-find and
+    // retry so a stale lock_version never orphans the record.
+    execFileSync("bin/rails", ["runner", "-e", "test",
+      `loop do record = Presentation.find_by(id: ${Number(created)}); break unless record; begin; record.destroy!; break; rescue ActiveRecord::StaleObjectError; end; end`
+    ], {
       cwd: path.resolve(process.cwd(), "../../../apps/web"),
       env: { ...process.env, RAILS_ENV: "test" },
       stdio: "pipe"
