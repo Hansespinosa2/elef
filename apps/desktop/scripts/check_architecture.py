@@ -45,7 +45,7 @@ assert performance_workflow.count("--launch-count 10 --report-runner") == 2, "sc
 assert 'schedule:' in performance_workflow and 'push:\n    branches:\n      - dev' in performance_workflow and "pull_request:" not in performance_workflow, "native measurements must run on dev pushes and outside pull-request authorization"
 assert 'DEFAULT_LAUNCH_COUNT = 20' in (REPO_ROOT / "apps" / "desktop" / "e2e" / "native-benchmark-config.js").read_text(), "local/target measurement default remains twenty launches"
 feature_flags_source = (REPO_ROOT / "packages" / "editor-runtime" / "src" / "lib" / "feature_flags.ts").read_text()
-delivery_plan = (REPO_ROOT / "docs" / "desktop" / "delivery-plan.md").read_text()
+feature_flags_doc = (REPO_ROOT / "docs" / "desktop" / "feature-flags.md").read_text()
 document_model = (REPO_ROOT / "apps" / "web" / "app" / "lib" / "source" / "document.rb").read_text()
 javascript_renderer = (REPO_ROOT / "apps" / "web" / "app" / "lib" / "source" / "javascript_renderer.rb").read_text()
 renderer_global = (REPO_ROOT / "packages" / "renderer" / "src" / "renderer_global.ts").read_text()
@@ -256,7 +256,7 @@ assert feature_flags == {
     "ELEF_ENABLE_LINEAGE": False,
 }, f"desktop deferred-feature defaults must stay explicitly off: {feature_flags}"
 for flag in feature_flags:
-    assert re.search(rf"\| `{flag}` \| off \| on \|", delivery_plan), f"{flag} is missing from the feature register"
+    assert re.search(rf"\| `{flag}` \| off \| on \|", feature_flags_doc), f"{flag} is missing from the feature register"
 assert "applyDesktopFeatureFlags(document)" in desktop_application, "the shared application must apply feature flags at startup"
 assert re.search(r"def editor_map\([^)]*\).*?Source::JavascriptRenderer\.editor_map", document_model, re.DOTALL), "Rails editor maps must delegate to the shared JavaScript implementation"
 assert '"ElefRenderer.buildEditorMap"' in javascript_renderer, "the Rails wrapper must call the shared map exported by the renderer bundle"

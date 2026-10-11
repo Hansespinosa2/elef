@@ -2,7 +2,7 @@
 //
 // The host executes the branch its capability declares (P10-02): the web app
 // runs the shared client features/export flow against Rails; the desktop has
-// no export surface (HD-06 in tests/host-differences.md) and asserts the
+// no export surface (HD-06 in docs/host-differences.md) and asserts the
 // explicit disabled path. Byte-level PPTX contracts stay in the Rails export
 // tests (service + system); this scenario proves the shared flow completes —
 // or is explicitly absent — on each real host.
