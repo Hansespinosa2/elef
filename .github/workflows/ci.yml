@@ -51,8 +51,6 @@ jobs:
           npm test --prefix apps/desktop/frontend
           npm run test:unit --prefix apps/desktop/e2e
           python3 apps/web/script/check_frontend_ownership.py
-          python3 apps/web/script/check_art_static.py
-          python3 apps/web/script/check_art_traceability.py
           python3 tooling/check_boundaries.py
           python3 tooling/check_boundaries.py --self-test
           cargo test --manifest-path Cargo.toml -p local-store --locked

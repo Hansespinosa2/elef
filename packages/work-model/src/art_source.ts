@@ -4,6 +4,16 @@
 // parsing only, no DOM. The boundary map (block starts/ends, directive
 // and blank lines) is shared with Ruby, which consumes blankLines to skip
 // protected lines with the same definition.
+//
+// Syntax: exact column-0 `:::art` on its own line, no arguments (`:art`
+// inserts exactly this line). It binds the next root Markdown list; only
+// blank lines or valid align/position directives may intervene, and any
+// other block, a closing :::, or an unknown directive blocks binding.
+// Root <ul> means Peers, root <ol> means Sequence; only direct root items
+// are Art items and nested lists stay recursive Markdown body content.
+// Art-looking text in fences, math, quotes, or nested content is ordinary
+// text. Layout, fallback, and diagnostics are pinned by art_contract and
+// the art_* suites, not prose.
 /// <reference path="./types/markdown-it.d.ts" />
 import MarkdownIt, { type MarkdownItToken } from "markdown-it"
 
