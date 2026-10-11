@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 
 import { createFileLibraryTransport } from "../src/file-library-transport.js"
+import { createFileLibraryTransport as createStableFileLibraryTransport } from "../src/file-library-transport-stable.js"
 
 test("the file library transport keeps native command names and payloads at the desktop boundary", async () => {
   const calls = []
@@ -52,6 +53,27 @@ test("the file library transport keeps native command names and payloads at the 
     ["resolve_import_conflict", { resolution: "keep_both" }],
     ["pending_open_elef_count", undefined],
     ["confirm_app_ready", undefined],
+    ["export_diagnostics", undefined]
+  ])
+})
+
+test("the stable file library transport keeps the base commands and omits the document graph", async () => {
+  const calls = []
+  const transport = createStableFileLibraryTransport({
+    invoke: async (command, payload) => {
+      calls.push([command, payload])
+      return { ok: true }
+    }
+  })
+
+  assert.equal(typeof transport.readDocumentGraph, "undefined")
+  await transport.listWorkFolders()
+  await transport.readSourcePreview("work-id")
+  await transport.exportDiagnostics()
+
+  assert.deepEqual(calls, [
+    ["list_work_folders", undefined],
+    ["read_work_folder_preview", { id: "work-id" }],
     ["export_diagnostics", undefined]
   ])
 })
