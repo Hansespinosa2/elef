@@ -217,7 +217,7 @@ assert.deepEqual(
 )
 assert.deepEqual(
   stableE2eAcl.permissions,
-  ["core:default", "core:window:allow-set-fullscreen", "core:window:allow-version", "allow-export-diagnostics-fixture"],
+  ["core:default", "core:window:allow-set-fullscreen", "core:app:allow-version", "allow-export-diagnostics-fixture"],
   "the Stable e2e capability must carry only the WebDriver surface plus the diagnostics fixture"
 )
 // Updater boundary: only the macOS-only capability grants the install
