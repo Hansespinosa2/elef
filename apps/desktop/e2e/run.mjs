@@ -11,6 +11,8 @@ import { CONFLICT_BASELINE_SOURCE, CONFLICT_WORK_NAME, CONFLICT_SOURCE_FILE } fr
 import { RICH_RENDERING_SOURCE, RICH_RENDERING_TITLE } from "../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
 import { runNativeQuitSmokes } from "./native-quit-smoke.js"
 import { createDesktopAppEnvironment } from "./desktop-app-environment.js"
+import { verifyDiagnosticsArchive } from "./diagnostics-archive.js"
+import { installMacDmgFixture } from "./install-macos-dmg-fixture.js"
 import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
 import { runStableProfileSmoke } from "./stable-profile-smoke.js"
 import { runIdentityIsolationSmoke } from "./identity-isolation-smoke.js"
@@ -70,31 +72,23 @@ const env = {
   ELEF_E2E_SEED_WORK_ID: "a3d0f020-6605-4f9e-a96d-d825ee4b13f1"
 }
 
-if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
+// Installed self-updates run on macOS only. Linux upgrades through its
+// package manager: no install fixtures are built there and the packaged
+// flow stays off, while download verification still runs inside the desktop
+// scenarios.
+const packagedUpdatesRequested = process.env.ELEF_E2E_PACKAGED_UPDATES === "1" && process.platform === "darwin"
+if (packagedUpdatesRequested) {
   const packages = path.join(repoRoot, "target/e2e-packages")
   const installed = path.join(temporaryRoot, "installed")
   await cp(path.join(packages, "n-1"), installed, { recursive: true, verbatimSymlinks: true })
   env.ELEF_E2E_PACKAGED_UPDATES = "1"
-  env.ELEF_E2E_APP_BINARY = process.platform === "darwin"
-    ? path.join(installed, "Elef.app/Contents/MacOS/elef-desktop") : path.join(installed, "Elef.AppImage")
+  env.ELEF_E2E_APP_BINARY = path.join(installed, "Elef.app/Contents/MacOS/elef-desktop")
   env.ELEF_E2E_INSTALLED_ARTIFACT = env.ELEF_E2E_APP_BINARY
-  env.ELEF_E2E_UPDATE_PACKAGE = path.join(packages, process.platform === "darwin" ? "update.tar.gz" : "update.AppImage")
-  if (process.platform === "linux") await prepareInstalledAppImage()
-} else if (process.env.CI) {
-  throw new Error("CI must exercise the installed N-1 and N updater packages")
-}
-
-async function prepareInstalledAppImage() {
-  const image = env.ELEF_E2E_INSTALLED_ARTIFACT
-  const extraction = path.join(temporaryRoot, "installed-extraction")
-  await rm(extraction, { recursive: true, force: true })
-  await mkdir(extraction)
-  // CI has no FUSE mount. Use the AppImage runtime's own extraction operation,
-  // then start its packaged binary directly so WebDriver owns the actual PID.
-  execFileSync(image, ["--appimage-extract"], { cwd: extraction, stdio: "ignore", timeout: 60_000 })
-  env.ELEF_E2E_APP_BINARY = path.join(extraction, "squashfs-root/AppRun")
-  env.APPDIR = path.join(extraction, "squashfs-root")
-  env.APPIMAGE = image
+  env.ELEF_E2E_UPDATE_PACKAGE = path.join(packages, "update.tar.gz")
+  env.ELEF_E2E_STABLE_DMG = path.join(packages, "stable-n-1", "Elef-0.1.0.dmg")
+  env.ELEF_E2E_STABLE_UPDATE_PACKAGE = path.join(packages, "stable-update.tar.gz")
+} else if (process.env.CI && process.platform === "darwin") {
+  throw new Error("macOS CI must exercise the installed N-1 and N updater packages")
 }
 
 async function hashTree(root, relative = "") {
@@ -296,12 +290,56 @@ try {
   if (desktopResult.error) throw desktopResult.error
   if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
   if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {
-    if (process.platform === "linux") await prepareInstalledAppImage()
     const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
       cwd: e2eRoot, env: { ...desktopAppEnvironment(desktopEnv()), ELEF_E2E_VERIFY_UPGRADED: "1" }, stdio: "inherit"
     })
     if (upgradedResult.error) throw upgradedResult.error
     if (upgradedResult.status !== 0) throw new Error("The installed update did not launch and preserve the work")
+    // Stable packaged N-1 → N on the production identifier: install the
+    // test-only Stable DMG, seed the previous library selection exactly as a
+    // pre-release install left it, then install the signed stable-package N
+    // and verify the relaunched N preserves the selection and cleans its
+    // receipt-matched backup.
+    const stableInstallDirectory = path.join(temporaryRoot, "stable-installed")
+    const stableBinary = await installMacDmgFixture(env.ELEF_E2E_STABLE_DMG, stableInstallDirectory)
+    const stableAppData = path.join(isolatedHome, "Library", "Application Support", "com.elef.desktop")
+    const stableStatePath = path.join(stableAppData, "library-root.json")
+    const preReleaseStateTemplate = await readFile(path.join(releaseFixtureRoot,
+      "pre-release-app-state/library-root.json.template"), "utf8")
+    const preReleaseState = preReleaseStateTemplate.replace("${ELEF_RELEASE_FIXTURE_LIBRARY_ROOT}", libraryRoot)
+    await mkdir(stableAppData, { recursive: true })
+    await writeFile(stableStatePath, preReleaseState)
+    const stableChildEnv = () => {
+      const child = {
+        ...desktopAppEnvironment(desktopEnv()),
+        ELEF_E2E_PROFILE: "stable-packaged",
+        ELEF_E2E_APP_BINARY: stableBinary,
+        ELEF_E2E_INSTALLED_ARTIFACT: stableBinary,
+        ELEF_E2E_PRE_RELEASE_STATE: stableStatePath,
+        ELEF_E2E_EXPECTED_PRE_RELEASE_STATE: preReleaseState
+      }
+      // The Stable packaged app must boot from its app-data selection (the
+      // identity-probe path), not the harness library override.
+      delete child.ELEF_E2E_LIBRARY_ROOT
+      if (child.ELEF_E2E_REAL_APP_BINARY) child.ELEF_E2E_REAL_APP_BINARY = stableBinary
+      return child
+    }
+    const stableInstallResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
+      cwd: e2eRoot, env: stableChildEnv(), stdio: "inherit"
+    })
+    if (stableInstallResult.error) throw stableInstallResult.error
+    if (stableInstallResult.status !== 0) throw new Error("The signed Stable package did not install")
+    assert.equal(await readFile(stableStatePath, "utf8"), preReleaseState,
+      "Stable's packaged install must preserve the previous library-root.json bytes")
+    await rm(env.ELEF_E2E_DIAGNOSTICS_EXPORT_PATH, { force: true })
+    const stableUpgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
+      cwd: e2eRoot, env: { ...stableChildEnv(), ELEF_E2E_VERIFY_STABLE_UPGRADED: "1" }, stdio: "inherit"
+    })
+    if (stableUpgradedResult.error) throw stableUpgradedResult.error
+    if (stableUpgradedResult.status !== 0) throw new Error("The installed Stable update did not launch and preserve the selection")
+    assert.equal(await readFile(stableStatePath, "utf8"), preReleaseState,
+      "The Stable N-1 to N update must preserve the previous Stable library selection bytes")
+    await verifyDiagnosticsArchive(env.ELEF_E2E_DIAGNOSTICS_EXPORT_PATH, "stable")
   }
 
   const desktopSource = await readFile(path.join(seedWorkFolder, "presentation.md"), "utf8")

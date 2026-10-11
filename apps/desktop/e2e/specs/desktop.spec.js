@@ -1,3 +1,4 @@
+import assert from "node:assert/strict"
 import { $, $$, browser } from "@wdio/globals"
 import { Key } from "webdriverio"
 import { execFileSync, spawn } from "node:child_process"
@@ -2304,13 +2305,19 @@ describe("desktop binary workflows and native boundaries", () => {
     await authoringSettingsWorkflow(new DesktopEditorUi())
   })
 
-  it("shows the updater affordance on the updater-capable desktop settings", async () => {
+  it("shows the updater affordance only where the updater boundary allows it", async () => {
     await openDesktopAuthoringSettings()
-    const updates = $("section[aria-label='Updates']")
-    await updates.waitForDisplayed({ timeout: 10_000 })
-    // Presence is capability-driven; the status line itself may still be
-    // resolving the updater endpoint in the background.
-    await $("section[aria-label='Updates'] button").waitForDisplayed()
+    // The updater boundary is macOS-only: macOS shows the settings Updates
+    // section, while Linux (package-managed) renders no updater affordance.
+    if (process.platform === "linux") {
+      assert.equal(await $("section[aria-label='Updates']").isExisting(), false)
+    } else {
+      const updates = $("section[aria-label='Updates']")
+      await updates.waitForDisplayed({ timeout: 10_000 })
+      // Presence is capability-driven; the status line itself may still be
+      // resolving the updater endpoint in the background.
+      await $("section[aria-label='Updates'] button").waitForDisplayed()
+    }
     await $("#close-authoring-settings").click()
     await $("#authoring-settings-dialog").waitForDisplayed({ reverse: true })
   })
@@ -2765,7 +2772,7 @@ describe("native updater verification", () => {
         if (process.platform === "darwin") {
           answerMacNativeDialog(accept ? "OK" : "Cancel")
         } else if (process.platform === "linux") {
-          const dialogId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--name", "^Install Elef update$"], {
+          const dialogId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--name", "^Install Elef update on quit$"], {
             encoding: "utf8", timeout: 15_000
           }).trim().split(/\s+/).at(-1)
           execFileSync("xdotool", ["windowactivate", "--sync", dialogId], { timeout: 5_000 })

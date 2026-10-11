@@ -100,8 +100,34 @@ describe("Stable profile exclusions", () => {
       )
     })
     assert.equal(graphCommandReachable, false, "Stable must not register or grant the document graph command")
-    // The Stable updater IPC boundary (unregistered update commands on
-    // Linux) lands with the macOS updater boundary in slice B.
+
+    // Updater boundary: Linux Stable is package-managed, so the install
+    // command is unregistered there (and would be capability-denied if it
+    // were registered). macOS Stable keeps the updater path.
+    if (process.platform === "linux") {
+      const updaterCommands = await browser.executeAsync((commands, done) => {
+        const { invoke, Channel } = window.__TAURI__.core
+        Promise.all(commands.map(async command => {
+          try {
+            await invoke(command, { version: "0.2.0", onProgress: new Channel() })
+            return { command, error: null }
+          } catch (error) {
+            return { command, error: error?.message || String(error) }
+          }
+        })).then(done, error => done({ failure: error?.message || String(error) }))
+      }, ["install_update"])
+      assert.ok(Array.isArray(updaterCommands), updaterCommands.failure || "Updater command checks did not return results")
+      for (const result of updaterCommands) {
+        const permission = result.command.replaceAll("_", "-")
+        const error = result.error || ""
+        const notRegistered = new RegExp(`\\b${result.command}\\b.*\\bnot found\\b`, "i")
+        const permissionDenied = new RegExp(
+          `\\b${result.command}\\b.*\\bnot allowed\\b.*\\ballow-${permission}\\b`, "i"
+        )
+        assert.ok(notRegistered.test(error) || permissionDenied.test(error),
+          `Linux Stable must reject ${result.command} as unregistered or without allow-${permission} permission; received ${error}`)
+      }
+    }
 
     const changed = await browser.execute(source => {
       const editor = document.querySelector("#desktop-editor-field").editorController

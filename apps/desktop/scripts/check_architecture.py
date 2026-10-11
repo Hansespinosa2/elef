@@ -29,8 +29,10 @@ build_source = (TAURI_ROOT / "build.rs").read_text()
 app_source = (TAURI_ROOT / "src" / "lib.rs").read_text()
 capability = json.loads((TAURI_ROOT / "capabilities" / "main.json").read_text())
 e2e_capability = json.loads((TAURI_ROOT / "capabilities" / "e2e.json").read_text())
+macos_updater_capability = json.loads((TAURI_ROOT / "capabilities" / "macos-updater.json").read_text())
 config = json.loads((TAURI_ROOT / "tauri.conf.json").read_text())
 e2e_config = json.loads((TAURI_ROOT / "tauri.e2e.conf.json").read_text())
+e2e_stable_config = json.loads((TAURI_ROOT / "tauri.e2e-stable.conf.json").read_text())
 performance_config = json.loads((TAURI_ROOT / "tauri.performance.conf.json").read_text())
 assert performance_config == {"plugins": {"updater": {"endpoints": ["https://127.0.0.1:8888/manifest"]}}}, "release measurement must keep secure transport and a loopback-only offline check"
 performance_benchmark = (REPO_ROOT / "apps" / "desktop" / "e2e" / "benchmark-native.mjs").read_text()
@@ -187,11 +189,12 @@ assert "createElementNS" not in desktop_application and "document-graph-node" no
 
 declared = command_names(build_source, r"macro_rules! command_list \{(.*?)\$\(\$extra\)")
 assert "document_graph" not in declared, "the graph command must not be in the production command base"
+assert "install_update" not in declared, "the install command must not be in the production command base"
 matrix_commands = set()
-for command_call in re.findall(r"command_list!\((.*?)\)", build_source):
+for command_call in re.findall(r"command_list!\((.*?)\)", build_source, re.DOTALL):
     matrix_commands.update(re.findall(r'"([a-z_]+)"', command_call))
-assert matrix_commands == {"document_graph", "export_diagnostics_fixture"}, (
-    f"only the Dev graph command and the diagnostics fixture may extend the base list: {sorted(matrix_commands)}"
+assert matrix_commands == {"document_graph", "install_update", "export_diagnostics_fixture"}, (
+    f"only the Dev graph command, the updater install command, and the diagnostics fixture may extend the base list: {sorted(matrix_commands)}"
 )
 assert 'std::env::var_os("CARGO_FEATURE_DESKTOP_DEV").is_some()' in build_source, (
     "the graph command must be gated on the desktop-dev feature"
@@ -199,15 +202,23 @@ assert 'std::env::var_os("CARGO_FEATURE_DESKTOP_DEV").is_some()' in build_source
 assert 'std::env::var_os("CARGO_FEATURE_WEBDRIVER").is_some()' in build_source, (
     "test-only commands must be gated on the WebDriver feature"
 )
-assert "(desktop_dev, webdriver)" in build_source, "build.rs must gate commands on the desktop-dev and webdriver matrix"
-assert '(true, true) => command_list!("document_graph", "export_diagnostics_fixture")' in build_source, "the Dev e2e matrix cell must grant the graph command and the fixture"
-assert '(true, false) => command_list!("document_graph")' in build_source, "the Dev matrix cell must grant only the graph command"
-assert '(false, true) => command_list!("export_diagnostics_fixture")' in build_source, "the Stable e2e matrix cell must grant only the fixture"
-assert "(false, false) => command_list!()" in build_source, "the Stable matrix cell must grant no extra commands"
+assert "(desktop_dev, has_update_command, webdriver)" in build_source, "build.rs must gate commands on the desktop-dev, updater, and webdriver matrix"
+assert 'let has_update_command = target_os == "macos" || (desktop_dev && webdriver);' in build_source, (
+    "the install command must exist only on macOS or in the Dev WebDriver harness"
+)
+assert '(true, true, false) => command_list!("document_graph", "install_update")' in build_source, "the macOS Dev matrix cell must grant the graph and install commands"
+assert '"document_graph",\n                "install_update",\n                "export_diagnostics_fixture"' in build_source, "the Dev e2e matrix cell must grant the graph and install commands plus the fixture"
+assert '(true, false, false) => command_list!("document_graph")' in build_source, "the Linux Dev matrix cell must grant only the graph command"
+assert '"install_update",\n                "export_diagnostics_fixture"' in build_source, "the macOS Stable e2e matrix cell must grant the install command plus the fixture"
+assert '(false, true, false) => command_list!("install_update")' in build_source, "the macOS Stable matrix cell must grant only the install command"
+assert '(false, false, true) => command_list!("export_diagnostics_fixture")' in build_source, "the Linux Stable e2e matrix cell must grant only the fixture"
+assert "(false, false, false) => command_list!()" in build_source, "the Linux Stable matrix cell must grant no extra commands"
+assert re.search(r'#\[cfg\(any\(\s*target_os = "macos",\s*all\(feature = "desktop-dev", feature = "webdriver"\)\s*\)\)\]', app_source), "Linux Stable must not compile updater code"
+assert "app_commands!(document_graph)" in app_source and "app_commands!(install_update)" in app_source, "the handler matrix must cover the Dev-only and updater-only cells"
 shared_command_references = sorted(
     f"{source_file.relative_to(REPO_ROOT)} -> {command}"
     for source_file in app_javascript_source.rglob("*.js")
-    for command in declared | {"document_graph"}
+    for command in declared | {"document_graph", "install_update"}
     if re.search(rf"(?<![\w])['\"]{re.escape(command)}['\"]", source_file.read_text())
 )
 assert not shared_command_references, (
@@ -223,17 +234,32 @@ handler_match = re.search(
 if not handler_match:
     raise AssertionError("could not find Tauri invoke handler")
 registered = set(re.findall(r"^\s*([a-z_]+),\s*$", handler_match.group(1), re.MULTILINE))
-assert '#[cfg(all(feature = "desktop-dev", feature = "webdriver"))]\n    let builder = builder.invoke_handler(app_commands!(document_graph, export_diagnostics_fixture));' in app_source, (
-    "the Dev WebDriver build must register the graph command and the fixture"
+assert '#[cfg(all(feature = "desktop-dev", feature = "webdriver"))]\n    let builder = builder.invoke_handler(app_commands!(\n        document_graph,\n        install_update,\n        export_diagnostics_fixture\n    ));' in app_source, (
+    "the Dev WebDriver build must register the graph and install commands plus the fixture"
 )
-assert '#[cfg(all(feature = "desktop-dev", not(feature = "webdriver")))]\n    let builder = builder.invoke_handler(app_commands!(document_graph));' in app_source, (
-    "the Dev build must register only the graph command beyond the base list"
+assert '#[cfg(all(\n        feature = "desktop-dev",\n        not(feature = "webdriver"),\n        target_os = "macos"\n    ))]\n    let builder = builder.invoke_handler(app_commands!(document_graph, install_update));' in app_source, (
+    "the macOS Dev build must register the graph and install commands beyond the base list"
 )
-assert '#[cfg(all(not(feature = "desktop-dev"), feature = "webdriver"))]\n    let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));' in app_source, (
-    "the Stable WebDriver build must register only the fixture beyond the base list"
+assert '#[cfg(all(\n        feature = "desktop-dev",\n        not(feature = "webdriver"),\n        not(target_os = "macos")\n    ))]\n    let builder = builder.invoke_handler(app_commands!(document_graph));' in app_source, (
+    "the Linux Dev build must register only the graph command beyond the base list"
 )
-assert '#[cfg(all(not(feature = "desktop-dev"), not(feature = "webdriver")))]\n    let builder = builder.invoke_handler(app_commands!());' in app_source, (
-    "production builds must register only the base command list"
+assert '#[cfg(all(\n        not(feature = "desktop-dev"),\n        target_os = "macos",\n        feature = "webdriver"\n    ))]\n    let builder = builder.invoke_handler(app_commands!(install_update, export_diagnostics_fixture));' in app_source, (
+    "the macOS Stable WebDriver build must register the install command plus the fixture"
+)
+assert '#[cfg(all(\n        not(feature = "desktop-dev"),\n        target_os = "macos",\n        not(feature = "webdriver")\n    ))]\n    let builder = builder.invoke_handler(app_commands!(install_update));' in app_source, (
+    "the macOS Stable build must register only the install command beyond the base list"
+)
+assert '#[cfg(all(\n        not(feature = "desktop-dev"),\n        not(target_os = "macos"),\n        feature = "webdriver"\n    ))]\n    let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));' in app_source, (
+    "the Linux Stable WebDriver build must register only the fixture beyond the base list"
+)
+assert '#[cfg(all(\n        not(feature = "desktop-dev"),\n        not(target_os = "macos"),\n        not(feature = "webdriver")\n    ))]\n    let builder = builder.invoke_handler(app_commands!());' in app_source, (
+    "Linux Stable production builds must register only the base command list"
+)
+assert '.plugin(tauri_plugin_process::init())\n        .plugin(updater.build());' in app_source, (
+    "the updater and restart plugins must register only where the updater boundary allows installs"
+)
+assert '"check-for-updates" => {' in app_source, (
+    "the Stable macOS menu must keep its update-check action"
 )
 assert '#[cfg(feature = "desktop-dev")]\nuse crate::work_folders::document_graph;' in app_source, (
     "the graph command import must exist only under desktop-dev"
@@ -256,6 +282,14 @@ dev_allowed = {
     and not permission.startswith("core:")
 }
 assert dev_allowed == declared | {"document_graph"}, f"the Dev capability must add exactly the graph command: {dev_allowed ^ (declared | {'document_graph'})}"
+macos_updater_allowed = {
+    permission.removeprefix("allow-").replace("-", "_")
+    for permission in macos_updater_capability["permissions"]
+    if permission.startswith("allow-")
+    and not permission.startswith("core:")
+}
+assert macos_updater_allowed == {"install_update"}, f"only the macOS updater capability may activate a signed update: {sorted(macos_updater_allowed)}"
+assert macos_updater_capability["platforms"] == ["macOS"], "updater command permissions must be macOS-only"
 assert "core:default" not in permissions, "use only the individual core permissions needed"
 assert {permission for permission in permissions if permission.startswith("core:")} == {
     "core:event:allow-listen",
@@ -267,8 +301,9 @@ assert {permission for permission in permissions if permission.startswith("core:
 }, "grant only events, window close completion, presentation fullscreen, and releasing updater resources"
 assert "await this.destroy();" in (REPO_ROOT / "apps/desktop/frontend/node_modules/@tauri-apps/api/window.js").read_text(), "recheck window permissions when the close-listener implementation changes"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
-assert config["app"]["security"]["capabilities"] == ["main-capability"], "production must not attach the E2E WebDriver capability"
+assert config["app"]["security"]["capabilities"] == ["main-capability", "macos-updater-capability"], "Stable must attach only its common and macOS-only updater capabilities"
 assert e2e_config["app"]["security"]["capabilities"] == ["main-dev-capability", "e2e-webdriver"], "the Dev test build must attach only the Dev and E2E capabilities"
+assert e2e_stable_config["app"]["security"]["capabilities"] == ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"], "Stable runtime tests must use Stable native permissions"
 e2e_updater = e2e_config["plugins"]["updater"]
 assert e2e_updater["endpoints"] == ["http://127.0.0.1:8888/manifest"], "the E2E updater fixture must stay loopback-only"
 assert e2e_updater.get("dangerousInsecureTransportProtocol") is True, "only the release-mode E2E fixture may opt into its loopback HTTP updater"
@@ -276,11 +311,14 @@ assert not performance_config.get("plugins", {}).get("updater", {}).get("dangero
 assert set(e2e_capability["permissions"]) == {
     "wdio:default",
     "wdio-webdriver:default",
+    "allow-install-update",
+    "updater:allow-check",
     "updater:allow-download",
+    "process:allow-restart",
     "allow-export-diagnostics-fixture",
     "core:app:allow-version",
     "core:window:allow-is-fullscreen",
-}, "only the test-only capability may expose WebdriverIO and fixture downloads"
+}, "only the test-only Dev capability may expose WebdriverIO and the loopback updater fixture"
 assert "allow-export-diagnostics-fixture" not in permissions, (
     "the diagnostics export fixture must stay out of the production capability"
 )
@@ -323,14 +361,12 @@ package_hash = hashlib.sha256(package_bundle.read_bytes()).hexdigest()
 desktop_hash = hashlib.sha256(desktop_bundle.read_bytes()).hexdigest()
 assert package_hash == desktop_hash, "package and desktop renderer bundle hashes differ; run npm run renderer:build"
 assert not re.search(r"def (?:editor_blocks|editable_region_for_block|utf16_range)\b", document_model), "Rails must not retain a second editor-map implementation"
-assert {
-    permission
-    for permission in permissions
-    if ":" in permission and not permission.startswith("core:")
-} == {
+assert not any(":" in permission for permission in permissions if not permission.startswith("core:")), "Stable common capability must not expose updater plugins"
+assert set(macos_updater_capability["permissions"]) == {
+    "allow-install-update",
     "updater:allow-check",
     "process:allow-restart",
-}, "grant only update checks and restart; installation must use the native confirmed staging command"
+}, "grant only signed macOS update checks, restart, and the native confirmed install command"
 
 csp = config["app"]["security"]["csp"]
 directives = {}

@@ -174,6 +174,20 @@ for (const dist of [
 for (const input of [...devInputs]) {
   assert.ok(!input.includes(".stable.js") && !input.endsWith("-stable.js"), `Dev desktop bundle references the Stable-only input ${input}`)
 }
+// Updater modules bundle only into Stable on macOS (the platform-selected
+// updater runtime); repository Dev never bundles them on any platform.
+const updaterModulePresent = inputs => [...inputs].some(input => input.includes("@tauri-apps/plugin-updater") || input.includes("@tauri-apps/plugin-process"))
+assert.equal(updaterModulePresent(stableInputs), process.platform === "darwin", "only Stable on macOS may bundle Tauri updater modules")
+assert.ok(!updaterModulePresent(devInputs), "repository Dev must not bundle Tauri updater modules")
+if (process.platform === "darwin") {
+  assert.ok(stableInputs.has("apps/desktop/frontend/src/update-runtime-macos.js"), "Stable macOS must resolve the updater-capable runtime")
+  assert.ok(!stableInputs.has("apps/desktop/frontend/src/update-runtime-disabled.js"), "Stable macOS must not resolve the disabled runtime")
+} else {
+  assert.ok(stableInputs.has("apps/desktop/frontend/src/update-runtime-disabled.js"), "Stable Linux must resolve the disabled runtime")
+  assert.ok(!stableInputs.has("apps/desktop/frontend/src/update-runtime-macos.js"), "Stable Linux must not resolve the updater-capable runtime")
+}
+assert.ok(devInputs.has("apps/desktop/frontend/src/update-runtime-disabled.js"), "repository Dev must resolve the disabled runtime")
+assert.ok(!devInputs.has("apps/desktop/frontend/src/update-runtime-macos.js"), "repository Dev must not resolve the updater-capable runtime")
 
 // The Stable shell opens works in source mode; Dev keeps the visual default.
 assert.ok(
@@ -206,23 +220,54 @@ assert.deepEqual(
   ["core:default", "core:window:allow-set-fullscreen", "core:window:allow-version", "allow-export-diagnostics-fixture"],
   "the Stable e2e capability must carry only the WebDriver surface plus the diagnostics fixture"
 )
+// Updater boundary: only the macOS-only capability grants the install
+// command, the update check, and restart. Neither the Stable nor the Dev
+// common capability grants any updater surface.
+const macUpdaterAcl = readJson("apps/desktop/src-tauri/capabilities/macos-updater.json")
+assert.deepEqual(macUpdaterAcl.platforms, ["macOS"], "only macOS may receive updater command permissions")
+assert.deepEqual(
+  [...macUpdaterAcl.permissions].sort(),
+  ["allow-install-update", "process:allow-restart", "updater:allow-check"],
+  "the macOS updater capability must grant exactly the install, check, and restart permissions"
+)
+for (const [name, acl] of [["Stable", stableAcl], ["Dev", devAcl]]) {
+  assert.ok(!acl.permissions.includes("allow-install-update"), `the ${name} capability must not grant the install command`)
+  assert.ok(!acl.permissions.some(permission => permission.startsWith("updater:") || permission === "process:allow-restart"), `the ${name} capability must not grant updater plugin permissions`)
+}
+const devE2eAcl = readJson("apps/desktop/src-tauri/capabilities/e2e.json")
+assert.ok(devE2eAcl.permissions.includes("allow-install-update"), "the Dev e2e capability must grant the loopback install command")
+assert.ok(devE2eAcl.permissions.includes("updater:allow-check"), "the Dev e2e capability must grant the loopback update check")
 
-// Native gating: the graph command exists only under desktop-dev, and the
-// build manifest gates the same matrix the handler registration implements.
+// Native gating: the graph command exists only under desktop-dev, the
+// install command exists only on macOS or in the Dev WebDriver harness,
+// and the build manifest gates the same matrix the handler registration
+// implements.
 const buildSource = readText("apps/desktop/src-tauri/build.rs")
-assert.ok(buildSource.includes("(desktop_dev, webdriver)"), "build.rs must gate commands on the desktop-dev and webdriver matrix")
+assert.ok(buildSource.includes("(desktop_dev, has_update_command, webdriver)"), "build.rs must gate commands on the desktop-dev, updater, and webdriver matrix")
 assert.ok(
-  buildSource.includes('command_list!("document_graph", "export_diagnostics_fixture")'),
-  "build.rs must grant the graph command to the Dev e2e matrix cell"
+  buildSource.includes('let has_update_command = target_os == "macos" || (desktop_dev && webdriver);'),
+  "build.rs must define the updater matrix from the target OS plus Dev WebDriver"
+)
+assert.ok(
+  buildSource.includes('command_list!("document_graph", "install_update")'),
+  "build.rs must grant the graph and install commands to the macOS Dev matrix cell"
 )
 assert.ok(
   buildSource.includes('command_list!("document_graph")'),
-  "build.rs must grant the graph command to the Dev matrix cell"
+  "build.rs must grant the graph command to the Linux Dev matrix cell"
+)
+assert.ok(
+  buildSource.includes('command_list!("install_update")'),
+  "build.rs must grant the install command to the macOS Stable matrix cell"
+)
+assert.ok(
+  buildSource.includes('command_list!("document_graph", "export_diagnostics_fixture")'),
+  "build.rs must grant the graph command to the Linux Dev e2e matrix cell"
 )
 assert.equal(
-  buildSource.match(/command_list!\([^)]*"document_graph"/g)?.length || 0,
-  2,
-  "build.rs must grant the graph command in exactly the two Dev matrix cells"
+  buildSource.match(/command_list!\("document_graph"/g)?.length || 0,
+  3,
+  "build.rs must grant the graph command in exactly the three single-line Dev matrix cells"
 )
 const workFoldersSource = readText("apps/desktop/src-tauri/src/work_folders.rs")
 assert.ok(
@@ -232,13 +277,28 @@ assert.ok(
 )
 const nativeSource = readText("apps/desktop/src-tauri/src/lib.rs")
 for (const arm of [
-  '#[cfg(all(feature = "desktop-dev", feature = "webdriver"))]\n    let builder = builder.invoke_handler(app_commands!(document_graph, export_diagnostics_fixture));',
-  '#[cfg(all(feature = "desktop-dev", not(feature = "webdriver")))]\n    let builder = builder.invoke_handler(app_commands!(document_graph));',
-  '#[cfg(all(not(feature = "desktop-dev"), feature = "webdriver"))]\n    let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));',
-  '#[cfg(all(not(feature = "desktop-dev"), not(feature = "webdriver")))]\n    let builder = builder.invoke_handler(app_commands!());'
+  '#[cfg(all(feature = "desktop-dev", feature = "webdriver"))]\n    let builder = builder.invoke_handler(app_commands!(\n        document_graph,\n        install_update,\n        export_diagnostics_fixture\n    ));',
+  '#[cfg(all(\n        feature = "desktop-dev",\n        not(feature = "webdriver"),\n        target_os = "macos"\n    ))]\n    let builder = builder.invoke_handler(app_commands!(document_graph, install_update));',
+  '#[cfg(all(\n        feature = "desktop-dev",\n        not(feature = "webdriver"),\n        not(target_os = "macos")\n    ))]\n    let builder = builder.invoke_handler(app_commands!(document_graph));',
+  '#[cfg(all(\n        not(feature = "desktop-dev"),\n        target_os = "macos",\n        feature = "webdriver"\n    ))]\n    let builder = builder.invoke_handler(app_commands!(install_update, export_diagnostics_fixture));',
+  '#[cfg(all(\n        not(feature = "desktop-dev"),\n        target_os = "macos",\n        not(feature = "webdriver")\n    ))]\n    let builder = builder.invoke_handler(app_commands!(install_update));',
+  '#[cfg(all(\n        not(feature = "desktop-dev"),\n        not(target_os = "macos"),\n        feature = "webdriver"\n    ))]\n    let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));',
+  '#[cfg(all(\n        not(feature = "desktop-dev"),\n        not(target_os = "macos"),\n        not(feature = "webdriver")\n    ))]\n    let builder = builder.invoke_handler(app_commands!());'
 ]) {
   assert.ok(nativeSource.includes(arm), `lib.rs lost a handler matrix arm: ${arm.split("\n")[0]}`)
 }
+// The install command, its updater plugin import, and the updater/restart
+// plugin registration compile only where the updater boundary allows
+// installs; the readiness cleanup follows the same gate while the ack
+// itself stays unconditional (boot depends on it).
+const updatesSource = readText("apps/desktop/src-tauri/src/updates.rs")
+const updaterCfg = '#[cfg(any(\n    target_os = "macos",\n    all(feature = "desktop-dev", feature = "webdriver")\n))]'
+assert.ok(updatesSource.includes(`${updaterCfg}\nuse tauri_plugin_updater::UpdaterExt;`), "updates.rs must gate the updater plugin import on the updater matrix")
+assert.ok(updatesSource.includes(`${updaterCfg}\n#[tauri::command]\npub(crate) async fn install_update(`), "updates.rs must gate install_update on the updater matrix")
+assert.ok(updatesSource.includes("Install Elef update on quit"), "the native install confirmation must name the safe-quit flow")
+assert.ok(updatesSource.includes("Your work is saved. Elef will restart after installation."), "the native install confirmation must promise the saved restart")
+assert.ok(nativeSource.includes(".plugin(tauri_plugin_process::init())\n        .plugin(updater.build());"), "lib.rs must register the updater plugins only on updater builds")
+assert.ok(nativeSource.includes('"check-for-updates" => {'), "lib.rs must keep the Stable macOS update-check menu action")
 const cargoManifest = readText("apps/desktop/src-tauri/Cargo.toml")
 assert.ok(cargoManifest.includes("desktop-dev = []"), "Cargo.toml must declare the desktop-dev feature")
 assert.ok(
@@ -260,12 +320,26 @@ assert.ok(
 // Desktop entry contract: the shell boots through the profile-selected
 // modules and hands the shared application its profile inputs.
 const desktopMain = readText("apps/desktop/frontend/src/main.js")
-for (const module of ["#desktop/file-library-transport", "#desktop/editor-runtime", "#desktop/document-graph-runtime"]) {
+for (const module of ["#desktop/file-library-transport", "#desktop/editor-runtime", "#desktop/document-graph-runtime", "#desktop/update-runtime"]) {
   assert.ok(desktopMain.includes(`from "${module}"`), `main.js must boot through ${module}`)
 }
-for (const input of ["profile: desktopProfile", "features: desktopFeatures", "featureFlags: desktopFeatureFlags", "documentGraphRuntime", "presentationEditorRuntime"]) {
+for (const input of ["profile: desktopProfile", "features: desktopFeatures", "featureFlags: desktopFeatureFlags", "documentGraphRuntime", "presentationEditorRuntime", "updateRuntime", "updateEnabled: updateRuntime.enabled"]) {
   assert.ok(desktopMain.includes(input), `main.js must pass ${input} to the shared application`)
 }
+assert.ok(desktopMain.includes("checkForUpdate: updateRuntime.checkForUpdate"), "main.js must check updates through the update runtime")
+assert.ok(desktopMain.includes("installPendingUpdate: updateRuntime.installPendingUpdate"), "main.js must install updates through the update runtime")
+assert.ok(desktopMain.includes("updaterSeam: updateRuntime.updaterSeam"), "main.js must source the updater seam from the update runtime")
+assert.ok(!desktopMain.includes("@tauri-apps/plugin-updater") && !desktopMain.includes("@tauri-apps/plugin-process"), "main.js must not import the updater plugins directly")
+// The macOS runtime carries the single-install flow (plugin check plus the
+// native confirmed install command) and the safe-quit arming state; the
+// disabled runtime reports the package-managed boundary with no seam.
+const macosRuntime = readText("apps/desktop/frontend/src/update-runtime-macos.js")
+assert.ok(macosRuntime.includes('invoke("install_update"'), "the macOS update runtime must install through the native confirmed command")
+assert.ok(macosRuntime.includes("armPendingUpdate"), "the macOS update runtime must own the safe-quit arming state")
+assert.ok(!macosRuntime.includes("stage_update"), "the single-install flow must not name the dropped staged split")
+const disabledRuntime = readText("apps/desktop/frontend/src/update-runtime-disabled.js")
+assert.ok(disabledRuntime.includes("enabled: false"), "the disabled update runtime must report no updater")
+assert.ok(disabledRuntime.includes("updaterSeam: null"), "the disabled update runtime must offer no updater seam")
 const desktopProfile = readText("apps/desktop/frontend/src/desktop-profile.js")
 for (const flag of ["visualEditing: devEnabled", "presentationEditing: devEnabled", "slideOverview: devEnabled", "documentGraph: devEnabled", "documentLinks: devEnabled"]) {
   assert.ok(desktopProfile.includes(flag), `desktop-profile.js must derive the ${flag} feature from the profile`)
@@ -286,6 +360,8 @@ assert.ok(desktopBuild.includes("elef-work-model.stable.js"), "build.mjs must re
 assert.ok(desktopBuild.includes("__ELEF_DESKTOP_PROFILE__"), "build.mjs must define the profile for the bundle")
 assert.ok(desktopBuild.includes("app.metafile.json"), "build.mjs must persist the bundle metafile")
 assert.ok(desktopBuild.includes('data-editor-mode="source"'), "build.mjs must flip the Stable shell default to source mode")
+assert.ok(desktopBuild.includes('profile === "stable" && process.platform === "darwin"'), "only Stable macOS builds may use the public updater runtime")
+assert.ok(desktopBuild.includes('e2eBuild && process.platform === "darwin"'), "the loopback-only E2E bundle may exercise packaged macOS updates")
 
 // Config matrix: distinct app identities per profile, bundling off for the
 // dev/e2e shapes, and the matching frontend outputs and capabilities.
@@ -312,15 +388,22 @@ assert.equal(devConf.build.frontendDist, "../frontend/dist-dev", "the Dev config
 assert.equal(e2eStableConf.build.frontendDist, "../frontend/dist-e2e-stable", "the Stable e2e config must serve the Stable e2e frontend")
 assert.equal(stableIdentityConf.build.frontendDist, "../frontend/dist-e2e-stable", "the Stable identity probe must serve the Stable e2e frontend")
 assert.equal(devIdentityConf.build.frontendDist, "../frontend/dist-dev", "the Dev identity probe must serve the Dev frontend")
+assert.deepEqual(productionConf.app.security.capabilities, ["main-capability", "macos-updater-capability"], "production must grant the common plus the macOS-only updater capability")
+assert.equal(productionConf.bundle?.macOS?.signingIdentity, "-", "production Stable must ad-hoc sign its macOS bundles (v0)")
 assert.deepEqual(devConf.app.security.capabilities, ["main-dev-capability"], "the Dev config must grant the Dev capability")
 assert.deepEqual(e2eConf.app.security.capabilities, ["main-dev-capability", "e2e-webdriver"], "the Dev e2e config must grant Dev plus WebDriver")
-assert.deepEqual(e2eStableConf.app.security.capabilities, ["main-capability", "e2e-stable-webdriver"], "the Stable e2e config must grant Stable plus the Stable WebDriver surface")
-assert.deepEqual(stableIdentityConf.app.security.capabilities, ["main-capability", "e2e-stable-webdriver"], "the Stable identity probe must grant the Stable e2e surface")
+assert.deepEqual(e2eStableConf.app.security.capabilities, ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"], "the Stable e2e config must grant Stable plus the Stable WebDriver surface")
+assert.deepEqual(stableIdentityConf.app.security.capabilities, ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"], "the Stable identity probe must grant the Stable e2e surface")
 assert.deepEqual(devIdentityConf.app.security.capabilities, ["main-dev-capability", "e2e-webdriver"], "the Dev identity probe must grant the Dev e2e surface")
 for (const [name, conf] of [["dev", devConf], ["e2e-stable", e2eStableConf], ["stable-identity", stableIdentityConf], ["dev-identity", devIdentityConf]]) {
   assert.deepEqual(conf.plugins?.updater?.endpoints, [], `the ${name} config must disable the update channel`)
 }
+assert.deepEqual(e2eStableUpdaterConf.app.security.capabilities, ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"], "the installed Stable updater fixture must use Stable's native command permissions")
 assert.deepEqual(e2eStableUpdaterConf.bundle?.targets, ["app", "dmg"], "the Stable updater-fixture config must target the macOS bundles")
+assert.deepEqual(e2eStableUpdaterConf.plugins?.updater?.endpoints, ["http://127.0.0.1:8888/manifest"], "only the test-only packaged Stable updater fixture may use its loopback endpoint")
+assert.equal(e2eStableUpdaterConf.plugins?.updater?.requireSignedVersion, true, "the Stable updater fixture must bind versions to signatures")
+assert.equal(e2eStableUpdaterConf.plugins?.updater?.dangerousInsecureTransportProtocol, true, "only the test-only Stable updater fixture may opt into loopback HTTP")
+assert.equal(e2eStableUpdaterConf.app.withGlobalTauri, true, "only the test-only Stable updater bundle may expose Tauri globals for its smoke harness")
 
 // Repository entry points: tauri dev boots the Dev identity with the
 // desktop-dev feature, and the e2e runner routes profiles to specs.
@@ -333,11 +416,31 @@ const e2eRunner = readText("apps/desktop/e2e/run.mjs")
 assert.ok(e2eRunner.includes("runStableProfileSmoke"), "run.mjs must invoke the Stable profile smoke")
 assert.ok(e2eRunner.includes("runIdentityIsolationSmoke"), "run.mjs must invoke the identity isolation smoke")
 assert.ok(e2eRunner.includes("createDesktopAppEnvironment"), "run.mjs must isolate app user directories per run")
+assert.ok(e2eRunner.includes('ELEF_E2E_PACKAGED_UPDATES === "1" && process.platform === "darwin"'), "only macOS may run the installed self-updater transition; Linux upgrades through its package manager")
+assert.ok(e2eRunner.includes("installMacDmgFixture(env.ELEF_E2E_STABLE_DMG"), "macOS CI must install and test the packaged Stable DMG")
+assert.ok(e2eRunner.includes("ELEF_E2E_PRE_RELEASE_STATE"), "the Stable packaged flow must seed the pre-release selection")
+assert.ok(e2eRunner.includes("ELEF_E2E_EXPECTED_PRE_RELEASE_STATE"), "the Stable packaged flow must assert the preserved selection bytes")
+assert.ok(e2eRunner.includes("ELEF_E2E_VERIFY_STABLE_UPGRADED"), "the Stable packaged flow must verify the relaunched N")
+assert.ok(e2eRunner.includes("delete child.ELEF_E2E_LIBRARY_ROOT"), "the Stable packaged flow must boot from its app-data selection")
 const wdioConf = readText("apps/desktop/e2e/wdio.conf.js")
 assert.ok(wdioConf.includes('ELEF_E2E_PROFILE === "identity"'), "wdio.conf.js must route the identity profile to its spec")
 assert.ok(wdioConf.includes("./identity-isolation.spec.js"), "wdio.conf.js must run the identity isolation spec")
 assert.ok(wdioConf.includes('ELEF_E2E_PROFILE === "stable"'), "wdio.conf.js must route the stable profile to its spec")
 assert.ok(wdioConf.includes("./stable-exclusions.spec.js"), "wdio.conf.js must run the Stable exclusions spec")
+assert.ok(wdioConf.includes('ELEF_E2E_PROFILE === "stable-packaged"'), "wdio.conf.js must route the stable-packaged profile to its spec")
+assert.ok(wdioConf.includes("./stable-packaged.spec.js"), "wdio.conf.js must run the Stable packaged spec")
+// Packaged fixtures: the Stable DMG built from the Stable updater config,
+// verified arm64, served as the stable-package N archive.
+const fixtureBuilder = readText("apps/desktop/e2e/build-update-fixtures.mjs")
+assert.ok(fixtureBuilder.includes("tauri.e2e-stable-updater.conf.json"), "macOS updater fixtures must build the Stable profile")
+assert.ok(fixtureBuilder.includes("stable-update.tar.gz"), "macOS updater fixtures must emit the Stable N archive")
+assert.ok(fixtureBuilder.includes("Skipped updater install fixtures on Linux"), "Linux must build no install fixtures")
+assert.ok(readText("apps/desktop/e2e/install-macos-dmg-fixture.js").includes("verify_arch") && readText("apps/desktop/e2e/install-macos-dmg-fixture.js").includes("arm64"), "the packaged Stable DMG must be an Apple Silicon build")
+assert.ok(readText("apps/desktop/e2e/updater-fixture-server.mjs").includes("stable-package"), "the updater fixture server must serve the Stable N archive")
+const stablePackagedSpec = readText("apps/desktop/e2e/stable-packaged.spec.js")
+for (const pin of ["mode?value=stable-package", 'invoke("install_update"', '"0.2.0"', "previousInstallationsRemoved", ".elef-update-", "export_diagnostics_fixture"]) {
+  assert.ok(stablePackagedSpec.includes(pin), `the Stable packaged spec must pin ${pin}`)
+}
 
 // Smoke contracts: the Stable binary never carries desktop-dev, and the
 // identity probes build both identities with distinct binaries and bus names.
@@ -386,7 +489,27 @@ for (const pin of [
 ]) {
   assert.ok(stableSpec.includes(pin), `the Stable spec must pin ${pin}`)
 }
-assert.ok(!stableSpec.includes("stage_update"), "the Stable updater boundary lands with slice B, not here")
+// Linux Stable updater boundary: the exclusions spec attempts the install
+// command and accepts only unregistered or exact-permission denials.
+assert.ok(stableSpec.includes('process.platform === "linux"'), "Linux Stable runtime must exercise its package-manager-only updater boundary")
+assert.ok(stableSpec.includes('["install_update"]'), "Linux Stable must attempt the install IPC command")
+assert.ok(stableSpec.includes("notRegistered = new RegExp"), "Linux Stable updater checks must recognize missing commands")
+assert.ok(stableSpec.includes("permissionDenied = new RegExp"), "Linux Stable updater checks must recognize Tauri permission denials")
+assert.ok(stableSpec.includes("allow-${permission}"), "Linux Stable updater permission denials must name the exact required capability")
+assert.ok(!stableSpec.includes("stage_update"), "the single-install flow must not name the dropped staged split")
+// Safe-quit wording: the dialog arms for quit (no immediate install), the
+// close flow installs on a saved flush and defers otherwise, with no new
+// prompts on the save path.
+const desktopHost = readText("apps/web/app/views/desktop_host.html")
+assert.ok(desktopHost.includes(">Install on quit</button>"), "the update dialog must arm for quit instead of installing immediately")
+const sharedApplication = readText("packages/editor-runtime/src/lib/file_library_application.ts")
+assert.ok(sharedApplication.includes("is ready to install on quit."), "the update dialog must name the safe-quit flow")
+assert.ok(sharedApplication.includes("armUpdateForQuit"), "the update dialog must arm the checked update for quit")
+assert.ok(sharedApplication.includes("will install version"), "arming must tell the user the install waits for quit")
+assert.ok(sharedApplication.includes("if (updateEnabled) startupUpdateCheck.schedule(10_000)"), "the idle update check must run only where updates are enabled")
+const closeFlow = readText("apps/desktop/frontend/src/close-flow.js")
+assert.ok(closeFlow.includes("takeArmedUpdate"), "the close flow must consume the armed update on a safe quit")
+assert.ok(closeFlow.includes("clearArmedUpdate"), "the close flow must defer the armed update on an unsafe save")
 
 // Deferred features stay flag-kept: desktop defaults off, register rows
 // present, and no lineage controller on either desktop profile.

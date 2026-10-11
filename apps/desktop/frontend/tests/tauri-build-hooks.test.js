@@ -31,7 +31,7 @@ test("The desktop entry points keep their release-guard rails", () => {
   assert.equal(stableConfig.identifier, "com.elef.desktop.e2e.stable")
   assert.equal(stableConfig.build.frontendDist, "../frontend/dist-e2e-stable")
   assert.equal(stableConfig.bundle.active, false)
-  assert.deepEqual(stableConfig.app.security.capabilities, ["main-capability", "e2e-stable-webdriver"])
+  assert.deepEqual(stableConfig.app.security.capabilities, ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"])
   assert.deepEqual(stableConfig.plugins.updater.endpoints, [])
 })
 
