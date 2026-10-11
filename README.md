@@ -18,7 +18,3 @@ Elef is a Markdown authoring and presentation application with a Rails web app a
 - [Mac mini deployment runbook](docs/mac-mini-deployment.md)
 
 The development guide covers the current Omarchy server, clean local setup, the `bin/check` tiers, Rails system tests, and the shared web/desktop parity harness.
-
-## Authoring references
-
-- [Slide reveals](docs/animation/reveals.md) — `:::step` syntax and Present behavior.
