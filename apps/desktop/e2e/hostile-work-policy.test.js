@@ -1,11 +1,11 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { hostileDeckNeutralizedWorkflow } from "../../web/test/e2e/scenarios/hostile-deck.js"
+import { hostileWorkNeutralizedWorkflow } from "../../web/test/e2e/scenarios/hostile-work.js"
 
 function host(externalMediaPolicy, state = {}) {
   return {
     externalMediaPolicy,
-    async openDeck() {},
+    async openWork() {},
     async showVisualMode() {},
     async waitForPreview() {},
     async inspectHostilePreview() {
@@ -26,36 +26,36 @@ function host(externalMediaPolicy, state = {}) {
 }
 
 test("the web host declares and permits its remote image source policy", async () => {
-  await hostileDeckNeutralizedWorkflow(host("allow-remote", {
+  await hostileWorkNeutralizedWorkflow(host("allow-remote", {
     externalMedia: ["https://example.invalid/tracker.png"]
   }))
-  await hostileDeckNeutralizedWorkflow(host("allow-remote", {
+  await hostileWorkNeutralizedWorkflow(host("allow-remote", {
     remoteRequests: ["https://example.invalid/tracker.png"]
   }))
 
   await assert.rejects(
-    hostileDeckNeutralizedWorkflow(host("allow-remote")),
+    hostileWorkNeutralizedWorkflow(host("allow-remote")),
     /violated the allow-remote host policy/
   )
 })
 
 test("the native host rejects external media and remote requests", async () => {
-  await hostileDeckNeutralizedWorkflow(host("reject-remote"))
+  await hostileWorkNeutralizedWorkflow(host("reject-remote"))
 
   for (const state of [
     { externalMedia: ["https://example.invalid/tracker.png"] },
     { remoteRequests: ["https://example.invalid/tracker.png"] }
   ]) {
     await assert.rejects(
-      hostileDeckNeutralizedWorkflow(host("reject-remote", state)),
+      hostileWorkNeutralizedWorkflow(host("reject-remote", state)),
       /violated the reject-remote host policy/
     )
   }
 })
 
-test("the hostile-deck policy refuses an undeclared host policy", async () => {
+test("the hostile-work policy refuses an undeclared host policy", async () => {
   await assert.rejects(
-    hostileDeckNeutralizedWorkflow(host(undefined)),
+    hostileWorkNeutralizedWorkflow(host(undefined)),
     /Host must declare an external media policy/
   )
 })

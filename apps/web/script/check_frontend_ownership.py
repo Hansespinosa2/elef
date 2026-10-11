@@ -327,7 +327,7 @@ shared_workflows = {
     "editAndPreviewWorkflow",
     "exportWorkflow",
     "externalEditConflictWorkflow",
-    "hostileDeckNeutralizedWorkflow",
+    "hostileWorkNeutralizedWorkflow",
     "libraryAndGraphWorkflow",
     "libraryCreateDeleteWorkflow",
     "libraryDeepLinksWorkflow",

@@ -9,7 +9,7 @@ import { libraryAndGraphWorkflow } from "../../../../apps/web/test/e2e/scenarios
 import { libraryCreateDeleteWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-create-delete.js"
 import { libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
-import { hostileDeckNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-deck.js"
+import { hostileWorkNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-work.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-settings.js"
 import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../../../../apps/web/test/e2e/scenarios/media-fixture.js"
@@ -282,7 +282,7 @@ class DesktopEditorUi {
 
   constructor() {
     this.externalMediaPolicy = "reject-remote"
-    this.activeDeckTitle = null
+    this.activeWorkTitle = null
     this.capabilities = { export: false }
   }
 
@@ -305,7 +305,7 @@ class DesktopEditorUi {
     if (result?.error) throw new Error(result.error)
   }
 
-  async openDeck(title = "E2E seed") {
+  async openWork(title = "E2E seed") {
     if (!(await $("#library-view").isDisplayed())) {
       if ((await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual") {
         await this.showSourceMode()
@@ -313,21 +313,21 @@ class DesktopEditorUi {
       await $("#back-to-library").click()
       await $("#library-view").waitForDisplayed()
     }
-    await $("#show-deck-list").click()
+    await $("#show-work-list").click()
     const card = $(`[aria-label="Edit ${title}"]`)
     await card.waitForDisplayed()
     await card.click()
     try {
       await browser.waitUntil(async () => browser.execute(expected => {
         const form = document.querySelector("#desktop-editor-form")
-        return document.querySelector("#deck-title")?.textContent === expected
-          && form?.dataset.loadedDeckId === document.querySelector("#deck-id")?.textContent
+        return document.querySelector("#work-title")?.textContent === expected
+          && form?.dataset.loadedWorkId === document.querySelector("#work-id")?.textContent
           && form?.dataset.editorMode === "visual"
           && !document.querySelector("#visual-mode")?.disabled
-          && !document.querySelector("#deck-view")?.hidden
+          && !document.querySelector("#work-view")?.hidden
       }, title), {
         timeout: 10_000,
-        timeoutMsg: `The ${title} deck did not finish opening in visual mode`
+        timeoutMsg: `The ${title} work did not finish opening in visual mode`
       })
     } catch (error) {
       const diagnostic = await browser.execute(expected => {
@@ -352,9 +352,9 @@ class DesktopEditorUi {
           previewTrace: window.__elefPreviewTrace?.slice(-8) || [],
           visualEditorConnected: Boolean(form?.visualEditorController),
           presentationEditorConnected: Boolean(form?.presentationEditorController),
-          deckTitle: document.querySelector("#deck-title")?.textContent || "",
-          deckId: document.querySelector("#deck-id")?.textContent || "",
-          loadedDeckId: form?.dataset.loadedDeckId || "",
+          workTitle: document.querySelector("#work-title")?.textContent || "",
+          workId: document.querySelector("#work-id")?.textContent || "",
+          loadedWorkId: form?.dataset.loadedWorkId || "",
           editorControllers: editorField?.dataset.controller || "",
           editorFieldConnected: Boolean(editorField?.isConnected),
           editorControllerReady: editorField?.editorController?.editorReady ?? null,
@@ -363,17 +363,17 @@ class DesktopEditorUi {
           controllerErrors: window.__elefE2EControllerErrors?.slice(-5) || [],
           codeMirrorMounted: Boolean(editorField?.querySelector(".cm-editor")),
           libraryHidden: document.querySelector("#library-view")?.hidden,
-          deckViewHidden: document.querySelector("#deck-view")?.hidden,
+          workViewHidden: document.querySelector("#work-view")?.hidden,
           cardVisible: [...document.querySelectorAll(".library-card-open")].some(button => button.getAttribute("aria-label") === `Edit ${expected}`)
         }
       }, title)
       throw new Error(`${error.message}; desktop open diagnostic: ${JSON.stringify(diagnostic)}`)
     }
-    this.activeDeckTitle = title
+    this.activeWorkTitle = title
   }
 
   async assertExportUnavailable() {
-    await this.openDeck("E2E seed")
+    await this.openWork("E2E seed")
     if (await $("//button[contains(., 'Download PPTX')]").isExisting()) {
       throw new Error("The desktop editor must not offer a PPTX export surface (HD-06)")
     }
@@ -403,8 +403,8 @@ class DesktopEditorUi {
     await $("#settings-dialog").waitForDisplayed({ reverse: true })
   }
 
-  async reopenDeck() {
-    await this.openDeck(this.activeDeckTitle || "E2E seed")
+  async reopenWork() {
+    await this.openWork(this.activeWorkTitle || "E2E seed")
   }
 
   async enterPresentationMode() {
@@ -421,7 +421,7 @@ class DesktopEditorUi {
     const started = await browser.executeAsync(done => {
       const start = window.__elefPresentationTestHooks?.start
       if (!start) return done({ error: "The presentation shell is unavailable" })
-      start().then(() => done({ started: document.body.classList.contains("presenting-deck") }))
+      start().then(() => done({ started: document.body.classList.contains("presenting-work") }))
         .catch(error => done({ error: error.message || String(error) }))
     })
     if (started.error || !started.started) throw new Error(started.error || "Desktop presentation mode did not start")
@@ -556,18 +556,18 @@ class DesktopEditorUi {
 
   async exitPresentationMode() {
     await sendPresentationKey("Escape")
-    await browser.waitUntil(async () => !(await browser.execute(() => document.body.classList.contains("presenting-deck"))), {
+    await browser.waitUntil(async () => !(await browser.execute(() => document.body.classList.contains("presenting-work"))), {
       timeout: 5_000,
       timeoutMsg: "Escape did not exit desktop presentation mode"
     })
   }
 
   async returnToEditor() {
-    if (await browser.execute(() => document.body.classList.contains("presenting-deck"))) {
-      // Keep a failed Escape assertion from leaving this shared fixture deck in
+    if (await browser.execute(() => document.body.classList.contains("presenting-work"))) {
+      // Keep a failed Escape assertion from leaving this shared fixture work in
       // presentation-test content and cascading into unrelated scenarios.
       await browser.execute(() => document.querySelector("#exit-presentation")?.click())
-      await browser.waitUntil(async () => !(await browser.execute(() => document.body.classList.contains("presenting-deck"))), {
+      await browser.waitUntil(async () => !(await browser.execute(() => document.body.classList.contains("presenting-work"))), {
         timeout: 5_000,
         timeoutMsg: "The native presentation exit control did not return to editing"
       })
@@ -578,19 +578,19 @@ class DesktopEditorUi {
       delete globalThis.__elefPresentationKeyCapture
       delete globalThis.__elefPresentationKeyEvents
     })
-    if (!(await $("#deck-view").isDisplayed())) await this.openDeck()
+    if (!(await $("#work-view").isDisplayed())) await this.openWork()
   }
 
   async renameEditorTitle(title) {
     await $("#desktop-editor-title").setValue(title)
     await browser.keys(Key.Tab)
-    this.activeDeckTitle = title
+    this.activeWorkTitle = title
   }
 
   async waitForEditorTitle(title) {
     await browser.waitUntil(async () =>
       (await $("#desktop-editor-title").getValue()) === title &&
-      (await $("#deck-title").getText()) === title &&
+      (await $("#work-title").getText()) === title &&
       (await browser.execute(() => window.__elefSaveTestHooks?.saveStatus())) === "clean", {
       timeout: 10_000,
       timeoutMsg: `The presentation title did not save as ${title}`
@@ -622,7 +622,7 @@ class DesktopEditorUi {
       timeout: 5_000,
       timeoutMsg: "The desktop CodeMirror controller did not enter source mode"
     })
-    const editor = await $("#deck-source-editor .cm-content")
+    const editor = await $("#work-source-editor .cm-content")
     await editor.waitForDisplayed()
     // Tauri's embedded WebDriver cannot reliably focus CodeMirror on CI. Use
     // the live controller's input-proxy path so its normal update/input,
@@ -869,7 +869,7 @@ class DesktopEditorUi {
         throw new Error(`The visual editor did not receive focus before native typing: ${JSON.stringify(focus)}`)
       }
     } else {
-      target = await $("#deck-source-editor .cm-content")
+      target = await $("#work-source-editor .cm-content")
       await target.waitForDisplayed()
       const focus = await browser.execute(() => {
         const editor = document.querySelector("#desktop-editor-field")?.editorController
@@ -1058,9 +1058,9 @@ class DesktopEditorUi {
   async waitForSaved(expectedSource) {
     if (expectedSource !== undefined) {
       await this.waitForSource(expectedSource)
-      const deckTitle = this.activeDeckTitle || "E2E seed"
-      const sourceFile = deckTitle === "E2E document" ? "document.md" : "presentation.md"
-      const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, deckTitle, sourceFile)
+      const workTitle = this.activeWorkTitle || "E2E seed"
+      const sourceFile = workTitle === "E2E document" ? "document.md" : "presentation.md"
+      const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, workTitle, sourceFile)
       await browser.waitUntil(async () => {
         try {
           return normalizeLineEndings(await readFile(sourcePath, "utf8")) === expectedSource
@@ -1077,8 +1077,8 @@ class DesktopEditorUi {
             saveStatus: window.__elefSaveTestHooks?.saveStatus?.() || "<missing>",
             status: document.querySelector("#status-text")?.textContent || "<missing>",
             notice: document.querySelector("#notice")?.textContent || "",
-            deckId: document.querySelector("#deck-id")?.textContent || "",
-            deckTitle: document.querySelector("#deck-title")?.textContent || ""
+            workId: document.querySelector("#work-id")?.textContent || "",
+            workTitle: document.querySelector("#work-title")?.textContent || ""
           }))
         ])
         throw new Error(`${error.message}; desktop state: ${JSON.stringify(state)}; disk source: ${JSON.stringify(diskSource)}`)
@@ -1137,7 +1137,7 @@ class DesktopEditorUi {
     }
     const expectedDocumentId = process.env.ELEF_E2E_DESKTOP_LINKED_DOCUMENT_ID
     if (!expectedDocumentId) throw new Error("The desktop linked-document fixture ID is unavailable")
-    if ((await link.getAttribute("href")) !== `#deck/${expectedDocumentId}`) {
+    if ((await link.getAttribute("href")) !== `#work/${expectedDocumentId}`) {
       throw new Error(`The desktop preview did not link ${title} to the expected document ID`)
     }
   }
@@ -1558,13 +1558,13 @@ class DesktopEditorUi {
 class DesktopLibraryUi {
   async createWork(title, kind) {
     await this.openLibrary()
-    await $("#new-deck").click()
-    await $("#new-deck-kind").selectByAttribute("value", kind)
-    await $("#new-deck-name").setValue(title)
+    await $("#new-work").click()
+    await $("#new-work-kind").selectByAttribute("value", kind)
+    await $("#new-work-name").setValue(title)
     await $("#create-submit").click()
-    await $("#deck-view").waitForDisplayed()
+    await $("#work-view").waitForDisplayed()
     await browser.waitUntil(async () => browser.execute(({ expected, documentKind }) => {
-      if (documentKind) return document.querySelector("#deck-title")?.textContent.trim() === expected
+      if (documentKind) return document.querySelector("#work-title")?.textContent.trim() === expected
       return document.querySelector("#desktop-editor-title")?.value === expected
     }, { expected: title, documentKind: kind === "document" }), {
       timeout: 10_000,
@@ -1573,10 +1573,10 @@ class DesktopLibraryUi {
   }
 
   async assertCreatedWork(title, kind) {
-    await $("#deck-view").waitForDisplayed()
+    await $("#work-view").waitForDisplayed()
     const result = await browser.execute(({ expected, documentKind }) => ({
       title: documentKind
-        ? document.querySelector("#deck-title")?.textContent.trim()
+        ? document.querySelector("#work-title")?.textContent.trim()
         : document.querySelector("#desktop-editor-title")?.value,
       source: document.querySelector("#desktop-editor-field")?.editorController?.sourceValue
     }), { expected: title, documentKind: kind === "document" })
@@ -1587,13 +1587,13 @@ class DesktopLibraryUi {
 
   async assertWorkVisible(title) {
     await this.openLibrary()
-    await $("#show-deck-list").click()
+    await $("#show-work-list").click()
     await $(`[aria-label='Edit ${title}']`).waitForDisplayed()
   }
 
   async deleteWork(title) {
     await this.openLibrary()
-    await $("#show-deck-list").click()
+    await $("#show-work-list").click()
     let card
     for (const candidate of await $$(".library-card")) {
       if (await candidate.$(".library-card-title").getText() === title) card = candidate
@@ -1605,7 +1605,7 @@ class DesktopLibraryUi {
     if (process.platform === "darwin") {
       answerMacNativeDialog("OK")
     } else if (process.platform === "linux") {
-      const dialogId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--name", "^Move deck to Trash$"], {
+      const dialogId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--name", "^Move Work to Trash$"], {
         encoding: "utf8", timeout: 15_000
       }).trim().split(/\s+/).at(-1)
       execFileSync("xdotool", ["windowactivate", "--sync", dialogId], { timeout: 5_000 })
@@ -1621,7 +1621,7 @@ class DesktopLibraryUi {
 
   async assertWorkAbsent(title) {
     await this.openLibrary()
-    await $("#show-deck-list").click()
+    await $("#show-work-list").click()
     if (await $(`[aria-label='Edit ${title}']`).isExisting()) {
       throw new Error(`The library still shows deleted work ${title}`)
     }
@@ -1629,13 +1629,13 @@ class DesktopLibraryUi {
 
   async previewWork(title) {
     await this.openLibrary()
-    await $("#show-deck-list").click()
+    await $("#show-work-list").click()
     await $(`[aria-label='Preview ${title}']`).click()
     await browser.waitUntil(async () => browser.execute(expected => {
       const editor = document.querySelector("#desktop-editor-title")
       const form = document.querySelector("#desktop-editor-form")
       return editor?.value === expected && form?.dataset.editorMode === "visual" &&
-        !document.querySelector("#deck-view")?.hidden && Boolean(form?.dataset.loadedDeckId)
+        !document.querySelector("#work-view")?.hidden && Boolean(form?.dataset.loadedWorkId)
     }, title), {
       timeout: 10_000,
       timeoutMsg: `The ${title} card preview did not open its rendered Visual editor`
@@ -1645,7 +1645,7 @@ class DesktopLibraryUi {
 
   async presentWork(title) {
     await this.openLibrary()
-    await $("#show-deck-list").click()
+    await $("#show-work-list").click()
     const started = await browser.execute(expected => {
       const card = [...document.querySelectorAll(".library-card")]
         .find(candidate => candidate.querySelector(".library-card-title")?.textContent.trim() === expected)
@@ -1656,7 +1656,7 @@ class DesktopLibraryUi {
     }, title)
     if (!started) throw new Error(`The ${title} library card has no Present action`)
     try {
-      await browser.waitUntil(async () => browser.execute(() => document.body.classList.contains("presenting-deck")), {
+      await browser.waitUntil(async () => browser.execute(() => document.body.classList.contains("presenting-work")), {
         timeout: 10_000,
         timeoutMsg: `The ${title} library card did not start presentation mode`
       })
@@ -1665,9 +1665,9 @@ class DesktopLibraryUi {
         timeoutMsg: `The ${title} presentation did not enter native fullscreen`
       })
     } finally {
-      if (await browser.execute(() => document.body.classList.contains("presenting-deck"))) {
+      if (await browser.execute(() => document.body.classList.contains("presenting-work"))) {
         await $("#exit-presentation").click()
-        await browser.waitUntil(async () => browser.execute(() => !document.body.classList.contains("presenting-deck")), {
+        await browser.waitUntil(async () => browser.execute(() => !document.body.classList.contains("presenting-work")), {
           timeout: 5_000,
           timeoutMsg: "The native presentation did not return to editing"
         })
@@ -1682,15 +1682,15 @@ class DesktopLibraryUi {
 
   async openWork(title) {
     await this.openLibrary()
-    await $("#show-deck-list").click()
+    await $("#show-work-list").click()
     await $(`[aria-label='Edit ${title}']`).click()
     await browser.waitUntil(async () => browser.execute(expected => {
       const editor = document.querySelector("#desktop-editor-title")
       const form = document.querySelector("#desktop-editor-form")
-      return editor?.value === expected && !document.querySelector("#deck-view")?.hidden && Boolean(form?.dataset.loadedDeckId)
+      return editor?.value === expected && !document.querySelector("#work-view")?.hidden && Boolean(form?.dataset.loadedWorkId)
     }, title), {
       timeout: 10_000,
-      timeoutMsg: `The ${title} deck did not open from its library card`
+      timeoutMsg: `The ${title} work did not open from its library card`
     })
   }
 
@@ -1706,7 +1706,7 @@ class DesktopLibraryUi {
   async assertVisualMode() {
     await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual", {
       timeout: 5_000,
-      timeoutMsg: "Opening a deck from the library did not return to Rails' default Visual mode"
+      timeoutMsg: "Opening a work from the library did not return to Rails' default Visual mode"
     })
   }
 
@@ -1721,9 +1721,9 @@ class DesktopLibraryUi {
     await card.$(".library-rename input[type='text']").setValue(newTitle)
     await card.$(".library-rename button").click()
     await browser.waitUntil(async () => (await $(`[aria-label='Edit ${newTitle}']`).isDisplayed()), {
-      timeout: 10_000, timeoutMsg: `The library did not show the renamed ${newTitle} deck`
+      timeout: 10_000, timeoutMsg: `The library did not show the renamed ${newTitle} work`
     })
-    if (await $(`[aria-label='Edit ${title}']`).isExisting()) throw new Error("The old deck name remained after rename")
+    if (await $(`[aria-label='Edit ${title}']`).isExisting()) throw new Error("The old work name remained after rename")
   }
 
   async openLibrary() {
@@ -1741,19 +1741,19 @@ class DesktopLibraryUi {
       timeoutMsg: "The All library view did not show both presentations and documents"
     })
     if ((await $$(".library-card")).length !== 5) {
-      throw new Error("The All library view did not show all five fixture decks")
+      throw new Error("The All library view did not show all five fixture works")
     }
   }
 
   async assertCardPreview(title, text) {
-    await browser.execute(deckTitle => {
+    await browser.execute(workTitle => {
       const button = [...document.querySelectorAll(".library-card-open")]
-        .find(element => element.getAttribute("aria-label") === `Edit ${deckTitle}`)
+        .find(element => element.getAttribute("aria-label") === `Edit ${workTitle}`)
       button?.scrollIntoView({ block: "center", inline: "nearest" })
     }, title)
-    const findPreview = (deckTitle, previewText) => {
+    const findPreview = (workTitle, previewText) => {
       const button = [...document.querySelectorAll(".library-card-open")]
-        .find(element => element.getAttribute("aria-label") === `Edit ${deckTitle}`)
+        .find(element => element.getAttribute("aria-label") === `Edit ${workTitle}`)
       const preview = button?.closest(".library-card")?.querySelector(".library-card-preview")
       return preview?.dataset.previewState === "ready" && preview.textContent.includes(previewText)
     }
@@ -1763,23 +1763,23 @@ class DesktopLibraryUi {
         timeoutMsg: `The ${title} library preview did not render its Markdown`
       })
     } catch (error) {
-      const diagnostic = await browser.execute(async (deckTitle, previewText) => {
+      const diagnostic = await browser.execute(async (workTitle, previewText) => {
         const button = [...document.querySelectorAll(".library-card-open")]
-          .find(element => element.getAttribute("aria-label") === `Edit ${deckTitle}`)
+          .find(element => element.getAttribute("aria-label") === `Edit ${workTitle}`)
         const card = button?.closest(".library-card")
         const preview = card?.querySelector(".library-card-preview")
         // Card DOM ids are `<kind>_<work id>`; the preview node itself no
-        // longer carries the retired data-deck-id attribute.
+        // longer carries the retired data-work-id attribute.
         const workId = card?.id?.replace(/^(?:presentation|document)_/, "")
         try {
-          const deck = await window.__TAURI__.core.invoke("read_deck_preview", { id: workId })
+          const workFolder = await window.__TAURI__.core.invoke("read_work_folder_preview", { id: workId })
           return {
             previewState: preview?.dataset.previewState ?? null,
             previewMissing: !preview,
             previewText: preview?.textContent?.slice(0, 240) || "",
-            sourceHasExpectedText: deck.source.includes(previewText),
-            sourceHasLocalImage: deck.source.includes("elef-asset:"),
-            sourceFile: deck.source_file
+            sourceHasExpectedText: workFolder.source.includes(previewText),
+            sourceHasLocalImage: workFolder.source.includes("elef-asset:"),
+            sourceFile: workFolder.source_file
           }
         } catch (readError) {
           return { previewState: preview?.dataset.previewState ?? null, previewMissing: !preview, readError: readError?.code || "unknown" }
@@ -1790,9 +1790,9 @@ class DesktopLibraryUi {
   }
 
   async assertDocumentCardTheme(title, theme) {
-    const state = (deckTitle, theme) => {
+    const state = (workTitle, theme) => {
       const button = [...document.querySelectorAll(".library-card-open")]
-        .find(element => element.getAttribute("aria-label") === `Edit ${deckTitle}`)
+        .find(element => element.getAttribute("aria-label") === `Edit ${workTitle}`)
       const preview = button?.closest(".library-card")?.querySelector(".library-card-preview")
       const surface = preview?.querySelector(".document-reader .document-surface")
       const frame = surface?.querySelector(".document-page-frame")
@@ -1830,7 +1830,7 @@ class DesktopLibraryUi {
   async assertSearchResults(title) {
     await browser.waitUntil(async () => (await $$(".library-card")).length === 1, {
       timeout: 10_000,
-      timeoutMsg: "The library search did not narrow to one deck"
+      timeoutMsg: "The library search did not narrow to one work"
     })
     if (!(await $(`[aria-label='Edit ${title}']`).isDisplayed())) {
       throw new Error(`The library search did not show ${title}`)
@@ -1839,11 +1839,11 @@ class DesktopLibraryUi {
 
   async assertNoSearchResults() {
     await $("#library-no-results").waitForDisplayed()
-    await browser.waitUntil(async () => (await $("#library-no-results").getText()) === "No decks match this search.", {
+    await browser.waitUntil(async () => (await $("#library-no-results").getText()) === "No Works match this search.", {
       timeout: 10_000,
       timeoutMsg: "The library did not show its empty search result"
     })
-    if ((await $$(".library-card")).length !== 0) throw new Error("The empty search still shows deck cards")
+    if ((await $$(".library-card")).length !== 0) throw new Error("The empty search still shows work cards")
   }
 
   async showPresentations() {
@@ -1919,7 +1919,7 @@ class DesktopLibraryUi {
   }
 
   async assertDocumentOpened(title) {
-    await browser.waitUntil(async () => (await $("#deck-title").getText()) === title, {
+    await browser.waitUntil(async () => (await $("#work-title").getText()) === title, {
       timeout: 10_000,
       timeoutMsg: `The graph did not open ${title}`
     })
@@ -1927,7 +1927,7 @@ class DesktopLibraryUi {
 
   async openElefArchive(
     archivePath = process.env.ELEF_E2E_IMPORT_ARCHIVE,
-    deckName = "E2E archive seed",
+    workName = "E2E archive seed",
     expectedSource = "Portable archive fixture."
   ) {
     await this.openLibrary()
@@ -1956,14 +1956,14 @@ class DesktopLibraryUi {
     launched.once("error", error => { launchError = error })
     launched.once("exit", (code, signal) => { launchExit = { code, signal } })
     try {
-      const card = $(`[aria-label="Edit ${deckName}"]`)
+      const card = $(`[aria-label="Edit ${workName}"]`)
       try {
         await browser.waitUntil(async () => {
           if (launchError) throw new Error(`Opening the .elef file failed: ${launchError.message}`)
           return card.isDisplayed()
         }, {
           timeout: 20_000,
-          timeoutMsg: `The running desktop app did not import ${deckName} from the opened .elef file`
+          timeoutMsg: `The running desktop app did not import ${workName} from the opened .elef file`
         })
       } catch (error) {
         const state = await browser.execute(() => ({
@@ -1976,9 +1976,9 @@ class DesktopLibraryUi {
         throw new Error(`${error.message}; launch exit: ${JSON.stringify(launchExit)}; pending .elef files: ${pending}; library state: ${JSON.stringify(state)}; single-instance owner before launch: ${singleInstanceOwner}; second-process output: ${JSON.stringify(launchOutput)}`)
       }
       await card.click()
-      await browser.waitUntil(async () => (await $("#deck-title").getText()) === deckName, {
+      await browser.waitUntil(async () => (await $("#work-title").getText()) === workName, {
         timeout: 10_000,
-        timeoutMsg: `The imported .elef deck ${deckName} did not open`
+        timeoutMsg: `The imported .elef work ${workName} did not open`
       })
       const source = await browser.execute(() => document.querySelector("#desktop-editor-field")?.editorController?.sourceValue || "")
       if (!source.includes(expectedSource)) throw new Error(`The imported .elef source did not include ${expectedSource}`)
@@ -1996,7 +1996,7 @@ class DesktopLibraryUi {
 }
 
 describe("desktop binary workflows and native boundaries", () => {
-  it("opens the new-deck dialog from the native menu accelerator", async () => {
+  it("opens the new-work dialog from the native menu accelerator", async () => {
     await $("#library-view").waitForDisplayed()
     await browser.execute(() => window.focus())
     if (process.platform === "darwin") {
@@ -2012,7 +2012,7 @@ describe("desktop binary workflows and native boundaries", () => {
     sendNativeKey("Escape", { activate: false })
     await browser.waitUntil(async () => browser.execute(() => !document.querySelector("#create-dialog")?.open), {
       timeout: 5_000,
-      timeoutMsg: "Escape did not close the new-deck dialog"
+      timeoutMsg: "Escape did not close the new-work dialog"
     })
   })
 
@@ -2048,10 +2048,10 @@ describe("desktop binary workflows and native boundaries", () => {
   })
 
   it("neutralizes hostile Markdown before it reaches the Tauri preview DOM", async () => {
-    await hostileDeckNeutralizedWorkflow(new DesktopEditorUi())
+    await hostileWorkNeutralizedWorkflow(new DesktopEditorUi())
   })
 
-  it("edits, saves, and previews a deck in the desktop binary", async () => {
+  it("edits, saves, and previews a work in the desktop binary", async () => {
     await editAndPreviewWorkflow(new DesktopEditorUi())
     const form = await $("#desktop-editor-form")
     if (await form.getAttribute("data-editor-mode") !== "visual") {
@@ -2059,9 +2059,9 @@ describe("desktop binary workflows and native boundaries", () => {
     }
   })
 
-  it("opens the next deck after leaving a focused visual editor", async () => {
+  it("opens the next work after leaving a focused visual editor", async () => {
     const ui = new DesktopEditorUi()
-    await ui.openDeck("E2E seed")
+    await ui.openWork("E2E seed")
     const focused = await browser.execute(() => {
       const block = document.querySelector("#desktop-preview [contenteditable='true']")
       block?.focus()
@@ -2070,13 +2070,13 @@ describe("desktop binary workflows and native boundaries", () => {
     if (!focused) throw new Error("The visual editor block did not receive focus")
 
     await ui.showSourceMode()
-    await ui.openDeck("E2E document")
+    await ui.openWork("E2E document")
     await browser.waitUntil(async () => browser.execute(() =>
       document.querySelector("#desktop-editor-form")?.dataset.editorMode === "visual" &&
       !document.querySelector("#visual-mode")?.disabled
     ), {
       timeout: 10_000,
-      timeoutMsg: "The next deck preview stayed disabled after switching from a focused visual block"
+      timeoutMsg: "The next work preview stayed disabled after switching from a focused visual block"
     })
   })
 
@@ -2102,7 +2102,7 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("accepts trusted keyboard input in CodeMirror and persists it", async () => {
     const ui = new DesktopEditorUi()
-    await ui.openDeck()
+    await ui.openWork()
     await ui.showSourceMode()
     const original = await ui.readSource()
     const inserted = "Native keyboard input reaches CodeMirror."
@@ -2293,13 +2293,13 @@ describe("desktop binary workflows and native boundaries", () => {
     await displayMathEnterWorkflow(new DesktopEditorUi())
   })
 
-  it("saves a manifestless deck with its new identity, original line endings, and isolated undo", async () => {
+  it("saves a manifestless work with its new identity, original line endings, and isolated undo", async () => {
     const root = process.env.ELEF_E2E_LIBRARY_ROOT
     const title = "E2E manifestless lifecycle"
     const folder = path.join(root, title)
     const sourcePath = path.join(folder, "presentation.md")
-    const original = "# Deck\r\n\r\nBody bytes stay unchanged.\r\n"
-    const edited = original.replace("Deck", "Edited")
+    const original = "# Work\r\n\r\nBody bytes stay unchanged.\r\n"
+    const edited = original.replace("Work", "Edited")
     const ui = new DesktopEditorUi()
     await $("#back-to-library").click()
     await $("#library-view").waitForDisplayed()
@@ -2307,12 +2307,12 @@ describe("desktop binary workflows and native boundaries", () => {
     try {
       await writeFile(sourcePath, original)
       await $("#refresh-library").click()
-      await ui.openDeck(title)
+      await ui.openWork(title)
       await browser.waitUntil(async () => await ui.readSource() === original, {
-        timeoutMsg: "Opening the manifestless deck changed its source bytes"
+        timeoutMsg: "Opening the manifestless work changed its source bytes"
       })
       const manifest = JSON.parse(await readFile(path.join(folder, "elef.json"), "utf8"))
-      if (await $("#deck-id").getText() !== manifest.id) throw new Error("The new manifest identity was not activated")
+      if (await $("#work-id").getText() !== manifest.id) throw new Error("The new manifest identity was not activated")
       await ui.showSourceMode()
       await browser.execute(() => {
         const editor = document.querySelector("#desktop-editor-field").editorController
@@ -2321,15 +2321,15 @@ describe("desktop binary workflows and native boundaries", () => {
       await browser.waitUntil(async () => await readFile(sourcePath, "utf8") === edited, {
         timeoutMsg: "The first save lost the UUID handshake or source line endings"
       })
-      await ui.openDeck("E2E seed")
+      await ui.openWork("E2E seed")
       const seed = await ui.readSource()
       await ui.showSourceMode()
       await ui.undo()
-      if (await ui.readSource() !== seed) throw new Error("Undo copied the previous deck into the seed deck")
-      await ui.openDeck(title)
+      if (await ui.readSource() !== seed) throw new Error("Undo copied the previous work into the seed work")
+      await ui.openWork(title)
       if (await ui.readSource() !== edited) throw new Error("Reopening did not retain the first saved source")
       await ui.undo()
-      if (await ui.readSource() !== edited) throw new Error("Reopening inherited another deck's undo history")
+      if (await ui.readSource() !== edited) throw new Error("Reopening inherited another work's undo history")
       await $("#back-to-library").click()
       await $("#library-view").waitForDisplayed()
     } finally {
@@ -2340,7 +2340,7 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("loads custom snippets and math shortcuts from the selected library .elef settings", async () => {
     const ui = new DesktopEditorUi()
-    await ui.openDeck()
+    await ui.openWork()
     const originalSource = await ui.readSource()
 
     const snippetPrefix = `${originalSource.trimEnd()}\n`
@@ -2363,11 +2363,11 @@ describe("desktop binary workflows and native boundaries", () => {
     const library = new DesktopLibraryUi()
     await library.openLibrary()
     await $("#refresh-library").click()
-    await browser.waitUntil(async () => (await $("#status-text").getText()).includes("decks"), {
+    await browser.waitUntil(async () => (await $("#status-text").getText()).includes("Works"), {
       timeout: 10_000,
       timeoutMsg: "Refreshing the library did not finish loading its authoring settings"
     })
-    await ui.openDeck()
+    await ui.openWork()
     await ui.showVisualMode()
     await ui.waitForImage(PIXEL_PNG_DIGEST)
 
@@ -2455,7 +2455,7 @@ describe("desktop binary workflows and native boundaries", () => {
 
     await $("#close-authoring-settings").click()
     const ui = new DesktopEditorUi()
-    await ui.openDeck()
+    await ui.openWork()
     const originalSource = await ui.readSource()
     const prefix = `${originalSource.trimEnd()}\n`
     await ui.replaceSource(`${prefix}/${trigger}`)
@@ -2539,7 +2539,7 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("rejects unsupported and oversized media without changing the source", async () => {
     const ui = new DesktopEditorUi()
-    await ui.openDeck()
+    await ui.openWork()
     const imagesPath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "images")
     const filesBefore = (await readdir(imagesPath)).sort()
     const unsupportedStatus = await ui.rejectMediaFile({
@@ -2561,7 +2561,7 @@ describe("desktop binary workflows and native boundaries", () => {
     }
     const filesAfter = (await readdir(imagesPath)).sort()
     if (JSON.stringify(filesAfter) !== JSON.stringify(filesBefore)) {
-      throw new Error(`Rejected media changed the deck's images directory: ${JSON.stringify({ filesBefore, filesAfter })}`)
+      throw new Error(`Rejected media changed the work's images directory: ${JSON.stringify({ filesBefore, filesAfter })}`)
     }
   })
 
@@ -2608,9 +2608,9 @@ describe("desktop binary workflows and native boundaries", () => {
   it("exports a portable .elef archive from the desktop command", async () => {
     const exported = await browser.execute(async id =>
       window.__TAURI__?.core?.invoke("export_elef", { id }),
-    process.env.ELEF_E2E_SEED_DECK_ID)
+    process.env.ELEF_E2E_SEED_WORK_ID)
     if (exported !== true) throw new Error("The desktop export command did not write the .elef archive")
-    // The conformance spec later exports other decks through the same
+    // The conformance spec later exports other works through the same
     // harness file, so snapshot the seed bytes before they are replaced.
     const exportPath = process.env.ELEF_E2E_EXPORT_PATH
     if (!exportPath) throw new Error("ELEF_E2E_EXPORT_PATH is not set for the seed export snapshot")
@@ -2618,7 +2618,7 @@ describe("desktop binary workflows and native boundaries", () => {
   })
 
   it("opens and cancels the native .elef export dialog", async () => {
-    await new DesktopEditorUi().openDeck()
+    await new DesktopEditorUi().openWork()
     await browser.execute(() => window.focus())
     const started = await browser.execute(id => {
       if (!window.__TAURI__?.core?.invoke) return false
@@ -2627,7 +2627,7 @@ describe("desktop binary workflows and native boundaries", () => {
         useNativeDialog: true
       })
       return true
-    }, process.env.ELEF_E2E_SEED_DECK_ID)
+    }, process.env.ELEF_E2E_SEED_WORK_ID)
     if (!started) throw new Error("The native export command could not be started")
 
     if (process.platform === "darwin") {
@@ -2636,7 +2636,7 @@ describe("desktop binary workflows and native boundaries", () => {
       let dialogId
       await browser.waitUntil(async () => {
         try {
-          dialogId = execFileSync("xdotool", ["search", "--onlyvisible", "--name", "Export Elef deck"], { encoding: "utf8" })
+          dialogId = execFileSync("xdotool", ["search", "--onlyvisible", "--name", "Export Elef Work"], { encoding: "utf8" })
             .trim().split(/\s+/).at(-1)
           return Boolean(dialogId)
         } catch (_error) {
@@ -2659,7 +2659,7 @@ describe("desktop binary workflows and native boundaries", () => {
 
 describe("native updater verification", () => {
   for (const mode of ["none", "older", "valid", "bad-signature", "truncated", "version-mismatch"]) {
-    it(`handles ${mode} updates without changing the installed binary or deck source`, async () => {
+    it(`handles ${mode} updates without changing the installed binary or work source`, async () => {
       const binaryPath = process.env.ELEF_E2E_INSTALLED_ARTIFACT || process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
       const hash = async filename => createHash("sha256").update(await readFile(filename)).digest("hex")
       const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
@@ -2698,7 +2698,7 @@ describe("native updater verification", () => {
           if (mode === "version-mismatch" && !/version/i.test(result.rejectionReason)) throw new Error(`Wrong version rejection: ${result.rejectionReason}`)
         }
         if (await hash(binaryPath) !== original.binary || await hash(sourcePath) !== original.source) {
-          throw new Error("Update verification changed the installed binary or deck source")
+          throw new Error("Update verification changed the installed binary or work source")
         }
         if (!(await $("#back-to-library").isExisting())) throw new Error("The application stopped responding after update verification")
       } catch (error) {
@@ -2715,7 +2715,7 @@ describe("native updater verification", () => {
   }
 
   if (process.env.ELEF_E2E_PACKAGED_UPDATES === "1") {
-    it("requires native confirmation and installs signed version N without changing deck bytes", async function () {
+    it("requires native confirmation and installs signed version N without changing work bytes", async function () {
       this.timeout(180_000)
       const binaryPath = process.env.ELEF_E2E_INSTALLED_ARTIFACT || process.env.ELEF_E2E_REAL_APP_BINARY || process.env.ELEF_E2E_APP_BINARY
       const sourcePath = path.join(process.env.ELEF_E2E_LIBRARY_ROOT, "E2E seed", "presentation.md")
@@ -2753,7 +2753,7 @@ describe("native updater verification", () => {
         const installed = await browser.execute(async () => await window.__elefUpdateInstallation)
         if (installed.installed !== true) throw new Error(`The signed package did not install: ${JSON.stringify(installed)}`)
         if (await hash(binaryPath) === original.binary) throw new Error("The signed update did not replace the installed application")
-        if (await hash(sourcePath) !== original.source) throw new Error("Installation changed the user's deck bytes")
+        if (await hash(sourcePath) !== original.source) throw new Error("Installation changed the user's work bytes")
         if (!(await $("#back-to-library").isExisting())) throw new Error("The application stopped responding after installation")
       } catch (error) {
         try {

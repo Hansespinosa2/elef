@@ -11,7 +11,7 @@ export const SLIDE_POSITION_SOURCE = [
 ].join("\n")
 
 export const COLUMN_DOCKING_SOURCE = [
-  "# Deck title",
+  "# Slide title",
   "",
   "## Left",
   "",
@@ -27,7 +27,7 @@ export const COLUMN_DOCKING_SOURCE = [
 ].join("\n")
 
 export async function slidePositionGrammarWorkflow(ui) {
-  await ui.openDeck()
+  await ui.openWork()
   const originalSource = await ui.readSource()
 
   try {

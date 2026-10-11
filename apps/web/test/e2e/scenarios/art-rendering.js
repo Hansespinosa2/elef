@@ -22,7 +22,7 @@ export const ART_PARITY_SOURCE = `# Peer parity
 `
 
 export async function artRenderingWorkflow(ui) {
-  await ui.openDeck()
+  await ui.openWork()
   const originalSource = await ui.readSource()
 
   try {

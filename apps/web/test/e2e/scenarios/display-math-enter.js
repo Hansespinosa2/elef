@@ -1,7 +1,7 @@
 export const EMPTY_DISPLAY_MATH_SOURCE = "# E2E display math\n\n"
 
 export async function displayMathEnterWorkflow(ui) {
-  await ui.openDeck("E2E document")
+  await ui.openWork("E2E document")
   const originalSource = await ui.readSource()
   const expectedSource = `${EMPTY_DISPLAY_MATH_SOURCE}$$\n\n$$`
   const expectedCaret = EMPTY_DISPLAY_MATH_SOURCE.length + 3

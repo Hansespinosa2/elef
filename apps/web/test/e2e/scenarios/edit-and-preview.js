@@ -4,10 +4,10 @@ import { insertImageWorkflow } from "./insert-image.js"
 export const SAVED_SOURCE = "# Saved by shared scenario\n\nThe editor autosaved this text.\n\nSee [[E2E linked]].\n"
 
 export async function editAndPreviewWorkflow(ui) {
-  await ui.openDeck()
+  await ui.openWork()
   await ui.renameEditorTitle("E2E shared title")
   await ui.waitForEditorTitle("E2E shared title")
-  await ui.reopenDeck()
+  await ui.reopenWork()
   await ui.assertEditorTitle("E2E shared title")
   await ui.renameEditorTitle("E2E seed")
   await ui.waitForEditorTitle("E2E seed")
@@ -38,7 +38,7 @@ export async function editAndPreviewWorkflow(ui) {
   await ui.waitForSaved(visualSource)
   await ui.waitForPreview("The visual editor changed this text.")
 
-  await ui.openDeck("E2E document")
+  await ui.openWork("E2E document")
   const originalDocument = await ui.readSource()
   const updatedDocument = `${originalDocument.trimEnd()}\n\nAfter saving, see [[E2E linked]].\n`
   await ui.replaceSource(updatedDocument)
@@ -47,5 +47,5 @@ export async function editAndPreviewWorkflow(ui) {
   await ui.refreshPreview()
   await ui.showVisualMode()
   await ui.assertDocumentLinkPreview("E2E linked")
-  await ui.openDeck()
+  await ui.openWork()
 }

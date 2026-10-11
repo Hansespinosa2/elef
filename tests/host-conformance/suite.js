@@ -59,29 +59,29 @@ export const CASES = [
         a.ok(Array.isArray(item.warnings), "summary carries a warnings array");
       }
       checkCardMetadata(doc);
-      const deck = await host.library.createWork({
+      const work = await host.library.createWork({
         workspaceId,
         title: prefixName(prefix, "slides"),
         kind: "presentation",
       });
-      a.equal(deck.kind, "presentation", "created presentation kind");
-      checkCardMetadata(deck);
+      a.equal(work.kind, "presentation", "created presentation kind");
+      checkCardMetadata(work);
       const works = await host.library.listWorks(workspaceId);
       const ids = new Set(works.map((work) => work.id));
-      a.ok(ids.has(doc.id) && ids.has(deck.id), "list contains created works");
-      for (const item of works.filter((work) => work.id === doc.id || work.id === deck.id)) {
+      a.ok(ids.has(doc.id) && ids.has(work.id), "list contains created works");
+      for (const item of works.filter((work) => work.id === doc.id || work.id === work.id)) {
         checkCardMetadata(item);
       }
-      const renamed = await host.library.renameWork(deck.id, prefixName(prefix, "renamed"));
+      const renamed = await host.library.renameWork(work.id, prefixName(prefix, "renamed"));
       a.equal(renamed.title, prefixName(prefix, "renamed"), "rename applies");
       if (policy.deleteProgrammatic === false) {
         return "skip: delete is dialog-mediated; cleanup deletes are no-ops suite-wide";
       }
       await host.library.deleteWork(doc.id);
-      await host.library.deleteWork(deck.id);
+      await host.library.deleteWork(work.id);
       const after = await host.library.listWorks(workspaceId);
       const remaining = new Set(after.map((work) => work.id));
-      a.ok(!remaining.has(doc.id) && !remaining.has(deck.id), "delete removes works");
+      a.ok(!remaining.has(doc.id) && !remaining.has(work.id), "delete removes works");
     },
   },
   {

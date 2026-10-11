@@ -7,7 +7,7 @@ export async function insertImageWorkflow(ui) {
     mimeType: "image/png"
   })
   await ui.waitForSaved(source)
-  await ui.reopenDeck()
+  await ui.reopenWork()
   await ui.waitForSource(source)
   await ui.showVisualMode()
   await ui.waitForImage(PIXEL_PNG_DIGEST)

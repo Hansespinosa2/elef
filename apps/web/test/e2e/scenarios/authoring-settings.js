@@ -22,7 +22,7 @@ export async function authoringSettingsWorkflow(ui) {
   await ui.assertAuthoringEntryVisible(snippetTrigger)
 
   await ui.closeAuthoringSettings()
-  await ui.openDeck("E2E seed")
+  await ui.openWork("E2E seed")
   await ui.showSourceMode()
   const originalSource = await ui.readSource()
   const prefix = `${originalSource.trimEnd()}\n`

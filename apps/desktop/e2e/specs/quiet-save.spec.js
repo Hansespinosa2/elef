@@ -6,13 +6,13 @@ import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 const libraryRoot = () => process.env.ELEF_E2E_LIBRARY_ROOT
-const deckPath = title => path.join(libraryRoot(), title)
-const sourcePath = title => path.join(deckPath(title), "presentation.md")
+const workFolderPath = title => path.join(libraryRoot(), title)
+const sourcePath = title => path.join(workFolderPath(title), "presentation.md")
 
-async function seedDeck(title, source) {
-  await mkdir(deckPath(title), { recursive: true })
+async function seedWorkFolder(title, source) {
+  await mkdir(workFolderPath(title), { recursive: true })
   await writeFile(sourcePath(title), source)
-  await writeFile(path.join(deckPath(title), "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
+  await writeFile(path.join(workFolderPath(title), "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
 }
 
 async function showLibrary() {
@@ -27,20 +27,20 @@ async function refreshLibrary() {
   await $("#refresh-library").click()
 }
 
-async function openDeck(title) {
+async function openWork(title) {
   await showLibrary()
-  await $("#show-deck-list").click()
+  await $("#show-work-list").click()
   const card = $(`[aria-label="Edit ${title}"]`)
   await card.waitForDisplayed({ timeout: 10_000 })
   await card.click()
   await browser.waitUntil(async () => browser.execute(expected => {
     const form = document.querySelector("#desktop-editor-form")
-    return document.querySelector("#deck-title")?.textContent === expected
-      && form?.dataset.loadedDeckId === document.querySelector("#deck-id")?.textContent
-      && !document.querySelector("#deck-view")?.hidden
+    return document.querySelector("#work-title")?.textContent === expected
+      && form?.dataset.loadedWorkId === document.querySelector("#work-id")?.textContent
+      && !document.querySelector("#work-view")?.hidden
   }, title), {
     timeout: 10_000,
-    timeoutMsg: `The ${title} deck did not finish opening`
+    timeoutMsg: `The ${title} work did not finish opening`
   })
 }
 
@@ -53,7 +53,7 @@ async function replaceSource(source) {
     timeout: 5_000,
     timeoutMsg: "The source editor did not finish restoring after the mode switch"
   })
-  const editor = await $("#deck-source-editor .cm-content")
+  const editor = await $("#work-source-editor .cm-content")
   await editor.waitForDisplayed()
   const updated = await browser.execute(nextSource => {
     const controller = document.querySelector("#desktop-editor-field")?.editorController
@@ -93,12 +93,12 @@ async function waitForDisk(title, expected, timeout = 10_000) {
   return Date.now() - startedAt
 }
 
-async function deckId() {
-  return browser.execute(() => document.querySelector("#deck-id")?.textContent)
+async function workId() {
+  return browser.execute(() => document.querySelector("#work-id")?.textContent)
 }
 
 async function historySnapshots(title) {
-  const id = await deckId()
+  const id = await workId()
   void title
   const dir = path.join(libraryRoot(), ".elef-history", id)
   const files = await readdir(dir)
@@ -116,15 +116,15 @@ async function writeDirect(title, source) {
 }
 
 async function writeRename(title, source) {
-  const temp = path.join(deckPath(title), ".e2e-external-tmp")
+  const temp = path.join(workFolderPath(title), ".e2e-external-tmp")
   await writeFile(temp, source)
   await rename(temp, sourcePath(title))
 }
 
 async function writeRecreate(title, source) {
   const target = sourcePath(title)
-  await writeFile(path.join(deckPath(title), ".e2e-external-hold"), source)
-  await rename(path.join(deckPath(title), ".e2e-external-hold"), target + ".new")
+  await writeFile(path.join(workFolderPath(title), ".e2e-external-hold"), source)
+  await rename(path.join(workFolderPath(title), ".e2e-external-hold"), target + ".new")
   const { rm } = await import("node:fs/promises")
   await rm(target, { force: true })
   await rename(target + ".new", target)
@@ -155,18 +155,18 @@ const BASELINE = "# Quiet baseline\n\nSeed paragraph.\n"
 
 describe("desktop quiet save", () => {
   before(async () => {
-    await seedDeck("E2E quiet main", BASELINE)
-    await seedDeck("E2E quiet second", "# Quiet second\n\nAnother deck.\n")
-    await seedDeck("E2E quiet merge", "alpha\nbeta\n")
-    await seedDeck("E2E quiet conflict", "same\nlines\nhere\n")
-    await seedDeck("E2E quiet failure", "# Quiet failure\n\nSeed paragraph.\n")
-    await seedDeck("E2E quiet clean suspicious", `${"Clean suspicious line.\n".repeat(15)}`)
-    await seedDeck("E2E quiet periodic", "# Quiet periodic\n\nSeed paragraph.\n")
+    await seedWorkFolder("E2E quiet main", BASELINE)
+    await seedWorkFolder("E2E quiet second", "# Quiet second\n\nAnother work.\n")
+    await seedWorkFolder("E2E quiet merge", "alpha\nbeta\n")
+    await seedWorkFolder("E2E quiet conflict", "same\nlines\nhere\n")
+    await seedWorkFolder("E2E quiet failure", "# Quiet failure\n\nSeed paragraph.\n")
+    await seedWorkFolder("E2E quiet clean suspicious", `${"Clean suspicious line.\n".repeat(15)}`)
+    await seedWorkFolder("E2E quiet periodic", "# Quiet periodic\n\nSeed paragraph.\n")
   })
 
   it("shows no save button, status, unsaved marker, or retry on desktop", async () => {
     await refreshLibrary()
-    await openDeck("E2E quiet main")
+    await openWork("E2E quiet main")
     const chrome = await browser.execute(() => ({
       saveState: document.querySelector("#save-state")?.textContent ?? null,
       retrySave: document.querySelector("#retry-save")?.textContent ?? null,
@@ -185,7 +185,7 @@ describe("desktop quiet save", () => {
   })
 
   it("persists changed text to disk within 2.5 s after the last edit", async () => {
-    await openDeck("E2E quiet main")
+    await openWork("E2E quiet main")
     const edited = `${BASELINE}\nTimed quiet-save line.\n`
     await replaceSource(edited)
     const startedAt = Date.now()
@@ -196,7 +196,7 @@ describe("desktop quiet save", () => {
   })
 
   it("flushes dirty edits immediately on blur", async () => {
-    await openDeck("E2E quiet main")
+    await openWork("E2E quiet main")
     const edited = `${BASELINE}\nBlurred line.\n`
     await replaceSource(edited)
     await browser.execute(() => window.dispatchEvent(new Event("blur")))
@@ -206,7 +206,7 @@ describe("desktop quiet save", () => {
   })
 
   it("flushes dirty edits immediately on Cmd-or-Ctrl+S", async () => {
-    await openDeck("E2E quiet main")
+    await openWork("E2E quiet main")
     const edited = `${BASELINE}\nAccelerator line.\n`
     await replaceSource(edited)
     focusDesktopWindow()
@@ -220,17 +220,17 @@ describe("desktop quiet save", () => {
     assert.ok(diskMs < 1500, `Accelerator flush took ${diskMs} ms to reach disk`)
   })
 
-  it("flushes dirty edits before switching decks", async () => {
-    await openDeck("E2E quiet main")
+  it("flushes dirty edits before switching works", async () => {
+    await openWork("E2E quiet main")
     const edited = `${BASELINE}\nPre-switch line.\n`
     await replaceSource(edited)
-    await openDeck("E2E quiet second")
+    await openWork("E2E quiet second")
     assert.equal(await readDisk("E2E quiet main"), edited)
     await waitForQuiescent()
   })
 
   it("reloads clean external edits silently for every delivery style", async () => {
-    await openDeck("E2E quiet main")
+    await openWork("E2E quiet main")
     await waitForQuiescent()
     const styles = { direct: writeDirect, rename: writeRename, recreate: writeRecreate }
     for (const [name, write] of Object.entries(styles)) {
@@ -248,7 +248,7 @@ describe("desktop quiet save", () => {
   })
 
   it("merges dirty non-overlapping external edits after snapshotting both sides", async () => {
-    await openDeck("E2E quiet merge")
+    await openWork("E2E quiet merge")
     await waitForQuiescent()
     await replaceSource("ALPHA\nbeta\n")
     await writeDirect("E2E quiet merge", "alpha\nBETA\n")
@@ -268,10 +268,10 @@ describe("desktop quiet save", () => {
   })
 
   it("merges dirty non-overlapping git-style replacements", async () => {
-    await openDeck("E2E quiet merge")
+    await openWork("E2E quiet merge")
     await browser.waitUntil(async () => (await readEditorSource()) === "ALPHA\nBETA\n", {
       timeout: 10_000,
-      timeoutMsg: "The merge deck did not hold the previously merged source"
+      timeoutMsg: "The merge work did not hold the previously merged source"
     })
     await replaceSource("ALPHA\nBETA\nGAMMA\n")
     await writeRename("E2E quiet merge", "ZETA\nALPHA\nBETA\n")
@@ -284,7 +284,7 @@ describe("desktop quiet save", () => {
   })
 
   it("routes overlapping edits to the conflict dialog and preserves both sides", async () => {
-    await openDeck("E2E quiet conflict")
+    await openWork("E2E quiet conflict")
     await waitForQuiescent()
     await replaceSource("LOCAL\nlines\nhere\n")
     await writeDirect("E2E quiet conflict", "EXTERNAL\nlines\nhere\n")
@@ -302,10 +302,10 @@ describe("desktop quiet save", () => {
   })
 
   it("never auto-loads suspicious external changes", async () => {
-    await openDeck("E2E quiet conflict")
+    await openWork("E2E quiet conflict")
     await browser.waitUntil(async () => (await readEditorSource()) === "LOCAL\nlines\nhere\n", {
       timeout: 10_000,
-      timeoutMsg: "The conflict deck did not hold the previously kept local source"
+      timeoutMsg: "The conflict work did not hold the previously kept local source"
     })
     const local = "LOCAL line\n".repeat(25)
     await replaceSource(local)
@@ -318,7 +318,7 @@ describe("desktop quiet save", () => {
   })
 
   it("never silently reloads a suspicious change into a clean editor", async () => {
-    await openDeck("E2E quiet clean suspicious")
+    await openWork("E2E quiet clean suspicious")
     const local = await readEditorSource()
     assert.ok(local.length >= 200, `Seeded editor should hold a long clean buffer (got ${local.length} chars)`)
     await waitForQuiescent()
@@ -336,7 +336,7 @@ describe("desktop quiet save", () => {
   })
 
   it("takes periodic snapshots while edits stay unsaved", async () => {
-    await openDeck("E2E quiet periodic")
+    await openWork("E2E quiet periodic")
     await waitForQuiescent()
     await browser.execute(() => window.__elefSaveTestHooks?.pause())
     const edited = "# Quiet periodic\n\nAn unsaved line.\n"
@@ -354,13 +354,13 @@ describe("desktop quiet save", () => {
   })
 
   it("retries failed saves automatically without a modal dialog", async () => {
-    await openDeck("E2E quiet failure")
+    await openWork("E2E quiet failure")
     await waitForQuiescent()
     const target = `${BASELINE}\nRecovered line.\n`
     await replaceSource(target)
-    // Hide the deck directory so staged saves fail even for privileged users.
-    const held = `${deckPath("E2E quiet failure")}.held`
-    await rename(deckPath("E2E quiet failure"), held)
+    // Hide the work directory so staged saves fail even for privileged users.
+    const held = `${workFolderPath("E2E quiet failure")}.held`
+    await rename(workFolderPath("E2E quiet failure"), held)
     try {
       await browser.waitUntil(async () => (await saveStatus()) !== "clean", {
         timeout: 10_000,
@@ -371,7 +371,7 @@ describe("desktop quiet save", () => {
       const dialogOpen = await browser.execute(() => document.querySelector("#conflict-dialog")?.open === true)
       assert.equal(dialogOpen, false)
     } finally {
-      await rename(held, deckPath("E2E quiet failure"))
+      await rename(held, workFolderPath("E2E quiet failure"))
     }
     await waitForDisk("E2E quiet failure", target)
     await waitForQuiescent()

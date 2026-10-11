@@ -48,15 +48,15 @@ export async function runNativeQuitSmokes(env) {
   for (const mode of ["clean", "dirty", "conflict"]) {
     const id = randomUUID()
     const title = `E2E native Quit ${mode}`
-    const deck = path.join(env.ELEF_E2E_LIBRARY_ROOT, title)
-    const sourceFile = path.join(deck, "presentation.md")
+    const workFolder = path.join(env.ELEF_E2E_LIBRARY_ROOT, title)
+    const sourceFile = path.join(workFolder, "presentation.md")
     const original = "# Before native Quit\n\nOriginal source.\n"
     const draft = "# Unsaved native Quit\n\nLocal source.\n"
     const external = "# External native Quit\n\nExternal source.\n"
     const smokeEnv = { ...env, TAURI_WEBDRIVER_PORT: await reserveWebdriverPort() }
-    await mkdir(deck)
+    await mkdir(workFolder)
     await writeFile(sourceFile, original)
-    await writeFile(path.join(deck, "elef.json"), JSON.stringify({ id, schema_version: 1 }))
+    await writeFile(path.join(workFolder, "elef.json"), JSON.stringify({ id, schema_version: 1 }))
     const restricted = desktopCommand(env.ELEF_E2E_APP_BINARY)
     const app = spawn(restricted.command, restricted.args, { env: smokeEnv, stdio: ["ignore", "pipe", "pipe"] })
     let output = ""
@@ -105,12 +105,12 @@ export async function runNativeQuitSmokes(env) {
           && document.querySelector('#desktop-editor-field')?.editorController?.editorReady)`)
       }, "The native Quit smoke frontend did not finish loading", 65_000)
       await request(`/session/${sessionId}/timeouts`, { script: 60_000 })
-      stage = "opening the smoke deck"
+      stage = "opening the smoke work"
       await execute(`document.querySelector('[aria-label="Edit ${title}"]').click(); return true`)
-      stage = "waiting for the deck to finish opening"
+      stage = "waiting for the work to finish opening"
       await waitFor(() => execute(`const form = document.querySelector('#desktop-editor-form');
-        return form?.dataset.loadedDeckId === arguments[0] && !document.querySelector('#deck-view').hidden`, id),
-      "The native Quit smoke deck did not finish opening")
+        return form?.dataset.loadedWorkId === arguments[0] && !document.querySelector('#work-view').hidden`, id),
+      "The native Quit smoke work did not finish opening")
       if (mode !== "clean") {
         stage = "staging an unsaved editor draft"
         const changed = await execute(`window.__elefSaveTestHooks.pause();
@@ -181,7 +181,7 @@ export async function runNativeQuitSmokes(env) {
       }
       // Let the native webview and driver release resources before the next fresh launch.
       await pause(1_000)
-      await rm(deck, { recursive: true, force: true })
+      await rm(workFolder, { recursive: true, force: true })
     }
   }
 }

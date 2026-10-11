@@ -1,7 +1,7 @@
 export const PRESENTATION_SOURCE = "# First slide\n\n:::step{01}\nFirst reveal A\n\n:::step{1}\nFirst reveal B\n\n:::step\nSecond reveal\n\n---\n\n# Second slide\n\n:::step\nAfter E2E.\n"
 
 export async function presentationModeWorkflow(ui) {
-  await ui.openDeck()
+  await ui.openWork()
   const originalSource = await ui.readSource()
 
   try {

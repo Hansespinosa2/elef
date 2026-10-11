@@ -1,5 +1,5 @@
 export async function snippetInsertWorkflow(ui) {
-  await ui.openDeck()
+  await ui.openWork()
   await ui.showSourceMode()
   const prefix = (await ui.readSource()).trimEnd() + "\n"
   const query = `${prefix}/bold`
@@ -14,7 +14,7 @@ export async function snippetInsertWorkflow(ui) {
 }
 
 export async function mathInputWorkflow(ui) {
-  await ui.openDeck()
+  await ui.openWork()
   await ui.showSourceMode()
   const prefix = (await ui.readSource()).trimEnd()
   const pairPrefix = `${prefix}\n\n`
@@ -39,7 +39,7 @@ export async function mathInputWorkflow(ui) {
 }
 
 export async function documentLinkCompletionWorkflow(ui) {
-  await ui.openDeck("E2E document")
+  await ui.openWork("E2E document")
   await ui.showSourceMode()
   const original = await ui.readSource()
   const query = "[[E2E li"

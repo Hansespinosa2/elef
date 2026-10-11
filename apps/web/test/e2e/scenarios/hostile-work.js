@@ -1,8 +1,8 @@
-export async function hostileDeckNeutralizedWorkflow(ui) {
+export async function hostileWorkNeutralizedWorkflow(ui) {
   if (!["allow-remote", "reject-remote"].includes(ui.externalMediaPolicy)) {
     throw new Error(`Host must declare an external media policy: ${ui.externalMediaPolicy}`)
   }
-  await ui.openDeck("E2E hostile")
+  await ui.openWork("E2E hostile")
   await ui.showVisualMode()
   await ui.waitForPreview("Safe preview text remains visible.")
   const state = await ui.inspectHostilePreview()

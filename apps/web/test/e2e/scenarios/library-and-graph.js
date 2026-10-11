@@ -12,7 +12,7 @@ export async function libraryAndGraphWorkflow(ui) {
   await ui.assertAllWorkKindsVisible("E2E seed", "E2E document")
   await ui.searchFor("e2e SEED")
   await ui.assertSearchResults("E2E seed")
-  await ui.searchFor("no matching deck")
+  await ui.searchFor("no matching work")
   await ui.assertNoSearchResults()
   await ui.searchFor("")
   await ui.assertAllWorkKindsVisible("E2E seed", "E2E document")

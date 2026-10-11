@@ -1,7 +1,7 @@
 // Single source for the shared e2e seed contents consumed by both runners:
 // run.mjs (CI flow: desktop library + Rails fixtures) and seed-web-fixtures.mjs
 // (local `bin/check all` flow: Rails fixtures for the web runner). The hostile
-// payload must stay identical everywhere so the shared hostile-deck scenario
+// payload must stay identical everywhere so the shared hostile-work scenario
 // asserts the same neutralization on both hosts.
 import { readFile } from "node:fs/promises"
 import path from "node:path"

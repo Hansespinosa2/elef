@@ -5,7 +5,7 @@ export const CONFLICT_BASELINE_SOURCE = "# Before conflict test\n\nSeed paragrap
 
 export async function externalEditConflictWorkflow(ui, resolution = "disk") {
   await ui.writeExternalSource(CONFLICT_BASELINE_SOURCE)
-  await ui.openDeck("E2E conflict")
+  await ui.openWork("E2E conflict")
   await ui.pauseAutosave()
   await ui.replaceSource(CONFLICT_LOCAL_SOURCE)
   await ui.writeExternalSource(CONFLICT_EXTERNAL_SOURCE)

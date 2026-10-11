@@ -1,5 +1,5 @@
 export async function appearanceWorkflow(ui) {
-  await ui.openDeck()
+  await ui.openWork()
   const original = await ui.readSource()
   await ui.showVisualMode()
   await ui.setAppearance("theme", "dark")
@@ -9,7 +9,7 @@ export async function appearanceWorkflow(ui) {
     throw new Error("Appearance choices did not persist in Markdown front matter")
   }
   await ui.waitForSaved(styled)
-  await ui.reopenDeck()
+  await ui.reopenWork()
   await ui.showVisualMode()
   await ui.assertAppearance("dark", "technical")
   await ui.showSourceMode()

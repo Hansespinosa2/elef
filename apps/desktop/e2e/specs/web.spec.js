@@ -5,7 +5,7 @@ import { libraryAndGraphWorkflow } from "../../../../apps/web/test/e2e/scenarios
 import { libraryCreateDeleteWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-create-delete.js"
 import { libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
 import { externalEditConflictWorkflow, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
-import { hostileDeckNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-deck.js"
+import { hostileWorkNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-work.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-settings.js"
 import { PIXEL_PNG_MARKDOWN } from "../../../../apps/web/test/e2e/scenarios/media-fixture.js"
@@ -120,7 +120,7 @@ class WebEditorUi {
     this.capabilities = { export: true }
   }
 
-  async openDeck(title = "E2E seed") {
+  async openWork(title = "E2E seed") {
     if (title === "E2E hostile") {
       await this.page.route("https://example.invalid/**", route => route.abort())
     }
@@ -239,7 +239,7 @@ class WebEditorUi {
   }
 
   async enterPresentationMode() {
-    if (!this.activeWorkId) throw new Error("Open a presentation deck before entering presentation mode")
+    if (!this.activeWorkId) throw new Error("Open a presentation Work before entering presentation mode")
     await this.page.goto(`/presentations/${this.activeWorkId}/present`)
     await expect(this.page.locator(".presentation-stage .slide-frame")).toHaveCount(2)
   }
@@ -282,8 +282,8 @@ class WebEditorUi {
     }
   }
 
-  async reopenDeck() {
-    await this.openDeck()
+  async reopenWork() {
+    await this.openWork()
   }
 
   async renameEditorTitle(title) {
@@ -843,7 +843,7 @@ class WebLibraryUi {
       .getByRole("link", { name: "Library", exact: true })
     if (await libraryLink.count()) await libraryLink.click()
     else await this.page.goto("/", { waitUntil: "domcontentloaded" })
-    await expect(this.page.locator("#deck-list")).toBeVisible()
+    await expect(this.page.locator("#work-list")).toBeVisible()
   }
 
   async createWork(title, kind) {
@@ -1022,7 +1022,7 @@ class WebLibraryUi {
 
   async assertNoSearchResults() {
     await expect(this.page.locator("article.library-card:visible")).toHaveCount(0)
-    await expect(this.page.getByRole("status").filter({ hasText: "No decks match this search." })).toBeVisible()
+    await expect(this.page.getByRole("status").filter({ hasText: "No Works match this search." })).toBeVisible()
   }
 
   async showPresentations() {
@@ -1041,7 +1041,7 @@ class WebLibraryUi {
 
   async openLibraryDeepLink(filter) {
     await this.page.goto(filter === "all" ? "/" : `/${filter}`, { waitUntil: "domcontentloaded" })
-    await expect(this.page.locator("#deck-list")).toBeVisible()
+    await expect(this.page.locator("#work-list")).toBeVisible()
   }
 
   async setLibraryHash(filter) {
@@ -1161,8 +1161,8 @@ test("empty display math keeps its body caret in both web editor modes", async (
   await displayMathEnterWorkflow(new WebEditorUi(page))
 })
 
-test("shared hostile-deck security flow works in the web app", async ({ page }) => {
-  await hostileDeckNeutralizedWorkflow(new WebEditorUi(page))
+test("shared hostile-work security flow works in the web app", async ({ page }) => {
+  await hostileWorkNeutralizedWorkflow(new WebEditorUi(page))
 })
 
 test("appearance persists through the shared editing flow", async ({ page }) => {

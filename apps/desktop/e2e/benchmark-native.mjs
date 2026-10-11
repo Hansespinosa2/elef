@@ -32,14 +32,14 @@ if (process.platform === "linux" && (!process.env.DISPLAY || process.env.WAYLAND
 const output = path.resolve(process.env.ELEF_PERFORMANCE_REPORT || `target/native-performance-${process.platform}.json`)
 const temporary = await mkdtemp(path.join(os.tmpdir(), "elef-performance-"))
 const library = path.join(temporary, "Elef")
-const deckId = randomUUID()
+const workId = randomUUID()
 const source = Array.from({ length: 100 }, (_, index) =>
   `# Slide ${index + 1}\n\nNotes with $x^2$ and **emphasis**.\n\n\`\`\`javascript\nconst slide = ${index + 1}\n\`\`\`\n`
 ).join("\n---\n")
 const samples = { coldStart: [], open100Slides: [], warmLibrary: [] }
 const pause = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))
 const report = { platform: process.platform, architecture: process.arch, release: os.release(),
-  protocol: `${launchCount} fresh release processes; 1000 deck index; first ${LIBRARY_RENDER_BATCH_SIZE} cards; one 50 MiB deck; painted operation timings`,
+  protocol: `${launchCount} fresh release processes; 1000 work index; first ${LIBRARY_RENDER_BATCH_SIZE} cards; one 50 MiB work; painted operation timings`,
   samples, inputPreservedRuns: 0 }
 report.renderedLibraryCards = []
 report.bootstrapStageRuns = []
@@ -50,14 +50,14 @@ report.previewTraceRuns = []
 try {
   await mkdir(library)
   for (let index = 0; index < 1000; index += 1) {
-    const folder = path.join(library, index === 0 ? "0000 Large presentation" : `Deck ${String(index).padStart(4, "0")}`)
+    const folder = path.join(library, index === 0 ? "0000 Large presentation" : `Work ${String(index).padStart(4, "0")}`)
     await mkdir(folder)
-    await writeFile(path.join(folder, "presentation.md"), index === 0 ? source : `# Deck ${index}\n\nNotes.\n`)
-    await writeFile(path.join(folder, "elef.json"), JSON.stringify({ id: index === 0 ? deckId : randomUUID(), schema_version: 1 }))
+    await writeFile(path.join(folder, "presentation.md"), index === 0 ? source : `# Work ${index}\n\nNotes.\n`)
+    await writeFile(path.join(folder, "elef.json"), JSON.stringify({ id: index === 0 ? workId : randomUUID(), schema_version: 1 }))
     if (index === 0) {
       await mkdir(path.join(folder, "images"))
-      // Deck size includes an opaque, unreferenced local asset. Opening the
-      // deck must not read every image into IPC or memory merely to list it.
+      // Work size includes an opaque, unreferenced local asset. Opening the
+      // work must not read every image into IPC or memory merely to list it.
       await writeFile(path.join(folder, "images/scale-fixture.bin"), Buffer.alloc(50 * 1024 * 1024))
     }
   }
@@ -147,15 +147,15 @@ try {
       assert.ok(nativeReadyAt, "The release frontend must finish editor initialization before acknowledging the installed update")
       const startupStagesJson = await execute("return JSON.stringify(window.__elefPerformanceTestHooks.bootstrapStages())")
       report.bootstrapStageRuns.push(JSON.parse(startupStagesJson))
-      operation = "1,000-deck library refresh"
+      operation = "1,000-work library refresh"
       const listed = await execute("return await window.__elefPerformanceTestHooks.list()")
       assert.equal(listed.result.total, 1000)
       assert.equal(listed.result.rendered, Math.min(LIBRARY_RENDER_BATCH_SIZE, listed.result.total))
       report.renderedLibraryCards.push(listed.result.rendered)
       samples.warmLibrary.push(listed.milliseconds)
-      operation = "100-slide deck open and render"
-      const opened = await execute("return await window.__elefPerformanceTestHooks.open(arguments[0])", deckId)
-      assert.equal(opened.result.id, deckId)
+      operation = "100-slide work open and render"
+      const opened = await execute("return await window.__elefPerformanceTestHooks.open(arguments[0])", workId)
+      assert.equal(opened.result.id, workId)
       assert.equal(opened.result.slides, 100)
       samples.open100Slides.push(opened.milliseconds)
       report.openTraceRuns.push(opened.result.openTrace)
