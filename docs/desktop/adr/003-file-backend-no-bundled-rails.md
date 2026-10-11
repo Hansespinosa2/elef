@@ -8,11 +8,11 @@
 
 ## Context
 
-The Rails web app persists through its own application stack. Desktop decks must remain ordinary user-owned folders and work without a local server or database service.
+The Rails web app persists through its own application stack. Desktop works must remain ordinary user-owned folders and work without a local server or database service.
 
 ## Options considered
 
-- **Rust file backend:** native filesystem operations over deck folders.
+- **Rust file backend:** native filesystem operations over work folders.
 - **Bundled Rails:** would package a server and replace the web app's persistence layer.
 
 ## Decision

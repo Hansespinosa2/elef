@@ -1,6 +1,6 @@
 # Install and use Elef Desktop
 
-Elef Desktop runs locally on macOS and Linux. Decks remain ordinary folders on disk; the desktop app does not need a server or a database. Use the instructions for the matching release asset on the [GitHub Releases page](https://github.com/Hansespinosa2/elef/releases).
+Elef Desktop runs locally on macOS and Linux. Works remain ordinary folders on disk; the desktop app does not need a server or a database. Use the instructions for the matching release asset on the [GitHub Releases page](https://github.com/Hansespinosa2/elef/releases).
 
 ## Install on macOS (Apple silicon)
 
@@ -28,25 +28,25 @@ Keep the AppImage in the location from which you want to launch it. If it report
 
 ## Choose a library and edit
 
-On first launch, choose a library folder or create one, for example ~/Elef. Each deck is a folder inside that library with a Markdown source file and any local assets. You can keep using folders that already contain Elef decks.
+On first launch, choose a library folder or create one, for example ~/Elef. Each work is a folder inside that library with a Markdown source file and any local assets. You can keep using folders that already contain Elef works.
 
-Open a deck from the library. The source editor and visual editor share the web app's authoring controllers. Changes save automatically; **File → Save** requests an immediate save. Inserted media is stored with the deck. In the library, the **Documents** tab shows the Document network panel with links among documents.
+Open a Work from the library. The source editor and visual editor share the web app's authoring controllers. Changes save automatically; **File → Save** requests an immediate save. Inserted media is stored with the work. In the library, the **Documents** tab shows the Document network panel with links among documents.
 
 If another editor or sync tool changes the open source file, Elef checks for that change before saving. Use the conflict dialog to keep your edits, load the disk version, or merge. A conflict or failed save keeps the window open until the source is safe. Undo and redo are available for the current editing session; v1 does not keep a revision history after closing.
 
-## Move a deck between devices
+## Move a Work between devices
 
-Choose **File → Export Deck…** and save the .elef archive. Move that file by USB, AirDrop, or a file-sync tool, then choose **File → Import .elef…** on the other device. The archive contains the deck files and images. If an imported deck has the same identity as one already in the library, choose **Replace**, **Keep both**, or **Cancel**; Replace moves the existing deck to the system Trash.
+Choose **File → Export Work…** and save the .elef archive. Move that file by USB, AirDrop, or a file-sync tool, then choose **File → Import .elef…** on the other device. The archive contains the work folder files and images. If an imported Work has the same identity as one already in the library, choose **Replace**, **Keep both**, or **Cancel**; Replace moves the existing Work to the system Trash.
 
 ## Updates and offline use
 
 Elef checks for updates when it starts. To check at another time, choose **Help → Check for Updates…**. When a signed update is available, review the version and choose Install; Elef saves or asks you to resolve any open edits before restarting.
 
-Deck editing, rendering, local media, library search, and the document graph work offline. Update checks need a network connection and fail without blocking the app. v1 does not synchronize libraries between devices; move a deck folder or .elef archive yourself.
+Work editing, rendering, local media, library search, and the document graph work offline. Update checks need a network connection and fail without blocking the app. v1 does not synchronize libraries between devices; move a work folder or .elef archive yourself.
 
 ## If something goes wrong
 
 - **The AppImage will not launch:** check that it is executable and that FUSE is available. The extract-and-run command above is a fallback.
 - **macOS blocks the first launch:** use the per-app Open Anyway steps above only for the copy you obtained from the official Elef release.
-- **A library or deck is read-only:** Elef can open it, but saves and settings changes need write access. Choose a writable library location.
+- **A library or Work is read-only:** Elef can open it, but saves and settings changes need write access. Choose a writable library location.
 - **A conflict appears:** the file changed outside Elef. Resolve it in the app before closing; neither version is silently discarded.

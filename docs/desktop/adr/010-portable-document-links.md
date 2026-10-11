@@ -7,17 +7,17 @@
 
 ## Context
 
-Rails stores stable document keys and historical title aliases in database rows. A desktop library has no database, and a deck moved as a folder or `.elef` archive must retain the links that use those values. The approved `elef.json` contract stays limited to `{ id, schema_version }`.
+Rails stores stable document keys and historical title aliases in database rows. A desktop library has no database, and a work moved as a folder or `.elef` archive must retain the links that use those values. The approved `elef.json` contract stays limited to `{ id, schema_version }`.
 
 ## Options considered
 
 - **Keep graph metadata only in Rails rows.** Rejected: folder and archive copies lose custom keys and aliases.
-- **Add fields to `elef.json`.** Rejected: expands the intentionally tiny manifest and makes links depend on a manifest that is optional for opening a deck.
-- **Store optional metadata in Markdown front matter** (chosen): it travels with the source, is readable in any editor, and does not add another file to a deck.
+- **Add fields to `elef.json`.** Rejected: expands the intentionally tiny manifest and makes links depend on a manifest that is optional for opening a work.
+- **Store optional metadata in Markdown front matter** (chosen): it travels with the source, is readable in any editor, and does not add another file to a work.
 
 ## Decision
 
-Document decks may carry two optional top-level front-matter fields:
+Document works may carry two optional top-level front-matter fields:
 
 - `elef_document_key`: a JSON-quoted string with the stable graph key.
 - `elef_aliases`: a JSON array of historical or alternate titles.
@@ -35,4 +35,4 @@ Rails leaves canonical Markdown untouched during ordinary saves and adds these f
 
 ## Revisit when
 
-The metadata grows beyond link identity and aliases, or another consumer needs structured deck metadata outside Markdown.
+The metadata grows beyond link identity and aliases, or another consumer needs structured work metadata outside Markdown.

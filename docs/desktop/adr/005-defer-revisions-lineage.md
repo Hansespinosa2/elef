@@ -13,7 +13,7 @@ Revisions must not "blow up someone's folders with a bunch of previous versions.
 
 - **Flags, never branches** (chosen): one codebase, features hidden per product.
 - **Long-lived branch without the features.** Rejected: guarantees divergence.
-- **Ship revisions as version files in deck folders.** Rejected: violates the no-clutter preference.
+- **Ship revisions as version files in work folders.** Rejected: violates the no-clutter preference.
 
 ## Decision
 
@@ -25,7 +25,7 @@ Desktop v1 ships **no revision history and no lineage graph**. Saving is automat
 ## Consequences
 
 - The web app keeps revisions and lineage; the flags keep the codebases from diverging while desktop v1 ships without them.
-- When revisions return (post-v1) they must honor the no-clutter rule: version data lives in the SQLite cache or a single sidecar, never as version files inside deck folders.
+- When revisions return (post-v1) they must honor the no-clutter rule: version data lives in the SQLite cache or a single sidecar, never as version files inside work folders.
 - Both are labeled experimental/deferred in UI copy and docs until shipped.
 - **Flag hygiene:** each flag has an entry in the register in [feature-flags.md](../feature-flags.md) with a removal condition; CI compares live flags to that register.
 - **Known cost:** with session-only undo, an accidental large deletion followed by closing the app cannot be recovered. Desktop v1 has no durable recovery snapshot; any future safety net must honor the no-clutter rule.

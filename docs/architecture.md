@@ -13,7 +13,7 @@ flowchart LR
     Tauri --> Adapter[apps/desktop/frontend/src]
     Adapter --> Commands[Tauri commands]
     Commands --> Core[local-store]
-    Core --> Files[(Deck folders and .elef settings)]
+    Core --> Files[(Work folders and .elef settings)]
     Tauri -. signed update check .-> Releases[GitHub Releases]
 ~~~
 
@@ -38,7 +38,7 @@ Web-only pages, host adapters, and shared styles belong under `apps/web/app/`; h
 | Area | Web app | Desktop app |
 |---|---|---|
 | Product UI and shared behavior | Mounts `packages/client` through the Stimulus HTTP host adapter; web-only pages stay in Rails views | Mounts the same client bundle through the Tauri host adapter |
-| Persistence | Rails models and PostgreSQL; uploaded media uses Active Storage | Markdown deck folders, local assets, manifests, and .elef library settings |
+| Persistence | Rails models and PostgreSQL; uploaded media uses Active Storage | Markdown work folders, local assets, manifests, and .elef library settings |
 | Runtime integration | Rails routes, sessions, and web browser APIs | Tauri transport, Rust commands, native dialogs/menus, filesystem access, lifecycle, updater |
 | Rendering | Shared JavaScript renderer called from Rails through MiniRacer; no Ruby renderer remains | The same renderer bundle in a web worker; platform links and media use desktop adapters |
 
@@ -54,7 +54,7 @@ Markdown is the authored source. Rendered HTML, editor projections, library card
 | packages/client | Host-neutral interactive UI (React): the sole owner of library, settings, source/visual editor, slide overview, presentation, graph, and export UI, mounted by both hosts via `mountElef` with a host adapter |
 | packages/editor-runtime | Shared Stimulus editor shell (controllers, editor `lib`, desktop bootstrap), consumed through its narrowed boot API (`registerEditorRuntime`, `mountEditorHosts`, `startFileLibraryApplication`, mount tokens); strict TypeScript |
 | apps/web/config/routes.rb, apps/web/config/importmap.rb, apps/web/db/ | Web routes, frontend pins, and Rails database schema/migrations |
-| crates/local-store | Tauri-independent deck discovery, manifests, safe writes, media, and .elef archives |
+| crates/local-store | Tauri-independent work folder discovery, manifests, safe writes, media, and .elef archives |
 | apps/desktop/src-tauri | Tauri commands, capability boundary, native menu/window integration, and application lifecycle |
 | apps/desktop/frontend/src | Tauri bootstrap and native adapters for file-library commands, editor transport, media, lifecycle, and updates |
 | apps/web/test/e2e/scenarios | Shared user flows run by the Playwright web runner and WebdriverIO Tauri runner |
@@ -65,7 +65,7 @@ apps/desktop/frontend/build.mjs resolves `@elef/editor-runtime` (and the `@elef/
 
 The shared application calls named library services. Tauri command names and raw IPC stay inside `apps/desktop/frontend/src` adapters; Rails-owned frontend code does not invoke Tauri commands.
 
-The desktop media adapter also owns its preview, upload, and deck-asset URL schemes and installs the webview fetch bridge. Shared frontend modules receive those URLs as opaque values; Rails-owned JavaScript does not name desktop protocols or replace `fetch`.
+The desktop media adapter also owns its preview, upload, and work-asset URL schemes and installs the webview fetch bridge. Shared frontend modules receive those URLs as opaque values; Rails-owned JavaScript does not name desktop protocols or replace `fetch`.
 
 apps/web/app/views/desktop_host.html is a static desktop host shell consumed by the build, not a Rails response. Shared editor, library, and graph behavior lives in `packages/client`; shared styles live in Rails-owned `apps/web/app/assets`.
 
@@ -82,7 +82,7 @@ Each package exists for exactly one reason; anything else is a module inside its
 | packages/renderer | Single deterministic Markdown-to-HTML projection, so both hosts render identical output. |
 | packages/client | Single host-neutral interactive UI mounted by both hosts, so product workflows are written once. |
 | packages/editor-runtime | Single shared Stimulus editor shell consumed through one boot API, so neither host keeps editor controllers. |
-| crates/local-store | Single Tauri-independent deck-storage core, so desktop persistence is testable without the native shell. |
+| crates/local-store | Single Tauri-independent work-folder-storage core, so desktop persistence is testable without the native shell. |
 
 `apps/desktop/frontend` and `apps/desktop/e2e` carry a `package.json` as host-owned build/test tooling with one consumer each; they are not architectural packages and need no justification.
 
@@ -133,8 +133,8 @@ Ask "which row owns the state or behavior?" and put the change there; add a host
 
 ## Important contracts
 
-- Deck layout, source selection, manifests, library settings, and archive contents: [desktop data format](desktop/data-format.md).
-- Persisted-format version rules and archive layout: [desktop data format](desktop/data-format.md); deck manifest schema with frozen fixtures: [spec/](../spec/deck-manifest.schema.json).
+- Work folder layout, source selection, manifests, library settings, and archive contents: [desktop data format](desktop/data-format.md).
+- Persisted-format version rules and archive layout: [desktop data format](desktop/data-format.md); work manifest schema with frozen fixtures: [spec/](../spec/work-manifest.schema.json).
 - Desktop request-to-command mapping and host adapters: [desktop transport](desktop/transport-adapter.md).
 - Tauri capabilities, content security policy, path handling, and untrusted content: [desktop security](desktop/security.md).
 - Architecture decisions and their status: [desktop ADR index](desktop/adr/README.md).

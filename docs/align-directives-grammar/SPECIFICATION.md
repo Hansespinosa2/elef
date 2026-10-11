@@ -357,7 +357,7 @@ expect:
 ```yaml
 source: |
   :::align{middle center}
-  # Deck title
+  # Slide title
 
   ## Left
 
@@ -378,7 +378,7 @@ expect:
 
 ```yaml
 source: |
-  # Deck title
+  # Slide title
 
   :::align{middle center}
   ## Left
@@ -445,7 +445,7 @@ expect:
 
 ```yaml
 source: |
-  # Deck title
+  # Slide title
 
   ## Left
 

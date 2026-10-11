@@ -49,14 +49,14 @@ Capability keys come from the `HostCapabilities` interface
 ## HD-03 localFilesystem (tauri-only)
 
 - Capability: `localFilesystem`.
-- Concrete reason: the desktop persists to user-selected deck folders through
+- Concrete reason: the desktop persists to user-selected work folders through
   the Tauri-independent local persistence engine and must work fully offline
   with no database server (constitution §2.4); the web app persists to
   PostgreSQL + Active Storage.
 - Supported side: quiet-save suite (13 tests,
   `apps/desktop/e2e/specs/quiet-save.spec.js`) + local-store unit matrix
   (`cargo test -p local-store`, 73 tests).
-- Disabled side: the web app has no deck-folder access
+- Disabled side: the web app has no work-folder access
   (`apps/desktop/e2e/specs/web.spec.js`, "the web app without a localFilesystem
   capability offers no library folder picker": asserts `#change-library`
   count 0 on the library page; the button exists only in the desktop host
@@ -85,7 +85,7 @@ Capability keys come from the `HostCapabilities` interface
   `works/shell`, read/publish stay server-rendered web-only pages (Phase 09
   inventory; `parseWorkRoute` matrix in `packages/client` + navigation
   suites).
-- Desktop side: work targets resolve through the existing openDeck/file-open
+- Desktop side: work targets resolve through the existing openWork/file-open
   seam (desktop file-open/graph e2e flows).
 
 ## HD-06 export surface (web-only)
@@ -113,7 +113,7 @@ Capability keys come from the `HostCapabilities` interface
 
 - Capability: none (one `SearchPort` contract, two implementations).
 - Concrete reason: the desktop must search offline with no server to query, so
-  the Tauri adapter filters substring-side over `document_graph` plus deck
+  the Tauri adapter filters substring-side over `document_graph` plus work folder
   names (`searchPort.search` in `createTauriHost`,
   `apps/desktop/frontend/src/tauri-host.js`); the web adapter queries
   the server. Behavior is contract-identical; only the execution locality

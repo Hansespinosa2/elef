@@ -15,7 +15,7 @@ Auto-save is continuous, and other programs (editors, Dropbox, iCloud, Syncthing
 - **Last-write-wins.** Simple; silently destroys someone's edits. Rejected.
 - **File locking.** Not honored by editors or sync tools. Rejected as the primary mechanism.
 - **Optimistic concurrency with a fingerprint + conflict UI** (chosen).
-- **CRDT/merge on every save.** Heavy and unnecessary for single-user, single-source-file decks.
+- **CRDT/merge on every save.** Heavy and unnecessary for single-user, single-source-file works.
 
 ## Decision
 
@@ -23,8 +23,8 @@ Auto-save is continuous, and other programs (editors, Dropbox, iCloud, Syncthing
 2. **Fingerprint.** (mtime, size, content hash) of the *source file*, recorded at every load and successful save. Images are written once and are not part of the autosave path, so hashing the source (typically KBs to low MBs) before each save is cheap.
 3. **Check before write.** Before each save, re-evaluate the source-file rule and re-read/hash the selected source. If the selected filename or content differs from the recorded baseline, do not write — raise a `conflict` containing the current filename and source. Repeat this check immediately before replacement. The adapter supplies the last-known hash as `base_hash` ([transport-adapter.md](../transport-adapter.md)).
 4. **Conflict UI:** keep mine / keep theirs / merge view. The buffer stays dirty and in memory until resolved. "Keep theirs" reloads from disk and leaves the discarded text on the session undo stack so it is recoverable in-session.
-5. **Periodic check, fingerprint is truth.** While a deck is open, the desktop periodically reads and hashes its source. No unsaved changes → silent reload; unsaved changes → conflict UI. Own writes are recognized by their resulting content hash.
-6. **One writer per deck.** Saves are serialized per deck and coalesced (latest wins). An outstanding write keeps the session dirty even if Undo returns the buffer to the previous baseline; navigation waits for the final buffer to persist. Native Quit and window close use the same save/conflict guard. The shell flushes pending visual projection edits before checking dirty state; a flush error keeps the window open. Deck opens are serialized and recheck the previous buffer after the target read so edits during that read persist before switching. Opening another deck creates a new CodeMirror history boundary and uses that source file’s line separator. Discarded recovery drafts carry their deck identity and can only restore into that deck.
+5. **Periodic check, fingerprint is truth.** While a work is open, the desktop periodically reads and hashes its source. No unsaved changes → silent reload; unsaved changes → conflict UI. Own writes are recognized by their resulting content hash.
+6. **One writer per work.** Saves are serialized per work and coalesced (latest wins). An outstanding write keeps the session dirty even if Undo returns the buffer to the previous baseline; navigation waits for the final buffer to persist. Native Quit and window close use the same save/conflict guard. The shell flushes pending visual projection edits before checking dirty state; a flush error keeps the window open. Work opens are serialized and recheck the previous buffer after the target read so edits during that read persist before switching. Opening another work creates a new CodeMirror history boundary and uses that source file’s line separator. Discarded recovery drafts carry their work identity and can only restore into that work.
 7. **Accepted v1 residual race:** the check and rename are not one atomic step, so an external write in that final synchronous window can still be lost. Re-check immediately before rename, measure the check-to-rename window in CI (p95 below 250 ms), and show a note in the editor recommending sync-tool version history. Do not claim the race is eliminated.
 
 ```mermaid
@@ -56,11 +56,11 @@ sequenceDiagram
 
 ### Amendment 2026-10-03: navigation ownership
 
-Pending deck reads do not advance the active save fingerprint. Graph and editor preparation finish while the old deck retains save ownership. If edits arrive during preparation, they save against that old fingerprint and the target is reread before activation. Installing the editor buffer and activating the target's fingerprint/save ownership occur synchronously, without an intervening await. A failed buffer installation deactivates saves and returns to the library. Deferred-read and deferred-graph unit tests cover same-deck stale snapshots, external-change conflicts, and typing into the prior deck during preparation.
+Pending work reads do not advance the active save fingerprint. Graph and editor preparation finish while the old work retains save ownership. If edits arrive during preparation, they save against that old fingerprint and the target is reread before activation. Installing the editor buffer and activating the target's fingerprint/save ownership occur synchronously, without an intervening await. A failed buffer installation deactivates saves and returns to the library. Deferred-read and deferred-graph unit tests cover same-work stale snapshots, external-change conflicts, and typing into the prior work during preparation.
 
 ### Amendment 2026-10-03: delayed source replacement
 
-External reload, disk/merge resolution and draft recovery retain their originating deck and expected buffer through editor readiness. A delayed replacement refuses to change another deck or newer local edits. The old save fingerprint and active conflict remain until replacement succeeds; pending replacements count as unsaved and block saves, navigation and Quit. Failed recovery retains the original draft. Deferred readiness tests cover stale replacements and conflicting choices.
+External reload, disk/merge resolution and draft recovery retain their originating work and expected buffer through editor readiness. A delayed replacement refuses to change another work or newer local edits. The old save fingerprint and active conflict remain until replacement succeeds; pending replacements count as unsaved and block saves, navigation and Quit. Failed recovery retains the original draft. Deferred readiness tests cover stale replacements and conflicting choices.
 
 Polling and the replacement's final buffer check materialize pending visual edits before inspecting canonical source. Preparation captures a save-state revision, so an autosave that finishes during an awaited read/graph request invalidates the old snapshot even when dirty is already false. Refused recovery reschedules surviving edits for autosave while keeping the recovery draft. Regression tests reproduce each timing case with deferred operations and frame-pending visual input.
 

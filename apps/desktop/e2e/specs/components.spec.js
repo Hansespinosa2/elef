@@ -156,7 +156,7 @@ test("alignment geometry follows independent expectations in both static host st
         actual.lanes.forEach(lane => expect(Math.abs(lane.bottomGap), `${host} ${fixture.id} lane bottom pin`).toBeLessThanOrEqual(1))
       }
       if (fixture.geometry.some(assertion => assertion.includes("top edge == content top edge"))) {
-        const text = fixture.id === "F-03" ? "Kicker" : "Deck title"
+        const text = fixture.id === "F-03" ? "Kicker" : "Slide title"
         const block = actual.blocks.find(candidate => candidate.label.includes(text))
         expect(block, `${host} ${fixture.id} top-pinned block`).toBeTruthy()
         expect(Math.abs(block.top - actual.content.top), `${host} ${fixture.id} top pin`).toBeLessThanOrEqual(1)

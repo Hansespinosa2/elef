@@ -53,7 +53,7 @@ Rails suites need ambient `PGPASSWORD` for the local PostgreSQL test database (s
 | Pure Work semantics or transforms | npm run typecheck --prefix packages/work-model, then npm test --prefix packages/work-model |
 | Desktop transport/native frontend adapter | npm test --prefix apps/desktop/frontend |
 | E2E harness helpers | npm run test:unit --prefix apps/desktop/e2e |
-| Rust deck storage or archive behavior | cargo test --manifest-path Cargo.toml -p local-store --locked |
+| Rust work folder storage or archive behavior | cargo test --manifest-path Cargo.toml -p local-store --locked |
 | Rails model, service, controller, or request behavior | bin/rails test test/path_to_focused_test.rb (from apps/web/) |
 | Renderer implementation | npm run typecheck --prefix packages/renderer, then npm run renderer:build, then npm run test:javascript |
 

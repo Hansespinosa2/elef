@@ -13,7 +13,7 @@ packages/client owns the shared product workflows and user interface; the shared
 
 The shared application never calls raw Tauri `invoke()` or names Rust commands. `apps/desktop/frontend/src/file-library-transport.js` maps file-library operations to commands; editor saves, media, updater, and lifecycle stay in their corresponding desktop adapters.
 
-`apps/desktop/frontend/src/media-transport.js` owns the desktop preview, upload, and deck-asset URL schemes. The desktop bootstrap installs the fetch bridge; shared modules receive deck-scoped media URLs as opaque values and do not patch `fetch` or parse desktop schemes.
+`apps/desktop/frontend/src/media-transport.js` owns the desktop preview, upload, and work-asset URL schemes. The desktop bootstrap installs the fetch bridge; shared modules receive work-scoped media URLs as opaque values and do not patch `fetch` or parse desktop schemes.
 
 Desktop frontend edits belong in apps/desktop/frontend/src only when they implement a native transport, lifecycle, window, media, close, or updater integration. If behavior can be expressed independently of Tauri, put host-neutral UI and workflows in packages/client (pure semantics in packages/work-model) and make both hosts consume it through mountElef and the host adapters.
 
@@ -21,9 +21,9 @@ Desktop frontend edits belong in apps/desktop/frontend/src only when they implem
 
 | Work | Desktop implementation | Boundary |
 |---|---|---|
-| Library, deck, manifest, save, archive, and portable-settings operations | Tauri commands backed by local-store | Named commands and typed errors |
+| Library, work folder, manifest, save, archive, and portable-settings operations | Tauri commands backed by local-store | Named commands and typed errors |
 | Markdown preview and editor projection | Shared renderer in a web worker | Local to the webview; no Rust IPC round trip |
-| Media upload and reads | Native upload command and deck-scoped asset protocol | Content-addressed writes and validated, read-only reads |
+| Media upload and reads | Native upload command and work-scoped asset protocol | Content-addressed writes and validated, read-only reads |
 | Save conflict handling | Shared save flow plus desktop fingerprint adapter | The adapter supplies the base content hash; shared UI presents resolution |
 | Library cards, filters, graph, editor, settings UI | packages/client modules | No desktop-only copy |
 

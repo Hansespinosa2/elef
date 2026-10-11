@@ -7,7 +7,7 @@
 
 ## Context
 
-The web app's threat model doesn't transfer. On desktop the webview has IPC to a backend that writes files, and a `.elef` file or deck folder is untrusted input: someone else's deck, a downloaded sample, a synced folder. A hostile deck must not be able to call `invoke()` and read or write arbitrary files. The web renderer's `filter_html: true` plus URL allowlist is a start, not a model.
+The web app's threat model doesn't transfer. On desktop the webview has IPC to a backend that writes files, and a `.elef` file or work folder is untrusted input: someone else's work, a downloaded sample, a synced folder. A hostile work must not be able to call `invoke()` and read or write arbitrary files. The web renderer's `filter_html: true` plus URL allowlist is a start, not a model.
 
 ## Options considered
 
@@ -34,16 +34,16 @@ No new Tauri command ships without a capability review (what it can touch, why t
 
 - The command allowlist and the CSP are testable contracts; hostile-input and boundary checks are described in [development and testing](../../development.md).
 - Hostile fixtures (script payloads, traversal paths, zip-slip archives, zip-bombs) must be neutralized in CI.
-- Remote images are blocked in v1 because a static CSP cannot express a per-deck opt-in. This supersedes the earlier "opt-in per deck" wording, which could not be implemented as written.
+- Remote images are blocked in v1 because a static CSP cannot express a per-work opt-in. This supersedes the earlier "opt-in per work" wording, which could not be implemented as written.
 - Residual risk is documented, not hidden (see [security.md](../security.md)).
 
 ## Revisit when
 
-The hostile-deck test suite finds content reaching IPC on a supported OS, the pinned Tauri version changes major/minor, or distribution widens beyond the owner's devices.
+The hostile-work test suite finds content reaching IPC on a supported OS, the pinned Tauri version changes major/minor, or distribution widens beyond the owner's devices.
 
 ## Dated amendment — 2026-10-02
 
-Accepted after the shared hostile-deck workflow passed against the real Tauri WebView on Linux and macOS in [CI run 37061835922](https://github.com/Hansespinosa2/elef/actions/runs/37061835922). The tested categories and limits are summarized in [security.md](../security.md); this acceptance applies to the layered security decision and the tested corpus, not arbitrary hostile decks. Sanitizer timing characterization and broader adversarial coverage remain follow-up work.
+Accepted after the shared hostile-work workflow passed against the real Tauri WebView on Linux and macOS in [CI run 37061835922](https://github.com/Hansespinosa2/elef/actions/runs/37061835922). The tested categories and limits are summarized in [security.md](../security.md); this acceptance applies to the layered security decision and the tested corpus, not arbitrary hostile works. Sanitizer timing characterization and broader adversarial coverage remain follow-up work.
 
 ### Documentation amendment — 2026-10-07
 

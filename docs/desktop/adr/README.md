@@ -4,7 +4,7 @@ These records capture why load-bearing choices were made and whether their accep
 
 | ADR | Decision | Status | Remaining acceptance evidence |
 |---|---|---|---|
-| [001](001-folders-as-source-of-truth.md) | Desktop deck folders are the source of truth | Accepted | — |
+| [001](001-folders-as-source-of-truth.md) | Desktop work folders are the source of truth | Accepted | — |
 | [002](002-tauri-shell.md) | Tauri desktop shell | Proposed | Owner-device install acceptance in [#128](https://github.com/Hansespinosa2/elef/issues/128) |
 | [003](003-file-backend-no-bundled-rails.md) | File-backed desktop backend | Proposed | Remaining parity evidence in [#126](https://github.com/Hansespinosa2/elef/issues/126) |
 | [004](004-frontend-reuse-transport-adapter.md) | Shared web and desktop product frontend | Superseded by 011 | — |
@@ -15,6 +15,7 @@ These records capture why load-bearing choices were made and whether their accep
 | [009](009-distribution-and-update-channel.md) | Signed desktop updates | Proposed | Device acceptance in [#128](https://github.com/Hansespinosa2/elef/issues/128); production key ceremony in [#129](https://github.com/Hansespinosa2/elef/issues/129) |
 | [010](010-portable-document-links.md) | Portable document-link metadata | Accepted | — |
 | [011](011-neutral-editor-runtime-package.md) | Shared editor shell in a neutral package | Accepted | — |
+| [012](012-deck-to-work-rename.md) | Deck-to-Work rename | Accepted | — |
 
 Accepted decisions are stable records. Change one with a dated amendment or a new ADR that supersedes it; do not erase its history. Proposed records may be updated as evidence arrives. ADRs explain decisions rather than serve as implementation plans.
 
