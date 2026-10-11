@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 import { createDesktopAppEnvironment } from "./desktop-app-environment.js"
+import { makeCanonicalScratch } from "./identity-scratch.js"
 import { offlineMacAppLauncherScript } from "./offline-macos.js"
 import { reserveWebdriverPort } from "./webdriver-port.js"
 import { runWdio } from "./wdio-smoke.js"
@@ -64,7 +65,7 @@ function buildIdentityBinary({ config, features, frontend }) {
 }
 
 async function runIdentityProbe(profile, application, env) {
-  const scratch = mkdtempSync(path.join(tmpdir(), `elef-identity-${profile}-`))
+  const scratch = makeCanonicalScratch(`elef-identity-${profile}-`)
   const home = path.join(scratch, "home")
   const config = path.join(scratch, "config")
   const data = path.join(scratch, "data")
