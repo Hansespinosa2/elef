@@ -2,7 +2,9 @@
 use std::path::Path;
 use std::path::PathBuf;
 
-use tauri::{AppHandle, Manager, State};
+#[cfg(target_os = "linux")]
+use tauri::Manager;
+use tauri::{AppHandle, State};
 use tauri_plugin_dialog::MessageDialogKind;
 use tauri_plugin_updater::UpdaterExt;
 
