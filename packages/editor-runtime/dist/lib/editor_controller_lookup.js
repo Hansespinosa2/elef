@@ -8,6 +8,7 @@ function asEditorSeam(candidate) {
   if (typeof seam.commitSource !== "function") return null;
   if (typeof seam.replaceRange !== "function") return null;
   if (typeof seam.replaceRanges !== "function") return null;
+  if (typeof seam.setSelectionRange !== "function") return null;
   return candidate;
 }
 export {

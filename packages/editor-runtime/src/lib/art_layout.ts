@@ -82,12 +82,22 @@ const ART_MESSAGES: Record<string, string> = Object.freeze({
 const FIXED_HOST_SELECTOR = '[data-art-host="fixed"]'
 const ART_ROOT_SELECTOR = "[data-elef-art-root]"
 
-interface ArtDecision {
+export interface ArtDecision {
   root: Element
   host: Element | null
   desired?: string | null
   visible?: boolean
   failure?: string | null
+}
+
+// Lifecycle surface the Stimulus adapter re-exposes. The monitor routes its
+// chained passes through the delegate so host adapters (and their lifecycle
+// probes) observe every pass; standalone use leaves the delegate unset and
+// the monitor chains to itself.
+export interface ArtPassDelegate {
+  runDecisionPass(): void
+  runMeasurementPass(decisions: Array<ArtDecision>): void
+  runFallbackMeasurement(decisions: Array<ArtDecision>): void
 }
 
 function parseCssPixels(value: string | null): number {
@@ -97,8 +107,9 @@ function parseCssPixels(value: string | null): number {
 
 export class ArtLayoutMonitor {
   private readonly scope: Element
+  private readonly delegate: ArtPassDelegate | null
   private active = false
-  private roots: Array<Element> = []
+  private trackedRoots: Array<Element> = []
   private observedElements = new Set<Element>()
   private dirtyRoots = new Set<Element>()
   private globalDirty = true
@@ -108,8 +119,26 @@ export class ArtLayoutMonitor {
   private mutationObserver: MutationObserver | null = null
   private fontsReady: Promise<unknown> | null = null
 
-  constructor(scope: Element) {
+  constructor(scope: Element, delegate: ArtPassDelegate | null = null) {
     this.scope = scope
+    this.delegate = delegate
+  }
+
+  // Live roots under the scope; the adapter exposes this for lifecycle probes.
+  get roots(): Array<Element> {
+    return this.trackedRoots
+  }
+
+  get frameId(): number | null {
+    return this.frame
+  }
+
+  get readFrameId(): number | null {
+    return this.readFrame
+  }
+
+  private get passes(): ArtPassDelegate {
+    return this.delegate ?? this
   }
 
   start(): void {
@@ -153,7 +182,7 @@ export class ArtLayoutMonitor {
 
   syncRoots(): void {
     const next = [...this.scope.querySelectorAll(ART_ROOT_SELECTOR)]
-    this.roots = next
+    this.trackedRoots = next
     const nextObserved = new Set<Element>()
     for (const root of next) {
       const host = root.closest(FIXED_HOST_SELECTOR)
@@ -201,7 +230,7 @@ export class ArtLayoutMonitor {
           ...(element.querySelectorAll?.(ART_ROOT_SELECTOR) ?? [])
         ]
         for (const changedRoot of roots) {
-          if (!this.roots.includes(changedRoot)) continue
+          if (!this.trackedRoots.includes(changedRoot)) continue
           const host = changedRoot.closest(FIXED_HOST_SELECTOR)
           if (host) changedHosts.add(host)
           else changedRoots.add(changedRoot)
@@ -210,7 +239,7 @@ export class ArtLayoutMonitor {
     }
 
     for (const host of changedHosts) {
-      for (const root of this.roots) {
+      for (const root of this.trackedRoots) {
         if (root.closest(FIXED_HOST_SELECTOR) === host) changedRoots.add(root)
       }
     }
@@ -220,7 +249,7 @@ export class ArtLayoutMonitor {
 
   scheduleHosts(hosts: Array<Element>): void {
     const changedHosts = new Set(hosts)
-    const changedRoots = this.roots.filter((root) => changedHosts.has(root.closest(FIXED_HOST_SELECTOR) as Element))
+    const changedRoots = this.trackedRoots.filter((root) => changedHosts.has(root.closest(FIXED_HOST_SELECTOR) as Element))
     if (changedRoots.length) this.schedule(changedRoots)
   }
 
@@ -229,17 +258,17 @@ export class ArtLayoutMonitor {
     if (roots === null) this.globalDirty = true
     else for (const root of roots) this.dirtyRoots.add(root)
     if (this.frame !== null) return
-    this.frame = requestAnimationFrame(() => this.runDecisionPass())
+    this.frame = requestAnimationFrame(() => this.passes.runDecisionPass())
   }
 
   runDecisionPass(): void {
     this.frame = null
     if (!this.active || (!this.globalDirty && !this.dirtyRoots.size)) return
     this.syncRoots()
-    const rootsToEvaluate = this.globalDirty ? new Set(this.roots) : this.dirtyRoots
+    const rootsToEvaluate = this.globalDirty ? new Set(this.trackedRoots) : this.dirtyRoots
     this.globalDirty = false
     this.dirtyRoots = new Set()
-    const roots = this.roots.filter((root) => rootsToEvaluate.has(root) && DYNAMIC_STATUSES.has(root.getAttribute("data-art-status") ?? ""))
+    const roots = this.trackedRoots.filter((root) => rootsToEvaluate.has(root) && DYNAMIC_STATUSES.has(root.getAttribute("data-art-status") ?? ""))
     if (!roots.length) return
     const hostWidths = new Map<Element, number>()
     const decisions: Array<ArtDecision> = roots.map((root) => {
@@ -290,7 +319,7 @@ export class ArtLayoutMonitor {
     for (const host of hosts) host.setAttribute("data-art-overfull", "false")
 
     const measuredRoots = decisions.filter((decision) => decision.host && !decision.failure)
-    this.readFrame = requestAnimationFrame(() => this.runMeasurementPass(measuredRoots))
+    this.readFrame = requestAnimationFrame(() => this.passes.runMeasurementPass(measuredRoots))
   }
 
   runMeasurementPass(decisions: Array<ArtDecision>): void {
@@ -332,7 +361,7 @@ export class ArtLayoutMonitor {
       root.setAttribute("data-art-layout", "sequence-vertical")
       this.setStatus(root, "pending", false)
     }
-    this.readFrame = requestAnimationFrame(() => this.runFallbackMeasurement(horizontalFallbacks))
+    this.readFrame = requestAnimationFrame(() => this.passes.runFallbackMeasurement(horizontalFallbacks))
   }
 
   runFallbackMeasurement(decisions: Array<ArtDecision>): void {
@@ -361,7 +390,7 @@ export class ArtLayoutMonitor {
   updateOverfull(failedHosts: Set<Element>, decisions: Array<ArtDecision>): void {
     const hosts = new Set(decisions.map((decision) => decision.host).filter(Boolean) as Array<Element>)
     for (const host of hosts) {
-      const hasNoFit = this.roots.some((root) =>
+      const hasNoFit = this.trackedRoots.some((root) =>
         root.closest(FIXED_HOST_SELECTOR) === host &&
         root.getAttribute("data-art-status") === "fallback-no-fit"
       )

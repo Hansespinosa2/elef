@@ -48,8 +48,9 @@ function parseCssPixels(value) {
 }
 class ArtLayoutMonitor {
   scope;
+  delegate;
   active = false;
-  roots = [];
+  trackedRoots = [];
   observedElements = /* @__PURE__ */ new Set();
   dirtyRoots = /* @__PURE__ */ new Set();
   globalDirty = true;
@@ -58,8 +59,22 @@ class ArtLayoutMonitor {
   resizeObserver = null;
   mutationObserver = null;
   fontsReady = null;
-  constructor(scope) {
+  constructor(scope, delegate = null) {
     this.scope = scope;
+    this.delegate = delegate;
+  }
+  // Live roots under the scope; the adapter exposes this for lifecycle probes.
+  get roots() {
+    return this.trackedRoots;
+  }
+  get frameId() {
+    return this.frame;
+  }
+  get readFrameId() {
+    return this.readFrame;
+  }
+  get passes() {
+    return this.delegate ?? this;
   }
   start() {
     if (this.active) return;
@@ -94,7 +109,7 @@ class ArtLayoutMonitor {
   }
   syncRoots() {
     const next = [...this.scope.querySelectorAll(ART_ROOT_SELECTOR)];
-    this.roots = next;
+    this.trackedRoots = next;
     const nextObserved = /* @__PURE__ */ new Set();
     for (const root of next) {
       const host = root.closest(FIXED_HOST_SELECTOR);
@@ -138,7 +153,7 @@ class ArtLayoutMonitor {
           ...element.querySelectorAll?.(ART_ROOT_SELECTOR) ?? []
         ];
         for (const changedRoot of roots) {
-          if (!this.roots.includes(changedRoot)) continue;
+          if (!this.trackedRoots.includes(changedRoot)) continue;
           const host = changedRoot.closest(FIXED_HOST_SELECTOR);
           if (host) changedHosts.add(host);
           else changedRoots.add(changedRoot);
@@ -146,7 +161,7 @@ class ArtLayoutMonitor {
       }
     }
     for (const host of changedHosts) {
-      for (const root of this.roots) {
+      for (const root of this.trackedRoots) {
         if (root.closest(FIXED_HOST_SELECTOR) === host) changedRoots.add(root);
       }
     }
@@ -155,7 +170,7 @@ class ArtLayoutMonitor {
   }
   scheduleHosts(hosts) {
     const changedHosts = new Set(hosts);
-    const changedRoots = this.roots.filter((root) => changedHosts.has(root.closest(FIXED_HOST_SELECTOR)));
+    const changedRoots = this.trackedRoots.filter((root) => changedHosts.has(root.closest(FIXED_HOST_SELECTOR)));
     if (changedRoots.length) this.schedule(changedRoots);
   }
   schedule = (roots = null) => {
@@ -163,16 +178,16 @@ class ArtLayoutMonitor {
     if (roots === null) this.globalDirty = true;
     else for (const root of roots) this.dirtyRoots.add(root);
     if (this.frame !== null) return;
-    this.frame = requestAnimationFrame(() => this.runDecisionPass());
+    this.frame = requestAnimationFrame(() => this.passes.runDecisionPass());
   };
   runDecisionPass() {
     this.frame = null;
     if (!this.active || !this.globalDirty && !this.dirtyRoots.size) return;
     this.syncRoots();
-    const rootsToEvaluate = this.globalDirty ? new Set(this.roots) : this.dirtyRoots;
+    const rootsToEvaluate = this.globalDirty ? new Set(this.trackedRoots) : this.dirtyRoots;
     this.globalDirty = false;
     this.dirtyRoots = /* @__PURE__ */ new Set();
-    const roots = this.roots.filter((root) => rootsToEvaluate.has(root) && DYNAMIC_STATUSES.has(root.getAttribute("data-art-status") ?? ""));
+    const roots = this.trackedRoots.filter((root) => rootsToEvaluate.has(root) && DYNAMIC_STATUSES.has(root.getAttribute("data-art-status") ?? ""));
     if (!roots.length) return;
     const hostWidths = /* @__PURE__ */ new Map();
     const decisions = roots.map((root) => {
@@ -216,7 +231,7 @@ class ArtLayoutMonitor {
     }
     for (const host of hosts) host.setAttribute("data-art-overfull", "false");
     const measuredRoots = decisions.filter((decision) => decision.host && !decision.failure);
-    this.readFrame = requestAnimationFrame(() => this.runMeasurementPass(measuredRoots));
+    this.readFrame = requestAnimationFrame(() => this.passes.runMeasurementPass(measuredRoots));
   }
   runMeasurementPass(decisions) {
     this.readFrame = null;
@@ -255,7 +270,7 @@ class ArtLayoutMonitor {
       root.setAttribute("data-art-layout", "sequence-vertical");
       this.setStatus(root, "pending", false);
     }
-    this.readFrame = requestAnimationFrame(() => this.runFallbackMeasurement(horizontalFallbacks));
+    this.readFrame = requestAnimationFrame(() => this.passes.runFallbackMeasurement(horizontalFallbacks));
   }
   runFallbackMeasurement(decisions) {
     this.readFrame = null;
@@ -282,7 +297,7 @@ class ArtLayoutMonitor {
   updateOverfull(failedHosts, decisions) {
     const hosts = new Set(decisions.map((decision) => decision.host).filter(Boolean));
     for (const host of hosts) {
-      const hasNoFit = this.roots.some(
+      const hasNoFit = this.trackedRoots.some(
         (root) => root.closest(FIXED_HOST_SELECTOR) === host && root.getAttribute("data-art-status") === "fallback-no-fit"
       );
       host.setAttribute("data-art-overfull", failedHosts.has(host) || hasNoFit ? "true" : "false");

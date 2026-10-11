@@ -32,6 +32,7 @@ const DESIGN_WIDTH = 794
 
 const FLOW_TEXT_SELECTOR = "p, h1, h2, h3, h4, h5, h6, pre, li, td, th"
 const HIDDEN_TEXT_SELECTOR = ".katex-mathml, [aria-hidden='true'], [contenteditable='false']"
+const ART_ITEM_TOO_TALL = "ART_ITEM_TOO_TALL"
 
 export default class extends Controller<HTMLElement> {
   static targets = ["surface"]
@@ -132,6 +133,7 @@ export default class extends Controller<HTMLElement> {
     this.pendingCaretRestore = caret
     this.resizeObserver?.disconnect()
     const blocks = this.logicalBlocks()
+    blocks.forEach((block) => this.clearArtItemTooTall(block))
     blocks.forEach((block) => this.ensureFlowId(block))
 
     this.surfaceTarget.replaceChildren()
@@ -309,6 +311,7 @@ export default class extends Controller<HTMLElement> {
         if (keepWith.length && keepWith.every((node) => currentPage.content.contains(node))) {
           currentPage.content.append(remainder)
           currentPage.page.classList.add("is-overflowing-content")
+          this.markOversizedArtItem(remainder, currentPage)
           return
         }
 
@@ -323,6 +326,7 @@ export default class extends Controller<HTMLElement> {
         // the next fixed-size page.
         currentPage.content.append(remainder)
         currentPage.page.classList.add("is-overflowing-content")
+        this.markOversizedArtItem(remainder, currentPage)
         return
       }
 
@@ -335,6 +339,9 @@ export default class extends Controller<HTMLElement> {
   }
 
   splitBlock(block: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {
+    const art = this.artRoot(block)
+    if (art) return this.splitArtBlock(block, art, page)
+
     const groupedSplit = this.splitGroupedChildren(block, page)
     if (groupedSplit) return groupedSplit
 
@@ -355,6 +362,100 @@ export default class extends Controller<HTMLElement> {
       this.textFragment(block, target, textMap, 0, best),
       this.textFragment(block, target, textMap, best, textMap.text.length)
     ]
+  }
+
+  splitArtBlock(block: HTMLElement, artRoot: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {
+    const list = artRoot.querySelector(".elef-art-list")
+    if (!list) return null
+    const children = [...list.children]
+    if (children.length < 2 || !children.every((child) => child.tagName === "LI")) {
+      const onlyChild = children[0]
+      if (children.length === 1 && onlyChild && page.content.childElementCount === 0 && this.artItemOverflows(block, list, onlyChild, page)) {
+        page.page.classList.add("is-overflowing-content")
+        this.markArtItemTooTall(block)
+      }
+      return null
+    }
+
+    const bestCount = this.largestFittingChildCount(block, list, children, page)
+    if (bestCount > 0 && bestCount < children.length) {
+      return this.artFragments(block, list, children, bestCount)
+    }
+
+    const leadChild = children[0]
+    if (bestCount === 0 && leadChild && page.content.childElementCount === 0 && this.artItemOverflows(block, list, leadChild, page)) {
+      page.page.classList.add("is-overflowing-content")
+      this.markArtItemTooTall(block)
+      return this.artFragments(block, list, children, 1)
+    }
+    return null
+  }
+
+  artFragments(block: HTMLElement, list: Element, children: Element[], splitAt: number): [HTMLElement, HTMLElement] {
+    const first = this.childFragment(block, list, children.slice(0, splitAt))
+    const remainder = this.childFragment(block, list, children.slice(splitAt))
+    if (list.tagName === "OL") {
+      const baseStart = list.hasAttribute("start") ? Number(list.getAttribute("start")) : 1
+      const remainderList = this.artRootList(remainder)
+      remainderList?.setAttribute("start", String(baseStart + splitAt))
+    }
+    return [first, remainder]
+  }
+
+  artItemOverflows(block: HTMLElement, list: Element, item: Element, page: DocumentPage): boolean {
+    const candidate = this.childFragment(block, list, [item])
+    page.content.append(candidate)
+    const overflows = this.overflows(page)
+    page.content.removeChild(candidate)
+    return overflows
+  }
+
+  artRoot(block: HTMLElement): HTMLElement | null {
+    if (block.matches("[data-elef-art-root]")) return block
+    return block.querySelector("[data-elef-art-root]") as HTMLElement | null
+  }
+
+  artRootList(block: HTMLElement): Element | null {
+    return this.artRoot(block)?.querySelector(".elef-art-list") || null
+  }
+
+  markArtItemTooTall(block: HTMLElement): void {
+    const artRoot = this.artRoot(block)
+    if (!artRoot) return
+    if (!artRoot.dataset.artDiagnostic) artRoot.dataset.artDiagnostic = ART_ITEM_TOO_TALL
+    if (artRoot.dataset.artItemTooTall === "true") return
+    artRoot.dataset.artItemTooTall = "true"
+    const blockId = block.dataset.editorBlockId || null
+    artRoot.dispatchEvent(new CustomEvent("elef:art-diagnostic", {
+      bubbles: true,
+      detail: {
+        code: ART_ITEM_TOO_TALL,
+        message: "An Art item is taller than a document page. It remains atomic and is available through the page overflow content.",
+        blockId
+      }
+    }))
+  }
+
+  markOversizedArtItem(block: HTMLElement, page: DocumentPage): void {
+    const artRoot = this.artRoot(block)
+    const list = artRoot?.querySelector(".elef-art-list")
+    if (!list || !page.content.contains(block)) return
+    const items = [...list.children].filter((child) => child.tagName === "LI")
+    page.content.removeChild(block)
+    const oversized = items.some((item) => this.artItemOverflows(block, list, item, page))
+    page.content.append(block)
+    if (oversized) this.markArtItemTooTall(block)
+  }
+
+  clearArtItemTooTall(block: HTMLElement): void {
+    const artRoot = this.artRoot(block)
+    if (!artRoot || artRoot.dataset.artItemTooTall !== "true") return
+    artRoot.removeAttribute("data-art-item-too-tall")
+    if (artRoot.dataset.artDiagnostic === ART_ITEM_TOO_TALL) artRoot.removeAttribute("data-art-diagnostic")
+    artRoot.dispatchEvent(new CustomEvent("elef:art-diagnostic", {
+      bubbles: true,
+      detail: { code: null, message: null, blockId: block.dataset.editorBlockId || null }
+    }))
   }
 
   splitGroupedChildren(block: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {

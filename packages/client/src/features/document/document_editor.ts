@@ -66,6 +66,7 @@ export interface DocumentEditorSeam {
   commitSource(source: string): unknown
   replaceRange(replacement: string, from: number, to: number): void
   replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
+  setSelectionRange(anchor: number, head?: number): void
 }
 
 export interface DocumentProjectionEvent {
@@ -664,8 +665,7 @@ export class DocumentEditor {
       to = span.to
       const lineEnding = span.lineEnding
       const vertical = block.position?.vertical_explicit ? block.position.vertical : null
-      const verticalAlignment = vertical === "middle" ? "center" : vertical
-      replacement = `:::align{${verticalAlignment ? `${verticalAlignment} ` : ""}${horizontal}}${lineEnding}`
+      replacement = `:::align{${vertical ? `${vertical} ` : ""}${horizontal}}${lineEnding}`
     } else {
       from = block.range.start
       to = from
@@ -973,12 +973,13 @@ export class DocumentEditor {
     if (!textNode || textNode.textContent === null) return
     const offset = Math.min(openingLength + lineEnding.length, textNode.textContent.length)
     window.getSelection()?.setBaseAndExtent(textNode, offset, textNode, offset)
-    this.lastProjectionCaret = { blockId: (blockElement as HTMLElement).dataset.editorBlockId ?? "", visibleOffset: 0 }
+    this.lastProjectionCaret = { blockId: (blockElement as HTMLElement).dataset.editorBlockId ?? "", visibleOffset: offset }
 
     // Install the source after the active DOM and selection are ready. The
     // preview's stale-projection handler then preserves this focused block,
     // while the shifted map lets the first typed character round-trip safely.
     this.editorController.replaceRange(replacement, from, to)
+    this.editorController.setSelectionRange(from + offset)
   }
 
   continueStructuredBlock(blockElement: Element, region: DocumentEditorRegion, kind: string, markdown: string, source: string, emptyMarker: boolean): void {

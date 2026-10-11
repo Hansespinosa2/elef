@@ -464,7 +464,11 @@ class ArtTest < ApplicationSystemTestCase
     assert_equal "middle right", first("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='#{first_art_index}']", visible: :all)["value"]
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
 
-    all(".slide-region[data-art-host='fixed'] [data-elef-art-root]")[1].hover
+    # Scope to the editable projection: slide overview thumbnails intentionally
+    # duplicate slide content (see the "clone only inert slide content"
+    # contract), so a page-wide art-root selector is ambiguous. The footer
+    # controls under test live in the projection.
+    all(".presentation-surface.presentation-editor-projection .slide-region[data-art-host='fixed'] [data-elef-art-root]")[1].hover
     first_footer_alignment = first("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='#{first_footer_index}']")
     first_footer_alignment.select("Bottom Center")
     assert_field "Markdown source", with: /:::align\{bottom center\}/, wait: 5
