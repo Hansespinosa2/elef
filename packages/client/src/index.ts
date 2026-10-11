@@ -2,6 +2,7 @@ export { ADAPTER_METHODS, assertEditorAdapter } from "./session/editor_adapter.j
 export { createSaveFlow } from "./session/save_flow.js";
 export { createTitleSaveFlow } from "./session/title_save_flow.js";
 export { createWorkSession } from "./session/work_session.js";
+export { createPortSession } from "./session/port_session.js";
 export {
   caretAfterInsert,
   clampSelection,

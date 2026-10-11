@@ -2,6 +2,7 @@
 // plus the existing JSON asset, search, settings-transfer and export routes.
 // Transport policy: single default workspace, CSRF via meta token plus a
 // minimal cookie jar, modern browser user agent for allow_browser.
+import { createPortSession } from "@elef/client";
 
 export const railsPolicy = {
   deleteProgrammatic: true,
@@ -104,8 +105,6 @@ export async function createRailsHost({ baseUrl, fetchImpl = fetch, csrfToken: p
     return kind === "presentation" ? "presentations" : "documents";
   }
 
-  const sessions = new Map();
-
   function toSummary(payload) {
     return {
       id: String(payload.id),
@@ -175,78 +174,6 @@ export async function createRailsHost({ baseUrl, fetchImpl = fetch, csrfToken: p
       }
     },
   };
-
-  function createSession(workId) {
-    const session = {
-      workId,
-      kind: null,
-      text: "",
-      revision: null,
-      ready: null,
-      statusHandlers: new Set(),
-      externalHandlers: new Set(),
-      disposed: false,
-      ensure() {
-        if (!this.ready) {
-          this.ready = worksPort.getWork(workId).then((snapshot) => {
-            this.kind = snapshot.kind;
-            this.text = snapshot.text;
-            this.revision = snapshot.baseline.revision;
-            return snapshot;
-          });
-        }
-        return this.ready;
-      },
-      getText() {
-        return this.text;
-      },
-      applyLocalChange(change) {
-        this.text = this.text.slice(0, change.from) + change.insert + this.text.slice(change.to);
-        this.emitStatus({ kind: "dirty" });
-      },
-      replaceText(text) {
-        this.text = text;
-        this.emitStatus({ kind: "dirty" });
-      },
-      onExternalChange(handler) {
-        this.externalHandlers.add(handler);
-        return () => this.externalHandlers.delete(handler);
-      },
-      onStatus(handler) {
-        this.statusHandlers.add(handler);
-        return () => this.statusHandlers.delete(handler);
-      },
-      emitStatus(status) {
-        for (const handler of this.statusHandlers) handler(status);
-      },
-      async flush() {
-        if (this.disposed) {
-          return { kind: "failed", error: { category: "invalid_input", message: "session disposed", retryable: false } };
-        }
-        await this.ensure();
-        const live = await worksPort.getWork(workId);
-        if (live.text === this.text && live.baseline.revision === this.revision) {
-          return { kind: "clean", baseline: live.baseline };
-        }
-        this.emitStatus({ kind: "saving" });
-        const result = await worksPort.saveWork(workId, this.text, { revision: this.revision });
-        if (result.kind === "saved") {
-          this.revision = result.baseline.revision;
-          this.emitStatus({ kind: "clean" });
-          return result;
-        }
-        const current = result.current;
-        for (const handler of this.externalHandlers) handler(current);
-        this.emitStatus({ kind: "clean" });
-        return result;
-      },
-      dispose() {
-        this.disposed = true;
-      },
-    };
-    sessions.set(workId, session);
-    return session;
-  }
 
   const mediaPort = {
     async listMedia(workId) {
@@ -377,9 +304,7 @@ export async function createRailsHost({ baseUrl, fetchImpl = fetch, csrfToken: p
     search: searchPort,
     transfer: transferPort,
     async createWorkSession(workId) {
-      const session = createSession(workId);
-      await session.ensure();
-      return session;
+      return createPortSession(worksPort, workId);
     },
   };
 }

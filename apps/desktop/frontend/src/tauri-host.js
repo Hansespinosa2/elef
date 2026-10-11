@@ -4,6 +4,7 @@
 // delete is dialog-mediated in production, so automation runs with
 // deleteProgrammatic: false. Exported bytes come from the e2e harness export
 // file; import takes archive bytes through import_elef_bytes.
+import { createPortSession } from "@elef/client";
 
 export const tauriPolicy = {
   deleteProgrammatic: false,
@@ -16,7 +17,6 @@ function commandError(error) {
 
 export function createTauriHost({ invoke, readExportFile, initialStatus }) {
   const baseHashes = new Map();
-  const sessions = new Set();
   // Boot snapshot reuse: the host already fetched get_library_status at
   // boot, so the client's first list serves it instead of paying two more
   // full-list IPCs racing boot. Single-use: any mutation drops it and the
@@ -185,79 +185,6 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
     },
   };
 
-  function createSession(workId) {
-    const session = {
-      workId,
-      kind: null,
-      text: "",
-      revision: null,
-      ready: null,
-      statusHandlers: new Set(),
-      externalHandlers: new Set(),
-      disposed: false,
-      ensure() {
-        if (!this.ready) {
-          this.ready = snapshotOf(workId).then((snapshot) => {
-            this.kind = snapshot.kind;
-            this.text = snapshot.text;
-            this.revision = snapshot.baseline.revision;
-            return snapshot;
-          });
-        }
-        return this.ready;
-      },
-      getText() {
-        return this.text;
-      },
-      applyLocalChange(change) {
-        this.text = this.text.slice(0, change.from) + change.insert + this.text.slice(change.to);
-        this.emitStatus({ kind: "dirty" });
-      },
-      replaceText(text) {
-        this.text = text;
-        this.emitStatus({ kind: "dirty" });
-      },
-      onExternalChange(handler) {
-        this.externalHandlers.add(handler);
-        return () => this.externalHandlers.delete(handler);
-      },
-      onStatus(handler) {
-        this.statusHandlers.add(handler);
-        return () => this.statusHandlers.delete(handler);
-      },
-      emitStatus(status) {
-        for (const handler of this.statusHandlers) handler(status);
-      },
-      async flush() {
-        if (this.disposed) {
-          return { kind: "failed", error: { category: "invalid_input", message: "session disposed", retryable: false } };
-        }
-        await this.ensure();
-        const live = await snapshotOf(workId);
-        if (live.text === this.text && live.baseline.revision === this.revision) {
-          return { kind: "clean", baseline: live.baseline };
-        }
-        this.emitStatus({ kind: "saving" });
-        const result = await worksPort.saveWork(workId, this.text, { revision: this.revision });
-        if (result.kind === "saved") {
-          this.revision = result.baseline.revision;
-          baseHashes.set(workId, this.revision);
-          this.emitStatus({ kind: "clean" });
-          return result;
-        }
-        for (const handler of this.externalHandlers) handler(result.current);
-        this.emitStatus({ kind: "clean" });
-        return result;
-      },
-      dispose() {
-        this.disposed = true;
-        sessions.delete(this);
-      },
-    };
-    sessions.add(session);
-    return session;
-  }
-
   const mediaPort = {
     async listMedia(workId) {
       const items = await call("list_media", { id: workId });
@@ -399,9 +326,7 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
       dropListCaches();
     },
     async createWorkSession(workId) {
-      const session = createSession(workId);
-      await session.ensure();
-      return session;
+      return createPortSession(worksPort, workId);
     },
   };
 }
