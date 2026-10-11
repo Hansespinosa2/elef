@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://elef.app/spec/deck-manifest.schema.json",
   "title": "Elef deck manifest (elef.json)",
-  "description": "Identity file at a deck directory root. Grounded in read_manifest (crates/local-store/src/manifest.rs): only id and schema_version are read; unknown fields are ignored so newer writers stay openable.",
+  "description": "Identity file at a deck directory root. Grounded in read_manifest (crates/local-store/src/manifest.rs): only id and schema_version are read; unknown fields are ignored so newer writers stay openable. Enforced by tooling/check_spec.py via bin/check quick.",
   "type": "object",
   "required": ["id", "schema_version"],
   "additionalProperties": true,
