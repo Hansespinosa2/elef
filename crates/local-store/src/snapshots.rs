@@ -276,7 +276,12 @@ mod tests {
         };
         let mode = std::env::var("ELEF_CORE_TEST_STORE_MODE").unwrap();
         let library = Library::open(root).unwrap();
-        let work_folder = library.list_work_folders().unwrap().into_iter().next().unwrap();
+        let work_folder = library
+            .list_work_folders()
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
         let opened = library.open_work_folder(&work_folder.id).unwrap();
         match mode.as_str() {
             "take" => {
@@ -395,7 +400,9 @@ mod tests {
     fn snapshots_round_trip_disk_and_provided_text_newest_first() {
         let (_temp, library) = library();
         let work_folder = library.create_work_folder("Snapshots", "document").unwrap();
-        let disk = library.take_snapshot(&work_folder.id, "interval", None).unwrap();
+        let disk = library
+            .take_snapshot(&work_folder.id, "interval", None)
+            .unwrap();
         assert_eq!(disk.reason, "interval");
         assert!(!disk.content_hash.is_empty());
         let local = library
@@ -412,7 +419,9 @@ mod tests {
     #[test]
     fn snapshot_reason_and_id_validation_rejects_path_escapes() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Snapshot Names", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Snapshot Names", "document")
+            .unwrap();
         for bad in ["", "../x", "a/b", "a.b", "a b", "x".repeat(33).as_str()] {
             assert!(
                 library.take_snapshot(&work_folder.id, bad, None).is_err(),
@@ -433,7 +442,11 @@ mod tests {
                 "snapshot id {bad:?} must be rejected"
             );
         }
-        assert!(library.take_snapshot(&work_folder.id, "a-1_b", None).is_ok());
+        assert!(
+            library
+                .take_snapshot(&work_folder.id, "a-1_b", None)
+                .is_ok()
+        );
     }
 
     #[test]
@@ -441,12 +454,16 @@ mod tests {
         let (_temp, library) = library();
         let work_folder = library.create_work_folder("Restore", "document").unwrap();
         let opened = library.open_work_folder(&work_folder.id).unwrap();
-        let first = library.take_snapshot(&work_folder.id, "interval", None).unwrap();
+        let first = library
+            .take_snapshot(&work_folder.id, "interval", None)
+            .unwrap();
         let updated = "# Restore\n\nversion two\n";
         library
             .save_source(&work_folder.id, updated, &opened.content_hash)
             .unwrap();
-        let outcome = library.restore_snapshot(&work_folder.id, &first.id).unwrap();
+        let outcome = library
+            .restore_snapshot(&work_folder.id, &first.id)
+            .unwrap();
         assert_eq!(outcome.content_hash, first.content_hash);
         let reread = library.open_work_folder(&work_folder.id).unwrap();
         assert_eq!(reread.source, opened.source);
@@ -469,7 +486,9 @@ mod tests {
     #[test]
     fn snapshot_restore_missing_is_not_found() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Restore Missing", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Restore Missing", "document")
+            .unwrap();
         let error = library
             .restore_snapshot(&work_folder.id, "1-interval")
             .unwrap_err();
@@ -486,33 +505,47 @@ mod tests {
         fs::write(dir.join("junk.txt"), b"junk").unwrap();
         fs::write(dir.join("no-stamp.snap"), b"junk").unwrap();
         fs::create_dir(dir.join("subdir.snap")).unwrap();
-        let fresh = library.take_snapshot(&work_folder.id, "interval", None).unwrap();
+        let fresh = library
+            .take_snapshot(&work_folder.id, "interval", None)
+            .unwrap();
         assert!(!dir.join("1-interval.snap").exists());
         let listed = library.list_snapshots(&work_folder.id).unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, fresh.id);
         // History storage never disturbs work folder discovery.
         let work_folders = library.list_work_folders().unwrap();
-        assert!(work_folders.iter().any(|work_folder| work_folder.name == "Prune"));
+        assert!(
+            work_folders
+                .iter()
+                .any(|work_folder| work_folder.name == "Prune")
+        );
     }
 
     #[test]
     fn snapshots_preserve_non_utf8_disk_bytes() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Binary Snapshots", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Binary Snapshots", "document")
+            .unwrap();
         let record_path = library.root().join("Binary Snapshots").join("document.md");
         fs::write(&record_path, [0xff, 0xfe, 0x00, b'\n']).unwrap();
-        let taken = library.take_snapshot(&work_folder.id, "interval", None).unwrap();
+        let taken = library
+            .take_snapshot(&work_folder.id, "interval", None)
+            .unwrap();
         assert_eq!(taken.byte_len, 4);
         fs::write(&record_path, b"replaced\n").unwrap();
-        library.restore_snapshot(&work_folder.id, &taken.id).unwrap();
+        library
+            .restore_snapshot(&work_folder.id, &taken.id)
+            .unwrap();
         assert_eq!(fs::read(&record_path).unwrap(), [0xff, 0xfe, 0x00, b'\n']);
     }
 
     #[test]
     fn snapshot_rejects_oversized_text() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Huge Snapshot", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Huge Snapshot", "document")
+            .unwrap();
         let huge = "x".repeat(MAX_SOURCE_BYTES + 1);
         let error = library
             .take_snapshot(&work_folder.id, "interval", Some(&huge))

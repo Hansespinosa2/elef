@@ -2,20 +2,20 @@ export function createTransportAdapter({ invoke, onConflict = () => {} }) {
   const baseHashes = new Map()
 
   return {
-    readDeck(id) {
-      return invoke("open_deck", { id })
+    readWorkFolder(id) {
+      return invoke("open_work_folder", { id })
     },
 
-    activateDeck(deck, requestedId = deck.id) {
-      if (deck.id !== requestedId) baseHashes.delete(requestedId)
-      baseHashes.set(deck.id, deck.content_hash)
+    activateWorkFolder(workFolder, requestedId = workFolder.id) {
+      if (workFolder.id !== requestedId) baseHashes.delete(requestedId)
+      baseHashes.set(workFolder.id, workFolder.content_hash)
     },
 
-    async openDeck(id) {
-      const deck = await invoke("open_deck", { id })
-      if (deck.id !== id) baseHashes.delete(id)
-      baseHashes.set(deck.id, deck.content_hash)
-      return deck
+    async openWorkFolder(id) {
+      const workFolder = await invoke("open_work_folder", { id })
+      if (workFolder.id !== id) baseHashes.delete(id)
+      baseHashes.set(workFolder.id, workFolder.content_hash)
+      return workFolder
     },
 
     readSourceSnapshot(id) {
@@ -49,7 +49,7 @@ export function createTransportAdapter({ invoke, onConflict = () => {} }) {
       if (!baseHash) {
         throw {
           code: "not_found",
-          message: "Open this deck again before saving.",
+          message: "Open this Work again before saving.",
           retryable: false
         }
       }

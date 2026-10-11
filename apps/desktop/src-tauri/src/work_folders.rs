@@ -1,6 +1,6 @@
 use local_store::{
-    DeckPreview, DeckSummary, DocumentGraphDocument, FileEvent, MergeOutcome, OpenDeck,
-    RestoreOutcome, SaveResult, SnapshotInfo, SourceSnapshot,
+    DocumentGraphDocument, FileEvent, MergeOutcome, OpenWorkFolder, RestoreOutcome, SaveResult,
+    SnapshotInfo, SourceSnapshot, WorkFolderPreview, WorkFolderSummary,
 };
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -15,8 +15,10 @@ pub(crate) struct DeleteResult {
     deleted: bool,
 }
 #[tauri::command]
-pub(crate) fn list_decks(state: State<'_, DesktopState>) -> Result<Vec<DeckSummary>, CommandError> {
-    Ok(state.current_library()?.list_decks()?)
+pub(crate) fn list_work_folders(
+    state: State<'_, DesktopState>,
+) -> Result<Vec<WorkFolderSummary>, CommandError> {
+    Ok(state.current_library()?.list_work_folders()?)
 }
 
 #[tauri::command]
@@ -27,28 +29,28 @@ pub(crate) fn document_graph(
 }
 
 #[tauri::command]
-pub(crate) fn create_deck(
+pub(crate) fn create_work_folder(
     state: State<'_, DesktopState>,
     name: String,
     kind: String,
-) -> Result<OpenDeck, CommandError> {
-    Ok(state.current_library()?.create_deck(&name, &kind)?)
+) -> Result<OpenWorkFolder, CommandError> {
+    Ok(state.current_library()?.create_work_folder(&name, &kind)?)
 }
 
 #[tauri::command]
-pub(crate) fn open_deck(
+pub(crate) fn open_work_folder(
     state: State<'_, DesktopState>,
     id: String,
-) -> Result<OpenDeck, CommandError> {
-    Ok(state.current_library()?.open_deck(&id)?)
+) -> Result<OpenWorkFolder, CommandError> {
+    Ok(state.current_library()?.open_work_folder(&id)?)
 }
 
 #[tauri::command]
-pub(crate) fn read_deck_preview(
+pub(crate) fn read_work_folder_preview(
     state: State<'_, DesktopState>,
     id: String,
-) -> Result<DeckPreview, CommandError> {
-    Ok(state.current_library()?.read_deck_preview(&id)?)
+) -> Result<WorkFolderPreview, CommandError> {
+    Ok(state.current_library()?.read_work_folder_preview(&id)?)
 }
 
 #[tauri::command]
@@ -60,33 +62,33 @@ pub(crate) fn read_source_snapshot(
 }
 
 #[tauri::command]
-pub(crate) fn rename_deck(
+pub(crate) fn rename_work_folder(
     state: State<'_, DesktopState>,
     id: String,
     name: String,
-) -> Result<DeckSummary, CommandError> {
-    Ok(state.current_library()?.rename_deck(&id, &name)?)
+) -> Result<WorkFolderSummary, CommandError> {
+    Ok(state.current_library()?.rename_work_folder(&id, &name)?)
 }
 
 #[tauri::command]
-pub(crate) async fn delete_deck(
+pub(crate) async fn delete_work_folder(
     app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
 ) -> Result<DeleteResult, CommandError> {
     let library = state.current_library()?;
-    let deck_name = library.deck_summary(&id)?.name;
+    let work_folder_name = library.work_folder_summary(&id)?.name;
     let confirmed = confirm_native_action(
         &app,
-        format!("Move ‘{deck_name}’ to the system Trash?"),
-        "Move deck to Trash",
+        format!("Move ‘{work_folder_name}’ to the system Trash?"),
+        "Move Work to Trash",
         MessageDialogKind::Warning,
     )
     .await?;
     if !confirmed {
         return Ok(DeleteResult { deleted: false });
     }
-    library.delete_deck(&id)?;
+    library.delete_work_folder(&id)?;
     Ok(DeleteResult { deleted: true })
 }
 

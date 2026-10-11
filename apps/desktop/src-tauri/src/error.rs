@@ -62,7 +62,7 @@ impl From<CoreError> for CommandError {
                 existing_name,
             } => Self::with_details(
                 "import_conflict",
-                "A deck with this identity already exists.",
+                "A Work with this identity already exists.",
                 false,
                 serde_json::json!({
                     "incoming_name": incoming_name,
@@ -72,7 +72,7 @@ impl From<CoreError> for CommandError {
             other => Self {
                 code: other.code(),
                 message: other.to_string(),
-                // A deck path that vanishes mid-session (sync tools, transient
+                // A work folder path that vanishes mid-session (sync tools, transient
                 // unmounts) must retry on the capped backoff like any IO
                 // failure instead of wedging the saver in a manual-retry
                 // state that quiet-save no longer offers.

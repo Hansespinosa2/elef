@@ -18,7 +18,8 @@ use crate::io::{
 use crate::library::Library;
 use crate::manifest::write_manifest_atomic;
 use crate::types::{
-    CoreError, WorkFolderManifest, WorkFolderPreview, WorkFolderRecord, WorkFolderSummary, OpenWorkFolder, SourceSnapshot,
+    CoreError, OpenWorkFolder, SourceSnapshot, WorkFolderManifest, WorkFolderPreview,
+    WorkFolderRecord, WorkFolderSummary,
 };
 use crate::writes::remove_stale_temps;
 
@@ -228,7 +229,11 @@ impl Library {
         self.open_work_folder(&id)
     }
 
-    pub fn rename_work_folder(&self, id: &str, new_name: &str) -> Result<WorkFolderSummary, CoreError> {
+    pub fn rename_work_folder(
+        &self,
+        id: &str,
+        new_name: &str,
+    ) -> Result<WorkFolderSummary, CoreError> {
         validate_work_folder_name(new_name)?;
         let record = self.record(id)?;
         self.validate_work_folder_path(&record.path)?;
@@ -278,11 +283,11 @@ mod tests {
     use std::fs;
 
     use crate::consts::{MANIFEST_FILE, MAX_LIBRARY_PREVIEW_SOURCE_BYTES};
-    use crate::work_folders::{name_warnings, normalized_name, validate_work_folder_name};
     use crate::discovery::path_id;
     use crate::io::sha256;
     use crate::test_support::{library, write_work_folder};
     use crate::types::CoreError;
+    use crate::work_folders::{name_warnings, normalized_name, validate_work_folder_name};
 
     #[test]
     fn first_open_creates_manifest_and_returns_content_fingerprint() {
@@ -301,7 +306,8 @@ mod tests {
     #[test]
     fn source_snapshot_detects_external_bytes_without_writing_manifest() {
         let (temp, library) = library();
-        let work_folder = write_work_folder(temp.path(), "External", &[("presentation.md", "first")]);
+        let work_folder =
+            write_work_folder(temp.path(), "External", &[("presentation.md", "first")]);
         let id = path_id(&work_folder.canonicalize().unwrap());
         library.list_work_folders().unwrap();
 
@@ -345,7 +351,8 @@ mod tests {
     #[test]
     fn source_snapshot_tracks_source_rule_changes_without_creating_a_manifest() {
         let (temp, library) = library();
-        let work_folder = write_work_folder(temp.path(), "Source Choice", &[("talk.md", "same bytes")]);
+        let work_folder =
+            write_work_folder(temp.path(), "Source Choice", &[("talk.md", "same bytes")]);
         let id = path_id(&work_folder.canonicalize().unwrap());
         library.list_work_folders().unwrap();
 

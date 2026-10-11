@@ -117,7 +117,10 @@ impl Library {
             }
         });
         drop(slot);
-        let records = self.records.read().expect("work folder index lock poisoned");
+        let records = self
+            .records
+            .read()
+            .expect("work folder index lock poisoned");
         let mut events = Vec::new();
         for (path, removed) in quiet {
             let Some(record) = records
@@ -166,7 +169,9 @@ mod tests {
     #[test]
     fn watcher_drains_empty_while_disabled_and_enables_idempotently() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Watch Disabled", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Watch Disabled", "document")
+            .unwrap();
         assert!(library.poll_file_events().is_empty());
         library.enable_watching().unwrap();
         library.enable_watching().unwrap();
@@ -184,7 +189,9 @@ mod tests {
     #[test]
     fn watcher_reports_git_style_rename_over_temp() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Watch Rename", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Watch Rename", "document")
+            .unwrap();
         library.enable_watching().unwrap();
         let dir = library.root().join("Watch Rename");
         let temp = dir.join(".git-tmp-write");
@@ -201,7 +208,9 @@ mod tests {
     #[test]
     fn watcher_reports_atomic_replace_and_delete_recreate() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Watch Atomic", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Watch Atomic", "document")
+            .unwrap();
         library.enable_watching().unwrap();
         // Sync-tool style: delete then recreate with new bytes.
         let path = library.root().join("Watch Atomic").join("document.md");
@@ -224,7 +233,9 @@ mod tests {
     #[test]
     fn watcher_coalesces_rapid_successive_writes() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Watch Coalesce", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Watch Coalesce", "document")
+            .unwrap();
         library.enable_watching().unwrap();
         let path = library.root().join("Watch Coalesce").join("document.md");
         for i in 0..5 {
@@ -245,9 +256,13 @@ mod tests {
     #[test]
     fn watcher_ignores_history_temp_and_dot_files() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Watch Ignored", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Watch Ignored", "document")
+            .unwrap();
         library.enable_watching().unwrap();
-        library.take_snapshot(&work_folder.id, "interval", None).unwrap();
+        library
+            .take_snapshot(&work_folder.id, "interval", None)
+            .unwrap();
         let dir = library.root().join("Watch Ignored");
         fs::write(dir.join(".elef-save-1.tmp"), b"temp").unwrap();
         fs::write(dir.join(".DS_Store"), b"junk").unwrap();
@@ -259,7 +274,9 @@ mod tests {
     #[test]
     fn watcher_reports_work_folder_directory_removal() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Watch Rmdir", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Watch Rmdir", "document")
+            .unwrap();
         library.enable_watching().unwrap();
         fs::remove_dir_all(library.root().join("Watch Rmdir")).unwrap();
         poll_until(

@@ -20,7 +20,6 @@ use crate::consts::{
     MAX_ARCHIVE_COMPRESSION_RATIO, MAX_ARCHIVE_ENTRIES, MAX_ARCHIVE_FILE_BYTES,
     MAX_ARCHIVE_RATIO_CHECK_BYTES, MAX_ARCHIVE_UNCOMPRESSED_BYTES,
 };
-use crate::work_folders::{normalized_name, validate_work_folder_name};
 use crate::discovery::choose_source_file;
 use crate::io::{
     create_new_file, file_name, move_to_trash, open_regular_file, read_regular_file_handle,
@@ -28,6 +27,7 @@ use crate::io::{
 use crate::library::Library;
 use crate::manifest::{read_manifest, write_manifest_atomic};
 use crate::types::{CoreError, ImportResolution, ImportResult};
+use crate::work_folders::{normalized_name, validate_work_folder_name};
 
 #[derive(Debug)]
 pub(crate) struct ArchiveItem {
@@ -432,7 +432,7 @@ mod tests {
     use crate::test_support::{
         library, mark_first_central_entry_as_symlink, tree_bytes, write_work_folder,
     };
-    use crate::types::{CoreError, WorkFolderManifest, ImportResolution};
+    use crate::types::{CoreError, ImportResolution, WorkFolderManifest};
 
     #[test]
     fn archive_export_is_deterministic_and_round_trips_all_file_bytes() {
@@ -527,7 +527,8 @@ mod tests {
     #[test]
     fn archive_import_reports_unicode_casefold_name_collision() {
         let (temp, library) = library();
-        let existing = write_work_folder(temp.path(), "Straße", &[("presentation.md", "# Existing")]);
+        let existing =
+            write_work_folder(temp.path(), "Straße", &[("presentation.md", "# Existing")]);
         library.list_work_folders().unwrap();
 
         let options = SimpleFileOptions::default()

@@ -1,6 +1,6 @@
 // ElefHost over Tauri invoke against the desktop command surface.
 // Transport policy: the library root is a single workspace ("local"); search
-// is adapter-side substring filtering over document_graph plus deck names;
+// is adapter-side substring filtering over document_graph plus work folder names;
 // delete is dialog-mediated in production, so automation runs with
 // deleteProgrammatic: false. Exported bytes come from the e2e harness export
 // file; import takes archive bytes through import_elef_bytes.
@@ -22,41 +22,41 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
   // full-list IPCs racing boot. Single-use: any mutation drops it and the
   // next list re-fetches, so a served list is never older than its fetch.
   let bootStatus = initialStatus ?? null;
-  // Same-tick refresh note: refreshLibrary lists decks through the raw
+  // Same-tick refresh note: refreshLibrary lists work folders through the raw
   // transport and hands the result over, so the client's reload in the same
   // refresh consumes it instead of listing a second time. Single-use.
-  let notedDecks = null;
+  let notedWorkFolders = null;
   // The root name only changes via chooseLibrary, which invalidates this;
   // every other list serves the cached workspace without a status IPC.
   let cachedWorkspaces = null;
   // Latest listed summaries by work id. Snapshots join fresh preview text
   // onto the cached summary so getWork stays read-only: it must never call
-  // open_deck, which repairs manifestless identities and would invalidate
+  // open_work_folder, which repairs manifestless identities and would invalidate
   // the listed id the caller is holding.
   const summaries = new Map();
 
-  function remember(deck) {
-    const work = summary(deck);
+  function remember(workFolder) {
+    const work = summary(workFolder);
     summaries.set(work.id, work);
     return work;
   }
 
-  function summary(deck) {
-    // DeckSummary carries kind; OpenDeck (create/open) does not, so derive it
+  function summary(workFolder) {
+    // WorkFolderSummary carries kind; OpenWorkFolder (create/open) does not, so derive it
     // from the kind-specific source file for those shapes.
     const kind =
-      deck.kind ?? (deck.source_file === "presentation.md" ? "presentation" : "document");
-    const modifiedMs = deck.modified_ms ?? deck.fingerprint?.modified_ms;
+      workFolder.kind ?? (workFolder.source_file === "presentation.md" ? "presentation" : "document");
+    const modifiedMs = workFolder.modified_ms ?? workFolder.fingerprint?.modified_ms;
     return {
-      id: String(deck.id),
+      id: String(workFolder.id),
       workspaceId: "local",
-      title: deck.name,
+      title: workFolder.name,
       kind: kind === "presentation" ? "presentation" : "document",
       updatedAt:
         modifiedMs === null || modifiedMs === undefined
           ? new Date().toISOString()
           : new Date(Number(modifiedMs)).toISOString(),
-      warnings: [...(deck.warnings ?? []), ...(deck.notices ?? [])].map(String),
+      warnings: [...(workFolder.warnings ?? []), ...(workFolder.notices ?? [])].map(String),
     };
   }
 
@@ -71,15 +71,15 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
     return result;
   }
 
-  async function snapshotOf(deckId) {
-    const snapshot = await call("read_source_snapshot", { id: deckId });
-    let work = summaries.get(String(deckId));
+  async function snapshotOf(workFolderId) {
+    const snapshot = await call("read_source_snapshot", { id: workFolderId });
+    let work = summaries.get(String(workFolderId));
     if (!work) {
-      const decks = await call("list_decks");
-      work = decks.map(summary).find(entry => entry.id === String(deckId)) ?? null;
+      const workFolders = await call("list_work_folders");
+      work = workFolders.map(summary).find(entry => entry.id === String(workFolderId)) ?? null;
     }
     if (!work) {
-      throw { code: "not_found", message: "The deck could not be found.", retryable: false };
+      throw { code: "not_found", message: "The Work could not be found.", retryable: false };
     }
     summaries.set(work.id, work);
     baseHashes.set(work.id, snapshot.content_hash);
@@ -96,7 +96,7 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
 
   function dropListCaches() {
     bootStatus = null;
-    notedDecks = null;
+    notedWorkFolders = null;
   }
 
   const library = {
@@ -109,43 +109,43 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
       return cachedWorkspaces;
     },
     async listWorks() {
-      const noted = notedDecks;
-      notedDecks = null;
+      const noted = notedWorkFolders;
+      notedWorkFolders = null;
       if (noted) {
         summaries.clear();
         return noted.map(remember);
       }
       const status = bootStatus;
       bootStatus = null;
-      if (status?.decks) {
+      if (status?.work_folders) {
         summaries.clear();
-        return status.decks.map(remember);
+        return status.work_folders.map(remember);
       }
-      const decks = await call("list_decks");
+      const workFolders = await call("list_work_folders");
       summaries.clear();
-      return decks.map(remember);
+      return workFolders.map(remember);
     },
     async createWork(input) {
       dropListCaches();
-      const deck = await call("create_deck", { name: input.title, kind: input.kind });
-      baseHashes.set(deck.id, deck.content_hash);
+      const workFolder = await call("create_work_folder", { name: input.title, kind: input.kind });
+      baseHashes.set(workFolder.id, workFolder.content_hash);
       if (input.text !== undefined && input.text !== null) {
-        await worksPort.saveWork(deck.id, input.text, {
-          revision: String(deck.content_hash),
+        await worksPort.saveWork(workFolder.id, input.text, {
+          revision: String(workFolder.content_hash),
         });
       }
-      const opened = await call("open_deck", { id: deck.id });
+      const opened = await call("open_work_folder", { id: workFolder.id });
       baseHashes.set(opened.id, opened.content_hash);
       return remember(opened);
     },
     async renameWork(workId, title) {
       dropListCaches();
-      const deck = await call("rename_deck", { id: workId, name: title });
-      return remember(deck);
+      const workFolder = await call("rename_work_folder", { id: workId, name: title });
+      return remember(workFolder);
     },
     async deleteWork(workId) {
       dropListCaches();
-      const result = await call("delete_deck", { id: workId });
+      const result = await call("delete_work_folder", { id: workId });
       // The backend mediates deletion with a native Trash confirmation; a
       // dismissed dialog resolves instead of rejecting, so translate the
       // negative ack into the port-level cancellation the client swallows.
@@ -163,7 +163,7 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
     },
     async saveWork(workId, text, baseline) {
       // A save bumps the work mtime, so the next list must re-fetch rather
-      // than serve the noted decks, or card keys would not turn over and
+      // than serve the noted work folders, or card keys would not turn over and
       // previews would stay stale after the save that changed them.
       dropListCaches();
       try {
@@ -200,7 +200,7 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
       // invoke wrapper rehydrates bytes into a Uint8Array for the raw body.
       const uploaded = await call("upload_asset", Array.from(input.bytes), {
         headers: {
-          "x-elef-deck-id": workId,
+          "x-elef-work-id": workId,
           "x-elef-filename": input.name,
           "x-elef-declared-media-type": input.mimeType,
           "x-elef-fit": "contain",
@@ -235,10 +235,10 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
   };
 
   async function findOwningWork(mediaId) {
-    const decks = await call("list_decks");
-    for (const deck of decks) {
-      const items = await call("list_media", { id: deck.id });
-      if (items.some((item) => String(item.digest) === String(mediaId))) return deck.id;
+    const workFolders = await call("list_work_folders");
+    for (const workFolder of workFolders) {
+      const items = await call("list_media", { id: workFolder.id });
+      if (items.some((item) => String(item.digest) === String(mediaId))) return workFolder.id;
     }
     throw commandError({ code: "not_found", message: "media not found", retryable: false });
   }
@@ -258,13 +258,13 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
   const searchPort = {
     async search(input) {
       const query = input.query.toLowerCase();
-      const decks = await call("list_decks");
+      const workFolders = await call("list_work_folders");
       const graph = await call("document_graph").catch(() => []);
       const sources = new Map(graph.map((doc) => [String(doc.id), doc.source ?? ""]));
       const hits = [];
-      for (const deck of decks) {
-        const summaryValue = summary(deck);
-        const haystack = `${deck.name}\n${sources.get(String(deck.id)) ?? ""}`.toLowerCase();
+      for (const workFolder of workFolders) {
+        const summaryValue = summary(workFolder);
+        const haystack = `${workFolder.name}\n${sources.get(String(workFolder.id)) ?? ""}`.toLowerCase();
         if (haystack.includes(query)) hits.push({ work: summaryValue });
       }
       return { requestId: input.requestId, hits };
@@ -273,7 +273,7 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
 
   const transferPort = {
     async exportElef(workIds) {
-      if (workIds.length !== 1) throw new Error("tauri export handles one deck per call");
+      if (workIds.length !== 1) throw new Error("tauri export handles one Work per call");
       if (typeof readExportFile !== "function") {
         throw new Error("tauri export bytes require the e2e harness export file");
       }
@@ -284,18 +284,18 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
       dropListCaches();
       try {
         const result = await call("import_elef_bytes", { bytes: Array.from(bytes) });
-        if (!result) throw new Error("import produced no deck");
+        if (!result) throw new Error("import produced no Work");
         if (result.name_collision) {
           const resolved = await call("resolve_import_conflict", { resolution: "keep_both" });
           if (!resolved) throw new Error("import conflict could not be resolved");
-          return [summary(resolved.deck)];
+          return [summary(resolved.work_folder)];
         }
-        return [summary(result.deck)];
+        return [summary(result.work_folder)];
       } catch (error) {
         if (error?.code !== "import_conflict") throw error;
         const resolved = await call("resolve_import_conflict", { resolution: "keep_both" });
         if (!resolved) throw new Error("import conflict could not be resolved");
-        return [summary(resolved.deck)];
+        return [summary(resolved.work_folder)];
       }
     },
   };
@@ -318,8 +318,8 @@ export function createTauriHost({ invoke, readExportFile, initialStatus }) {
     // Desktop-internal list coordination, not part of the ElefHost ports:
     // the application hands its same-tick list over so the client's reload
     // in the same refresh consumes it instead of listing twice.
-    noteListedDecks(decks) {
-      notedDecks = decks;
+    noteListedWorkFolders(workFolders) {
+      notedWorkFolders = workFolders;
     },
     noteRootChanged() {
       cachedWorkspaces = null;

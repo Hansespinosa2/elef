@@ -302,12 +302,12 @@ assert "*" not in directives.get("img-src", [])
 associations = config["bundle"].get("fileAssociations", [])
 assert any(
     "elef" in association.get("ext", [])
-    and association.get("exportedType", {}).get("identifier") == "com.elef.deck"
+    and association.get("exportedType", {}).get("identifier") == "com.elef.work"
     for association in associations
 ), "register the portable .elef archive with the operating system"
 
 for menu_action in (
-    "open-deck",
+    "open-work",
     "refresh-library",
     "save",
     "export-elef",

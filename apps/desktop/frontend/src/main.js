@@ -6,7 +6,7 @@ import { check as checkUpdater } from "@tauri-apps/plugin-updater"
 import { completeBootstrap } from "./bootstrap-flow.js"
 import { createCloseFlow } from "./close-flow.js"
 import { createTransportAdapter } from "./transport-adapter.js"
-import { createMediaFetch, mediaUrlsForDeck } from "./media-transport.js"
+import { createMediaFetch, mediaUrlsForWorkFolder } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
 import { checkForDesktopUpdate, createIdleUpdateCheck, installDesktopUpdate } from "./update-flow.js"
 import { createFileLibraryTransport } from "./file-library-transport.js"
@@ -44,7 +44,7 @@ startFileLibraryApplication({
     })
     return () => previewTrace.slice()
   },
-  mediaUrlsForDeck,
+  mediaUrlsForWorkFolder,
   checkForUpdate: () => checkForDesktopUpdate(
     () => checkUpdater({ timeout: 10_000 }),
     (version, onProgress) => invoke("install_update", { version, onProgress: new Channel(onProgress) })

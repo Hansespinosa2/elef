@@ -107,8 +107,8 @@ test("the native entry point only wires Tauri APIs into the shared application",
   assert.match(bootstrap, /createFileLibraryTransport\(\{ invoke \}\)/)
   assert.match(application, /fileLibrary\.listDecks\(\)/)
   assert.doesNotMatch(application, /\binvoke\s*\(/)
-  assert.doesNotMatch(application, /["'](?:get_library_status|list_decks|create_deck|save_source|install_update)["']/)
-  assert.match(fileLibraryTransport, /listDecks: \(\) => invoke\("list_decks"\)/)
+  assert.doesNotMatch(application, /["'](?:get_library_status|list_work_folders|create_work_folder|save_source|install_update)["']/)
+  assert.match(fileLibraryTransport, /listWorkFolders: \(\) => invoke\("list_work_folders"\)/)
 })
 
 test("desktop media URLs and fetch interception stay in native transport", async () => {
@@ -117,9 +117,9 @@ test("desktop media URLs and fetch interception stay in native transport", async
   assert.doesNotMatch(application, /globalThis\.fetch\s*=/)
   assert.doesNotMatch(application, /__elefPreviewTrace/)
   assert.equal(document.querySelector("#desktop-editor-form").dataset.previewUrlValue, "")
-  assert.match(mediaTransport, /export function mediaUrlsForDeck\(/)
+  assert.match(mediaTransport, /export function mediaUrlsForWorkFolder\(/)
   assert.match(bootstrap, /globalThis\.fetch = createPreviewFetch/)
-  assert.match(bootstrap, /mediaUrlsForDeck,/)
+  assert.match(bootstrap, /mediaUrlsForWorkFolder,/)
 })
 
 test("Rails and desktop consume the same client-owned save state machine", () => {

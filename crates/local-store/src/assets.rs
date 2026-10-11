@@ -9,7 +9,8 @@ use std::time::SystemTime;
 use tempfile::Builder as TempFileBuilder;
 
 use crate::consts::{
-    ASSET_TYPES, MAX_ARCHIVE_ENTRIES, MAX_ASSET_BYTES, MAX_WORK_FOLDER_MEDIA_BYTES, STALE_TEMP_AGE_SECONDS,
+    ASSET_TYPES, MAX_ARCHIVE_ENTRIES, MAX_ASSET_BYTES, MAX_WORK_FOLDER_MEDIA_BYTES,
+    STALE_TEMP_AGE_SECONDS,
 };
 use crate::io::{move_to_trash, read_regular_file_limited, sha256, sync_directory};
 use crate::library::Library;
@@ -480,7 +481,8 @@ mod tests {
     #[test]
     fn asset_upload_is_content_addressed_and_read_only_lookup_verifies_the_digest() {
         let (temp, library) = library();
-        let work_folder_path = write_work_folder(temp.path(), "Asset Work", &[("presentation.md", "# Talk")]);
+        let work_folder_path =
+            write_work_folder(temp.path(), "Asset Work", &[("presentation.md", "# Talk")]);
         let id = library.list_work_folders().unwrap()[0].id.clone();
         let png = b"\x89PNG\r\n\x1a\nvalid test bytes";
 
@@ -563,8 +565,10 @@ mod tests {
     #[test]
     fn asset_upload_rejects_mismatched_media_types_and_document_video() {
         let (temp, library) = library();
-        let raster_path = write_work_folder(temp.path(), "Raster", &[("presentation.md", "# Talk")]);
-        let document_path = write_work_folder(temp.path(), "Document", &[("document.md", "# Notes")]);
+        let raster_path =
+            write_work_folder(temp.path(), "Raster", &[("presentation.md", "# Talk")]);
+        let document_path =
+            write_work_folder(temp.path(), "Document", &[("document.md", "# Notes")]);
         let raster_id = library.list_work_folders().unwrap()[1].id.clone();
         let document_id = library
             .work_folder_summary(&library.list_work_folders().unwrap()[0].id)

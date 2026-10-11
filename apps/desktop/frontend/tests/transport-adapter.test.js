@@ -11,14 +11,14 @@ test("save sends the last loaded hash and advances it after success", async () =
   const adapter = createTransportAdapter({
     invoke: async (command, payload) => {
       calls.push([command, payload])
-      if (command === "open_deck") return { id: "deck-1", content_hash: hashA }
+      if (command === "open_work_folder") return { id: "work-1", content_hash: hashA }
       return { ok: true, content_hash: hashB }
     }
   })
 
-  await adapter.openDeck("deck-1")
-  await adapter.saveSource("deck-1", "# edited")
-  await adapter.saveSource("deck-1", "# edited again")
+  await adapter.openWorkFolder("work-1")
+  await adapter.saveSource("work-1", "# edited")
+  await adapter.saveSource("work-1", "# edited again")
 
   assert.deepEqual(calls.map(([, payload]) => payload.baseHash), [undefined, hashA, hashB])
   assert.equal("base_hash" in calls[1][1], false)
@@ -32,7 +32,7 @@ test("conflicts preserve the base hash until the user accepts the disk version",
   const adapter = createTransportAdapter({
     onConflict: event => conflicts.push(event),
     invoke: async (command, payload) => {
-      if (command === "open_deck") return { id: "deck-1", content_hash: hashA }
+      if (command === "open_work_folder") return { id: "work-1", content_hash: hashA }
       saves.push(payload)
       if (conflict) {
         throw {
@@ -44,14 +44,14 @@ test("conflicts preserve the base hash until the user accepts the disk version",
     }
   })
 
-  await adapter.openDeck("deck-1")
-  await assert.rejects(adapter.saveSource("deck-1", "# local"), error => error.code === "conflict")
+  await adapter.openWorkFolder("work-1")
+  await assert.rejects(adapter.saveSource("work-1", "# local"), error => error.code === "conflict")
   assert.equal(conflicts[0].source, "# local")
   assert.equal(saves[0].baseHash, hashA)
 
   conflict = false
-  adapter.acceptDiskVersion("deck-1", hashB)
-  await adapter.saveSource("deck-1", "# keep local")
+  adapter.acceptDiskVersion("work-1", hashB)
+  await adapter.saveSource("work-1", "# keep local")
   assert.equal(saves[1].baseHash, hashB)
 })
 
@@ -60,11 +60,11 @@ test("first-open manifest creation and UUID repair save with the returned identi
     const calls = []
     const adapter = createTransportAdapter({ invoke: async (command, payload) => {
       calls.push([command, payload])
-      if (command === "open_deck") return { id: "new-uuid", source: "old", content_hash: hashA }
+      if (command === "open_work_folder") return { id: "new-uuid", source: "old", content_hash: hashA }
       return { content_hash: hashB }
     } })
-    const deck = await adapter.openDeck(requested)
-    await adapter.saveSource(deck.id, "edited")
+    const workFolder = await adapter.openWorkFolder(requested)
+    await adapter.saveSource(workFolder.id, "edited")
     assert.deepEqual(calls[1], ["save_source", { id: "new-uuid", source: "edited", baseHash: hashA }])
     await assert.rejects(adapter.saveSource(requested, "stale"), error => error.code === "not_found")
   }
@@ -72,32 +72,32 @@ test("first-open manifest creation and UUID repair save with the returned identi
 
 test("quiet-save transport drains watcher events and snapshots either side", async () => {
   const calls = []
-  const events = [{ deck_id: "deck-1", kind: "SourceChanged" }]
+  const events = [{ work_id: "work-1", kind: "SourceChanged" }]
   const adapter = createTransportAdapter({ invoke: async (command, payload) => {
     calls.push([command, payload])
     if (command === "poll_file_events") return events
     return { id: "snap-1" }
   } })
   assert.deepEqual(await adapter.pollFileEvents(), events)
-  await adapter.takeSnapshot("deck-1", "pre-merge", "local")
-  await adapter.takeSnapshot("deck-1", "external-change")
+  await adapter.takeSnapshot("work-1", "pre-merge", "local")
+  await adapter.takeSnapshot("work-1", "external-change")
   assert.deepEqual(calls, [
     ["poll_file_events", {}],
-    ["take_snapshot", { id: "deck-1", reason: "pre-merge", source: "local" }],
-    ["take_snapshot", { id: "deck-1", reason: "external-change", source: null }]
+    ["take_snapshot", { id: "work-1", reason: "pre-merge", source: "local" }],
+    ["take_snapshot", { id: "work-1", reason: "external-change", source: null }]
   ])
 })
 
 test("quiet-save transport normalizes merge outcomes and rejects unknown shapes", async () => {
   let outcome = { Merged: "ONE\nTWO\n" }
   const adapter = createTransportAdapter({ invoke: async () => outcome })
-  assert.deepEqual(await adapter.mergeExternalChange("deck-1", "local"), { kind: "merged", source: "ONE\nTWO\n" })
+  assert.deepEqual(await adapter.mergeExternalChange("work-1", "local"), { kind: "merged", source: "ONE\nTWO\n" })
   outcome = "Overlap"
-  assert.deepEqual(await adapter.mergeExternalChange("deck-1", "local"), { kind: "overlap" })
+  assert.deepEqual(await adapter.mergeExternalChange("work-1", "local"), { kind: "overlap" })
   outcome = "Suspicious"
-  assert.deepEqual(await adapter.mergeExternalChange("deck-1", "local"), { kind: "suspicious" })
+  assert.deepEqual(await adapter.mergeExternalChange("work-1", "local"), { kind: "suspicious" })
   outcome = { Merged: 42 }
-  await assert.rejects(adapter.mergeExternalChange("deck-1", "local"), error => error.code === "invalid_response")
+  await assert.rejects(adapter.mergeExternalChange("work-1", "local"), error => error.code === "invalid_response")
   outcome = null
-  await assert.rejects(adapter.mergeExternalChange("deck-1", "local"), error => error.code === "invalid_response")
+  await assert.rejects(adapter.mergeExternalChange("work-1", "local"), error => error.code === "invalid_response")
 })

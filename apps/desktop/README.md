@@ -17,7 +17,7 @@ These commands run from apps/desktop/frontend. The configured Tauri dev and prod
 
 ## Structure
 
-- src-tauri builds on the shared crates/local-store core for Tauri-independent deck and archive operations.
+- src-tauri builds on the shared crates/local-store core for Tauri-independent work folder and archive operations.
 - src-tauri: native command boundary, capabilities, menus, lifecycle, and updater integration.
 - frontend/src: Tauri bootstrap and native transport adapters.
 - e2e: shared Playwright web and WebdriverIO desktop scenarios.

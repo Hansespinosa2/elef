@@ -1,12 +1,12 @@
 export function createFileLibraryTransport({ invoke }) {
   return {
     getLibraryStatus: () => invoke("get_library_status"),
-    listDecks: () => invoke("list_decks"),
+    listWorkFolders: () => invoke("list_work_folders"),
     chooseLibraryRoot: () => invoke("choose_library_root"),
-    createDeck: (name, kind) => invoke("create_deck", { name, kind }),
-    renameDeck: (id, name) => invoke("rename_deck", { id, name }),
-    deleteDeck: id => invoke("delete_deck", { id }),
-    readSourcePreview: id => invoke("read_deck_preview", { id }),
+    createWorkFolder: (name, kind) => invoke("create_work_folder", { name, kind }),
+    renameWorkFolder: (id, name) => invoke("rename_work_folder", { id, name }),
+    deleteWorkFolder: id => invoke("delete_work_folder", { id }),
+    readSourcePreview: id => invoke("read_work_folder_preview", { id }),
     readDocumentGraph: () => invoke("document_graph"),
     readAuthoringRegistries: () => invoke("read_authoring_registries"),
     writeAuthoringRegistry: payload => invoke("write_authoring_registry", payload),

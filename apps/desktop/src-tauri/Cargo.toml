@@ -1,7 +1,7 @@
 [package]
 name = "elef-desktop"
 version = "0.1.0"
-description = "Offline-first desktop authoring for Elef decks"
+description = "Offline-first desktop authoring for Elef works"
 authors = ["Elef"]
 edition = "2024"
 publish = false

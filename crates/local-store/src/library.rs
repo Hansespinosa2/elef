@@ -8,10 +8,10 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 
-use crate::work_folders::{name_warnings, normalized_name};
 use crate::io::{file_name, system_time_ms};
 use crate::types::{CoreError, WorkFolderRecord, WorkFolderSummary};
 use crate::watch::WatchState;
+use crate::work_folders::{name_warnings, normalized_name};
 
 pub struct Library {
     pub(crate) root: PathBuf,
@@ -49,7 +49,10 @@ impl Library {
     }
 
     pub(crate) fn refresh_record(&self, record: WorkFolderRecord) {
-        let mut records = self.records.write().expect("work folder index lock poisoned");
+        let mut records = self
+            .records
+            .write()
+            .expect("work folder index lock poisoned");
         records.retain(|_, existing| existing.path != record.path);
         records.insert(record.id.clone(), record);
     }

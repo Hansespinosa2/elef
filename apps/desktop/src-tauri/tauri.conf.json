@@ -35,20 +35,20 @@
     "fileAssociations": [
       {
         "ext": ["elef"],
-        "name": "Elef deck",
-        "description": "Portable Elef deck archive",
+        "name": "Elef Work",
+        "description": "Portable Elef Work archive",
         "role": "Editor",
         "rank": "Owner",
-        "mimeType": "application/vnd.elef.deck",
+        "mimeType": "application/vnd.elef.work",
         "exportedType": {
-          "identifier": "com.elef.deck",
+          "identifier": "com.elef.work",
           "conformsTo": ["public.zip-archive"]
         }
       }
     ],
     "category": "Productivity",
     "shortDescription": "Write notes and presentations in Elef",
-    "longDescription": "An offline-first desktop editor for plain-folder Elef decks."
+    "longDescription": "An offline-first desktop editor for plain-folder Elef works."
   },
   "plugins": {
     "updater": {

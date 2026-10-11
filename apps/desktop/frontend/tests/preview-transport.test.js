@@ -5,7 +5,7 @@ import { createPreviewFetch } from "../src/preview-transport.js"
 test("preview transport awaits source-aware document context before rendering", async () => {
   const source = "See [[E2E linked]]."
   const documentNodes = [{ id: "linked-id", title: "E2E linked" }]
-  const renderedPreview = { html: "<p>See <a href=\"#deck/linked-id\">E2E linked</a>.</p>" }
+  const renderedPreview = { html: "<p>See <a href=\"#work/linked-id\">E2E linked</a>.</p>" }
   let contextSource = null
   let renderInput = null
   const previewFetch = createPreviewFetch({
@@ -24,7 +24,7 @@ test("preview transport awaits source-aware document context before rendering", 
   const body = new FormData()
   body.set("presentation[source]", source)
 
-  const response = await previewFetch("elef-preview://localhost/deck-id", { method: "POST", body })
+  const response = await previewFetch("elef-preview://localhost/work-id", { method: "POST", body })
 
   assert.equal(response.status, 200)
   assert.ok(response instanceof Response)

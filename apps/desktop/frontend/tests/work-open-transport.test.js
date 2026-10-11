@@ -11,14 +11,14 @@ const deferred = () => {
   return { promise, resolve }
 }
 
-test("same-deck reopen rereads edits saved while its earlier snapshot was pending", async () => {
+test("same-work reopen rereads edits saved while its earlier snapshot was pending", async () => {
   const reading = deferred()
   let disk = { id: "A", source: "original", content_hash: hashA }
   let source = disk.source
   let reads = 0
   const saves = []
   const adapter = createTransportAdapter({ invoke: async (command, args) => {
-    if (command === "open_deck") {
+    if (command === "open_work_folder") {
       if (++reads === 2) return reading.promise
       return { ...disk }
     }
@@ -27,10 +27,10 @@ test("same-deck reopen rereads edits saved while its earlier snapshot was pendin
     disk = { ...disk, source: args.source, content_hash: hashB }
     return { content_hash: hashB }
   } })
-  await adapter.openDeck("A")
+  await adapter.openWorkFolder("A")
   let baseline = source
   const opening = prepareDeckOpen("A", {
-    read: id => adapter.readDeck(id), prepare: async () => ({}),
+    read: id => adapter.readWorkFolder(id), prepare: async () => ({}),
     isDirty: () => source !== baseline,
     flushSave: async () => { await adapter.saveSource("A", source); baseline = source; return true }
   })
@@ -43,22 +43,22 @@ test("same-deck reopen rereads edits saved while its earlier snapshot was pendin
   assert.deepEqual(saves, [{ id: "A", source, baseHash: hashA }])
 })
 
-test("a same-deck read never authorizes overwriting an external version while local edits are pending", async () => {
+test("a same-work read never authorizes overwriting an external version while local edits are pending", async () => {
   const reading = deferred()
   let reads = 0
   let local = "original"
   const disk = { id: "A", source: "external", content_hash: hashB }
   const saves = []
   const adapter = createTransportAdapter({ invoke: async (command, args) => {
-    if (command === "open_deck") return ++reads === 1
+    if (command === "open_work_folder") return ++reads === 1
       ? { id: "A", source: "original", content_hash: hashA } : reading.promise
     saves.push(args)
     if (args.baseHash !== disk.content_hash) throw { code: "conflict" }
     assert.fail("An external version must not be overwritten")
   } })
-  await adapter.openDeck("A")
+  await adapter.openWorkFolder("A")
   const opening = prepareDeckOpen("A", {
-    read: id => adapter.readDeck(id), prepare: async () => ({}), isDirty: () => local !== "original",
+    read: id => adapter.readWorkFolder(id), prepare: async () => ({}), isDirty: () => local !== "original",
     flushSave: async () => {
       try { await adapter.saveSource("A", local); return true }
       catch (error) { assert.equal(error.code, "conflict"); return false }
@@ -72,7 +72,7 @@ test("a same-deck read never authorizes overwriting an external version while lo
   assert.equal(local, "pending local edits")
 })
 
-test("typing during a new document's graph preparation saves to the old deck before activation", async () => {
+test("typing during a new document's graph preparation saves to the old work before activation", async () => {
   const graph = deferred()
   const disk = {
     A: { id: "A", source: "A original", content_hash: hashA },
@@ -83,16 +83,16 @@ test("typing during a new document's graph preparation saves to the old deck bef
   let baseline = local
   const saves = []
   const adapter = createTransportAdapter({ invoke: async (command, args) => {
-    if (command === "open_deck") return { ...disk[args.id] }
+    if (command === "open_work_folder") return { ...disk[args.id] }
     saves.push(args)
     assert.equal(args.id, "A")
     assert.equal(args.baseHash, hashA)
     disk.A.source = args.source
     return { content_hash: hashA }
   } })
-  await adapter.openDeck("A")
+  await adapter.openWorkFolder("A")
   const opening = prepareDeckOpen("B", {
-    read: id => adapter.readDeck(id), prepare: async () => { await graph.promise; return { titles: ["A", "B"] } },
+    read: id => adapter.readWorkFolder(id), prepare: async () => { await graph.promise; return { titles: ["A", "B"] } },
     isDirty: () => local !== baseline,
     flushSave: async () => { await adapter.saveSource(owner, local); baseline = local; return true }
   })
@@ -106,13 +106,13 @@ test("typing during a new document's graph preparation saves to the old deck bef
   assert.equal(saves.length, 1)
   assert.equal(owner, "A", "Preparation must not change save ownership")
   local = transition.deck.source
-  adapter.activateDeck(transition.deck)
+  adapter.activateWorkFolder(transition.deck)
   owner = transition.deck.id
   assert.equal(owner, "B")
   assert.equal(local, "B original")
 })
 
-test("same-deck autosave completing during preparation invalidates an earlier clean snapshot", async () => {
+test("same-work autosave completing during preparation invalidates an earlier clean snapshot", async () => {
   const graph = deferred()
   let disk = { id: "A", source: "old", content_hash: hashA }
   let revision = 0

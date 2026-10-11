@@ -28,7 +28,7 @@ export function createPreviewFetch({ renderer, getContext = () => ({}), fetchImp
         source,
         kind: context.kind || "presentation",
         title: context.title || "Untitled",
-        deckId: context.deckId || "",
+        workId: context.workId || "",
         mediaBaseUrl: context.mediaBaseUrl || "",
         documentNodes: context.documentNodes || []
       })

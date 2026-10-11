@@ -20,7 +20,7 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         ],
     )?;
 
-    let open_deck = MenuItem::with_id(app, "open-deck", "Open Deck…", true, Some("CmdOrCtrl+O"))?;
+    let open_work = MenuItem::with_id(app, "open-work", "Open Work…", true, Some("CmdOrCtrl+O"))?;
     let open_library =
         MenuItem::with_id(app, "choose-library", "Choose Library…", true, None::<&str>)?;
     let new_presentation = MenuItem::with_id(
@@ -32,7 +32,7 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     )?;
     let new_document = MenuItem::with_id(app, "new-document", "New Document", true, None::<&str>)?;
     let save = MenuItem::with_id(app, "save", "Save", true, Some("CmdOrCtrl+S"))?;
-    let export = MenuItem::with_id(app, "export-elef", "Export Deck…", true, None::<&str>)?;
+    let export = MenuItem::with_id(app, "export-elef", "Export Work…", true, None::<&str>)?;
     let import = MenuItem::with_id(app, "import-elef", "Import .elef…", true, None::<&str>)?;
     let print = MenuItem::with_id(app, "print", "Print…", true, Some("CmdOrCtrl+P"))?;
     let file_separator = PredefinedMenuItem::separator(app)?;
@@ -42,7 +42,7 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             "File",
             true,
             &[
-                &open_deck,
+                &open_work,
                 &open_library,
                 &new_presentation,
                 &new_document,
@@ -58,7 +58,7 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
             "File",
             true,
             &[
-                &open_deck,
+                &open_work,
                 &open_library,
                 &new_presentation,
                 &new_document,
@@ -95,7 +95,7 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     )?;
 
     let fullscreen = PredefinedMenuItem::fullscreen(app, None)?;
-    let show_library = MenuItem::with_id(app, "open-deck", "Show Library", true, None::<&str>)?;
+    let show_library = MenuItem::with_id(app, "open-work", "Show Library", true, None::<&str>)?;
     let refresh_library = MenuItem::with_id(
         app,
         "refresh-library",

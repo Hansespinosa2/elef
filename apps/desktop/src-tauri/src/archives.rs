@@ -18,7 +18,7 @@ async fn export_elef_impl(
     use_native_dialog: bool,
 ) -> Result<bool, CommandError> {
     let library = state.current_library()?;
-    let deck = library.deck_summary(&id)?;
+    let work_folder = library.work_folder_summary(&id)?;
     #[cfg(feature = "webdriver")]
     if !use_native_dialog && let Some(destination) = std::env::var_os("ELEF_E2E_EXPORT_PATH") {
         export_elef_to_path(&library, &id, PathBuf::from(destination))?;
@@ -29,9 +29,9 @@ async fn export_elef_impl(
     let Some(selection) = app
         .dialog()
         .file()
-        .set_title("Export Elef deck")
-        .set_file_name(format!("{}.elef", deck.name))
-        .add_filter("Elef deck", &["elef"])
+        .set_title("Export Elef Work")
+        .set_file_name(format!("{}.elef", work_folder.name))
+        .add_filter("Elef Work", &["elef"])
         .blocking_save_file()
     else {
         return Ok(false);
@@ -77,7 +77,7 @@ fn export_elef_to_path(
         Some(_) => {
             return Err(CommandError::new(
                 "invalid_input",
-                "The exported deck must use the .elef extension.",
+                "The exported Work must use the .elef extension.",
                 false,
             ));
         }
@@ -94,8 +94,8 @@ pub(crate) async fn import_elef(
     let Some(selection) = app
         .dialog()
         .file()
-        .set_title("Import Elef deck")
-        .add_filter("Elef deck", &["elef"])
+        .set_title("Import Elef Work")
+        .add_filter("Elef Work", &["elef"])
         .blocking_pick_file()
     else {
         return Ok(None);
@@ -216,7 +216,7 @@ pub(crate) async fn resolve_import_conflict(
             Ok(_) => {
                 return Err(CommandError::new(
                     "invalid_input",
-                    "The archive no longer conflicts with a deck in this library.",
+                    "The archive no longer conflicts with a Work in this library.",
                     false,
                 ));
             }
@@ -224,8 +224,8 @@ pub(crate) async fn resolve_import_conflict(
         };
         let confirmed = confirm_native_action(
             &app,
-            format!("Move “{preview}” to the system Trash and replace it with the imported deck?"),
-            "Replace existing deck",
+            format!("Move “{preview}” to the system Trash and replace it with the imported Work?"),
+            "Replace existing Work",
             MessageDialogKind::Warning,
         )
         .await?;
@@ -239,7 +239,7 @@ pub(crate) async fn resolve_import_conflict(
 
 fn write_elef_archive(
     library: &Library,
-    deck_id: &str,
+    work_id: &str,
     destination: &Path,
 ) -> Result<(), CommandError> {
     let parent = destination.parent().ok_or_else(|| {
@@ -265,7 +265,7 @@ fn write_elef_archive(
         .suffix(".tmp")
         .tempfile_in(&parent)
         .map_err(CoreError::Io)?;
-    library.export_elef(deck_id, &mut temporary)?;
+    library.export_elef(work_id, &mut temporary)?;
     temporary.as_file().sync_all().map_err(CoreError::Io)?;
     temporary
         .persist(&destination)
@@ -334,13 +334,13 @@ mod tests {
         let state = DesktopState::default();
         state.use_library(root).unwrap();
         let library = state.current_library().unwrap();
-        let deck = library.create_deck("Transfer", "document").unwrap();
+        let work_folder = library.create_work_folder("Transfer", "document").unwrap();
         let mut archive = Cursor::new(Vec::new());
-        library.export_elef(&deck.id, &mut archive).unwrap();
+        library.export_elef(&work_folder.id, &mut archive).unwrap();
         let bytes = archive.into_inner();
         assert!(!bytes.is_empty());
 
-        // The deck is still present, so the byte import conflicts and the
+        // The work folder is still present, so the byte import conflicts and the
         // staged archive becomes the pending import.
         let error = import_elef_bytes_impl(&state, &bytes).unwrap_err();
         assert_eq!(error.code, "import_conflict");
@@ -350,13 +350,13 @@ mod tests {
 
         // Resolving through the real completion path re-imports the staged
         // archive instead of failing on the deleted file, then cleans up.
-        // Byte imports carry no deck-name metadata, so keep_both mints a
+        // Byte imports carry no work-folder-name metadata, so keep_both mints a
         // fresh identity under the staged file's stem, not a name collision.
         let resolved = complete_pending_import(&library, &staged, ImportResolution::KeepBoth)
             .unwrap()
             .unwrap();
-        assert_ne!(resolved.deck.id, deck.id);
-        let reread = library.open_deck(&resolved.deck.id).unwrap();
+        assert_ne!(resolved.work_folder.id, work_folder.id);
+        let reread = library.open_work_folder(&resolved.work_folder.id).unwrap();
         assert!(reread.source.contains("# Transfer"));
         assert!(!staged.path.exists());
         assert!(take_pending_import(&state).is_none());

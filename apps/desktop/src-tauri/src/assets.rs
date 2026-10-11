@@ -149,8 +149,8 @@ pub(crate) fn upload_asset(
             .get(name)
             .and_then(|value| value.to_str().ok())
     };
-    let id = header_value("x-elef-deck-id").ok_or_else(|| {
-        CommandError::new("invalid_input", "Choose a deck before adding media.", false)
+    let id = header_value("x-elef-work-id").ok_or_else(|| {
+        CommandError::new("invalid_input", "Choose a Work before adding media.", false)
     })?;
     let filename = header_value("x-elef-filename").unwrap_or("image");
     let media_type = header_value("x-elef-declared-media-type").unwrap_or("");
@@ -192,24 +192,24 @@ mod tests {
     fn asset_protocol_accepts_digest_and_scoped_relative_asset_paths() {
         let digest = "a".repeat(64);
         assert_eq!(
-            parse_asset_protocol_path(&format!("/deck-id/{digest}")),
+            parse_asset_protocol_path(&format!("/work-id/{digest}")),
             Some(AssetProtocolPath {
-                id: "deck-id".into(),
+                id: "work-id".into(),
                 source: AssetProtocolSource::Digest(digest.clone())
             })
         );
         assert_eq!(
-            parse_asset_protocol_path(&format!("/deck-id/{digest}/extra")),
+            parse_asset_protocol_path(&format!("/work-id/{digest}/extra")),
             None
         );
-        assert_eq!(parse_asset_protocol_path("/deck-id/%2e%2e"), None);
+        assert_eq!(parse_asset_protocol_path("/work-id/%2e%2e"), None);
         assert_eq!(parse_asset_protocol_path("//digest"), None);
         assert_eq!(
-            parse_asset_protocol_path("/deck-id/path/images/%2e%2e/file.png"),
+            parse_asset_protocol_path("/work-id/path/images/%2e%2e/file.png"),
             None
         );
         assert_eq!(
-            parse_asset_protocol_path("/deck-id/path/images/%2Fetc/passwd"),
+            parse_asset_protocol_path("/work-id/path/images/%2Fetc/passwd"),
             None
         );
         assert_eq!(

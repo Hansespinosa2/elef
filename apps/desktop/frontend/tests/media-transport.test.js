@@ -1,16 +1,16 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { createMediaFetch, mediaUrlsForDeck } from "../src/media-transport.js"
+import { createMediaFetch, mediaUrlsForWorkFolder } from "../src/media-transport.js"
 
-const deckId = "550e8400-e29b-41d4-a716-446655440000"
+const workFolderId = "550e8400-e29b-41d4-a716-446655440000"
 
-test("desktop media URLs are owned by the native adapter and scoped to one deck", () => {
-  assert.deepEqual(mediaUrlsForDeck({ id: deckId }), {
-    previewUrl: `elef-preview://localhost/${deckId}`,
-    uploadUrl: `elef-upload://localhost/${deckId}`,
-    assetBaseUrl: `elefasset://localhost/${deckId}`
+test("desktop media URLs are owned by the native adapter and scoped to one work folder", () => {
+  assert.deepEqual(mediaUrlsForWorkFolder({ id: workFolderId }), {
+    previewUrl: `elef-preview://localhost/${workFolderId}`,
+    uploadUrl: `elef-upload://localhost/${workFolderId}`,
+    assetBaseUrl: `elefasset://localhost/${workFolderId}`
   })
-  assert.throws(() => mediaUrlsForDeck({ id: "" }), /deck id is required/)
+  assert.throws(() => mediaUrlsForWorkFolder({ id: "" }), /work folder id is required/)
 })
 
 test("media fetch sends file bytes as a raw IPC body and preserves the Rails JSON result", async () => {
@@ -27,7 +27,7 @@ test("media fetch sends file bytes as a raw IPC body and preserves the Rails JSO
   body.append("file", new Blob([pngHeader], { type: "image/png" }), "diagram.png")
   body.append("fit", "cover")
 
-  const response = await fetch(`elef-upload://localhost/${deckId}`, { method: "POST", body })
+  const response = await fetch(`elef-upload://localhost/${workFolderId}`, { method: "POST", body })
   assert.equal(response.status, 201)
   assert.deepEqual(await response.json(), {
     digest: "a".repeat(64),
@@ -37,7 +37,7 @@ test("media fetch sends file bytes as a raw IPC body and preserves the Rails JSO
   assert.equal(calls.length, 1)
   assert.ok(calls[0][1] instanceof Uint8Array)
   assert.deepEqual([...calls[0][1]], [...pngHeader])
-  assert.equal(calls[0][2].headers["x-elef-deck-id"], deckId)
+  assert.equal(calls[0][2].headers["x-elef-work-id"], workFolderId)
   assert.equal(calls[0][2].headers["x-elef-declared-media-type"], "image/png")
   assert.equal(calls[0][2].headers["x-elef-filename"], "diagram.png")
   assert.equal(calls[0][2].headers["x-elef-fit"], "cover")
@@ -53,7 +53,7 @@ test("media fetch rejects missing uploads and leaves unrelated requests untouche
     }
   })
 
-  const invalid = await fetch(`elef-upload://localhost/${deckId}`, { method: "POST", body: new FormData() })
+  const invalid = await fetch(`elef-upload://localhost/${workFolderId}`, { method: "POST", body: new FormData() })
   assert.equal(invalid.status, 400)
   assert.equal(networkCalls, 0)
   assert.equal(await (await fetch("https://example.invalid/")).text(), "ok")

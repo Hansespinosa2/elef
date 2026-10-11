@@ -196,7 +196,8 @@ mod tests {
     #[test]
     fn save_conflicts_if_external_files_change_the_selected_source_file() {
         let (temp, library) = library();
-        let work_folder = write_work_folder(temp.path(), "Source Race", &[("talk.md", "old source")]);
+        let work_folder =
+            write_work_folder(temp.path(), "Source Race", &[("talk.md", "old source")]);
         let id = path_id(&work_folder.canonicalize().unwrap());
         library.list_work_folders().unwrap();
         let opened = library.open_work_folder(&id).unwrap();
@@ -260,7 +261,12 @@ mod tests {
             return;
         };
         let library = Library::open(root).unwrap();
-        let work_folder = library.list_work_folders().unwrap().into_iter().next().unwrap();
+        let work_folder = library
+            .list_work_folders()
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
         let opened = library.open_work_folder(&work_folder.id).unwrap();
         let new_source = "# New source\n".repeat(4096);
         library
@@ -352,7 +358,12 @@ mod tests {
             return;
         }
         let library = Library::open(&root).unwrap();
-        let work_folder = library.list_work_folders().unwrap().into_iter().next().unwrap();
+        let work_folder = library
+            .list_work_folders()
+            .unwrap()
+            .into_iter()
+            .next()
+            .unwrap();
         let opened = library.open_work_folder(&work_folder.id).unwrap();
         let source_path = PathBuf::from(&root)
             .join("Crash fixture")
@@ -492,7 +503,9 @@ mod tests {
     #[test]
     fn merge_entry_tracks_open_save_and_missing_ancestor_lifecycle() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Merge Entry", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Merge Entry", "document")
+            .unwrap();
         let id = work_folder.id.clone();
         let ancestor_of = |library: &Library| {
             library
@@ -539,7 +552,9 @@ mod tests {
     #[test]
     fn merge_entry_without_ancestor_takes_the_conflict_path() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("No Ancestor", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("No Ancestor", "document")
+            .unwrap();
         // Fresh discovery has no in-memory ancestor until the work folder is opened.
         library.list_work_folders().unwrap();
         assert_eq!(
@@ -553,7 +568,9 @@ mod tests {
     #[test]
     fn merge_entry_refuses_non_utf8_disk_bytes() {
         let (_temp, library) = library();
-        let work_folder = library.create_work_folder("Binary Disk", "document").unwrap();
+        let work_folder = library
+            .create_work_folder("Binary Disk", "document")
+            .unwrap();
         library.open_work_folder(&work_folder.id).unwrap();
         let record_path = library.root().join("Binary Disk").join("document.md");
         fs::write(&record_path, [0xff, 0xfe, 0x00]).unwrap();

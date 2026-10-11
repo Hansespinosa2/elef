@@ -1,8 +1,8 @@
 const MAX_MEDIA_BYTES = 50 * 1024 * 1024
 
-export function mediaUrlsForDeck(deck) {
-  const id = encodeURIComponent(typeof deck === "string" ? deck : deck?.id || "")
-  if (!id) throw new TypeError("A deck id is required to build media URLs.")
+export function mediaUrlsForWorkFolder(workFolder) {
+  const id = encodeURIComponent(typeof workFolder === "string" ? workFolder : workFolder?.id || "")
+  if (!id) throw new TypeError("A work folder id is required to build media URLs.")
   return {
     previewUrl: `elef-preview://localhost/${id}`,
     uploadUrl: `elef-upload://localhost/${id}`,
@@ -28,14 +28,14 @@ export function createMediaFetch({ invoke, fetchImpl = globalThis.fetch.bind(glo
     if (file.size === 0 || file.size > MAX_MEDIA_BYTES) {
       return jsonResponse({ error: "Media files must be between 1 byte and 50 MB." }, 413)
     }
-    const deckPath = url.pathname.slice(1).split("/")
-    let deckId
+    const workFolderPath = url.pathname.slice(1).split("/")
+    let workFolderId
     try {
-      deckId = decodeURIComponent(deckPath[0])
+      workFolderId = decodeURIComponent(workFolderPath[0])
     } catch (_error) {
       return jsonResponse({ error: "The media upload destination is invalid." }, 400)
     }
-    if (url.hostname !== "localhost" || deckPath.length !== 1 || !deckId || deckId.includes("/")) {
+    if (url.hostname !== "localhost" || workFolderPath.length !== 1 || !workFolderId || workFolderId.includes("/")) {
       return jsonResponse({ error: "The media upload destination is invalid." }, 400)
     }
 
@@ -46,7 +46,7 @@ export function createMediaFetch({ invoke, fetchImpl = globalThis.fetch.bind(glo
           // Tauri assigns content-type to raw IPC bodies. Carry the browser's
           // hint separately and let Rust verify it against the file signature.
           "x-elef-declared-media-type": file.type || "application/octet-stream",
-          "x-elef-deck-id": deckId,
+          "x-elef-work-id": workFolderId,
           "x-elef-filename": file.name || "image",
           "x-elef-fit": init.body.get("fit") || "contain"
         }

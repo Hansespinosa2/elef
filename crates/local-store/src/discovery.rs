@@ -5,11 +5,11 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::work_folders::normalized_name;
 use crate::io::{read_regular_file, sha256};
 use crate::library::Library;
 use crate::manifest::{manifest_notices, read_manifest};
-use crate::types::{CoreError, WorkFolderRecord, WorkFolderSummary, DocumentGraphDocument};
+use crate::types::{CoreError, DocumentGraphDocument, WorkFolderRecord, WorkFolderSummary};
+use crate::work_folders::normalized_name;
 
 pub(crate) fn choose_source_file(work_folder_path: &Path) -> Result<Option<String>, CoreError> {
     let mut candidates = fs::read_dir(work_folder_path)?
@@ -79,7 +79,10 @@ impl Library {
                 work_folder.path.clone(),
             )
         });
-        *self.records.write().expect("work folder index lock poisoned") = records;
+        *self
+            .records
+            .write()
+            .expect("work folder index lock poisoned") = records;
         Ok(summaries)
     }
 
@@ -123,7 +126,9 @@ impl Library {
         Err(CoreError::InvalidInput)
     }
 
-    pub(crate) fn discover_work_folders(&self) -> Result<HashMap<String, WorkFolderRecord>, CoreError> {
+    pub(crate) fn discover_work_folders(
+        &self,
+    ) -> Result<HashMap<String, WorkFolderRecord>, CoreError> {
         let mut directories = fs::read_dir(&self.root)?
             .filter_map(Result::ok)
             .filter_map(|entry| {

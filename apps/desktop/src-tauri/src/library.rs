@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use local_store::{AuthoringRegistries, DeckSummary, Library, LibraryConfig};
+use local_store::{AuthoringRegistries, Library, LibraryConfig, WorkFolderSummary};
 use serde::Serialize;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_dialog::DialogExt;
@@ -12,7 +12,7 @@ use crate::state::DesktopState;
 #[derive(Debug, Serialize)]
 pub(crate) struct LibraryStatus {
     root: String,
-    decks: Vec<DeckSummary>,
+    work_folders: Vec<WorkFolderSummary>,
     config: LibraryConfig,
     config_notice: Option<String>,
 }
@@ -30,7 +30,7 @@ pub(crate) fn library_status(
     };
     Ok(LibraryStatus {
         root: root.to_string_lossy().into_owned(),
-        decks: library.list_decks()?,
+        work_folders: library.list_work_folders()?,
         config,
         config_notice,
     })

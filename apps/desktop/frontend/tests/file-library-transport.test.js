@@ -14,18 +14,18 @@ test("the file library transport keeps native command names and payloads at the 
   })
 
   await transport.getLibraryStatus()
-  await transport.listDecks()
+  await transport.listWorkFolders()
   await transport.chooseLibraryRoot()
-  await transport.createDeck("Notes", "document")
-  await transport.renameDeck("deck-id", "Renamed")
-  await transport.deleteDeck("deck-id")
-  await transport.readSourcePreview("deck-id")
+  await transport.createWorkFolder("Notes", "document")
+  await transport.renameWorkFolder("work-id", "Renamed")
+  await transport.deleteWorkFolder("work-id")
+  await transport.readSourcePreview("work-id")
   await transport.readDocumentGraph()
   await transport.readAuthoringRegistries()
   await transport.writeAuthoringRegistry({ registry: "snippets", entries: [] })
   await transport.readLibraryConfig()
   await transport.writeLibraryConfig({ theme: "light" })
-  await transport.exportElef("deck-id")
+  await transport.exportElef("work-id")
   await transport.importElef()
   await transport.importOpenedElef()
   await transport.resolveImportConflict("keep_both")
@@ -34,18 +34,18 @@ test("the file library transport keeps native command names and payloads at the 
 
   assert.deepEqual(calls, [
     ["get_library_status", undefined],
-    ["list_decks", undefined],
+    ["list_work_folders", undefined],
     ["choose_library_root", undefined],
-    ["create_deck", { name: "Notes", kind: "document" }],
-    ["rename_deck", { id: "deck-id", name: "Renamed" }],
-    ["delete_deck", { id: "deck-id" }],
-    ["read_deck_preview", { id: "deck-id" }],
+    ["create_work_folder", { name: "Notes", kind: "document" }],
+    ["rename_work_folder", { id: "work-id", name: "Renamed" }],
+    ["delete_work_folder", { id: "work-id" }],
+    ["read_work_folder_preview", { id: "work-id" }],
     ["document_graph", undefined],
     ["read_authoring_registries", undefined],
     ["write_authoring_registry", { registry: "snippets", entries: [] }],
     ["read_library_config", undefined],
     ["write_library_config", { config: { theme: "light" } }],
-    ["export_elef", { id: "deck-id" }],
+    ["export_elef", { id: "work-id" }],
     ["import_elef", undefined],
     ["import_opened_elef", undefined],
     ["resolve_import_conflict", { resolution: "keep_both" }],
