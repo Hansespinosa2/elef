@@ -31,6 +31,10 @@ npm run tauri:dev --prefix apps/desktop/frontend
 
 The Tauri configuration runs the shared frontend build before dev and production launches. After changing shared frontend sources, the running desktop app must be relaunched to load the rebuilt bundle.
 
+## Testing built desktop artifacts
+
+Built artifacts install without the dev harness. On Linux, make the AppImage executable and launch it; if FUSE is unavailable, install the distribution's FUSE 2 compatibility package (`fuse2` on Arch) or fall back to `./Elef.AppImage --appimage-extract-and-run`. On macOS, the unsigned test build trips Gatekeeper on first launch; use the per-app Open Anyway exception in System Settings → Privacy & Security only for a build from a trusted source. If macOS reports the app damaged or containing malware, stop and rebuild rather than excepting it.
+
 ## Check tiers
 
 `bin/check` is the canonical entry point. Tiers nest: each tier runs everything below it plus its own scope.

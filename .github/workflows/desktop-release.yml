@@ -48,7 +48,7 @@ jobs:
           releaseBody: |
             Updater downloads are signed and verified by Elef before installation.
 
-            [Install and use Elef Desktop](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/desktop/install-and-use.md)
+            [Install and test this build](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/development.md#testing-built-desktop-artifacts)
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true
@@ -98,7 +98,7 @@ jobs:
           releaseBody: |
             Updater downloads are signed and verified by Elef before installation.
 
-            [Install and use Elef Desktop](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/desktop/install-and-use.md)
+            [Install and test this build](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/development.md#testing-built-desktop-artifacts)
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: true

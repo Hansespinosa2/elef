@@ -22,7 +22,7 @@ Capability keys come from the `HostCapabilities` interface
 - Capability: `updater`.
 - Concrete reason: the desktop ships a signed self-update channel through the
   Tauri updater plugin against GitHub Releases
-  (`docs/desktop/adr/009-distribution-and-update-channel.md`); the web app is
+  (`docs/desktop/adr/002-tauri-shell.md`); the web app is
   deployed server-side, so no client updater exists or is needed.
 - Supported side: desktop settings show the updater affordance and the native
   updater verification flow runs

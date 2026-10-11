@@ -291,7 +291,7 @@ assert directives.get("style-src") == ["'self'", "'unsafe-inline'"], (
 )
 assert directives.get("style-src-attr") == ["'unsafe-inline'"], "allow inline geometry and formula styles used by CodeMirror and KaTeX"
 assert "CodeMirror 6's `style-mod` inserts its base and theme rules in a `<style>` element" in (
-    REPO_ROOT / "docs/desktop/security.md"
+    REPO_ROOT / "docs/desktop/data-format.md"
 ).read_text(), (
     "document why desktop CSP permits inline style elements"
 )

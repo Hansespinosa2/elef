@@ -4,7 +4,7 @@ This directory contains the Tauri shell and file-backed runtime. Shared product 
 
 ## Local use
 
-For installation and everyday use, see [Install and use Elef Desktop](../../docs/desktop/install-and-use.md).
+For setup, artifact testing, and checks, see the [development guide](../../docs/development.md).
 
 ~~~sh
 npm ci

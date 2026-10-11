@@ -12,7 +12,7 @@ Each fact has exactly one home; everything else links to it.
 | product principles / owner intent | `ELEF-DOCTRINE.md` |
 | boundaries, ownership, contracts, change-routing examples | `docs/architecture.md` |
 | setup, validation tiers, feature/bug workflow, commands | `docs/development.md` |
-| domain runbooks (desktop, deployment, media/printing) | `docs/desktop/**`, `docs/mac-mini-deployment.md`, `docs/presentation-media-and-printing.md` |
+| domain runbooks (desktop, deployment, media/printing) | `docs/desktop/data-format.md` (formats + trust boundary), `docs/desktop/feature-flags.md`, `docs/desktop/adr/`, `docs/mac-mini-deployment.md`, `docs/presentation-media-and-printing.md` |
 | `:::step` reveal semantics | `apps/web/test/fixtures/slide-reveals/parity-cases.json` + `slide_reveals` / `presentation_reveals_baseline` / `presentation_navigation` suites (tests are the spec) |
 | `:::align` / `:::position` grammar | `packages/work-model/src/slide_position_layout.ts` header + `packages/work-model/test/fixtures/align_grammar.json` (machine-read corpus) |
 | `:::art` syntax | `packages/work-model/src/art_source.ts` header; behavior pinned by `art_contract` + the `art_*` suites, not prose |

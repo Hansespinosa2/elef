@@ -13,7 +13,6 @@ Elef is a Markdown authoring and presentation application with a Rails web app a
 - [Product principles](ELEF-DOCTRINE.md)
 - [Architecture and code map](docs/architecture.md)
 - [Development and testing](docs/development.md)
-- [Install and use Elef Desktop](docs/desktop/install-and-use.md)
 - [Presentation media and printing](docs/presentation-media-and-printing.md)
 - [Mac mini deployment runbook](docs/mac-mini-deployment.md)
 

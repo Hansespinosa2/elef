@@ -1,3 +1,18 @@
+// Desktop integration boundary: the shared application (packages/client,
+// editor-runtime) never calls raw Tauri invoke() or names Rust commands.
+// This adapter maps work-folder open, save, snapshot, and merge operations
+// to named commands; library listing and CRUD live in
+// file-library-transport.js, media URL schemes in media-transport.js,
+// preview rendering in a local web worker with no Rust round trip, and the
+// desktop entry point injects these services at boot. Failures cross as
+// typed errors with a stable code and user-safe message, mapped to fetch
+// response shapes; raw
+// OS errors are never shown. Saves carry the base_hash captured at load or
+// the last successful write; a mismatch returns a conflict and preserves
+// the local buffer, and a successful write updates the base hash (protocol:
+// ADR-008). Desktop frontend edits belong here only for native transport,
+// lifecycle, window, media, close, or updater integration; anything
+// host-neutral belongs in packages/client (pure semantics in work-model).
 export function createTransportAdapter({ invoke, onConflict = () => {} }) {
   const baseHashes = new Map()
 

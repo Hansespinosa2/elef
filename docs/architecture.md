@@ -135,8 +135,8 @@ Ask "which row owns the state or behavior?" and put the change there; add a host
 
 - Work folder layout, source selection, manifests, library settings, and archive contents: [desktop data format](desktop/data-format.md).
 - Persisted-format version rules and archive layout: [desktop data format](desktop/data-format.md); work manifest schema with frozen fixtures: [spec/](../spec/work-manifest.schema.json).
-- Desktop request-to-command mapping and host adapters: [desktop transport](desktop/transport-adapter.md).
-- Tauri capabilities, content security policy, path handling, and untrusted content: [desktop security](desktop/security.md).
+- Desktop request-to-command mapping and host adapters: [transport adapter](../apps/desktop/frontend/src/transport-adapter.js) (boundary rules in its header comment).
+- Tauri capabilities, content security policy, path handling, and untrusted content: [desktop data format](desktop/data-format.md#trust-boundary).
 - Architecture decisions and their status: [desktop ADR index](desktop/adr/README.md).
 - Product principles: [Elef Doctrine](../ELEF-DOCTRINE.md).
 

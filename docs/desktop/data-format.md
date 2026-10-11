@@ -97,7 +97,34 @@ The library-level .elef directory stores portable configuration and authoring re
 
 Names are compared after Unicode normalization and case folding. Cross-platform-incompatible names produce a warning; desktop preserves the original spelling.
 
-See [security.md](security.md) for path containment and archive validation details.
+## Trust boundary
+
+Works, Markdown, media, and .elef archives are untrusted input. The webview has access to a small native command surface, so sanitization is one layer rather than the trust boundary. Folder discovery, archive validation, and the rules below are one contract: untrusted bytes enter only through validated paths.
+
+### Webview boundary
+
+The shipped policy is configured in apps/desktop/src-tauri/tauri.conf.json and checked by apps/desktop/scripts/check_architecture.py:
+
+- Scripts are self-only. The policy does not allow inline scripts or eval.
+- Frames are disabled; network connections are limited to Tauri IPC.
+- Remote images are blocked. Local app, asset, and elefasset protocols supply packaged and work-local media.
+- CodeMirror 6's `style-mod` inserts its base and theme rules in a `<style>` element, so the CSP permits inline style elements. Inline style attributes are also used for CodeMirror geometry and KaTeX formula layout. This is why style-src allows unsafe-inline; script-src remains self-only.
+
+The preview sanitizer validates rendered content before it reaches the DOM. Mermaid uses strict mode. The hostile-work workflow exercises representative script, event-handler, frame, unsafe-link, remote-fetch, and remote-media payloads against web and native paths. Passing that corpus does not prove that arbitrary malicious input is harmless.
+
+### Native commands and files
+
+- Tauri capabilities expose named commands, not generic filesystem or shell access. The capability list is checked against command registration and the desktop adapter.
+- Rust commands validate their inputs, resolve work identifiers through the selected library, canonicalize paths, and enforce containment within the library root.
+- Source writes use atomic replacement with fingerprint checks; the check-to-replacement window against an external writer remains a documented residual race and the editor displays that warning. See [ADR-008](adr/008-safe-writes-and-conflict-detection.md).
+- Archive import follows the [rejection rules](#archive-rejection-rules-normative) above: traversal paths, symlinks, and special files rejected, size and compression limits applied, staging before library entry.
+- The asset protocol is read-only and scoped to one work folder's images. Uploaded media is content-addressed and cannot overwrite another asset.
+
+### Updates and dependency checks
+
+Updater artifacts are signed and verified against the public key configured into the app. Release packaging and signing are in .github/workflows/desktop-release.yml. Dependency audit and native capability/CSP checks run in CI.
+
+For the decision record and verification limits, see [ADR-006](adr/006-security-model.md) and [development and testing](../development.md).
 
 ## Persisted-format version rules
 
