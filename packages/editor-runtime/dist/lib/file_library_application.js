@@ -37,7 +37,8 @@ function startFileLibraryApplication(platform) {
     desktopAuthoringRegistry,
     loadDesktopAuthoringRegistry,
     quietSavePolicy,
-    registerEditorRuntime
+    registerEditorRuntime,
+    recordBootstrapFailure
   } = platform;
   applyDesktopFeatureFlags(document);
   const renderer = createRendererClient();
@@ -987,6 +988,7 @@ function startFileLibraryApplication(platform) {
     if (action === "import-elef") return importWork();
     if (action === "settings") return showSettings();
     if (action === "check-for-updates") return checkForUpdates(true);
+    if (action === "export-diagnostics") return fileLibrary.exportDiagnostics();
     if (action === "about") return elements.aboutDialog.showModal();
     if (action === "start-presentation") return startPresentation();
     if (action === "print") return printCurrentWork();
@@ -1124,7 +1126,10 @@ function startFileLibraryApplication(platform) {
       }).catch(showError);
       startupUpdateCheck.schedule(1e4);
     }
-  }).catch(showError);
+  }).catch((error) => {
+    recordBootstrapFailure?.();
+    showError(error);
+  });
 }
 export {
   startFileLibraryApplication
