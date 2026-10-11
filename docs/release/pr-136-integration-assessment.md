@@ -104,7 +104,7 @@ This addendum supersedes the earlier PR-readiness, refactor-head, CI, and merge-
 
 Read-only fetch and GitHub API checks confirmed:
 
-- Release branch / PR #147: `5e45001cc2171febe199f55aea451067111f8418`, still open against `main` `41d89fa92a34274d1f2c155d7ae560d728c87fca`.
+- Release product-code head / PR #147: `5e45001cc2171febe199f55aea451067111f8418`, still open against `main` `41d89fa92a34274d1f2c155d7ae560d728c87fca` at that snapshot. The audit itself was committed as documentation-only `ca9593f147300f44ad68308816e9a863d17b8f30`; its exact-head hosted run was queued when STATUS was refreshed.
 - Refactor branch / PR #136: `18f00dab6f1abbb2106356752a57ae6eb2557a18`, still open and **draft**, based on current `dev` `769cc79028813d0d4fd0651952739d9008626847`. GitHub reports `CLEAN` and mergeable, but no review decision is recorded.
 - The refactor head is exactly 357 commits ahead of current `dev` (0 behind). Release and refactor share `2dc9ba70746ef94a03b1db1f258ead3da19c8f0b` and have 182 and 420 unique commits respectively. `main` has five commits not in `dev`; their trees differ across 143 paths. Thus a later PR retarget from the current main-based #147 can include main-only changes unrelated to the release.
 - All visible #136 CI and hygiene checks pass at exact head `18f00da` ([run 38111114425](https://github.com/Hansespinosa2/elef/actions/runs/38111114425)). That is strong implementation evidence, but does not resolve the design conflicts or replace the release constitution's merged-SHA Gate A.
