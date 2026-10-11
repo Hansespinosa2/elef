@@ -1,18 +1,18 @@
-//! Deck listing, summaries, and source-file selection.
+//! Work folder listing, summaries, and source-file selection.
 
 use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use crate::decks::normalized_name;
+use crate::work_folders::normalized_name;
 use crate::io::{read_regular_file, sha256};
 use crate::library::Library;
 use crate::manifest::{manifest_notices, read_manifest};
-use crate::types::{CoreError, DeckRecord, DeckSummary, DocumentGraphDocument};
+use crate::types::{CoreError, WorkFolderRecord, WorkFolderSummary, DocumentGraphDocument};
 
-pub(crate) fn choose_source_file(deck_path: &Path) -> Result<Option<String>, CoreError> {
-    let mut candidates = fs::read_dir(deck_path)?
+pub(crate) fn choose_source_file(work_folder_path: &Path) -> Result<Option<String>, CoreError> {
+    let mut candidates = fs::read_dir(work_folder_path)?
         .filter_map(Result::ok)
         .filter_map(|entry| {
             let file_type = entry.file_type().ok()?;
@@ -31,10 +31,10 @@ pub(crate) fn choose_source_file(deck_path: &Path) -> Result<Option<String>, Cor
 }
 
 pub(crate) fn source_file_for_write(
-    deck_path: &Path,
+    work_folder_path: &Path,
     previous_source_path: &Path,
 ) -> Result<String, CoreError> {
-    if let Some(source_file) = choose_source_file(deck_path)? {
+    if let Some(source_file) = choose_source_file(work_folder_path)? {
         return Ok(source_file);
     }
     if fs::symlink_metadata(previous_source_path)
@@ -66,33 +66,33 @@ pub(crate) fn path_id(path: &Path) -> String {
 }
 
 impl Library {
-    pub fn list_decks(&self) -> Result<Vec<DeckSummary>, CoreError> {
-        let records = self.discover_decks()?;
+    pub fn list_work_folders(&self) -> Result<Vec<WorkFolderSummary>, CoreError> {
+        let records = self.discover_work_folders()?;
         let mut summaries = records
             .values()
             .map(|record| self.summary(record))
             .collect::<Vec<_>>();
-        summaries.sort_by_key(|deck| {
+        summaries.sort_by_key(|work_folder| {
             (
-                normalized_name(&deck.name),
-                deck.path.to_lowercase(),
-                deck.path.clone(),
+                normalized_name(&work_folder.name),
+                work_folder.path.to_lowercase(),
+                work_folder.path.clone(),
             )
         });
-        *self.records.write().expect("deck index lock poisoned") = records;
+        *self.records.write().expect("work folder index lock poisoned") = records;
         Ok(summaries)
     }
 
     pub fn document_graph(&self) -> Result<Vec<DocumentGraphDocument>, CoreError> {
         let summaries = self
-            .list_decks()?
+            .list_work_folders()?
             .into_iter()
-            .filter(|deck| deck.kind == "document")
+            .filter(|work_folder| work_folder.kind == "document")
             .collect::<Vec<_>>();
         let mut documents = Vec::with_capacity(summaries.len());
         for summary in summaries {
             let record = self.record(&summary.id)?;
-            self.validate_deck_path(&record.path)?;
+            self.validate_work_folder_path(&record.path)?;
             let bytes = read_regular_file(&record.source_path)?;
             let source = String::from_utf8(bytes).map_err(|_| CoreError::InvalidInput)?;
             documents.push(DocumentGraphDocument {
@@ -104,13 +104,13 @@ impl Library {
         Ok(documents)
     }
 
-    pub fn deck_summary(&self, id: &str) -> Result<DeckSummary, CoreError> {
+    pub fn work_folder_summary(&self, id: &str) -> Result<WorkFolderSummary, CoreError> {
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         Ok(self.summary(&record))
     }
 
-    pub(crate) fn available_deck_name(&self, requested: &str) -> Result<String, CoreError> {
+    pub(crate) fn available_work_folder_name(&self, requested: &str) -> Result<String, CoreError> {
         if !self.name_collision_exists(requested)? {
             return Ok(requested.into());
         }
@@ -123,7 +123,7 @@ impl Library {
         Err(CoreError::InvalidInput)
     }
 
-    pub(crate) fn discover_decks(&self) -> Result<HashMap<String, DeckRecord>, CoreError> {
+    pub(crate) fn discover_work_folders(&self) -> Result<HashMap<String, WorkFolderRecord>, CoreError> {
         let mut directories = fs::read_dir(&self.root)?
             .filter_map(Result::ok)
             .filter_map(|entry| {
@@ -159,10 +159,10 @@ impl Library {
                 Ok(None) => (path_id(&canonical_path), Vec::new()),
                 Err(()) => (
                     path_id(&canonical_path),
-                    vec!["The deck manifest is invalid; its path is used as identity.".into()],
+                    vec!["The Work manifest is invalid; its path is used as identity.".into()],
                 ),
             };
-            records.push(DeckRecord {
+            records.push(WorkFolderRecord {
                 id,
                 path: canonical_path,
                 source_path,
@@ -174,7 +174,7 @@ impl Library {
             });
         }
 
-        let mut groups: BTreeMap<String, Vec<DeckRecord>> = BTreeMap::new();
+        let mut groups: BTreeMap<String, Vec<WorkFolderRecord>> = BTreeMap::new();
         for record in records {
             groups.entry(record.id.clone()).or_default().push(record);
         }
@@ -214,13 +214,13 @@ mod tests {
     use crate::discovery::choose_source_file;
     use crate::io::system_time_ms;
     use crate::manifest::read_manifest;
-    use crate::test_support::{library, write_deck};
-    use crate::types::DeckManifest;
+    use crate::test_support::{library, write_work_folder};
+    use crate::types::WorkFolderManifest;
 
     #[test]
     fn source_file_rule_prefers_named_then_shorter_then_alphabetical() {
         let (temp, _) = library();
-        let path = write_deck(
+        let path = write_work_folder(
             temp.path(),
             "Talk",
             &[
@@ -247,7 +247,7 @@ mod tests {
     #[test]
     fn document_graph_command_returns_documents_for_shared_frontend_resolution() {
         let (temp, library) = library();
-        write_deck(
+        write_work_folder(
             temp.path(),
             "A",
             &[(
@@ -255,24 +255,24 @@ mod tests {
                 "---\ntheme: light\n---\n# First Document\n\n[[Second Document|next]] [[Second Document]] `[[Inline Code]]` \\[[Escaped]]\n\n```md\n[[Fenced Code]]\n```\n    [[Indented Code]]\n",
             )],
         );
-        write_deck(temp.path(), "B", &[("document.md", "# Second Document\n")]);
-        write_deck(
+        write_work_folder(temp.path(), "B", &[("document.md", "# Second Document\n")]);
+        write_work_folder(
             temp.path(),
             "Slides",
             &[("presentation.md", "# Slides\n\n[[Second Document]]")],
         );
 
-        let summaries = library.list_decks().unwrap();
+        let summaries = library.list_work_folders().unwrap();
         let graph_documents = library.document_graph().unwrap();
         let first_id = summaries
             .iter()
-            .find(|deck| deck.name == "A")
+            .find(|work_folder| work_folder.name == "A")
             .unwrap()
             .id
             .clone();
         let second_id = summaries
             .iter()
-            .find(|deck| deck.name == "B")
+            .find(|work_folder| work_folder.name == "B")
             .unwrap()
             .id
             .clone();
@@ -295,37 +295,37 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn scan_ignores_dot_folders_nested_markdown_and_symlink_decks() {
+    fn scan_ignores_dot_folders_nested_markdown_and_symlink_work_folders() {
         let (temp, library) = library();
-        write_deck(temp.path(), "Good", &[("presentation.md", "# good")]);
+        write_work_folder(temp.path(), "Good", &[("presentation.md", "# good")]);
         let notes = temp.path().join("Notes");
         fs::create_dir(&notes).unwrap();
         fs::create_dir(notes.join("nested")).unwrap();
-        fs::write(notes.join("nested/deep.md"), "not a deck").unwrap();
-        write_deck(temp.path(), ".hidden", &[("notes.md", "hidden")]);
+        fs::write(notes.join("nested/deep.md"), "not a work").unwrap();
+        write_work_folder(temp.path(), ".hidden", &[("notes.md", "hidden")]);
         symlink(temp.path().join("Good"), temp.path().join("Linked")).unwrap();
 
-        let decks = library.list_decks().unwrap();
-        assert_eq!(decks.len(), 1);
-        assert_eq!(decks[0].name, "Good");
+        let work_folders = library.list_work_folders().unwrap();
+        assert_eq!(work_folders.len(), 1);
+        assert_eq!(work_folders[0].name, "Good");
     }
 
     #[test]
-    fn deck_summary_uses_the_source_file_modification_time() {
+    fn work_folder_summary_uses_the_source_file_modification_time() {
         let (temp, library) = library();
-        let deck_path = write_deck(
+        let work_folder_path = write_work_folder(
             temp.path(),
             "Source timestamp",
             &[("presentation.md", "# Talk")],
         );
-        let source_path = deck_path.join("presentation.md");
+        let source_path = work_folder_path.join("presentation.md");
         let expected = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
         File::open(source_path)
             .unwrap()
             .set_times(fs::FileTimes::new().set_modified(expected))
             .unwrap();
 
-        let summary = library.list_decks().unwrap().remove(0);
+        let summary = library.list_work_folders().unwrap().remove(0);
         assert_eq!(summary.modified_ms, system_time_ms(expected).unwrap());
     }
 
@@ -333,27 +333,27 @@ mod tests {
     fn duplicate_manifest_ids_are_resolved_deterministically() {
         let (temp, library) = library();
         let id = Uuid::new_v4();
-        let manifest = serde_json::to_vec(&DeckManifest {
+        let manifest = serde_json::to_vec(&WorkFolderManifest {
             id,
             schema_version: 1,
         })
         .unwrap();
-        let first = write_deck(temp.path(), "A deck", &[("talk.md", "a")]);
-        let second = write_deck(temp.path(), "B deck", &[("talk.md", "b")]);
+        let first = write_work_folder(temp.path(), "A Work", &[("talk.md", "a")]);
+        let second = write_work_folder(temp.path(), "B Work", &[("talk.md", "b")]);
         fs::write(first.join(MANIFEST_FILE), &manifest).unwrap();
         fs::write(second.join(MANIFEST_FILE), &manifest).unwrap();
 
-        let decks = library.list_decks().unwrap();
-        assert_eq!(decks.len(), 2);
-        assert_eq!(decks[0].id, id.to_string());
-        assert_ne!(decks[1].id, id.to_string());
+        let work_folders = library.list_work_folders().unwrap();
+        assert_eq!(work_folders.len(), 2);
+        assert_eq!(work_folders[0].id, id.to_string());
+        assert_ne!(work_folders[1].id, id.to_string());
         assert_eq!(
             read_manifest(&first).unwrap().unwrap().id,
             read_manifest(&second).unwrap().unwrap().id,
-            "listing is read-only; duplicate repair waits until the deck is opened"
+            "listing is read-only; duplicate repair waits until the work folder is opened"
         );
 
-        library.open_deck(&decks[1].id).unwrap();
+        library.open_work_folder(&work_folders[1].id).unwrap();
         assert_ne!(
             read_manifest(&first).unwrap().unwrap().id,
             read_manifest(&second).unwrap().unwrap().id

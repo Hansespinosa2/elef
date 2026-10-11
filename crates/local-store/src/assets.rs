@@ -9,7 +9,7 @@ use std::time::SystemTime;
 use tempfile::Builder as TempFileBuilder;
 
 use crate::consts::{
-    ASSET_TYPES, MAX_ARCHIVE_ENTRIES, MAX_ASSET_BYTES, MAX_DECK_MEDIA_BYTES, STALE_TEMP_AGE_SECONDS,
+    ASSET_TYPES, MAX_ARCHIVE_ENTRIES, MAX_ASSET_BYTES, MAX_WORK_FOLDER_MEDIA_BYTES, STALE_TEMP_AGE_SECONDS,
 };
 use crate::io::{move_to_trash, read_regular_file_limited, sha256, sync_directory};
 use crate::library::Library;
@@ -50,7 +50,7 @@ pub(crate) fn check_asset_quota(images_dir: &Path, additional_bytes: u64) -> Res
     check_asset_quota_with_limit(
         images_dir,
         additional_bytes,
-        MAX_DECK_MEDIA_BYTES,
+        MAX_WORK_FOLDER_MEDIA_BYTES,
         MAX_ARCHIVE_ENTRIES,
     )
 }
@@ -189,9 +189,9 @@ impl Library {
         }
 
         let lock = self.write_lock(id);
-        let _guard = lock.lock().expect("deck write lock poisoned");
+        let _guard = lock.lock().expect("work folder write lock poisoned");
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let (extension, content_type) = detect_asset_type(bytes)?;
         let declared_type = declared_type.split(';').next().unwrap_or("").trim();
         if !declared_type.is_empty() && declared_type != content_type {
@@ -264,7 +264,7 @@ impl Library {
             return Err(CoreError::NotFound);
         }
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let images = record.path.join("images");
         let metadata = fs::symlink_metadata(&images).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
@@ -317,7 +317,7 @@ impl Library {
         }
 
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let images = record.path.join("images");
         let images_metadata = fs::symlink_metadata(&images).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
@@ -364,7 +364,7 @@ impl Library {
 
     pub fn list_assets(&self, id: &str) -> Result<Vec<StoredAsset>, CoreError> {
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let images = record.path.join("images");
         let metadata = match fs::symlink_metadata(&images) {
             Ok(metadata) => metadata,
@@ -424,9 +424,9 @@ impl Library {
             return Err(CoreError::NotFound);
         }
         let lock = self.write_lock(id);
-        let _guard = lock.lock().expect("deck write lock poisoned");
+        let _guard = lock.lock().expect("work folder write lock poisoned");
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let images = record.path.join("images");
         let metadata = fs::symlink_metadata(&images).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
@@ -474,14 +474,14 @@ mod tests {
     use std::path::Path;
 
     use crate::assets::check_asset_quota_with_limit;
-    use crate::test_support::{library, write_deck};
+    use crate::test_support::{library, write_work_folder};
     use crate::types::CoreError;
 
     #[test]
     fn asset_upload_is_content_addressed_and_read_only_lookup_verifies_the_digest() {
         let (temp, library) = library();
-        let deck_path = write_deck(temp.path(), "Asset deck", &[("presentation.md", "# Talk")]);
-        let id = library.list_decks().unwrap()[0].id.clone();
+        let work_folder_path = write_work_folder(temp.path(), "Asset Work", &[("presentation.md", "# Talk")]);
+        let id = library.list_work_folders().unwrap()[0].id.clone();
         let png = b"\x89PNG\r\n\x1a\nvalid test bytes";
 
         let uploaded = library
@@ -492,7 +492,7 @@ mod tests {
         assert!(uploaded.source.ends_with(" \"fit:cover\")"));
         assert_eq!(
             fs::read(
-                deck_path
+                work_folder_path
                     .join("images")
                     .join(format!("{}.png", uploaded.digest))
             )
@@ -506,17 +506,17 @@ mod tests {
     }
 
     #[test]
-    fn existing_relative_image_assets_are_scoped_to_the_deck_images_tree() {
+    fn existing_relative_image_assets_are_scoped_to_the_work_folder_images_tree() {
         let (temp, library) = library();
-        let deck_path = write_deck(
+        let work_folder_path = write_work_folder(
             temp.path(),
             "Existing assets",
             &[("presentation.md", "# Talk")],
         );
-        let id = library.list_decks().unwrap()[0].id.clone();
+        let id = library.list_work_folders().unwrap()[0].id.clone();
         let png = b"\x89PNG\r\n\x1a\nexisting image";
-        fs::create_dir_all(deck_path.join("images/nested")).unwrap();
-        fs::write(deck_path.join("images/nested/diagram.png"), png).unwrap();
+        fs::create_dir_all(work_folder_path.join("images/nested")).unwrap();
+        fs::write(work_folder_path.join("images/nested/diagram.png"), png).unwrap();
 
         assert_eq!(
             library
@@ -533,8 +533,8 @@ mod tests {
     #[test]
     fn asset_list_reports_verified_uploads_and_remove_trashes_them() {
         let (temp, library) = library();
-        write_deck(temp.path(), "Assets", &[("presentation.md", "# Talk")]);
-        let id = library.list_decks().unwrap()[0].id.clone();
+        write_work_folder(temp.path(), "Assets", &[("presentation.md", "# Talk")]);
+        let id = library.list_work_folders().unwrap()[0].id.clone();
         assert_eq!(library.list_assets(&id).unwrap(), Vec::new());
 
         let png = b"\x89PNG\r\n\x1a\nlisted image";
@@ -563,11 +563,11 @@ mod tests {
     #[test]
     fn asset_upload_rejects_mismatched_media_types_and_document_video() {
         let (temp, library) = library();
-        let raster_path = write_deck(temp.path(), "Raster", &[("presentation.md", "# Talk")]);
-        let document_path = write_deck(temp.path(), "Document", &[("document.md", "# Notes")]);
-        let raster_id = library.list_decks().unwrap()[1].id.clone();
+        let raster_path = write_work_folder(temp.path(), "Raster", &[("presentation.md", "# Talk")]);
+        let document_path = write_work_folder(temp.path(), "Document", &[("document.md", "# Notes")]);
+        let raster_id = library.list_work_folders().unwrap()[1].id.clone();
         let document_id = library
-            .deck_summary(&library.list_decks().unwrap()[0].id)
+            .work_folder_summary(&library.list_work_folders().unwrap()[0].id)
             .unwrap()
             .id;
         let png = b"\x89PNG\r\n\x1a\nvalid test bytes";

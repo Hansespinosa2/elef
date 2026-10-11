@@ -8,14 +8,14 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::RwLock;
 
-use crate::decks::{name_warnings, normalized_name};
+use crate::work_folders::{name_warnings, normalized_name};
 use crate::io::{file_name, system_time_ms};
-use crate::types::{CoreError, DeckRecord, DeckSummary};
+use crate::types::{CoreError, WorkFolderRecord, WorkFolderSummary};
 use crate::watch::WatchState;
 
 pub struct Library {
     pub(crate) root: PathBuf,
-    pub(crate) records: RwLock<HashMap<String, DeckRecord>>,
+    pub(crate) records: RwLock<HashMap<String, WorkFolderRecord>>,
     pub(crate) write_locks: Mutex<HashMap<String, Arc<Mutex<()>>>>,
     pub(crate) file_watcher: Mutex<Option<WatchState>>,
 }
@@ -39,22 +39,22 @@ impl Library {
         &self.root
     }
 
-    pub(crate) fn record(&self, id: &str) -> Result<DeckRecord, CoreError> {
+    pub(crate) fn record(&self, id: &str) -> Result<WorkFolderRecord, CoreError> {
         self.records
             .read()
-            .expect("deck index lock poisoned")
+            .expect("work folder index lock poisoned")
             .get(id)
             .cloned()
             .ok_or(CoreError::NotFound)
     }
 
-    pub(crate) fn refresh_record(&self, record: DeckRecord) {
-        let mut records = self.records.write().expect("deck index lock poisoned");
+    pub(crate) fn refresh_record(&self, record: WorkFolderRecord) {
+        let mut records = self.records.write().expect("work folder index lock poisoned");
         records.retain(|_, existing| existing.path != record.path);
         records.insert(record.id.clone(), record);
     }
 
-    pub(crate) fn summary(&self, record: &DeckRecord) -> DeckSummary {
+    pub(crate) fn summary(&self, record: &WorkFolderRecord) -> WorkFolderSummary {
         let metadata = fs::symlink_metadata(&record.source_path)
             .ok()
             .or_else(|| fs::metadata(&record.path).ok());
@@ -64,7 +64,7 @@ impl Library {
             .unwrap_or_default();
         let mut warnings = name_warnings(&file_name(&record.path));
         warnings.extend(record.notices.clone());
-        DeckSummary {
+        WorkFolderSummary {
             id: record.id.clone(),
             name: file_name(&record.path),
             path: record.path.to_string_lossy().into_owned(),
@@ -80,7 +80,7 @@ impl Library {
         }
     }
 
-    pub(crate) fn validate_deck_path(&self, path: &Path) -> Result<(), CoreError> {
+    pub(crate) fn validate_work_folder_path(&self, path: &Path) -> Result<(), CoreError> {
         let metadata = fs::symlink_metadata(path).map_err(|_| CoreError::NotFound)?;
         if metadata.file_type().is_symlink() || !metadata.is_dir() {
             return Err(CoreError::PathRejected);

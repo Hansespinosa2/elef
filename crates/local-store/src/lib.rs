@@ -4,7 +4,7 @@ mod archives;
 mod assets;
 mod config;
 mod consts;
-mod decks;
+mod work_folders;
 mod discovery;
 mod io;
 mod library;
@@ -25,8 +25,8 @@ pub use consts::{
 pub use library::Library;
 pub use merge::MergeOutcome;
 pub use types::{
-    AuthoringRegistries, AuthoringRegistryHashes, CoreError, DeckManifest, DeckPreview,
-    DeckSummary, DocumentGraphDocument, FileEvent, FileEventKind, Fingerprint, ImportResolution,
-    ImportResult, LibraryConfig, OpenDeck, RestoreOutcome, SaveResult, SnapshotInfo,
+    AuthoringRegistries, AuthoringRegistryHashes, CoreError, WorkFolderManifest, WorkFolderPreview,
+    WorkFolderSummary, DocumentGraphDocument, FileEvent, FileEventKind, Fingerprint, ImportResolution,
+    ImportResult, LibraryConfig, OpenWorkFolder, RestoreOutcome, SaveResult, SnapshotInfo,
     SourceSnapshot, StoredAsset, UploadedAsset,
 };

@@ -9,7 +9,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DeckManifest {
+pub struct WorkFolderManifest {
     pub id: Uuid,
     pub schema_version: u32,
 }
@@ -22,7 +22,7 @@ pub struct Fingerprint {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DeckSummary {
+pub struct WorkFolderSummary {
     pub id: String,
     pub name: String,
     pub path: String,
@@ -40,14 +40,14 @@ pub struct DocumentGraphDocument {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct OpenDeck {
+pub struct OpenWorkFolder {
     pub id: String,
     pub name: String,
     pub source: String,
     pub source_file: String,
     pub content_hash: String,
     pub fingerprint: Fingerprint,
-    pub manifest: Option<DeckManifest>,
+    pub manifest: Option<WorkFolderManifest>,
     pub notices: Vec<String>,
 }
 
@@ -59,7 +59,7 @@ pub struct SourceSnapshot {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DeckPreview {
+pub struct WorkFolderPreview {
     pub source: String,
     pub source_file: String,
 }
@@ -125,7 +125,7 @@ pub struct AuthoringRegistryHashes {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ImportResult {
-    pub deck: DeckSummary,
+    pub work_folder: WorkFolderSummary,
     pub replaced: bool,
     pub name_collision: bool,
 }
@@ -140,7 +140,7 @@ pub enum ImportResolution {
 pub enum CoreError {
     #[error("The library root is unavailable.")]
     InvalidLibrary,
-    #[error("The deck could not be found.")]
+    #[error("The Work could not be found.")]
     NotFound,
     #[error("The requested name or source is invalid.")]
     InvalidInput,
@@ -156,7 +156,7 @@ pub enum CoreError {
     },
     #[error("Authoring settings changed outside Elef. Reload them before saving.")]
     AuthoringConflict,
-    #[error("A deck with this identity already exists in the library.")]
+    #[error("A Work with this identity already exists in the library.")]
     ImportConflict {
         incoming_name: String,
         existing_name: String,
@@ -188,24 +188,25 @@ impl From<std::io::Error> for CoreError {
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct DeckRecord {
+pub(crate) struct WorkFolderRecord {
     pub(crate) id: String,
     pub(crate) path: PathBuf,
     pub(crate) source_path: PathBuf,
     pub(crate) source_file: String,
-    pub(crate) manifest: Option<DeckManifest>,
+    pub(crate) manifest: Option<WorkFolderManifest>,
     pub(crate) notices: Vec<String>,
     pub(crate) identity_repair: bool,
     /// Last persisted source text known to this process, used as the merge
-    /// ancestor. `None` until the deck is opened or saved here; a crash loses
+    /// ancestor. `None` until the work folder is opened or saved here; a crash loses
     /// it, and merging without an ancestor always takes the conflict path.
     pub(crate) persisted_source: Option<String>,
 }
 
-/// A coalesced external filesystem change affecting one deck's source file.
+/// A coalesced external filesystem change affecting one work folder's source file.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct FileEvent {
-    pub deck_id: String,
+    /// The Work id; values equal the WorkId 1:1 (one Work per work folder).
+    pub work_id: String,
     pub kind: FileEventKind,
 }
 

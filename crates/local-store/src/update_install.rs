@@ -1,5 +1,5 @@
 //! Activate a fully installed update without making the live launch path disappear.
-//! Paths here come from the native shell, never from deck content or IPC arguments.
+//! Paths here come from the native shell, never from work folder content or IPC arguments.
 use std::fs::{self, File};
 use std::io;
 use std::path::{Path, PathBuf};

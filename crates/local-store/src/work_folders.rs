@@ -1,4 +1,4 @@
-//! Deck open/read/create/rename/delete and name rules.
+//! Work folder open/read/create/rename/delete and name rules.
 
 use std::fs;
 use std::path::Component;
@@ -18,11 +18,11 @@ use crate::io::{
 use crate::library::Library;
 use crate::manifest::write_manifest_atomic;
 use crate::types::{
-    CoreError, DeckManifest, DeckPreview, DeckRecord, DeckSummary, OpenDeck, SourceSnapshot,
+    CoreError, WorkFolderManifest, WorkFolderPreview, WorkFolderRecord, WorkFolderSummary, OpenWorkFolder, SourceSnapshot,
 };
 use crate::writes::remove_stale_temps;
 
-pub(crate) fn validate_deck_name(name: &str) -> Result<(), CoreError> {
+pub(crate) fn validate_work_folder_name(name: &str) -> Result<(), CoreError> {
     let trimmed = name.trim();
     if trimmed.is_empty()
         || trimmed != name
@@ -73,16 +73,16 @@ pub(crate) fn is_reserved_device_name(name: &str) -> bool {
 }
 
 impl Library {
-    pub fn open_deck(&self, id: &str) -> Result<OpenDeck, CoreError> {
+    pub fn open_work_folder(&self, id: &str) -> Result<OpenWorkFolder, CoreError> {
         let lock = self.write_lock(id);
-        let _guard = lock.lock().expect("deck write lock poisoned");
+        let _guard = lock.lock().expect("work folder write lock poisoned");
         let mut record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         remove_stale_temps(&record.path)?;
         remove_stale_asset_temps(&record.path.join("images"))?;
 
         if record.identity_repair {
-            let manifest = DeckManifest {
+            let manifest = WorkFolderManifest {
                 id: Uuid::new_v4(),
                 schema_version: MANIFEST_SCHEMA_VERSION,
             };
@@ -95,12 +95,12 @@ impl Library {
                 }
                 Err(_) => {
                     record.notices.push(
-                        "This duplicate deck identity could not be repaired because the folder is read-only. Its path is used as identity.".into(),
+                        "This duplicate Work identity could not be repaired because the folder is read-only. Its path is used as identity.".into(),
                     );
                 }
             }
         } else if record.manifest.is_none() && !record.path.join(MANIFEST_FILE).exists() {
-            let manifest = DeckManifest {
+            let manifest = WorkFolderManifest {
                 id: Uuid::new_v4(),
                 schema_version: MANIFEST_SCHEMA_VERSION,
             };
@@ -124,7 +124,7 @@ impl Library {
         let fingerprint = fingerprint_bytes(&source, &record.source_path)?;
         let source = String::from_utf8(source).map_err(|_| CoreError::InvalidInput)?;
         record.persisted_source = Some(source.clone());
-        let result = OpenDeck {
+        let result = OpenWorkFolder {
             id: record.id.clone(),
             name: file_name(&record.path),
             source,
@@ -140,7 +140,7 @@ impl Library {
 
     pub fn read_source_snapshot(&self, id: &str) -> Result<SourceSnapshot, CoreError> {
         let mut record = self.record(id)?;
-        let path_missing = match self.validate_deck_path(&record.path) {
+        let path_missing = match self.validate_work_folder_path(&record.path) {
             Ok(()) => false,
             Err(CoreError::NotFound) => true,
             Err(error) => return Err(error),
@@ -148,10 +148,10 @@ impl Library {
         let source_changed = !path_missing
             && choose_source_file(&record.path)?.as_deref() != Some(record.source_file.as_str());
         if path_missing || source_changed {
-            self.list_decks()?;
+            self.list_work_folders()?;
             record = self.record(id)?;
         }
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let bytes = read_regular_file(&record.source_path)?;
         let content_hash = sha256(&bytes);
         let source = String::from_utf8(bytes).map_err(|_| CoreError::InvalidInput)?;
@@ -164,20 +164,20 @@ impl Library {
 
     /// Read a bounded, read-only source sample for the library card preview.
     /// This deliberately does not create or repair `elef.json` during listing.
-    pub fn read_deck_preview(&self, id: &str) -> Result<DeckPreview, CoreError> {
+    pub fn read_work_folder_preview(&self, id: &str) -> Result<WorkFolderPreview, CoreError> {
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let bytes =
             read_regular_file_limited(&record.source_path, MAX_LIBRARY_PREVIEW_SOURCE_BYTES)?;
         let source = String::from_utf8(bytes).map_err(|_| CoreError::InvalidInput)?;
-        Ok(DeckPreview {
+        Ok(WorkFolderPreview {
             source,
             source_file: record.source_file,
         })
     }
 
-    pub fn create_deck(&self, name: &str, kind: &str) -> Result<OpenDeck, CoreError> {
-        validate_deck_name(name)?;
+    pub fn create_work_folder(&self, name: &str, kind: &str) -> Result<OpenWorkFolder, CoreError> {
+        validate_work_folder_name(name)?;
         if !matches!(kind, "presentation" | "document") {
             return Err(CoreError::InvalidInput);
         }
@@ -195,17 +195,17 @@ impl Library {
         };
         let source = format!("# {name}\n\n");
         write_new_file(&path.join(source_file), source.as_bytes())?;
-        let manifest = DeckManifest {
+        let manifest = WorkFolderManifest {
             id: Uuid::new_v4(),
             schema_version: MANIFEST_SCHEMA_VERSION,
         };
         let mut notices = Vec::new();
         if write_manifest_atomic(&path, &manifest).is_err() {
-            notices.push("The deck opened, but its identity manifest could not be saved.".into());
+            notices.push("The Work opened, but its identity manifest could not be saved.".into());
         }
 
         let canonical_path = fs::canonicalize(&path)?;
-        let record = DeckRecord {
+        let record = WorkFolderRecord {
             id: if notices.is_empty() {
                 manifest.id.to_string()
             } else {
@@ -225,13 +225,13 @@ impl Library {
         };
         let id = record.id.clone();
         self.refresh_record(record);
-        self.open_deck(&id)
+        self.open_work_folder(&id)
     }
 
-    pub fn rename_deck(&self, id: &str, new_name: &str) -> Result<DeckSummary, CoreError> {
-        validate_deck_name(new_name)?;
+    pub fn rename_work_folder(&self, id: &str, new_name: &str) -> Result<WorkFolderSummary, CoreError> {
+        validate_work_folder_name(new_name)?;
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         if self.name_collision_exists(new_name)?
             && normalized_name(&file_name(&record.path)) != normalized_name(new_name)
         {
@@ -245,7 +245,7 @@ impl Library {
         fs::rename(&record.path, &target)?;
         let canonical_path = fs::canonicalize(&target)?;
         let source_path = canonical_path.join(&record.source_file);
-        let renamed = DeckRecord {
+        let renamed = WorkFolderRecord {
             id: record.id,
             path: canonical_path,
             source_path,
@@ -260,14 +260,14 @@ impl Library {
         Ok(summary)
     }
 
-    pub fn delete_deck(&self, id: &str) -> Result<(), CoreError> {
+    pub fn delete_work_folder(&self, id: &str) -> Result<(), CoreError> {
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         move_to_trash(&record.path)
             .map_err(|_| CoreError::Io(std::io::Error::other("trash failed")))?;
         self.records
             .write()
-            .expect("deck index lock poisoned")
+            .expect("work folder index lock poisoned")
             .remove(id);
         Ok(())
     }
@@ -278,66 +278,66 @@ mod tests {
     use std::fs;
 
     use crate::consts::{MANIFEST_FILE, MAX_LIBRARY_PREVIEW_SOURCE_BYTES};
-    use crate::decks::{name_warnings, normalized_name, validate_deck_name};
+    use crate::work_folders::{name_warnings, normalized_name, validate_work_folder_name};
     use crate::discovery::path_id;
     use crate::io::sha256;
-    use crate::test_support::{library, write_deck};
+    use crate::test_support::{library, write_work_folder};
     use crate::types::CoreError;
 
     #[test]
     fn first_open_creates_manifest_and_returns_content_fingerprint() {
         let (temp, library) = library();
-        let deck = write_deck(temp.path(), "My Deck", &[("talk.md", "# Notes\n")]);
-        let id = path_id(&deck.canonicalize().unwrap());
-        library.list_decks().unwrap();
+        let work_folder = write_work_folder(temp.path(), "My Work", &[("talk.md", "# Notes\n")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
 
-        let opened = library.open_deck(&id).unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
         assert_eq!(opened.source, "# Notes\n");
         assert_eq!(opened.fingerprint.content_hash, sha256(b"# Notes\n"));
         assert!(opened.manifest.is_some());
-        assert!(deck.join(MANIFEST_FILE).is_file());
+        assert!(work_folder.join(MANIFEST_FILE).is_file());
     }
 
     #[test]
     fn source_snapshot_detects_external_bytes_without_writing_manifest() {
         let (temp, library) = library();
-        let deck = write_deck(temp.path(), "External", &[("presentation.md", "first")]);
-        let id = path_id(&deck.canonicalize().unwrap());
-        library.list_decks().unwrap();
+        let work_folder = write_work_folder(temp.path(), "External", &[("presentation.md", "first")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
 
         let first = library.read_source_snapshot(&id).unwrap();
         assert_eq!(first.source, "first");
         assert_eq!(first.source_file, "presentation.md");
         assert_eq!(first.content_hash, sha256(b"first"));
-        assert!(!deck.join(MANIFEST_FILE).exists());
+        assert!(!work_folder.join(MANIFEST_FILE).exists());
 
-        fs::write(deck.join("presentation.md"), "external").unwrap();
+        fs::write(work_folder.join("presentation.md"), "external").unwrap();
         let changed = library.read_source_snapshot(&id).unwrap();
         assert_eq!(changed.source, "external");
         assert_eq!(changed.source_file, "presentation.md");
         assert_ne!(changed.content_hash, first.content_hash);
-        assert!(!deck.join(MANIFEST_FILE).exists());
+        assert!(!work_folder.join(MANIFEST_FILE).exists());
     }
 
     #[test]
     fn library_preview_is_bounded_read_only_and_uses_the_selected_source() {
         let (temp, library) = library();
-        let deck = write_deck(temp.path(), "Preview", &[("talk.md", "# A preview")]);
-        let id = path_id(&deck.canonicalize().unwrap());
-        library.list_decks().unwrap();
+        let work_folder = write_work_folder(temp.path(), "Preview", &[("talk.md", "# A preview")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
 
-        let preview = library.read_deck_preview(&id).unwrap();
+        let preview = library.read_work_folder_preview(&id).unwrap();
         assert_eq!(preview.source, "# A preview");
         assert_eq!(preview.source_file, "talk.md");
-        assert!(!deck.join(MANIFEST_FILE).exists());
+        assert!(!work_folder.join(MANIFEST_FILE).exists());
 
         fs::write(
-            deck.join("talk.md"),
+            work_folder.join("talk.md"),
             vec![b'x'; MAX_LIBRARY_PREVIEW_SOURCE_BYTES as usize + 1],
         )
         .unwrap();
         assert!(matches!(
-            library.read_deck_preview(&id),
+            library.read_work_folder_preview(&id),
             Err(CoreError::TooLarge)
         ));
     }
@@ -345,29 +345,29 @@ mod tests {
     #[test]
     fn source_snapshot_tracks_source_rule_changes_without_creating_a_manifest() {
         let (temp, library) = library();
-        let deck = write_deck(temp.path(), "Source Choice", &[("talk.md", "same bytes")]);
-        let id = path_id(&deck.canonicalize().unwrap());
-        library.list_decks().unwrap();
+        let work_folder = write_work_folder(temp.path(), "Source Choice", &[("talk.md", "same bytes")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
 
         let first = library.read_source_snapshot(&id).unwrap();
         assert_eq!(first.source_file, "talk.md");
-        fs::write(deck.join("presentation.md"), "preferred source").unwrap();
+        fs::write(work_folder.join("presentation.md"), "preferred source").unwrap();
 
         let changed = library.read_source_snapshot(&id).unwrap();
         assert_eq!(changed.source_file, "presentation.md");
         assert_eq!(changed.source, "preferred source");
-        assert!(!deck.join(MANIFEST_FILE).exists());
+        assert!(!work_folder.join(MANIFEST_FILE).exists());
     }
 
     #[test]
-    fn source_snapshot_finds_a_renamed_deck_by_its_manifest_identity() {
+    fn source_snapshot_finds_a_renamed_work_folder_by_its_manifest_identity() {
         let (temp, library) = library();
-        let deck = write_deck(temp.path(), "Before Rename", &[("talk.md", "source")]);
-        let id = path_id(&deck.canonicalize().unwrap());
-        library.list_decks().unwrap();
-        let opened = library.open_deck(&id).unwrap();
+        let work_folder = write_work_folder(temp.path(), "Before Rename", &[("talk.md", "source")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
         let stable_id = opened.id;
-        fs::rename(&deck, temp.path().join("After Rename")).unwrap();
+        fs::rename(&work_folder, temp.path().join("After Rename")).unwrap();
 
         let snapshot = library.read_source_snapshot(&stable_id).unwrap();
         assert_eq!(snapshot.source, "source");
@@ -375,20 +375,20 @@ mod tests {
     }
 
     #[test]
-    fn deck_names_are_single_safe_path_components_and_collisions_are_normalized() {
-        assert!(validate_deck_name("Notes").is_ok());
-        assert!(validate_deck_name("../outside").is_err());
-        assert!(validate_deck_name("with/slash").is_err());
+    fn work_folder_names_are_single_safe_path_components_and_collisions_are_normalized() {
+        assert!(validate_work_folder_name("Notes").is_ok());
+        assert!(validate_work_folder_name("../outside").is_err());
+        assert!(validate_work_folder_name("with/slash").is_err());
         assert_eq!(normalized_name("Cafe\u{301}"), normalized_name("Café"));
-        assert_eq!(normalized_name("My Deck"), normalized_name("my deck"));
+        assert_eq!(normalized_name("My Work"), normalized_name("my work"));
         assert_eq!(normalized_name("Straße"), normalized_name("STRASSE"));
         assert_eq!(normalized_name("ΟΣ"), normalized_name("ος"));
     }
 
     #[test]
     fn unsafe_cross_platform_names_are_warned_about() {
-        assert_eq!(name_warnings("My:Deck").len(), 1);
+        assert_eq!(name_warnings("My:Work").len(), 1);
         assert_eq!(name_warnings("CON").len(), 1);
-        assert!(name_warnings("My Deck").is_empty());
+        assert!(name_warnings("My Work").is_empty());
     }
 }

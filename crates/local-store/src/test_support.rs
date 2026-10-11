@@ -17,7 +17,7 @@ pub(crate) fn library() -> (TempDir, Library) {
     (temp, library)
 }
 
-pub(crate) fn write_deck(root: &Path, name: &str, files: &[(&str, &str)]) -> PathBuf {
+pub(crate) fn write_work_folder(root: &Path, name: &str, files: &[(&str, &str)]) -> PathBuf {
     let path = root.join(name);
     fs::create_dir(&path).unwrap();
     for (file, content) in files {
@@ -79,7 +79,7 @@ pub(crate) fn mark_first_central_entry_as_symlink(bytes: &mut [u8]) {
 
 pub(crate) fn poll_until(
     library: &Library,
-    deck_id: &str,
+    work_id: &str,
     kind: FileEventKind,
     what: &str,
 ) -> Vec<FileEvent> {
@@ -88,7 +88,7 @@ pub(crate) fn poll_until(
         let events = library.poll_file_events();
         if events
             .iter()
-            .any(|event| event.deck_id == deck_id && event.kind == kind)
+            .any(|event| event.work_id == work_id && event.kind == kind)
         {
             return events;
         }

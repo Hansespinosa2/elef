@@ -53,9 +53,9 @@ pub(crate) fn validate_snapshot_id(id: &str) -> Result<(), CoreError> {
 }
 
 impl Library {
-    /// Snapshots deck source bytes for crash/conflict recovery. `source`
+    /// Snapshots work folder source bytes for crash/conflict recovery. `source`
     /// snapshots caller-provided text (unsaved local edits); `None` snapshots
-    /// the current disk bytes under the deck write lock. Prunes snapshots
+    /// the current disk bytes under the work folder write lock. Prunes snapshots
     /// older than the retention window on every take.
     pub fn take_snapshot(
         &self,
@@ -65,9 +65,9 @@ impl Library {
     ) -> Result<SnapshotInfo, CoreError> {
         validate_snapshot_reason(reason)?;
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let lock = self.write_lock(id);
-        let _guard = lock.lock().expect("deck write lock poisoned");
+        let _guard = lock.lock().expect("work folder write lock poisoned");
         let bytes: Vec<u8> = match source {
             Some(text) => {
                 if text.len() > MAX_SOURCE_BYTES {
@@ -111,10 +111,10 @@ impl Library {
         })
     }
 
-    /// Lists this deck's snapshots newest first. Read-only: never prunes.
+    /// Lists this work folder's snapshots newest first. Read-only: never prunes.
     pub fn list_snapshots(&self, id: &str) -> Result<Vec<SnapshotInfo>, CoreError> {
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let dir = self.snapshot_dir(&record.id);
         let mut snapshots = Vec::new();
         let entries = match fs::read_dir(&dir) {
@@ -157,7 +157,7 @@ impl Library {
         Ok(snapshots)
     }
 
-    /// Restores deck bytes from a snapshot, snapshotting the current disk
+    /// Restores work folder bytes from a snapshot, snapshotting the current disk
     /// bytes first so the overwrite is itself recoverable. Returns the
     /// restored content hash.
     pub fn restore_snapshot(
@@ -167,9 +167,9 @@ impl Library {
     ) -> Result<RestoreOutcome, CoreError> {
         validate_snapshot_id(snapshot_id)?;
         let mut record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let lock = self.write_lock(id);
-        let _guard = lock.lock().expect("deck write lock poisoned");
+        let _guard = lock.lock().expect("work folder write lock poisoned");
         let dir = self.snapshot_dir(&record.id);
         let bytes = fs::read(dir.join(format!("{snapshot_id}.snap"))).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {
@@ -266,7 +266,7 @@ mod tests {
     use crate::consts::{MAX_SOURCE_BYTES, SNAPSHOT_DIR};
     use crate::library::Library;
     use crate::merge::MergeOutcome;
-    use crate::test_support::{library, wait_for_pause_marker, write_deck};
+    use crate::test_support::{library, wait_for_pause_marker, write_work_folder};
     use crate::types::CoreError;
 
     #[test]
@@ -276,8 +276,8 @@ mod tests {
         };
         let mode = std::env::var("ELEF_CORE_TEST_STORE_MODE").unwrap();
         let library = Library::open(root).unwrap();
-        let deck = library.list_decks().unwrap().into_iter().next().unwrap();
-        let opened = library.open_deck(&deck.id).unwrap();
+        let work_folder = library.list_work_folders().unwrap().into_iter().next().unwrap();
+        let opened = library.open_work_folder(&work_folder.id).unwrap();
         match mode.as_str() {
             "take" => {
                 library
@@ -306,7 +306,7 @@ mod tests {
     }
 
     #[test]
-    fn killing_a_process_at_snapshot_points_preserves_deck_and_history() {
+    fn killing_a_process_at_snapshot_points_preserves_work_folder_and_history() {
         const CASES: [(&str, &str); 2] = [
             ("take", "before_snapshot_persist"),
             ("restore", "before_snapshot_restore"),
@@ -318,8 +318,8 @@ mod tests {
         for (mode, point) in CASES {
             for _ in 0..RUNS_PER_POINT {
                 let temp = TempDir::new().unwrap();
-                let deck_path =
-                    write_deck(temp.path(), "Crash fixture", &[("presentation.md", OLD)]);
+                let work_folder_path =
+                    write_work_folder(temp.path(), "Crash fixture", &[("presentation.md", OLD)]);
                 let marker = temp.path().join("store-paused");
                 let mut child = Command::new(&executable)
                     .args([
@@ -341,23 +341,23 @@ mod tests {
                 assert!(!child.wait().unwrap().success());
 
                 assert_eq!(
-                    fs::read_to_string(deck_path.join("presentation.md")).unwrap(),
+                    fs::read_to_string(work_folder_path.join("presentation.md")).unwrap(),
                     OLD
                 );
                 let library = Library::open(temp.path()).unwrap();
-                let deck = library
-                    .list_decks()
+                let work_folder = library
+                    .list_work_folders()
                     .unwrap()
                     .into_iter()
                     .find(|summary| summary.name == "Crash fixture")
                     .unwrap();
-                library.open_deck(&deck.id).unwrap();
+                library.open_work_folder(&work_folder.id).unwrap();
 
-                let history = temp.path().join(SNAPSHOT_DIR).join(&deck.id);
+                let history = temp.path().join(SNAPSHOT_DIR).join(&work_folder.id);
                 if mode == "take" {
-                    assert!(library.list_snapshots(&deck.id).unwrap().is_empty());
+                    assert!(library.list_snapshots(&work_folder.id).unwrap().is_empty());
                     let taken = library
-                        .take_snapshot(&deck.id, "afterkill", Some("recovered"))
+                        .take_snapshot(&work_folder.id, "afterkill", Some("recovered"))
                         .unwrap();
                     assert_eq!(taken.byte_len, "recovered".len());
                     assert!(fs::read_dir(&history).unwrap().all(|entry| {
@@ -379,7 +379,7 @@ mod tests {
                         })
                         .expect("pre-restore snapshot must survive the kill");
                     assert_eq!(fs::read_to_string(pre).unwrap(), OLD);
-                    assert!(fs::read_dir(&deck_path).unwrap().all(|entry| {
+                    assert!(fs::read_dir(&work_folder_path).unwrap().all(|entry| {
                         !entry
                             .unwrap()
                             .file_name()
@@ -394,14 +394,14 @@ mod tests {
     #[test]
     fn snapshots_round_trip_disk_and_provided_text_newest_first() {
         let (_temp, library) = library();
-        let deck = library.create_deck("Snapshots", "document").unwrap();
-        let disk = library.take_snapshot(&deck.id, "interval", None).unwrap();
+        let work_folder = library.create_work_folder("Snapshots", "document").unwrap();
+        let disk = library.take_snapshot(&work_folder.id, "interval", None).unwrap();
         assert_eq!(disk.reason, "interval");
         assert!(!disk.content_hash.is_empty());
         let local = library
-            .take_snapshot(&deck.id, "pre-merge", Some("unsaved local\n"))
+            .take_snapshot(&work_folder.id, "pre-merge", Some("unsaved local\n"))
             .unwrap();
-        let listed = library.list_snapshots(&deck.id).unwrap();
+        let listed = library.list_snapshots(&work_folder.id).unwrap();
         assert_eq!(listed.len(), 2);
         assert!(listed[0].taken_at_ms >= listed[1].taken_at_ms);
         let by_id = |id: &str| listed.iter().find(|snapshot| snapshot.id == id);
@@ -412,10 +412,10 @@ mod tests {
     #[test]
     fn snapshot_reason_and_id_validation_rejects_path_escapes() {
         let (_temp, library) = library();
-        let deck = library.create_deck("Snapshot Names", "document").unwrap();
+        let work_folder = library.create_work_folder("Snapshot Names", "document").unwrap();
         for bad in ["", "../x", "a/b", "a.b", "a b", "x".repeat(33).as_str()] {
             assert!(
-                library.take_snapshot(&deck.id, bad, None).is_err(),
+                library.take_snapshot(&work_folder.id, bad, None).is_err(),
                 "reason {bad:?} must be rejected"
             );
         }
@@ -429,29 +429,29 @@ mod tests {
             "9".repeat(21).as_str(),
         ] {
             assert!(
-                library.restore_snapshot(&deck.id, bad).is_err(),
+                library.restore_snapshot(&work_folder.id, bad).is_err(),
                 "snapshot id {bad:?} must be rejected"
             );
         }
-        assert!(library.take_snapshot(&deck.id, "a-1_b", None).is_ok());
+        assert!(library.take_snapshot(&work_folder.id, "a-1_b", None).is_ok());
     }
 
     #[test]
     fn snapshot_restore_snapshots_current_disk_first_and_updates_ancestor() {
         let (_temp, library) = library();
-        let deck = library.create_deck("Restore", "document").unwrap();
-        let opened = library.open_deck(&deck.id).unwrap();
-        let first = library.take_snapshot(&deck.id, "interval", None).unwrap();
+        let work_folder = library.create_work_folder("Restore", "document").unwrap();
+        let opened = library.open_work_folder(&work_folder.id).unwrap();
+        let first = library.take_snapshot(&work_folder.id, "interval", None).unwrap();
         let updated = "# Restore\n\nversion two\n";
         library
-            .save_source(&deck.id, updated, &opened.content_hash)
+            .save_source(&work_folder.id, updated, &opened.content_hash)
             .unwrap();
-        let outcome = library.restore_snapshot(&deck.id, &first.id).unwrap();
+        let outcome = library.restore_snapshot(&work_folder.id, &first.id).unwrap();
         assert_eq!(outcome.content_hash, first.content_hash);
-        let reread = library.open_deck(&deck.id).unwrap();
+        let reread = library.open_work_folder(&work_folder.id).unwrap();
         assert_eq!(reread.source, opened.source);
         // The overwritten bytes survive as a pre-restore snapshot.
-        let listed = library.list_snapshots(&deck.id).unwrap();
+        let listed = library.list_snapshots(&work_folder.id).unwrap();
         let pre = listed
             .iter()
             .find(|snapshot| snapshot.reason == "pre-restore")
@@ -460,7 +460,7 @@ mod tests {
         // Ancestor follows the restore, so merging the restored text is clean.
         assert_eq!(
             library
-                .merge_external_change(&deck.id, &opened.source)
+                .merge_external_change(&work_folder.id, &opened.source)
                 .unwrap(),
             MergeOutcome::Merged(opened.source.clone())
         );
@@ -469,9 +469,9 @@ mod tests {
     #[test]
     fn snapshot_restore_missing_is_not_found() {
         let (_temp, library) = library();
-        let deck = library.create_deck("Restore Missing", "document").unwrap();
+        let work_folder = library.create_work_folder("Restore Missing", "document").unwrap();
         let error = library
-            .restore_snapshot(&deck.id, "1-interval")
+            .restore_snapshot(&work_folder.id, "1-interval")
             .unwrap_err();
         assert!(matches!(error, CoreError::NotFound));
     }
@@ -479,43 +479,43 @@ mod tests {
     #[test]
     fn snapshots_prune_by_filename_stamp_and_ignore_junk() {
         let (_temp, library) = library();
-        let deck = library.create_deck("Prune", "document").unwrap();
-        let dir = library.root().join(".elef-history").join(&deck.id);
+        let work_folder = library.create_work_folder("Prune", "document").unwrap();
+        let dir = library.root().join(".elef-history").join(&work_folder.id);
         fs::create_dir_all(&dir).unwrap();
         fs::write(dir.join("1-interval.snap"), b"ancient").unwrap();
         fs::write(dir.join("junk.txt"), b"junk").unwrap();
         fs::write(dir.join("no-stamp.snap"), b"junk").unwrap();
         fs::create_dir(dir.join("subdir.snap")).unwrap();
-        let fresh = library.take_snapshot(&deck.id, "interval", None).unwrap();
+        let fresh = library.take_snapshot(&work_folder.id, "interval", None).unwrap();
         assert!(!dir.join("1-interval.snap").exists());
-        let listed = library.list_snapshots(&deck.id).unwrap();
+        let listed = library.list_snapshots(&work_folder.id).unwrap();
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].id, fresh.id);
-        // History storage never disturbs deck discovery.
-        let decks = library.list_decks().unwrap();
-        assert!(decks.iter().any(|deck| deck.name == "Prune"));
+        // History storage never disturbs work folder discovery.
+        let work_folders = library.list_work_folders().unwrap();
+        assert!(work_folders.iter().any(|work_folder| work_folder.name == "Prune"));
     }
 
     #[test]
     fn snapshots_preserve_non_utf8_disk_bytes() {
         let (_temp, library) = library();
-        let deck = library.create_deck("Binary Snapshots", "document").unwrap();
+        let work_folder = library.create_work_folder("Binary Snapshots", "document").unwrap();
         let record_path = library.root().join("Binary Snapshots").join("document.md");
         fs::write(&record_path, [0xff, 0xfe, 0x00, b'\n']).unwrap();
-        let taken = library.take_snapshot(&deck.id, "interval", None).unwrap();
+        let taken = library.take_snapshot(&work_folder.id, "interval", None).unwrap();
         assert_eq!(taken.byte_len, 4);
         fs::write(&record_path, b"replaced\n").unwrap();
-        library.restore_snapshot(&deck.id, &taken.id).unwrap();
+        library.restore_snapshot(&work_folder.id, &taken.id).unwrap();
         assert_eq!(fs::read(&record_path).unwrap(), [0xff, 0xfe, 0x00, b'\n']);
     }
 
     #[test]
     fn snapshot_rejects_oversized_text() {
         let (_temp, library) = library();
-        let deck = library.create_deck("Huge Snapshot", "document").unwrap();
+        let work_folder = library.create_work_folder("Huge Snapshot", "document").unwrap();
         let huge = "x".repeat(MAX_SOURCE_BYTES + 1);
         let error = library
-            .take_snapshot(&deck.id, "interval", Some(&huge))
+            .take_snapshot(&work_folder.id, "interval", Some(&huge))
             .unwrap_err();
         assert!(matches!(error, CoreError::TooLarge));
     }

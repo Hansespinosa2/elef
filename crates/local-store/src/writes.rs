@@ -30,8 +30,8 @@ pub(crate) fn conflict_error(
     }
 }
 
-pub(crate) fn remove_stale_temps(deck_path: &Path) -> Result<(), CoreError> {
-    for entry in fs::read_dir(deck_path)? {
+pub(crate) fn remove_stale_temps(work_folder_path: &Path) -> Result<(), CoreError> {
+    for entry in fs::read_dir(work_folder_path)? {
         let entry = entry?;
         let name = entry.file_name().to_string_lossy().into_owned();
         if (!name.starts_with(".elef-save-") && !name.starts_with(".elef-restore-"))
@@ -63,12 +63,12 @@ impl Library {
         }
 
         let lock = self.write_lock(id);
-        let _guard = lock.lock().expect("deck write lock poisoned");
+        let _guard = lock.lock().expect("work folder write lock poisoned");
         let mut record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let selected_source_file = source_file_for_write(&record.path, &record.source_path)?;
         if selected_source_file != record.source_file {
-            self.list_decks()?;
+            self.list_work_folders()?;
             let current = self.record(id)?;
             let current_bytes = read_regular_file(&current.source_path)?;
             return Err(conflict_error(
@@ -110,7 +110,7 @@ impl Library {
         let verified_at = Instant::now();
         let selected_source_file = source_file_for_write(&record.path, &record.source_path)?;
         if selected_source_file != record.source_file {
-            self.list_decks()?;
+            self.list_work_folders()?;
             let current = self.record(id)?;
             let current_bytes = read_regular_file(&current.source_path)?;
             return Err(conflict_error(
@@ -161,7 +161,7 @@ impl Library {
         local_source: &str,
     ) -> Result<MergeOutcome, CoreError> {
         let record = self.record(id)?;
-        self.validate_deck_path(&record.path)?;
+        self.validate_work_folder_path(&record.path)?;
         let Some(ancestor) = record.persisted_source.as_deref() else {
             return Ok(MergeOutcome::Overlap);
         };
@@ -189,18 +189,18 @@ mod tests {
     use crate::library::Library;
     use crate::merge::{MergeOutcome, merge_sources};
     use crate::test_support::{
-        MERGE_EXTERNAL, MERGE_LOCAL, MERGE_OLD, library, wait_for_pause_marker, write_deck,
+        MERGE_EXTERNAL, MERGE_LOCAL, MERGE_OLD, library, wait_for_pause_marker, write_work_folder,
     };
     use crate::types::CoreError;
 
     #[test]
     fn save_conflicts_if_external_files_change_the_selected_source_file() {
         let (temp, library) = library();
-        let deck = write_deck(temp.path(), "Source Race", &[("talk.md", "old source")]);
-        let id = path_id(&deck.canonicalize().unwrap());
-        library.list_decks().unwrap();
-        let opened = library.open_deck(&id).unwrap();
-        fs::write(deck.join("presentation.md"), "new selected source").unwrap();
+        let work_folder = write_work_folder(temp.path(), "Source Race", &[("talk.md", "old source")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
+        fs::write(work_folder.join("presentation.md"), "new selected source").unwrap();
 
         let error = library
             .save_source(&opened.id, "my edit", &opened.content_hash)
@@ -214,11 +214,11 @@ mod tests {
             } if disk_source_file == "presentation.md" && disk_source == "new selected source"
         ));
         assert_eq!(
-            fs::read_to_string(deck.join("talk.md")).unwrap(),
+            fs::read_to_string(work_folder.join("talk.md")).unwrap(),
             "old source"
         );
         assert_eq!(
-            fs::read_to_string(deck.join("presentation.md")).unwrap(),
+            fs::read_to_string(work_folder.join("presentation.md")).unwrap(),
             "new selected source"
         );
     }
@@ -226,21 +226,21 @@ mod tests {
     #[test]
     fn save_is_atomic_and_conflicts_keep_external_bytes() {
         let (temp, library) = library();
-        let deck = write_deck(temp.path(), "Notes", &[("presentation.md", "old")]);
-        let id = path_id(&deck.canonicalize().unwrap());
-        library.list_decks().unwrap();
-        let opened = library.open_deck(&id).unwrap();
+        let work_folder = write_work_folder(temp.path(), "Notes", &[("presentation.md", "old")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
 
         let saved = library
             .save_source(&opened.id, "new", &opened.content_hash)
             .unwrap();
         assert!(saved.ok);
         assert_eq!(
-            fs::read_to_string(deck.join("presentation.md")).unwrap(),
+            fs::read_to_string(work_folder.join("presentation.md")).unwrap(),
             "new"
         );
 
-        fs::write(deck.join("presentation.md"), "external").unwrap();
+        fs::write(work_folder.join("presentation.md"), "external").unwrap();
         let error = library
             .save_source(&opened.id, "local", &saved.content_hash)
             .unwrap_err();
@@ -249,7 +249,7 @@ mod tests {
             matches!(error, CoreError::Conflict { disk_source, .. } if disk_source == "external")
         );
         assert_eq!(
-            fs::read_to_string(deck.join("presentation.md")).unwrap(),
+            fs::read_to_string(work_folder.join("presentation.md")).unwrap(),
             "external"
         );
     }
@@ -260,8 +260,8 @@ mod tests {
             return;
         };
         let library = Library::open(root).unwrap();
-        let deck = library.list_decks().unwrap().into_iter().next().unwrap();
-        let opened = library.open_deck(&deck.id).unwrap();
+        let work_folder = library.list_work_folders().unwrap().into_iter().next().unwrap();
+        let opened = library.open_work_folder(&work_folder.id).unwrap();
         let new_source = "# New source\n".repeat(4096);
         library
             .save_source(&opened.id, &new_source, &opened.content_hash)
@@ -283,7 +283,7 @@ mod tests {
         for point in POINTS {
             for _ in 0..RUNS_PER_POINT {
                 let temp = TempDir::new().unwrap();
-                let deck_path = write_deck(
+                let work_folder_path = write_work_folder(
                     temp.path(),
                     "Crash fixture",
                     &[("presentation.md", "# Old source\n")],
@@ -320,19 +320,19 @@ mod tests {
                     "# Old source\n"
                 };
                 assert_eq!(
-                    fs::read_to_string(deck_path.join("presentation.md")).unwrap(),
+                    fs::read_to_string(work_folder_path.join("presentation.md")).unwrap(),
                     expected
                 );
 
                 let library = Library::open(temp.path()).unwrap();
-                let deck = library
-                    .list_decks()
+                let work_folder = library
+                    .list_work_folders()
                     .unwrap()
                     .into_iter()
                     .find(|summary| summary.name == "Crash fixture")
                     .unwrap();
-                library.open_deck(&deck.id).unwrap();
-                assert!(fs::read_dir(&deck_path).unwrap().all(|entry| {
+                library.open_work_folder(&work_folder.id).unwrap();
+                assert!(fs::read_dir(&work_folder_path).unwrap().all(|entry| {
                     !entry
                         .unwrap()
                         .file_name()
@@ -352,8 +352,8 @@ mod tests {
             return;
         }
         let library = Library::open(&root).unwrap();
-        let deck = library.list_decks().unwrap().into_iter().next().unwrap();
-        let opened = library.open_deck(&deck.id).unwrap();
+        let work_folder = library.list_work_folders().unwrap().into_iter().next().unwrap();
+        let opened = library.open_work_folder(&work_folder.id).unwrap();
         let source_path = PathBuf::from(&root)
             .join("Crash fixture")
             .join("presentation.md");
@@ -364,7 +364,7 @@ mod tests {
         else {
             panic!("merge fixture must merge cleanly");
         };
-        let fresh = library.open_deck(&opened.id).unwrap();
+        let fresh = library.open_work_folder(&opened.id).unwrap();
         library
             .save_source(&opened.id, &merged, &fresh.content_hash)
             .unwrap();
@@ -389,7 +389,7 @@ mod tests {
         for point in POINTS {
             for _ in 0..RUNS_PER_POINT {
                 let temp = TempDir::new().unwrap();
-                let deck_path = write_deck(
+                let work_folder_path = write_work_folder(
                     temp.path(),
                     "Crash fixture",
                     &[("presentation.md", MERGE_OLD)],
@@ -420,19 +420,19 @@ mod tests {
                     MERGE_EXTERNAL
                 };
                 assert_eq!(
-                    fs::read_to_string(deck_path.join("presentation.md")).unwrap(),
+                    fs::read_to_string(work_folder_path.join("presentation.md")).unwrap(),
                     expected
                 );
                 let library = Library::open(temp.path()).unwrap();
-                let deck = library
-                    .list_decks()
+                let work_folder = library
+                    .list_work_folders()
                     .unwrap()
                     .into_iter()
                     .find(|summary| summary.name == "Crash fixture")
                     .unwrap();
-                let reopened = library.open_deck(&deck.id).unwrap();
+                let reopened = library.open_work_folder(&work_folder.id).unwrap();
                 assert_eq!(reopened.source, expected);
-                assert!(fs::read_dir(&deck_path).unwrap().all(|entry| {
+                assert!(fs::read_dir(&work_folder_path).unwrap().all(|entry| {
                     !entry
                         .unwrap()
                         .file_name()
@@ -446,10 +446,10 @@ mod tests {
     #[test]
     fn final_fingerprint_check_to_rename_window_stays_below_250ms_p95() {
         let (temp, library) = library();
-        let deck = write_deck(temp.path(), "Window", &[("presentation.md", "old")]);
-        let id = path_id(&deck.canonicalize().unwrap());
-        library.list_decks().unwrap();
-        let opened = library.open_deck(&id).unwrap();
+        let work_folder = write_work_folder(temp.path(), "Window", &[("presentation.md", "old")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
         let mut base_hash = opened.content_hash;
         let mut windows = Vec::with_capacity(50);
 
@@ -473,12 +473,12 @@ mod tests {
     #[test]
     fn save_rejects_a_symlink_source() {
         let (temp, library) = library();
-        let deck = write_deck(temp.path(), "Notes", &[("presentation.md", "old")]);
-        let id = path_id(&deck.canonicalize().unwrap());
-        library.list_decks().unwrap();
+        let work_folder = write_work_folder(temp.path(), "Notes", &[("presentation.md", "old")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
         let external = temp.path().join("outside.md");
         fs::write(&external, "outside").unwrap();
-        let source = deck.join("presentation.md");
+        let source = work_folder.join("presentation.md");
         fs::remove_file(&source).unwrap();
         symlink(&external, &source).unwrap();
 
@@ -492,20 +492,20 @@ mod tests {
     #[test]
     fn merge_entry_tracks_open_save_and_missing_ancestor_lifecycle() {
         let (_temp, library) = library();
-        let deck = library.create_deck("Merge Entry", "document").unwrap();
-        let id = deck.id.clone();
+        let work_folder = library.create_work_folder("Merge Entry", "document").unwrap();
+        let id = work_folder.id.clone();
         let ancestor_of = |library: &Library| {
             library
                 .records
                 .read()
-                .expect("deck index lock poisoned")
+                .expect("work folder index lock poisoned")
                 .get(&id)
-                .expect("deck record")
+                .expect("work folder record")
                 .persisted_source
                 .clone()
         };
         // Open establishes the ancestor from disk.
-        let opened = library.open_deck(&id).unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
         assert_eq!(
             ancestor_of(&library).as_deref(),
             Some(opened.source.as_str())
@@ -539,12 +539,12 @@ mod tests {
     #[test]
     fn merge_entry_without_ancestor_takes_the_conflict_path() {
         let (_temp, library) = library();
-        let deck = library.create_deck("No Ancestor", "document").unwrap();
-        // Fresh discovery has no in-memory ancestor until the deck is opened.
-        library.list_decks().unwrap();
+        let work_folder = library.create_work_folder("No Ancestor", "document").unwrap();
+        // Fresh discovery has no in-memory ancestor until the work folder is opened.
+        library.list_work_folders().unwrap();
         assert_eq!(
             library
-                .merge_external_change(&deck.id, "local text\n")
+                .merge_external_change(&work_folder.id, "local text\n")
                 .unwrap(),
             MergeOutcome::Overlap
         );
@@ -553,13 +553,13 @@ mod tests {
     #[test]
     fn merge_entry_refuses_non_utf8_disk_bytes() {
         let (_temp, library) = library();
-        let deck = library.create_deck("Binary Disk", "document").unwrap();
-        library.open_deck(&deck.id).unwrap();
+        let work_folder = library.create_work_folder("Binary Disk", "document").unwrap();
+        library.open_work_folder(&work_folder.id).unwrap();
         let record_path = library.root().join("Binary Disk").join("document.md");
         fs::write(&record_path, [0xff, 0xfe, 0x00]).unwrap();
         assert_eq!(
             library
-                .merge_external_change(&deck.id, "local text\n")
+                .merge_external_change(&work_folder.id, "local text\n")
                 .unwrap(),
             MergeOutcome::Overlap
         );

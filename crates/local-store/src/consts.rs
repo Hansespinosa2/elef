@@ -14,7 +14,7 @@ pub const MAX_ARCHIVE_UNCOMPRESSED_BYTES: u64 = 500 * 1024 * 1024;
 
 pub const MAX_ARCHIVE_ENTRIES: usize = 10_000;
 
-pub(crate) const MAX_DECK_MEDIA_BYTES: u64 = 400 * 1024 * 1024;
+pub(crate) const MAX_WORK_FOLDER_MEDIA_BYTES: u64 = 400 * 1024 * 1024;
 
 pub(crate) const MAX_ARCHIVE_FILE_BYTES: u64 = 600 * 1024 * 1024;
 
