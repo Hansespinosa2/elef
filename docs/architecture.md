@@ -134,7 +134,7 @@ Ask "which row owns the state or behavior?" and put the change there; add a host
 ## Important contracts
 
 - Deck layout, source selection, manifests, library settings, and archive contents: [desktop data format](desktop/data-format.md).
-- Persisted-format version rules, archive layout, and the deck manifest schema with frozen fixtures: [spec/](../spec/version-rules.md).
+- Persisted-format version rules and archive layout: [desktop data format](desktop/data-format.md); deck manifest schema with frozen fixtures: [spec/](../spec/deck-manifest.schema.json).
 - Desktop request-to-command mapping and host adapters: [desktop transport](desktop/transport-adapter.md).
 - Tauri capabilities, content security policy, path handling, and untrusted content: [desktop security](desktop/security.md).
 - Architecture decisions and their status: [desktop ADR index](desktop/adr/README.md).

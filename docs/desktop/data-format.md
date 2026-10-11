@@ -49,6 +49,45 @@ Import rejects absolute paths, traversal, symlinks, and special files. Current c
 
 The Tauri bundle registers the .elef extension. The app's file-open path accepts these archives for import.
 
+The normative rules below are the prose truth for the ZIP archives produced and consumed by the desktop transfer path; the summary above restates them briefly. Code truth is `crates/local-store/src/` (transfer: `archives.rs` — `export_elef`, `import_elef`, `extract_archive`, `validate_archive_path`, `single_wrapper_name`, `collect_archive_items`; discovery: `discovery.rs` — `choose_source_file`, `source_file_key`, `available_deck_name`, `discover_decks`; decks: `decks.rs` — `normalized_name`, `validate_deck_name`; manifests: `manifest.rs`). This section restates the rules both must keep; on conflict the code wins and this file is a bug.
+
+### Archive container (normative)
+
+- A `.elef` file is a ZIP archive (directories + deflated files).
+- Export writes entries sorted by name with fixed metadata (compression level 6, default timestamp, `0o100644`) for deterministic output (`export_elef`). Byte identity across runs is intended but not asserted here; the freshness/corpus suites pin behavior.
+
+### Archive member layout (normative)
+
+- The deck's files sit at the archive root (`collect_archive_items`: paths relative to the deck directory, `/`-separated).
+- Import also accepts a single wrapping directory: when every file is nested under one top-level directory, that prefix is stripped and the wrapper name becomes the imported deck name (`single_wrapper_name`, `import_elef`).
+- After unwrapping, the staging root must contain a Markdown source file chosen by the source-file rule (top-level `*.md`, preferring `presentation.md`, then `document.md`, then shortest name, then case-insensitive and bytewise lexical order: `choose_source_file`, `source_file_key`). An archive with no top-level Markdown file is rejected (`CoreError::InvalidInput`).
+- `elef.json` at the root is optional. When present it must parse as a [deck manifest](../../spec/deck-manifest.schema.json); a UUID already in the library prompts for replace / keep-both / cancel (`import_elef`).
+- In-progress save temp files (`.elef-save-*.tmp`) are never exported.
+
+### Archive rejection rules (normative)
+
+An archive is rejected before anything lands in the library when any entry (`validate_archive_path`, `extract_archive`):
+
+- has an empty, absolute, or drive-qualified path, or contains `\`, NUL, `:`, a control character, or an empty / `.` / `..` segment;
+- is encrypted or a symlink, or carries a non-regular, non-directory unix mode (devices, fifos, sockets);
+- duplicates another entry after Unicode normalization + case folding (`normalized_name`).
+
+Whole-archive limits (`local-store` constants):
+
+| Limit | Constant | Current value |
+|---|---|---|
+| Archive file size | `MAX_ARCHIVE_FILE_BYTES` | 600 MiB |
+| Total uncompressed size | `MAX_ARCHIVE_UNCOMPRESSED_BYTES` | 500 MiB |
+| Entry count | `MAX_ARCHIVE_ENTRIES` | 10,000 |
+| Per-entry compression ratio (entries ≥ 1 MiB) | `MAX_ARCHIVE_COMPRESSION_RATIO` / `MAX_ARCHIVE_RATIO_CHECK_BYTES` | 1000× / 1 MiB |
+
+Data is extracted to a staging directory inside the library (`.elef-import-*`), validated, then renamed into place; replacing an existing deck moves the prior deck to the OS Trash (`import_elef`).
+
+### Deck directory rules (normative)
+
+- A deck is an immediate, non-hidden child directory of the library containing a top-level Markdown file; nested folders are contents, not decks; symlinks are never followed (`discover_decks`; see Deck folders above).
+- Deck names are compared after Unicode normalization + case folding (`normalized_name`); keep-both copies take `Name (2)`, `Name (3)`, … (`available_deck_name`).
+
 ## Library settings
 
 The library-level .elef directory stores portable configuration and authoring registries:
@@ -59,3 +98,21 @@ The library-level .elef directory stores portable configuration and authoring re
 Names are compared after Unicode normalization and case folding. Cross-platform-incompatible names produce a warning; desktop preserves the original spelling.
 
 See [security.md](security.md) for path containment and archive validation details.
+
+## Persisted-format version rules
+
+The persisted format is the deck directory on disk: the Markdown source, the optional `elef.json` manifest, deck assets, and the `.elef` archive encoding of the same tree. (Rails rows are a server projection of this format, not a second format: `Source::Document` delegates all Work syntax to `@elef/work-model` via the shared renderer bundle — `apps/web/app/lib/source/document.rb:18-21`.)
+
+### Rules
+
+1. **Unknown fields are ignored, never rejected.** `read_manifest` (`crates/local-store/src/manifest.rs`) reads only `id` and `schema_version`; extra JSON members are skipped. New optional fields are backward and forward compatible by construction.
+2. **Newer `schema_version` values stay openable.** A manifest above `MANIFEST_SCHEMA_VERSION` (`consts.rs`) is read for known fields with one non-blocking notice (`manifest_notices` in `manifest.rs`). A newer version must never block opening; it may gate newer features behind the notice.
+3. **Missing or invalid manifests degrade, never block.** A deck without a readable `elef.json` opens under a path-derived identity; first open recreates the manifest when the directory is writable ([Manifest](#manifest), `open_deck` in `decks.rs`).
+4. **Removal or renames need a migration, not a version bump.** Deleting or retyping a field breaks rule 1. Such a change ships a code migration for existing decks plus a schema update here, in the same commit.
+5. **Limits are constants with tests.** The archive limits in [Archive rejection rules](#archive-rejection-rules-normative) mirror `local-store` constants; changing either side updates the other plus the boundary tests.
+6. **Every format change extends this doc plus the `spec/` schema and fixtures in the same commit.** (Phase 12 owner decision D4b, relocated: prose lives here, machine-checked law lives in `spec/`.) New fields, versions, or layout rules land with doc updates and schema/fixtures proving both directions.
+
+### Adjacent vocabularies (owned elsewhere, referenced here)
+
+- Markdown front-matter link keys `elef_document_key` / `elef_aliases` (`Source::Document::PORTABLE_DOCUMENT_KEY/ALIASES`, `apps/web/app/lib/source/document.rb:5-6,78-96`; semantics in `docs/desktop/adr/010-portable-document-links.md`). Key renames follow rule 4.
+- Library-level `.elef/config.json` (`LIBRARY_CONFIG_SCHEMA_VERSION`), `snippets.json` / `math-shortcuts.json` (`AUTHORING_REGISTRY_SCHEMA_VERSION`): same additive discipline; no committed schema yet (minimal-honest scope, D4b).
