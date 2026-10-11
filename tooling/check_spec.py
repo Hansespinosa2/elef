@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Validate the frozen persisted-format fixtures in spec/ against their schemas.
 
-Minimal-honest scope (Phase 12 owner decision D4b): the deck manifest
+Minimal-honest scope (Phase 12 owner decision D4b): the work manifest
 schema plus compat fixtures, with one CI-wired consumer (this script, run
 from bin/check quick). Stdlib only (json/re/pathlib/sys).
 
 Conventions:
-  spec/fixtures/manifest-*.json   must validate against deck-manifest.schema.json
+  spec/fixtures/manifest-*.json   must validate against work-manifest.schema.json
   spec/fixtures/invalid-*.json    must FAIL validation (rejection proof)
   spec/fixtures/manifest-forward-compat.json must carry a schema_version
       above the MANIFEST_SCHEMA_VERSION parsed from crates/local-store,
@@ -27,7 +27,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = ROOT / "spec"
 FIXTURES = SPEC / "fixtures"
-MANIFEST_SCHEMA = SPEC / "deck-manifest.schema.json"
+MANIFEST_SCHEMA = SPEC / "work-manifest.schema.json"
 LOCAL_STORE_SRC = ROOT / "crates" / "local-store" / "src"
 
 SUPPORTED_SCHEMA_KEYWORDS = frozenset(
@@ -99,7 +99,7 @@ def main() -> int:
     except (OSError, json.JSONDecodeError) as error:
         print(f"cannot read {MANIFEST_SCHEMA.relative_to(ROOT)}: {error}", file=sys.stderr)
         return 1
-    fail_closed(schema, "deck-manifest.schema.json", problems)
+    fail_closed(schema, "work-manifest.schema.json", problems)
 
     code_version = manifest_schema_version()
     checked_valid = 0

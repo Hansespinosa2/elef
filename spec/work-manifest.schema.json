@@ -1,14 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://elef.app/spec/deck-manifest.schema.json",
-  "title": "Elef deck manifest (elef.json)",
-  "description": "Identity file at a deck directory root. Grounded in read_manifest (crates/local-store/src/manifest.rs): only id and schema_version are read; unknown fields are ignored so newer writers stay openable. Enforced by tooling/check_spec.py via bin/check quick.",
+  "$id": "https://elef.app/spec/work-manifest.schema.json",
+  "title": "Elef work manifest (elef.json)",
+  "description": "Identity file at a work folder root. Grounded in read_manifest (crates/local-store/src/manifest.rs): only id and schema_version are read; unknown fields are ignored so newer writers stay openable. Enforced by tooling/check_spec.py via bin/check quick.",
   "type": "object",
   "required": ["id", "schema_version"],
   "additionalProperties": true,
   "properties": {
     "id": {
-      "description": "Deck identity (UUID). Serialized hyphenated lowercase by write_manifest_atomic; readers accept any form Uuid::parse_str accepts.",
+      "description": "Work identity (UUID). Serialized hyphenated lowercase by write_manifest_atomic; readers accept any form Uuid::parse_str accepts.",
       "type": "string",
       "pattern": "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
     },
