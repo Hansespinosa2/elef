@@ -51,6 +51,7 @@ jobs:
           npm test --prefix apps/desktop/frontend
           npm run test:unit --prefix apps/desktop/e2e
           npm run test:arch-package
+          npm run check:release-ci
           python3 apps/web/script/check_frontend_ownership.py
           python3 tooling/check_boundaries.py
           python3 tooling/check_boundaries.py --self-test
@@ -282,12 +283,26 @@ jobs:
         run: npm run renderer:build
       - name: Verify the shared renderer bundles are current
         run: git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js
+      - name: Build the profile-split shared packages
+        # Freshness of the tracked bundles is enforced by the affected job's
+        # bin/check run; these builds regenerate the ignored metafiles the
+        # Stable/Dev profile gate reads.
+        run: |
+          npm run build --prefix packages/client
+          npm run build --prefix packages/work-model
+          npm run build --prefix packages/editor-runtime
       - name: Bundle the desktop frontend
         run: npm run build --prefix apps/desktop/frontend
+      - name: Bundle the Dev desktop frontend
+        run: npm run build --prefix apps/desktop/frontend -- --profile=dev
       - name: Check command allowlist and CSP
         run: |
           python3 apps/desktop/scripts/check_architecture.py
           python3 apps/web/script/check_frontend_ownership.py
+      - name: Check release profiles and fixtures
+        run: |
+          npm run check:desktop-profiles
+          npm run check:release-fixtures
       - name: Check Rust formatting
         run: cargo fmt --manifest-path Cargo.toml --all -- --check
       - name: Lint desktop Rust workspace
@@ -498,12 +513,26 @@ jobs:
         run: npm run renderer:build
       - name: Verify the shared renderer bundles are current
         run: git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js
+      - name: Build the profile-split shared packages
+        # Freshness of the tracked bundles is enforced by the affected job's
+        # bin/check run; these builds regenerate the ignored metafiles the
+        # Stable/Dev profile gate reads.
+        run: |
+          npm run build --prefix packages/client
+          npm run build --prefix packages/work-model
+          npm run build --prefix packages/editor-runtime
       - name: Bundle the desktop frontend
         run: npm run build --prefix apps/desktop/frontend
+      - name: Bundle the Dev desktop frontend
+        run: npm run build --prefix apps/desktop/frontend -- --profile=dev
       - name: Check command allowlist and CSP
         run: |
           python3 apps/desktop/scripts/check_architecture.py
           python3 apps/web/script/check_frontend_ownership.py
+      - name: Check release profiles and fixtures
+        run: |
+          npm run check:desktop-profiles
+          npm run check:release-fixtures
       - name: Check Rust formatting
         run: cargo fmt --manifest-path Cargo.toml --all -- --check
       - name: Lint desktop Rust workspace
@@ -656,6 +685,33 @@ jobs:
           "${compose[@]}" up -d db
           "${compose[@]}" run --rm --no-deps web bin/rails db:prepare
           "${compose[@]}" run --rm --no-deps web bin/rails runner 'abort "wrong Rails environment" unless Rails.env.development?; abort "wrong database adapter" unless ActiveRecord::Base.connection.adapter_name == "PostgreSQL"; storage = Rails.root.join("storage"); probe = storage.join(".write-check"); File.write(probe, "ok"); File.delete(probe); puts "development smoke ok"'
+
+  release-gate:
+    name: Desktop release Gate A
+    needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, affected, desktop, arch-package, desktop-macos, renderer-macos, production-smoke, development-smoke ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the exact gated test candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Re-verify the Gate A wiring and record the source SHA
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          node apps/desktop/scripts/check_release_ci.mjs
+          echo "Gate A passed for SHA ${SOURCE_SHA}."
+          {
+            echo "## Desktop release Gate A"
+            echo "- Source SHA: \`${SOURCE_SHA}\`"
+            echo "- All required Rails, desktop, renderer, Arch package, and deployment smoke jobs passed on this run."
+          } >> "$GITHUB_STEP_SUMMARY"
 
   record-ci-attestation:
     if: github.event_name == 'pull_request'
