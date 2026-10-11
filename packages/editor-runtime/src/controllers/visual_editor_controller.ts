@@ -31,6 +31,12 @@ export default class extends Controller {
     if (this.element.visualEditorController === this) delete this.element.visualEditorController
   }
 
+  // Desktop switches deck kinds without remounting the form; push the host
+  // value into the live feature so document key handling follows the deck.
+  kindValueChanged() {
+    this.editor?.setKind?.(this.kindValue)
+  }
+
   blockFocus(event: Event) {
     this.editor.blockFocus(event)
   }

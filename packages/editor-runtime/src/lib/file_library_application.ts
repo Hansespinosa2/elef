@@ -173,6 +173,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} }
   let decks: FileLibraryDeck[] = []
   let activeDeck: FileLibraryDeck | null = null
+  let presentationEditorHandle: ReturnType<typeof mountHostPresentationEditor> | null = null
   let saveFlow: any = null
   let sessionStatusKind = "clean"
   let lastSourceFile: string | null = null
@@ -700,12 +701,15 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
         showLibrary()
         throw error
       }
-      // The shared client presentation editor lives on the form for the app
-      // lifetime (it resolves the projection canvas lazily, like the retired
-      // Stimulus controller did); presentation decks mount it once here while
-      // document decks leave it unmounted.
-      if (!isDocument && !elements.editorForm.presentationEditorController) {
-        mountHostPresentationEditor(elements.editorForm)
+      // The shared client presentation editor only handles presentation
+      // decks: mount it when one opens and destroy it when a document deck
+      // opens so it never double-handles document projection input beside
+      // the document editor.
+      if (isDocument) {
+        presentationEditorHandle?.destroy()
+        presentationEditorHandle = null
+      } else if (!presentationEditorHandle) {
+        presentationEditorHandle = mountHostPresentationEditor(elements.editorForm)
       }
     const viewSetupStartedAt = (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) ? performance.now() : null
       transport.activateDeck(deck, id)

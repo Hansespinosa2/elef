@@ -112,6 +112,7 @@ function startFileLibraryApplication(platform) {
   let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} };
   let decks = [];
   let activeDeck = null;
+  let presentationEditorHandle = null;
   let saveFlow = null;
   let sessionStatusKind = "clean";
   let lastSourceFile = null;
@@ -599,8 +600,11 @@ function startFileLibraryApplication(platform) {
         showLibrary();
         throw error;
       }
-      if (!isDocument && !elements.editorForm.presentationEditorController) {
-        mountHostPresentationEditor(elements.editorForm);
+      if (isDocument) {
+        presentationEditorHandle?.destroy();
+        presentationEditorHandle = null;
+      } else if (!presentationEditorHandle) {
+        presentationEditorHandle = mountHostPresentationEditor(elements.editorForm);
       }
       const viewSetupStartedAt = typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__ ? performance.now() : null;
       transport.activateDeck(deck, id);

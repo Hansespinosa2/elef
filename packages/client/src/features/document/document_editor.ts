@@ -188,6 +188,12 @@ export class DocumentEditor {
     return (this.readyEditor ?? this.cachedEditor) as DocumentEditorSeam
   }
 
+  // Deck kind can change under a live editor (desktop switches decks without
+  // remounting); the host adapter syncs it through this setter.
+  setKind(kind: string | undefined): void {
+    this.kind = kind
+  }
+
   get hasProjectionTarget(): boolean {
     return Boolean(this.projection)
   }
