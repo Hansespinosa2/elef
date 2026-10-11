@@ -1,12 +1,12 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { createDeckOpenFlow } from "@elef/editor-runtime/test-internals"
+import { createWorkOpenFlow } from "@elef/editor-runtime/test-internals"
 
-test("concurrent deck opens cannot replace editor state in reverse read order", async () => {
+test("concurrent work opens cannot replace editor state in reverse read order", async () => {
   let resolve
   const pending = new Promise(done => { resolve = done })
   const order = []
-  const open = createDeckOpenFlow(async id => {
+  const open = createWorkOpenFlow(async id => {
     order.push(`read ${id}`)
     if (id === "A") await pending
     order.push(`activate ${id}`)
@@ -21,7 +21,7 @@ test("concurrent deck opens cannot replace editor state in reverse read order", 
 })
 
 test("a rejected open does not prevent the next navigation", async () => {
-  const open = createDeckOpenFlow(async id => {
+  const open = createWorkOpenFlow(async id => {
     if (id === "missing") throw new Error("not found")
     return id
   })

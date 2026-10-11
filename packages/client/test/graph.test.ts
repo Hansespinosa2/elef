@@ -34,7 +34,7 @@ test("client graph view renders accessible nodes, edges, search, and controls", 
   assert.equal(root.querySelector("h2")?.textContent, "Document network");
   assert.equal(root.querySelector("#document-graph-heading")?.textContent, "Document network");
   assert.equal(root.querySelectorAll(".document-graph-node").length, 2);
-  assert.equal(root.querySelector(".document-graph-node[href='/documents/12']")?.getAttribute("data-deck-id"), "12");
+  assert.equal(root.querySelector(".document-graph-node[href='/documents/12']")?.getAttribute("data-work-id"), "12");
   assert.equal(
     root.querySelector(".document-graph-node[data-node-id='local-id']")?.getAttribute("aria-label"),
     "Open Notes & diagrams",
@@ -57,7 +57,7 @@ test("client graph view keeps titles inert and unsafe links local", () => {
 
   assert.equal(
     root.querySelector(".document-graph-node")?.getAttribute("href"),
-    "#deck/safe-id",
+    "#work/safe-id",
   );
   assert.equal(document.querySelectorAll("script, img").length, 0);
 });
@@ -104,7 +104,7 @@ test("client graph controller mounts status, zooms, highlights, and searches", (
     root,
     { nodes: demo.nodes, edges: demo.edges },
     {
-      onOpenDeck: (id) => {
+      onOpenWork: (id) => {
         opened = id;
       },
       scheduleFrame: () => 0,

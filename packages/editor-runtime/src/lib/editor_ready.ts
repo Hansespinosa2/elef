@@ -29,7 +29,7 @@ export function waitForEditorController(
 }
 
 function editorUnavailable() {
-  return Object.assign(new Error("The editor did not finish loading. Try closing and reopening this deck."), {
+  return Object.assign(new Error("The editor did not finish loading. Try closing and reopening this Work."), {
     code: "editor_unavailable",
     retryable: true
   })

@@ -57,7 +57,7 @@ function previewMessage(error: unknown): string {
     : "Preview unavailable.";
 }
 
-// Preview loads wait for the list to paint first: a large deck renders on
+// Preview loads wait for the list to paint first: a large work renders on
 // the main thread, and starting it mid-commit would freeze the paint that
 // carries the cards. Environments without a frame scheduler start at once.
 function afterPaint(): Promise<void> {
@@ -74,7 +74,7 @@ function afterPaint(): Promise<void> {
 
 // Preview loads additionally wait for an idle turn so the boot storm of
 // dozens of fetches and main-thread renders does not overlap boot or the
-// first deck open; the timeout caps the wait on a busy thread. Falls back
+// first work open; the timeout caps the wait on a busy thread. Falls back
 // to the paint gate where no idle scheduler exists.
 function afterIdle(): Promise<void> {
   const idle = globalThis.requestIdleCallback;
@@ -113,7 +113,7 @@ function LibraryCardView({ host, work, documentNodes, options, onChanged }: Libr
               <ExtraActions work={work} options={options} />
               {work.kind === "presentation" && options.presentWork !== undefined ? (
                 <button
-                  className="deck-action"
+                  className="work-action"
                   type="button"
                   onClick={() => options.presentWork?.(work)}
                 >
@@ -140,7 +140,7 @@ function LibraryCardView({ host, work, documentNodes, options, onChanged }: Libr
         ) : null}
       </div>
       {(work.warnings ?? []).length > 0 ? (
-        <p className="deck-warning" role="note">
+        <p className="work-warning" role="note">
           {(work.warnings ?? []).join(" ")}
         </p>
       ) : null}
@@ -236,7 +236,7 @@ function RenameControl({
           required
           onInput={(event) => setTitle(event.currentTarget.value)}
         />
-        <button className="deck-action" type="submit">
+        <button className="work-action" type="submit">
           Save title
         </button>
       </form>
@@ -284,13 +284,13 @@ function CardActionItem({
   }
   if (action.href !== undefined) {
     return (
-      <a className="deck-action" href={localTarget(action.href, "Library action")}>
+      <a className="work-action" href={localTarget(action.href, "Library action")}>
         {action.label}
       </a>
     );
   }
   return (
-    <button className="deck-action" type="button" onClick={() => action.run?.(work)}>
+    <button className="work-action" type="button" onClick={() => action.run?.(work)}>
       {action.label}
     </button>
   );
@@ -332,7 +332,7 @@ function DeleteControl({
 
   return (
     <button
-      className="deck-action danger is-danger"
+      className="work-action danger is-danger"
       type="button"
       onClick={() => void remove()}
     >
@@ -430,7 +430,7 @@ function CardPreview({
           source: snapshot.text,
           kind: work.kind,
           title: work.title,
-          deckId: work.id,
+          workId: work.id,
           mediaBaseUrl: options.resolveMediaBaseUrl?.(work) ?? "",
           documentNodes,
         });

@@ -44,14 +44,14 @@ test("sameWorks normalizes missing optional fields", () => {
 
 test("filterWorks matches titles case- and diacritics-insensitively", () => {
   const works = [
-    work("a", { title: "Café Deck", kind: "presentation" }),
+    work("a", { title: "Café Work", kind: "presentation" }),
     work("b", { title: "Meeting Notes", kind: "document" }),
   ];
   assert.deepEqual(
     filterWorks(works, "all", "CAFE\u0301").map((entry) => entry.id),
     [works[0]?.id],
   );
-  assert.deepEqual(filterWorks(works, "all", "no matching deck"), []);
+  assert.deepEqual(filterWorks(works, "all", "no matching work"), []);
   assert.deepEqual(
     filterWorks(works, "all", "").map((entry) => entry.id),
     [works[0]?.id, works[1]?.id],

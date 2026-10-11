@@ -224,7 +224,7 @@ export function buildDocumentGraph(documents: readonly LinkableDocument[] = []):
     .filter((doc): doc is ResolvedDocument => doc !== null)
   const resolve = createDocumentLinkResolver(entries)
   const nodes: DocumentGraphNode[] = entries.map((doc, index) => {
-    const fallbackUrl = `#deck/${encodeURIComponent(String(doc.id))}`
+    const fallbackUrl = `#work/${encodeURIComponent(String(doc.id))}`
     const rawUrl = doc.url || doc.href || fallbackUrl
     const rawTitle = doc.title
     return {

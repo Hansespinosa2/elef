@@ -56,13 +56,13 @@ function createRendererClient({
       }
     });
   }
-  const WARMUP_DECK = "# Warmup\n\nInline $x^2$ math.\n\n```js\nconst warm = 1\n```\n\n---\n\nSecond slide.\n";
+  const WARMUP_WORK = "# Warmup\n\nInline $x^2$ math.\n\n```js\nconst warm = 1\n```\n\n---\n\nSecond slide.\n";
   function warmup() {
     if (!warmupPromise) {
       warmupPromise = (async () => {
         try {
           const prewarmed = ensureWorker();
-          prewarmed.postMessage({ id: WARMUP_ID, input: { source: WARMUP_DECK } });
+          prewarmed.postMessage({ id: WARMUP_ID, input: { source: WARMUP_WORK } });
           prewarmed.postMessage({ id: WARMUP_ID, input: { kind: "markdown-block", source: "Elef" } });
         } catch (_error) {
         }

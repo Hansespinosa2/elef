@@ -10,7 +10,7 @@ import { applyEditorSource } from "./editor_source.js"
 
 export interface CodeMirrorBindingOptions {
   getEditor(): Controller | null | undefined;
-  getDeckId(): unknown;
+  getWorkId(): unknown;
   getFallbackValue(): unknown;
   setFallbackValue(source: string): void;
   waitForEditor(): Promise<Controller | null>;
@@ -19,7 +19,7 @@ export interface CodeMirrorBindingOptions {
 
 export function createCodeMirrorBinding({
   getEditor,
-  getDeckId,
+  getWorkId,
   getFallbackValue,
   setFallbackValue,
   waitForEditor,
@@ -29,11 +29,11 @@ export function createCodeMirrorBinding({
     return getEditor()?.sourceValue ?? getFallbackValue()
   }
 
-  function setText(source: string, { id = getDeckId(), expectedSource = getText() }: { id?: unknown; expectedSource?: string } = {}) {
+  function setText(source: string, { id = getWorkId(), expectedSource = getText() }: { id?: unknown; expectedSource?: string } = {}) {
     return applyEditorSource(source, {
       id,
       expectedSource,
-      getDeckId,
+      getWorkId,
       getSource: getText,
       waitForEditor,
       setFallback: setFallbackValue,

@@ -24,8 +24,8 @@ class visual_editor_controller_default extends Controller {
     this.editor?.disconnect();
     if (this.element.visualEditorController === this) delete this.element.visualEditorController;
   }
-  // Desktop switches deck kinds without remounting the form; push the host
-  // value into the live feature so document key handling follows the deck.
+  // Desktop switches work kinds without remounting the form; push the host
+  // value into the live feature so document key handling follows the work.
   kindValueChanged() {
     this.editor?.setKind?.(this.kindValue);
   }

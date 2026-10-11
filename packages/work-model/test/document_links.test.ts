@@ -164,7 +164,7 @@ test("explicit id and document key forms escape ambiguous aliases at graph level
   assert.deepEqual(graph.edges, [{ source: "source", target: "second" }])
 })
 
-test("malformed portable Markdown metadata safely falls back to the deck identity", () => {
+test("malformed portable Markdown metadata safely falls back to the work identity", () => {
   assert.deepEqual(parsePortableDocumentLinks("---\nelef_document_key: [bad\nelef_aliases: nope\n---\n# Notes"), {
     documentKey: null,
     aliases: []

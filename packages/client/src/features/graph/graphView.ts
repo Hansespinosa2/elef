@@ -53,7 +53,7 @@ export function graphNodeHref(node: GraphNodeData): string {
   if (typeof url === "string" && url.startsWith("/") && !url.startsWith("//") && !/[\\\u0000-\u001f]/.test(url)) {
     return url;
   }
-  return "#deck/" + encodeURIComponent(String(node.id));
+  return "#work/" + encodeURIComponent(String(node.id));
 }
 
 function renderGraphSvg(document: Document, nodes: GraphNodeData[], edges: GraphEdgeData[]): SVGElement {
@@ -98,7 +98,7 @@ function renderGraphSvg(document: Document, nodes: GraphNodeData[], edges: Graph
       class: "document-graph-node",
       "data-node-id": id,
       "data-title": title,
-      "data-deck-id": id,
+      "data-work-id": id,
       "aria-label": "Open " + title,
     });
     const hitArea = svgElement(document, "rect", {

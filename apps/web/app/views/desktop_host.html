@@ -30,9 +30,9 @@
           <button id="refresh-library" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Refresh</button>
           <button id="check-for-updates" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Check for updates</button>
           <button id="import-elef" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" disabled>Import .elef</button>
-          <button id="new-deck" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" disabled>＋ New work</button>
+          <button id="new-work" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" disabled>＋ New work</button>
         </div>
-        <span id="breadcrumb-current" class="sr-only">Decks</span>
+        <span id="breadcrumb-current" class="sr-only">Works</span>
       </div>
     </header>
 
@@ -43,7 +43,7 @@
             <div class="welcome-art" aria-hidden="true"><span class="art-page art-page-back"></span><span class="art-page art-page-front"><i></i><i></i><i></i></span></div>
             <p class="native-eyebrow">YOUR WORK, IN PLAIN FILES</p>
             <h1 id="welcome-title">A quiet place for your ideas.</h1>
-            <p class="welcome-copy">Choose a folder for your Elef library. Your decks stay on disk and work offline.</p>
+            <p class="welcome-copy">Choose a folder for your Elef library. Your Works stay on disk and work offline.</p>
             <button id="choose-library" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold large-button" type="button">Choose a library folder <span aria-hidden="true">→</span></button>
             <p class="welcome-footnote">No account. No server. Just your folders.</p>
           </div>
@@ -53,12 +53,12 @@
           <div id="library-view-mount"></div>
         </section>
 
-        <section id="deck-view" class="deck-view" hidden aria-labelledby="deck-title">
-          <h1 id="deck-title" class="sr-only">Deck</h1>
-          <span id="deck-kind" class="sr-only">PRESENTATION</span>
-          <span id="deck-source-name" class="sr-only"></span>
-          <span id="deck-id" class="sr-only"></span>
-          <p id="deck-notice" class="notice" role="status" hidden></p>
+        <section id="work-view" class="work-view" hidden aria-labelledby="work-title">
+          <h1 id="work-title" class="sr-only">Work</h1>
+          <span id="work-kind" class="sr-only">PRESENTATION</span>
+          <span id="work-source-name" class="sr-only"></span>
+          <span id="work-id" class="sr-only"></span>
+          <p id="work-notice" class="notice" role="status" hidden></p>
           <p class="desktop-save-note">External edits are checked before every save. A simultaneous write in the final atomic replacement window can still be overwritten; keep version history enabled in your sync tool.</p>
           <form id="desktop-editor-form" class="visual-editor-form file-library-editor-form" data-action="input->preview#schedule change->preview#schedule input->slide-overview#sourceChanged change->slide-overview#sourceChanged preview:updated->slide-overview#previewUpdated" data-preview-url-value="" data-preview-timeout-value="4000" data-media-enabled-value="false" data-media-work-kind-value="presentation" data-editor-mode="visual">
             <div id="desktop-editor-mount"></div>
@@ -87,8 +87,8 @@
     </dialog>
     <dialog id="import-conflict-dialog" class="app-dialog">
       <form method="dialog">
-        <p class="native-eyebrow">DUPLICATE DECK</p>
-        <h2>Deck already in this library</h2>
+        <p class="native-eyebrow">DUPLICATE WORK</p>
+        <h2>Work already in this library</h2>
         <p id="import-conflict-message" class="dialog-copy"></p>
         <p class="dialog-copy">Replace moves the current folder to Trash. Keep both assigns the imported copy a new identity.</p>
         <div class="dialog-actions">

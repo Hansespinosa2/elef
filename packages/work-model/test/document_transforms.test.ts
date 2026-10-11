@@ -51,11 +51,11 @@ test("slide moves keep front matter and reflow trailing blank lines with the sec
   assert.equal(moved, "\n# Two\n\nBody two.\n\n---\n# One\n\nBody one.\n")
   assert.equal(moveSlide(TWO_SLIDES, { slides: mapOf(TWO_SLIDES) }, 0, 5), null)
   assert.equal(moveSlide(TWO_SLIDES, { slides: mapOf(TWO_SLIDES) }, 4, 0), null)
-  const withFrontMatter = "---\ntitle: Deck\n---\nA\n---\nB\n"
+  const withFrontMatter = "---\ntitle: Work\n---\nA\n---\nB\n"
   const frontMap = buildEditorMap(withFrontMatter)
   assert.equal(
     moveSlide(withFrontMatter, frontMap, 0, 1),
-    "---\ntitle: Deck\n---\nB\n---\nA\n"
+    "---\ntitle: Work\n---\nB\n---\nA\n"
   )
 })
 

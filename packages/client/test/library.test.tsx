@@ -27,7 +27,7 @@ async function seed(host: ReturnType<typeof typedHost>) {
   });
   await host.library.createWork({
     workspaceId: ws("ws-1"),
-    title: "Beta deck",
+    title: "Beta work",
     kind: "presentation",
     text: "# Beta\n\nSlide text.\n",
   });
@@ -46,9 +46,9 @@ test("library tabs filter by kind and navigate through the host seam", async () 
   const options: ElefMountOptions = { navigate: (target) => seen.push(target) };
   const { element, shell } = await mountInto(host, options);
   try {
-    assert.deepEqual(titles(element), ["Alpha doc", "Beta deck"]);
+    assert.deepEqual(titles(element), ["Alpha doc", "Beta work"]);
     await click(element.querySelector('[data-library-tab="presentations"]'));
-    assert.deepEqual(titles(element), ["Beta deck"]);
+    assert.deepEqual(titles(element), ["Beta work"]);
     assert.deepEqual(seen, [{ url: "#library/presentations" }]);
     await click(element.querySelector('[data-library-tab="documents"]'));
     assert.deepEqual(titles(element), ["Alpha doc"]);
@@ -62,16 +62,16 @@ test("search box filters cards client-side with a no-results state", async () =>
   await seed(host);
   await host.library.createWork({
     workspaceId: ws("ws-1"),
-    title: "Café Deck",
+    title: "Café Work",
     kind: "presentation",
-    text: "# Café Deck\n",
+    text: "# Café Work\n",
   });
   const { element, shell } = await mountInto(host);
   try {
     await setSearchInput(element.querySelector("#library-search"), "BETA");
-    assert.deepEqual(titles(element), ["Beta deck"]);
+    assert.deepEqual(titles(element), ["Beta work"]);
     await setSearchInput(element.querySelector("#library-search"), "CAFÉ");
-    assert.deepEqual(titles(element), ["Café Deck"], "search ignores case and canonical Unicode differences");
+    assert.deepEqual(titles(element), ["Café Work"], "search ignores case and canonical Unicode differences");
     assert.match(
       element.querySelector("#library-count")?.textContent ?? "",
       /3 works · 1 shown/,
@@ -93,9 +93,9 @@ test("card warnings render hostile text inert with a note role", async () => {
   const host = typedHost();
   const warnings = ['<script>run()</script><img src="x" onerror="run()">'];
   const work: WorkSummary = {
-    id: "deck-unsafe" as WorkId,
+    id: "work-unsafe" as WorkId,
     workspaceId: ws("ws-1"),
-    title: "Unsafe deck",
+    title: "Unsafe work",
     kind: "presentation",
     warnings,
   };
@@ -113,7 +113,7 @@ test("card warnings render hostile text inert with a note role", async () => {
   await settled();
   try {
     assert.equal(element.querySelector("script, img, [onerror]"), null);
-    const note = element.querySelector(".deck-warning");
+    const note = element.querySelector(".work-warning");
     assert.equal(note?.textContent, warnings[0]);
     assert.equal(note?.getAttribute("role"), "note");
   } finally {
@@ -141,7 +141,7 @@ test("create dialog creates through the port and opens the new work", async () =
     );
     root.dispatchEvent(event);
     await settled();
-    await setInputValue(element.querySelector("#new-deck-name"), "Fresh work");
+    await setInputValue(element.querySelector("#new-work-name"), "Fresh work");
     await submitForm(element.querySelector("#create-form"));
     assert.deepEqual(titles(element), ["Fresh work"]);
     assert.equal(seen.length, 1, "new work opens after create");
@@ -164,7 +164,7 @@ test("rename form renames through the port and refreshes the card", async () => 
   try {
     await setInputValue(element.querySelector(".library-rename input"), "Renamed doc");
     await submitForm(element.querySelector(".library-rename"));
-    assert.deepEqual(titles(element), ["Renamed doc", "Beta deck"]);
+    assert.deepEqual(titles(element), ["Renamed doc", "Beta work"]);
     const works = await host.library.listWorks(ws("ws-1"));
     assert.ok(works.some((work) => work.title === "Renamed doc"));
     assert.equal(
@@ -197,10 +197,10 @@ test("delete honors the host confirm seam before calling the port", async () => 
   };
   const { element, shell } = await mountInto(host, options);
   try {
-    await click(element.querySelector("article.library-card .deck-action.danger"));
-    assert.deepEqual(titles(element), ["Alpha doc", "Beta deck"], "declined delete keeps the work");
-    await click(element.querySelector("article.library-card .deck-action.danger"));
-    assert.deepEqual(titles(element), ["Beta deck"], "confirmed delete removes the work");
+    await click(element.querySelector("article.library-card .work-action.danger"));
+    assert.deepEqual(titles(element), ["Alpha doc", "Beta work"], "declined delete keeps the work");
+    await click(element.querySelector("article.library-card .work-action.danger"));
+    assert.deepEqual(titles(element), ["Beta work"], "confirmed delete removes the work");
     const works = await host.library.listWorks(ws("ws-1"));
     assert.equal(works.length, 1);
     assert.deepEqual(events, [{ type: "deleted", title: "Alpha doc" }], "host observes the delete");
@@ -226,8 +226,8 @@ test("a cancelled delete is silent and keeps the work", async () => {
     onLibraryEvent: (event) => events.push(event.type),
   });
   try {
-    await click(element.querySelector("article.library-card .deck-action.danger"));
-    assert.deepEqual(titles(element), ["Alpha doc", "Beta deck"], "cancelled delete keeps the work");
+    await click(element.querySelector("article.library-card .work-action.danger"));
+    assert.deepEqual(titles(element), ["Alpha doc", "Beta work"], "cancelled delete keeps the work");
     assert.deepEqual(events, [], "no library event fires for a cancellation");
     const notice = element.querySelector("#notice") as unknown as { hidden: boolean };
     assert.equal(notice.hidden, true, "no notice is shown for a cancellation");
@@ -378,7 +378,7 @@ test("empty library invites creation for the active filter", async () => {
       "empty-state action opens the create dialog",
     );
     assert.equal(
-      (element.querySelector("#new-deck-kind") as unknown as { value: string }).value,
+      (element.querySelector("#new-work-kind") as unknown as { value: string }).value,
       "document",
       "dialog inherits the active filter kind",
     );
@@ -412,7 +412,7 @@ test("present button and host extras appear only when the host provides them", a
   try {
     const cards = element.querySelectorAll("article.library-card");
     assert.equal(cards.length, 2);
-    const presentButtons = [...element.querySelectorAll(".library-card-menu-options .deck-action")].filter(
+    const presentButtons = [...element.querySelectorAll(".library-card-menu-options .work-action")].filter(
       (node) => node.textContent?.trim() === "Present",
     );
     assert.equal(presentButtons.length, 1, "only presentations offer Present");
@@ -449,7 +449,7 @@ test("deleted event forwards host-defined refresh detail opaquely", async () => 
     onLibraryEvent: (event) => events.push(event),
   });
   try {
-    await click(element.querySelector("article.library-card .deck-action.danger"));
+    await click(element.querySelector("article.library-card .work-action.danger"));
     assert.equal(events.length, 1);
     const event = events[0] as { type: string; work: WorkSummary; detail: unknown };
     assert.equal(event.type, "deleted");

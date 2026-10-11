@@ -1,4 +1,4 @@
-import { createDeckOpenFlow, prepareDeckOpen } from "./deck_open_flow.js"
+import { createWorkOpenFlow, prepareWorkOpen } from "./work_open_flow.js"
 import { measurePaintedAction } from "./performance_measurement.js"
 import { editorFor } from "./editor_controller_lookup.js"
 import { mountHostPresentationEditor } from "./presentation_editor_host.js"
@@ -14,7 +14,7 @@ import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, renderEditorView } from "./editor_view.js"
 import { CREATE_WORK_EVENT, GraphController, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute, renderGraphView } from "@elef/client"
 
-export interface FileLibraryDeck {
+export interface WorkFolder {
   id: string;
   name: string;
   source: string;
@@ -25,23 +25,23 @@ export interface FileLibraryDeck {
   [key: string]: any;
 }
 
-// The native bridge omits content_hash for unhashed decks; normalize at
-// entry so every deck in the system carries a hash. Empty string means
+// The native bridge omits content_hash for unhashed work folders; normalize at
+// entry so every work folder in the system carries a hash. Empty string means
 // "unknown": it never equals a real revision, so staleness checks treat
-// hashless decks as changed (the safe direction), and work_session declines
+// hashless work folders as changed (the safe direction), and work_session declines
 // sessions for them exactly as it would for undefined.
-function ensureDeckHash(deck: Omit<FileLibraryDeck, "content_hash"> & { content_hash?: string }): FileLibraryDeck {
-  deck.content_hash ??= ""
+function ensureWorkFolderHash(workFolder: Omit<WorkFolder, "content_hash"> & { content_hash?: string }): WorkFolder {
+  workFolder.content_hash ??= ""
   // The ensure above guarantees content_hash at runtime; the cast records
   // what it established (TypeScript cannot narrow the object from it).
-  return deck as FileLibraryDeck
+  return workFolder as WorkFolder
 }
 
 export interface FileLibraryStatus {
   root: string;
   config?: any;
   config_notice?: string;
-  decks: FileLibraryDeck[];
+  work_folders: WorkFolder[];
   [key: string]: any;
 }
 
@@ -57,7 +57,7 @@ export interface DesktopPlatform {
   createCloseFlow: any;
   createTransportAdapter: any;
   installFetchTransport: any;
-  mediaUrlsForDeck: any;
+  mediaUrlsForWorkFolder: any;
   checkForUpdate: any;
   createIdleUpdateCheck: any;
   installPendingUpdate: any;
@@ -86,7 +86,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   const {
     fileLibrary, createLibraryHost, listen, getCurrentWindow,
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
-    mediaUrlsForDeck, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
+    mediaUrlsForWorkFolder, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
     registerEditorRuntime
   } = platform
@@ -97,10 +97,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   const readPreviewTrace = installFetchTransport({
     renderer,
     getContext: async (source: string) => ({
-      kind: activeDeck?.source_file === "document.md" ? "document" : "presentation",
-      title: document.querySelector<HTMLInputElement>("#desktop-editor-title")?.value.trim() || activeDeck?.name || "Untitled",
-      deckId: activeDeck?.id || "",
-      mediaBaseUrl: activeDeck ? mediaUrlsForDeck(activeDeck).assetBaseUrl : "",
+      kind: activeWorkFolder?.source_file === "document.md" ? "document" : "presentation",
+      title: document.querySelector<HTMLInputElement>("#desktop-editor-title")?.value.trim() || activeWorkFolder?.name || "Untitled",
+      workId: activeWorkFolder?.id || "",
+      mediaBaseUrl: activeWorkFolder ? mediaUrlsForWorkFolder(activeWorkFolder).assetBaseUrl : "",
       documentNodes: await previewDocumentNodes(source)
     })
   })
@@ -111,7 +111,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     sourceName: "presentation[source]",
     mode: "visual",
     visualDisabled: true,
-    visualDisabledMessage: "Open a deck to render its preview",
+    visualDisabledMessage: "Open a Work to render its preview",
     showTitle: true,
     showSubmit: false,
     showSaveStatus: false,
@@ -120,14 +120,14 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     documentTitles: [],
     ids: {
       field: "desktop-editor-field",
-      source: "deck-source",
-      surface: "deck-source-editor",
-      label: "deck-source-label",
+      source: "work-source",
+      surface: "work-source-editor",
+      label: "work-source-label",
       title: "desktop-editor-title",
       visualMode: "visual-mode",
       sourceMode: "source-mode",
-      theme: "deck-theme",
-      typography: "deck-typography",
+      theme: "work-theme",
+      typography: "work-typography",
       preview: "desktop-preview"
     }
   })
@@ -148,8 +148,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     libraryName: document.querySelector("#library-name") as HTMLElement,
     welcome: document.querySelector("#welcome-view") as HTMLElement,
     library: document.querySelector("#library-view") as HTMLElement,
-    deckView: document.querySelector("#deck-view") as HTMLElement,
-    deckTitle: document.querySelector("#deck-title") as HTMLElement,
+    workView: document.querySelector("#work-view") as HTMLElement,
+    workTitle: document.querySelector("#work-title") as HTMLElement,
     status: document.querySelector("#status-text") as HTMLElement,
     settingsDialog: document.querySelector("#settings-dialog") as HTMLDialogElement,
     settingsForm: document.querySelector("#settings-form") as HTMLFormElement,
@@ -157,7 +157,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     aboutDialog: document.querySelector("#about-dialog") as HTMLDialogElement,
     editorField: document.querySelector("#desktop-editor-field") as HTMLElement,
     editorForm: document.querySelector("#desktop-editor-form") as HTMLFormElement,
-    editorInput: document.querySelector("#deck-source") as HTMLTextAreaElement,
+    editorInput: document.querySelector("#work-source") as HTMLTextAreaElement,
     titleInput: document.querySelector("#desktop-editor-title") as HTMLInputElement,
     restoreDraft: document.querySelector("#restore-local-draft") as HTMLButtonElement,
     importConflictDialog: document.querySelector("#import-conflict-dialog") as HTMLDialogElement,
@@ -171,8 +171,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
 
   let library: FileLibraryStatus | null = null
   let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} }
-  let decks: FileLibraryDeck[] = []
-  let activeDeck: FileLibraryDeck | null = null
+  let workFolders: WorkFolder[] = []
+  let activeWorkFolder: WorkFolder | null = null
   let presentationEditorHandle: ReturnType<typeof mountHostPresentationEditor> | null = null
   let saveFlow: any = null
   let sessionStatusKind = "clean"
@@ -188,7 +188,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   let titleFlow: any = null
   const startupUpdateCheck = createIdleUpdateCheck(
     () => checkForUpdates(false),
-    () => !elements.deckView.hidden
+    () => !elements.workView.hidden
   )
 
   // The shared client renders the authoring dialog (the same DOM contract as
@@ -242,7 +242,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   const sessionTransport = {
     ...transport,
     saveSource: async (id: string, source: string) => {
-      const isDocument = decks.find(deck => deck.id === id)?.source_file === "document.md"
+      const isDocument = workFolders.find(workFolder => workFolder.id === id)?.source_file === "document.md"
       if ((typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) && e2eNextSaveDelayMs > 0) {
         const delay = e2eNextSaveDelayMs
         e2eNextSaveDelayMs = 0
@@ -253,12 +253,12 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       return result
     }
   }
-  function openSession(deck: FileLibraryDeck): void {
+  function openSession(workFolder: WorkFolder): void {
     closeSession()
-    lastSourceFile = deck.source_file
+    lastSourceFile = workFolder.source_file
     const adapter = createCodeMirrorBinding({
       getEditor: () => editorFor(elements.editorField),
-      getDeckId: () => activeDeck?.id,
+      getWorkId: () => activeWorkFolder?.id,
       getFallbackValue: () => elements.editorInput.value,
       setFallbackValue: value => { elements.editorInput.value = value },
       waitForEditor: () => waitForEditorController(elements.editorField, editorFor),
@@ -267,9 +267,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     const session = createWorkSession({
       transport: sessionTransport,
       policy: {
-        workId: deck.id,
-        kind: deck.source_file === "document.md" ? "document" : "presentation",
-        deck,
+        workId: workFolder.id,
+        kind: workFolder.source_file === "document.md" ? "document" : "presentation",
+        work: workFolder,
         getText: adapter.getText,
         setText: adapter.setText,
         saveDelay: quietSavePolicy.saveDelay,
@@ -283,8 +283,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     session.onStatus((status: any) => {
       sessionStatusKind = status.kind
       elements.restoreDraft.hidden = !session.canRestoreDraft
-      if (activeDeck && activeDeck.source_file !== lastSourceFile) {
-        lastSourceFile = activeDeck.source_file
+      if (activeWorkFolder && activeWorkFolder.source_file !== lastSourceFile) {
+        lastSourceFile = activeWorkFolder.source_file
         syncSourceLabel()
       }
       if (status.kind === "clean" && openFilesWaitingForSave) {
@@ -293,9 +293,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       }
     })
     session.onExternalChange((snapshot: any) => {
-      if (snapshot.removed || !activeDeck) return
-      if (activeDeck.source_file === "document.md" &&
-          (snapshot.baseline.revision !== activeDeck.content_hash || snapshot.sourceFile !== activeDeck.source_file)) {
+      if (snapshot.removed || !activeWorkFolder) return
+      if (activeWorkFolder.source_file === "document.md" &&
+          (snapshot.baseline.revision !== activeWorkFolder.content_hash || snapshot.sourceFile !== activeWorkFolder.source_file)) {
         documentGraphCache.invalidate()
       }
     })
@@ -312,11 +312,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     sessionStatusKind = "clean"
   }
   titleFlow = createTitleSaveFlow({
-    getDeck: () => activeDeck,
+    getWork: () => activeWorkFolder,
     getTitle: () => elements.titleInput.value,
-    renameDeck,
+    renameWork,
     onRenamed: (renamed: any) => {
-      elements.deckTitle.textContent = renamed.name
+      elements.workTitle.textContent = renamed.name
       shellElement<HTMLElement>("#breadcrumb-current").textContent = renamed.name
     },
     onState: () => {},
@@ -392,9 +392,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
           const traceStart = readPreviewTrace?.().length || 0
           const openStageStart = openStageMeasurements.length
           const measured = await measurePaintedAction(async () => {
-            await openDeck(id)
-            if (activeDeck?.id !== id || elements.editorForm.dataset.loadedDeckId !== id ||
-                shellElement<HTMLButtonElement>("#visual-mode").disabled) throw new Error("The measured deck did not finish rendering.")
+            await openWork(id)
+            if (activeWorkFolder?.id !== id || elements.editorForm.dataset.loadedWorkId !== id ||
+                shellElement<HTMLButtonElement>("#visual-mode").disabled) throw new Error("The measured Work did not finish rendering.")
             const projection = elements.editorForm.querySelector(".presentation-editor-projection")
             if (!projection) throw new Error("The measured presentation projection did not render.")
             return { id, slides: projection.querySelectorAll(".slide-frame > .slide").length }
@@ -416,7 +416,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
             await refreshLibrary()
             const notice = document.querySelector<HTMLElement>("#notice")
             if (notice && !notice.hidden && notice.dataset.tone === "error") throw new Error("The measured library refresh failed.")
-            return { total: decks.length, rendered: document.querySelectorAll("#deck-list .library-card").length }
+            return { total: workFolders.length, rendered: document.querySelectorAll("#work-list .library-card").length }
           })
         },
         typingValue: () => currentSource(),
@@ -501,11 +501,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     document.body.dataset.desktopView = "library"
     elements.welcome.hidden = Boolean(library)
     elements.library.hidden = !library
-    elements.deckView.hidden = true
+    elements.workView.hidden = true
     elements.libraryName.textContent = library ? library.root.split(/[\\/]/).filter(Boolean).at(-1) || library.root : "No library selected"
-    shellElement<HTMLButtonElement>("#new-deck").disabled = !library
+    shellElement<HTMLButtonElement>("#new-work").disabled = !library
     shellElement<HTMLButtonElement>("#import-elef").disabled = !library
-    shellElement<HTMLElement>("#breadcrumb-current").textContent = "Decks"
+    shellElement<HTMLElement>("#breadcrumb-current").textContent = "Works"
     // The first show preserves the boot filter (a deep-linked tab); every
     // return home resets to All and reloads, so cards and previews reflect
     // saves made in the editor (the pre-client card pass re-read preview
@@ -555,7 +555,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       if (!slot) return
       graphController?.destroy()
       renderGraphView(slot, graph)
-      graphController = new GraphController(slot, graph, { onOpenDeck: (id: string) => void openDeck(id) })
+      graphController = new GraphController(slot, graph, { onOpenWork: (id: string) => void openWork(id) })
       // The client hides the panel when the filter leaves documents; the host
       // unhides it once populated. Re-read the settled filter here so a slow
       // load racing a tab switch lands in the correct state.
@@ -568,16 +568,16 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   async function refreshLibrary(): Promise<void> {
     if (!library) return
     try {
-      const [listedDecks] = await Promise.all([
-        fileLibrary.listDecks(),
+      const [listedWorkFolders] = await Promise.all([
+        fileLibrary.listWorkFolders(),
         loadDesktopAuthoringRegistry()
       ])
-      decks = listedDecks.map(ensureDeckHash)
+      workFolders = listedWorkFolders.map(ensureWorkFolderHash)
       documentGraphCache.invalidate()
-      libraryHost?.noteListedDecks(listedDecks)
+      libraryHost?.noteListedWorkFolders(listedWorkFolders)
       await shell.refresh()
       if (currentFilter() === "documents") await showDocumentGraph()
-      setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`)
+      setStatus(`${workFolders.length} ${workFolders.length === 1 ? "Work" : "Works"}`)
       clearNotice()
     } catch (error) {
       showError(error)
@@ -599,11 +599,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       await loadDesktopAuthoringRegistry()
       documentGraphCache.invalidate()
       libraryConfig = selected.config || libraryConfig
-      decks = selected.decks.map(ensureDeckHash)
+      workFolders = selected.work_folders.map(ensureWorkFolderHash)
       applyTheme(libraryConfig.theme)
       showLibrary()
       if (selected.config_notice) showNotice(selected.config_notice, "error")
-      setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`)
+      setStatus(`${workFolders.length} ${workFolders.length === 1 ? "Work" : "Works"}`)
       if (await fileLibrary.pendingOpenedElefCount()) void processOpenedFiles()
     } catch (error) {
       showError(error)
@@ -619,9 +619,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     )
   }
 
-  const openDeck = createDeckOpenFlow(openDeckNow)
+  const openWork = createWorkOpenFlow(openWorkNow)
 
-  async function openDeckNow(id: string): Promise<boolean> {
+  async function openWorkNow(id: string): Promise<boolean> {
     // Hide the library before the first await: pending card-preview idle
     // callbacks would otherwise spend fetches and main-thread renders
     // through the whole open. Every early exit below restores visibility;
@@ -631,28 +631,28 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     elements.library.hidden = true
     const restoreLibrary = () => { elements.library.hidden = libraryWasHidden }
     try {
-      if (document.body.classList.contains("presenting-deck")) await exitPresentation()
+      if (document.body.classList.contains("presenting-work")) await exitPresentation()
       elements.editorForm.previewController?.finishEditing()
       await Promise.resolve()
-      if (activeDeck && hasUnsavedChanges() && !(await flushSave())) { restoreLibrary(); return false }
-      delete elements.editorForm.dataset.loadedDeckId
-      let transition: { deck: FileLibraryDeck; prepared: unknown; revision: unknown } | null
+      if (activeWorkFolder && hasUnsavedChanges() && !(await flushSave())) { restoreLibrary(); return false }
+      delete elements.editorForm.dataset.loadedWorkId
+      let transition: { work: WorkFolder; prepared: unknown; revision: unknown } | null
       do {
-        transition = await prepareDeckOpen<string, FileLibraryDeck>(id, {
-          read: target => measureOpenStage("readDeck", () => transport.readDeck(target)),
+        transition = await prepareWorkOpen<string, WorkFolder>(id, {
+          read: target => measureOpenStage("readWork", () => transport.readWorkFolder(target)),
           isDirty: hasUnsavedChanges,
           getRevision: () => saveFlow?.revision ?? 0,
           flushSave,
-          prepare: deck => measureOpenStage("prepareDeck", async () => {
+          prepare: work => measureOpenStage("prepareWork", async () => {
             await registerEditorRuntime()
             let documentTitles: string[] = []
-            if (deck.source_file === "document.md" || deck.source.includes("[[")) {
+            if (work.source_file === "document.md" || work.source.includes("[[")) {
               try {
                 const graph = await documentGraphData()
-                documentTitles = deck.source_file === "document.md" ? graph.nodes.map((node: any) => node.title) : []
+                documentTitles = work.source_file === "document.md" ? graph.nodes.map((node: any) => node.title) : []
               } catch (_error) {
-                documentTitles = deck.source_file === "document.md"
-                  ? decks.filter(item => item.kind === "document").map(item => item.name) : []
+                documentTitles = work.source_file === "document.md"
+                  ? workFolders.filter(item => item.kind === "document").map(item => item.name) : []
               }
             }
             return { documentTitles }
@@ -660,15 +660,15 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
         })
       } while (transition && (hasUnsavedChanges() || (saveFlow?.revision ?? 0) !== transition.revision))
       if (!transition) {
-        if (activeDeck) elements.editorForm.dataset.loadedDeckId = activeDeck.id
+        if (activeWorkFolder) elements.editorForm.dataset.loadedWorkId = activeWorkFolder.id
         restoreLibrary()
         return false
       }
-      const { deck, prepared } = transition
+      const { work, prepared } = transition
       const { documentTitles } = prepared as { documentTitles: string[] }
-      const isDocument = deck.source_file === "document.md"
-      if (deck.id !== id) {
-        decks = decks.map(item => item.id === id ? { ...item, id: deck.id } : item)
+      const isDocument = work.source_file === "document.md"
+      if (work.id !== id) {
+        workFolders = workFolders.map(item => item.id === id ? { ...item, id: work.id } : item)
         documentGraphCache.invalidate()
         void shell.refresh()
       }
@@ -676,7 +676,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // save ownership occur in one synchronous turn, with no stale A buffer
       // able to schedule a write for B during graph/controller preparation.
       closeSession()
-      activeDeck = null
+      activeWorkFolder = null
       try {
         configureEditorKind(elements.editorField.closest(".editor-shell"), isDocument ? "document" : "presentation", {
           documentTitles,
@@ -688,7 +688,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
           ? editorFor(elements.editorField)
           : waitForEditorController(elements.editorField, editorFor))
         measureOpenStage("loadDocument", () => {
-          editor.loadDocument(deck.source)
+          editor.loadDocument(work.source)
           editor.setEditingMode("visual", { restoreCaret: false })
         })
       } catch (error) {
@@ -697,7 +697,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
         throw error
       }
       // The shared client presentation editor only handles presentation
-      // decks: mount it when one opens and destroy it when a document deck
+      // works: mount it when one opens and destroy it when a document work
       // opens so it never double-handles document projection input beside
       // the document editor.
       if (isDocument) {
@@ -707,19 +707,19 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
         presentationEditorHandle = mountHostPresentationEditor(elements.editorForm)
       }
     const viewSetupStartedAt = (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) ? performance.now() : null
-      transport.activateDeck(deck, id)
-      activeDeck = deck
-      openSession(deck)
-      elements.deckTitle.textContent = deck.name
-      elements.deckTitle.hidden = !isDocument
-      elements.titleInput.value = deck.name
-      shellElement<HTMLElement>("#deck-kind").textContent = deck.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
-      shellElement<HTMLElement>("#deck-source-name").textContent = deck.source_file
-      elements.editorField.dataset.editorInitialSourceValue = JSON.stringify(deck.source)
-      const mediaUrls = mediaUrlsForDeck(deck)
+      transport.activateWorkFolder(work, id)
+      activeWorkFolder = work
+      openSession(work)
+      elements.workTitle.textContent = work.name
+      elements.workTitle.hidden = !isDocument
+      elements.titleInput.value = work.name
+      shellElement<HTMLElement>("#work-kind").textContent = work.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
+      shellElement<HTMLElement>("#work-source-name").textContent = work.source_file
+      elements.editorField.dataset.editorInitialSourceValue = JSON.stringify(work.source)
+      const mediaUrls = mediaUrlsForWorkFolder(work)
       elements.editorForm.dataset.previewUrlValue = mediaUrls.previewUrl
       elements.editorForm.dataset.mediaEnabledValue = "true"
-      elements.editorForm.dataset.mediaWorkKindValue = deck.source_file === "document.md" ? "document" : "presentation"
+      elements.editorForm.dataset.mediaWorkKindValue = work.source_file === "document.md" ? "document" : "presentation"
       elements.editorForm.dataset.mediaUploadUrlValue = mediaUrls.uploadUrl
       elements.editorForm.dataset.mediaAssetBaseUrlValue = mediaUrls.assetBaseUrl
       elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
@@ -727,17 +727,17 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       visualButton.disabled = true
       visualButton.title = "Rendering preview…"
       elements.editorInput.disabled = false
-      shellElement<HTMLElement>("#deck-id").textContent = deck.id
-      elements.editorForm.dataset.loadedDeckId = deck.id
-      const notice = document.querySelector("#deck-notice") as HTMLElement
-      notice.textContent = deck.notices.join(" ")
-      notice.hidden = deck.notices.length === 0
+      shellElement<HTMLElement>("#work-id").textContent = work.id
+      elements.editorForm.dataset.loadedWorkId = work.id
+      const notice = document.querySelector("#work-notice") as HTMLElement
+      notice.textContent = work.notices.join(" ")
+      notice.hidden = work.notices.length === 0
       elements.library.hidden = true
-      elements.deckView.hidden = false
+      elements.workView.hidden = false
       document.body.dataset.desktopView = "editor"
-      shellElement<HTMLElement>("#breadcrumb-current").textContent = deck.name
-      setStatus("Deck opened")
-      if (viewSetupStartedAt !== null) recordOpenStage("deckViewSetup", viewSetupStartedAt)
+      shellElement<HTMLElement>("#breadcrumb-current").textContent = work.name
+      setStatus("Work opened")
+      if (viewSetupStartedAt !== null) recordOpenStage("workViewSetup", viewSetupStartedAt)
       await measureOpenStage("previewRefresh", () => elements.editorForm.previewController?.refresh())
       return true
     } catch (error) {
@@ -746,11 +746,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
   }
 
-  async function renameDeck(deck: FileLibraryDeck, name: string): Promise<any> {
-    if (typeof name !== "string" || name.trim() === deck.name) return
-    const renamed = await fileLibrary.renameDeck(deck.id, name.trim())
-    if (activeDeck && activeDeck.id === deck.id) Object.assign(activeDeck, renamed)
-    decks = decks.map(item => item.id === deck.id ? { ...item, ...renamed } : item)
+  async function renameWork(workFolder: WorkFolder, name: string): Promise<any> {
+    if (typeof name !== "string" || name.trim() === workFolder.name) return
+    const renamed = await fileLibrary.renameWorkFolder(workFolder.id, name.trim())
+    if (activeWorkFolder && activeWorkFolder.id === workFolder.id) Object.assign(activeWorkFolder, renamed)
+    workFolders = workFolders.map(item => item.id === workFolder.id ? { ...item, ...renamed } : item)
     await shell.refresh()
     return renamed
   }
@@ -759,37 +759,37 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   // host only keeps its editor-side caches consistent and reports status.
   function handleLibraryEvent(event: any): void {
     if (event.type === "renamed") {
-      if (activeDeck && activeDeck.id === event.work.id) Object.assign(activeDeck, { name: event.work.title })
-      decks = decks.map(item => item.id === event.work.id ? { ...item, name: event.work.title } : item)
+      if (activeWorkFolder && activeWorkFolder.id === event.work.id) Object.assign(activeWorkFolder, { name: event.work.title })
+      workFolders = workFolders.map(item => item.id === event.work.id ? { ...item, name: event.work.title } : item)
     }
     if (event.type === "deleted") {
-      if (activeDeck?.id === event.work.id) {
-        activeDeck = null
+      if (activeWorkFolder?.id === event.work.id) {
+        activeWorkFolder = null
         closeSession()
       }
-      decks = decks.filter(item => item.id !== event.work.id)
+      workFolders = workFolders.filter(item => item.id !== event.work.id)
       setStatus(`Moved “${event.work.title}” to Trash`)
     }
     if (currentFilter() === "documents") void showDocumentGraph()
   }
 
   function showImportConflict(error: any): void {
-    const incoming = error.details?.incoming_name || "This deck"
-    const existing = error.details?.existing_name || "an existing deck"
+    const incoming = error.details?.incoming_name || "This Work"
+    const existing = error.details?.existing_name || "an existing Work"
     elements.importConflictMessage.textContent = `“${incoming}” has the same identity as “${existing}”.`
     elements.importConflictDialog.showModal()
   }
 
   async function completeImport(imported: any): Promise<void> {
-    if (imported.replaced && activeDeck?.id === imported.deck.id) {
-      activeDeck = null
+    if (imported.replaced && activeWorkFolder?.id === imported.work_folder.id) {
+      activeWorkFolder = null
       closeSession()
       showLibrary()
     }
     await refreshLibrary()
-    setStatus((imported.replaced ? "Replaced" : "Imported") + ` “${imported.deck.name}”`)
+    setStatus((imported.replaced ? "Replaced" : "Imported") + ` “${imported.work_folder.name}”`)
     if (imported.name_collision) {
-      showNotice(`A deck with an equivalent name already exists. Imported as “${imported.deck.name}”.`, "warning")
+      showNotice(`A Work with an equivalent name already exists. Imported as “${imported.work_folder.name}”.`, "warning")
     }
   }
 
@@ -901,22 +901,22 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
   }
 
-  async function exportCurrentDeck(): Promise<void> {
-    if (!activeDeck) {
-      showNotice("Open a deck before exporting it.")
+  async function exportCurrentWork(): Promise<void> {
+    if (!activeWorkFolder) {
+      showNotice("Open a Work before exporting it.")
       return
     }
     if (hasUnsavedChanges() && !(await flushSave({ force: true }))) return
     try {
-      if (await fileLibrary.exportElef(activeDeck.id)) setStatus("Deck exported")
+      if (await fileLibrary.exportElef(activeWorkFolder.id)) setStatus("Work exported")
     } catch (error) {
       showError(error)
     }
   }
 
-  async function importDeck(): Promise<void> {
+  async function importWork(): Promise<void> {
     if (!library) {
-      showNotice("Choose a library before importing a deck.")
+      showNotice("Choose a library before importing a Work.")
       return
     }
     if (hasUnsavedChanges() && !(await flushSave())) return
@@ -993,28 +993,28 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
   }
 
-  async function printCurrentDeck(): Promise<void> {
-    if (!activeDeck) {
-      showNotice("Open a deck before printing it.")
+  async function printCurrentWork(): Promise<void> {
+    if (!activeWorkFolder) {
+      showNotice("Open a Work before printing it.")
       return
     }
     if (hasUnsavedChanges() && !(await flushSave())) return
     const preview = document.querySelector("#desktop-preview") as HTMLElement
     if (!preview.childElementCount && !(await elements.editorForm.previewController?.refresh())) {
-      showNotice("Render the deck before printing it.", "error")
+      showNotice("Render the Work before printing it.", "error")
       return
     }
-    document.body.classList.add("printing-deck")
+    document.body.classList.add("printing-work")
     await new Promise(resolve => requestAnimationFrame(resolve))
     window.addEventListener("afterprint", () => {
-      document.body.classList.remove("printing-deck")
+      document.body.classList.remove("printing-work")
     }, { once: true })
     window.print()
   }
 
   // Present mode runs on the shared client presentation mount (the retired
   // Stimulus "presentation" controller is gone). The mount persists across
-  // decks on this form; start() re-discovers the live projection slides and
+  // works on this form; start() re-discovers the live projection slides and
   // preview re-renders resync scaling plus navigation while presenting.
   let presentationMount: any = null
 
@@ -1022,7 +1022,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     return elements.editorForm.querySelector(".presentation-editor-projection") as HTMLElement | null
   }
 
-  // renderEditorView rebuilds the projection on every deck open, so each
+  // renderEditorView rebuilds the projection on every work open, so each
   // present starts from a fresh mount bound to the live projection element.
   let presentationResyncListening = false
 
@@ -1044,8 +1044,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   async function startPresentation(): Promise<void> {
-    if (!activeDeck || activeDeck.source_file === "document.md") {
-      showNotice("Open a presentation deck to start presentation mode.")
+    if (!activeWorkFolder || activeWorkFolder.source_file === "document.md") {
+      showNotice("Open a presentation Work to start presentation mode.")
       return
     }
     if (!(await elements.editorForm.previewController?.refresh())) {
@@ -1057,7 +1057,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       showNotice("This presentation has no slides to show.", "error")
       return
     }
-    document.body.classList.add("presenting-deck")
+    document.body.classList.add("presenting-work")
     elements.presentationExit.hidden = false
     document.addEventListener("keydown", presentationKeydown, true)
     try {
@@ -1072,15 +1072,15 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   function presentationKeydown(event: KeyboardEvent): void {
-    if (!document.body.classList.contains("presenting-deck")) return
+    if (!document.body.classList.contains("presenting-work")) return
     if (event.key !== "Escape") return
     event.preventDefault()
     void exitPresentation()
   }
 
   async function exitPresentation(): Promise<void> {
-    if (!document.body.classList.contains("presenting-deck")) return
-    document.body.classList.remove("presenting-deck")
+    if (!document.body.classList.contains("presenting-work")) return
+    document.body.classList.remove("presenting-work")
     elements.presentationExit.hidden = true
     document.removeEventListener("keydown", presentationKeydown, true)
     presentationMount?.destroy()
@@ -1117,16 +1117,16 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   function syncSourceLabel(): void {
-    if (!activeDeck) return
-    shellElement<HTMLElement>("#deck-source-name").textContent = activeDeck.source_file
-    shellElement<HTMLElement>("#deck-kind").textContent = activeDeck.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
+    if (!activeWorkFolder) return
+    shellElement<HTMLElement>("#work-source-name").textContent = activeWorkFolder.source_file
+    shellElement<HTMLElement>("#work-kind").textContent = activeWorkFolder.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
   }
 
   async function handleMenuAction(action: string): Promise<any> {
     if (action === "quit") return getCurrentWindow().close()
     if (action === "choose-library") return chooseLibrary()
     if (action === "refresh-library") return refreshLibrary()
-    if (action === "open-deck") {
+    if (action === "open-work") {
       if (!library) return chooseLibrary()
       if (hasUnsavedChanges() && !(await flushSave())) return
       showLibrary()
@@ -1136,13 +1136,13 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     if (action === "new-presentation") return showCreateDialog("presentation")
     if (action === "new-document") return showCreateDialog("document")
     if (action === "save") return flushSave({ force: true })
-    if (action === "export-elef") return exportCurrentDeck()
-    if (action === "import-elef") return importDeck()
+    if (action === "export-elef") return exportCurrentWork()
+    if (action === "import-elef") return importWork()
     if (action === "settings") return showSettings()
     if (action === "check-for-updates") return checkForUpdates(true)
     if (action === "about") return elements.aboutDialog.showModal()
     if (action === "start-presentation") return startPresentation()
-    if (action === "print") return printCurrentDeck()
+    if (action === "print") return printCurrentWork()
   }
 
   shellElement<HTMLElement>("#choose-library").addEventListener("click", () => void chooseLibrary())
@@ -1152,11 +1152,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     shellElement<HTMLElement>("#back-to-library").click()
   })
   shellElement<HTMLElement>("#open-settings").addEventListener("click", () => void showSettings())
-  shellElement<HTMLElement>("#new-deck").addEventListener("click", () => {
+  shellElement<HTMLElement>("#new-work").addEventListener("click", () => {
     showCreateDialog(currentFilter() === "documents" ? "document" : "presentation")
   })
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
-  shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importDeck())
+  shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
   shellElement<HTMLElement>("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then(saved => {
@@ -1232,15 +1232,15 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // editor, tab targets only move the location hash for deep-linking.
       navigate: target => {
         if (!("url" in target)) {
-          void openDeck(target.workId)
+          void openWork(target.workId)
           return
         }
         if (target.url.startsWith("#")) location.hash = target.url
         if (parseLibraryRoute(target.url)?.filter === "documents") void showDocumentGraph()
       },
-      resolveMediaBaseUrl: work => mediaUrlsForDeck(work.id).assetBaseUrl,
+      resolveMediaBaseUrl: work => mediaUrlsForWorkFolder(work.id).assetBaseUrl,
       presentWork: work => {
-        void openDeck(work.id).then(opened => {
+        void openWork(work.id).then(opened => {
           if (opened) void startPresentation()
         })
       },
@@ -1257,12 +1257,12 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       const [status] = await measureBootstrapStage("library-status", () => Promise.all([fileLibrary.getLibraryStatus(), openedFileListener]))
       library = status
       libraryConfig = status?.config || libraryConfig
-      decks = (status?.decks || []).map(ensureDeckHash)
+      workFolders = (status?.work_folders || []).map(ensureWorkFolderHash)
       await mountLibrary(status)
       applyTheme(libraryConfig.theme)
       measureBootstrapStage("initial-library-render", showLibrary)
       if (status?.config_notice) showNotice(status.config_notice, "error")
-      setStatus(library ? `${decks.length} ${decks.length === 1 ? "deck" : "decks"}` : "Choose a library folder to begin")
+      setStatus(library ? `${workFolders.length} ${workFolders.length === 1 ? "Work" : "Works"}` : "Choose a library folder to begin")
       libraryStatusLoaded = true
     },
     waitForPaint: () => measureBootstrapStage("initial-paint", () => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))),
@@ -1272,7 +1272,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     waitForEditor: async () => {
       // Prewarm the preview worker off the interactive path: the library no
       // longer renders card previews through it, so without this the first
-      // deck open pays the cold-worker spawn and bundle parse.
+      // work open pays the cold-worker spawn and bundle parse.
       void renderer.warmup()
       await measureBootstrapStage("editor-runtime", () => registerEditorRuntime())
       configureEditorKind(elements.editorField.closest(".editor-shell"), "presentation", {

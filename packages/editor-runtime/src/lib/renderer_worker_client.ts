@@ -87,10 +87,10 @@ export function createRendererClient({
     })
   }
 
-  // A tiny deck through the same entry point as every preview: two slides
+  // A tiny work through the same entry point as every preview: two slides
   // (splitter), inline math (KaTeX) and a fenced block (highlight), so the
   // first real render meets compiled code, not a cold worker.
-  const WARMUP_DECK = "# Warmup\n\nInline $x^2$ math.\n\n```js\nconst warm = 1\n```\n\n---\n\nSecond slide.\n"
+  const WARMUP_WORK = "# Warmup\n\nInline $x^2$ math.\n\n```js\nconst warm = 1\n```\n\n---\n\nSecond slide.\n"
 
   function warmup() {
     if (!warmupPromise) {
@@ -100,7 +100,7 @@ export function createRendererClient({
           // failing warmup must never cancel a real render, it only leaves
           // the first render to pay the cold-worker cost as before.
           const prewarmed = ensureWorker()
-          prewarmed.postMessage({ id: WARMUP_ID, input: { source: WARMUP_DECK } })
+          prewarmed.postMessage({ id: WARMUP_ID, input: { source: WARMUP_WORK } })
           prewarmed.postMessage({ id: WARMUP_ID, input: { kind: "markdown-block", source: "Elef" } })
         } catch (_error) {
           // Missing/broken workers resolve silently; the render path still

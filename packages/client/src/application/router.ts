@@ -71,7 +71,7 @@ const WORK_SEGMENTS: Readonly<Record<string, WorkKind>> = {
 // Product work links: authoring entries (new/edit) resolve through the
 // shell/editor stack on both hosts, while read/publish entries (show,
 // present, print, history) are web-only pages. Desktop maps work targets to
-// openDeck instead of URLs.
+// openWork instead of URLs.
 export function parseWorkRoute(url: string): WorkRoute | null {
   let parsed: URL;
   try {

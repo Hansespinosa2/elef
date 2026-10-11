@@ -24,7 +24,7 @@ export { mountEditorHosts } from "./lib/editor_view.js";
 export { renderWorkerMessage } from "./lib/renderer_worker.js";
 export { mermaidAssetUrl } from "./controllers/mermaid_runtime.js";
 export { translateElementMounts } from "./lib/client_mounts.js";
-export { createDeckOpenFlow, prepareDeckOpen } from "./lib/deck_open_flow.js";
+export { createWorkOpenFlow, prepareWorkOpen } from "./lib/work_open_flow.js";
 export { createDocumentGraphCache } from "./lib/document_graph_cache.js";
 export { bindEditorAction, editorActionControl } from "./lib/editor_actions.js";
 export { createCodeMirrorBinding } from "./lib/editor_binding.js";

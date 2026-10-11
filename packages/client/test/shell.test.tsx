@@ -6,9 +6,9 @@ test("fake host mounts the client shell with no Rails/Tauri process", async () =
   const host = typedHost();
   await host.library.createWork({
     workspaceId: ws("ws-1"),
-    title: "Shell deck",
+    title: "Shell work",
     kind: "document",
-    text: "# Shell deck\n",
+    text: "# Shell work\n",
   });
   const { element, shell } = await mountInto(host);
   try {
@@ -16,7 +16,7 @@ test("fake host mounts the client shell with no Rails/Tauri process", async () =
     assert.equal(items.length, 1, "shell lists the fake work");
     const first = items[0];
     assert.ok(first, "first item exists");
-    assert.match(first.textContent ?? "", /Shell deck/, "shell shows the work title");
+    assert.match(first.textContent ?? "", /Shell work/, "shell shows the work title");
     assert.match(
       element.querySelector("#library-count")?.textContent ?? "",
       /1 work/,
@@ -31,7 +31,7 @@ test("fake host mounts the client shell with no Rails/Tauri process", async () =
 test("initialUrl selects the library filter", async () => {
   const host = typedHost();
   await host.library.createWork({ workspaceId: ws("ws-1"), title: "Doc", kind: "document" });
-  await host.library.createWork({ workspaceId: ws("ws-1"), title: "Deck", kind: "presentation" });
+  await host.library.createWork({ workspaceId: ws("ws-1"), title: "Work", kind: "presentation" });
   const { element, shell } = await mountInto(host, { initialUrl: "/documents" });
   try {
     const items = element.querySelectorAll("article.library-card");

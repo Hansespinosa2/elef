@@ -90,7 +90,7 @@ export interface RenderPreviewInput {
   readonly source?: string
   readonly kind?: string
   readonly title?: string
-  readonly deckId?: string
+  readonly workId?: string
   readonly mediaBaseUrl?: string
   readonly documentNodes?: readonly unknown[]
   readonly mediaMap?: MediaMap
@@ -124,7 +124,7 @@ export interface ClientPreviewInput {
   readonly source?: string
   readonly kind?: string
   readonly title?: string
-  readonly deckId?: string
+  readonly workId?: string
   readonly mediaBaseUrl?: string
   readonly documentNodes?: readonly unknown[]
   readonly allowRemoteMedia?: boolean
@@ -292,7 +292,7 @@ markdown.inline.ruler.after("backticks", "elef_wiki_link", (state, silent) => {
     state.pos = close + 2
     return true
   }
-  const href = String(node.href || `#deck/${encodeURIComponent(String(node.id))}`)
+  const href = String(node.href || `#work/${encodeURIComponent(String(node.id))}`)
   const open = state.push("link_open", "a", 1)
   open.attrSet("href", href)
   open.attrSet("class", "document-link")
@@ -348,7 +348,7 @@ export function collectMediaReferences(source = ""): string[] {
 
 export function renderMarkdownBlock(source = "", options: MarkdownBlockOptions = {}): string {
   if (typeof source !== "string") throw typedError("invalid_input", "Markdown source must be text.")
-  if (source.length > 50 * 1024 * 1024) throw typedError("too_large", "This deck is too large to render.")
+  if (source.length > 50 * 1024 * 1024) throw typedError("too_large", "This Work is too large to render.")
   const documentNodes = options.documentNodes || []
   return markdown.render(source, {
     mediaBaseUrl: options.mediaBaseUrl || "",
@@ -402,7 +402,7 @@ export function renderPreviewCore({
   source = "",
   kind = "presentation",
   title = "Untitled",
-  deckId = "",
+  workId = "",
   mediaBaseUrl = "",
   documentNodes = [],
   mediaMap = {},
@@ -411,7 +411,7 @@ export function renderPreviewCore({
   marginSettings: marginOverrides = {}
 }: RenderPreviewInput = {}, { chrome = bareChrome }: { chrome?: RendererChrome } = {}): RenderPreviewOutput {
   if (typeof source !== "string") throw typedError("invalid_input", "Markdown source must be text.")
-  if (source.length > 50 * 1024 * 1024) throw typedError("too_large", "This deck is too large to preview.")
+  if (source.length > 50 * 1024 * 1024) throw typedError("too_large", "This Work is too large to preview.")
   const mode = kind === "document" ? "document" : "presentation"
   const sourceName = String(title || "Untitled")
   const structure = buildEditorStructure(source, { sourceName, mode })

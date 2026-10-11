@@ -7,7 +7,7 @@
 // allowed here.
 //
 // Session lifetime: one session per opened work. Switching works means
-// dispose() plus a new session. The host must show the deck text in the
+// dispose() plus a new session. The host must show the work text in the
 // editor before creating the session, so the initial baseline matches.
 //
 // External changes arrive through transport.pollFileEvents() on the policy
@@ -24,7 +24,7 @@ import {
   type ExternalSnapshot,
   type MergeOutcome,
   type SaveConflict,
-  type SaveDeck,
+  type SaveWork,
   type SaveFlowStatus,
   type SaveSourceResult,
 } from "./save_flow.js"
@@ -72,7 +72,7 @@ export interface SessionSnapshotNotification {
 
 export interface SessionFileEvent {
   kind: string
-  deck_id: string
+  work_id: string
 }
 
 export interface WorkSessionTransport {
@@ -87,7 +87,7 @@ export interface WorkSessionTransport {
 export interface WorkSessionPolicy {
   workId: string
   kind?: string
-  deck: SaveDeck
+  work: SaveWork
   getText(): string
   setText?: ((source: string, meta: EditorAdapterSetMeta) => boolean | Promise<boolean>) | null
   getSnapshot?: () => string
@@ -147,7 +147,7 @@ export function createWorkSession({ transport: transportOption, policy: policyOp
   const {
     workId,
     kind = "presentation",
-    deck,
+    work,
     getText,
     setText = null,
     getSnapshot,
@@ -178,12 +178,12 @@ export function createWorkSession({ transport: transportOption, policy: policyOp
     throw new TypeError("Session policy requires getText().")
   }
   assertEditorAdapter({ getText, setText: setText ?? (() => false), materializeEdits })
-  if (!deck || deck.id !== workId || typeof deck.content_hash !== "string" || deck.content_hash.length === 0) {
-    throw new TypeError("Session policy requires the opened deck for workId.")
+  if (!work || work.id !== workId || typeof work.content_hash !== "string" || work.content_hash.length === 0) {
+    throw new TypeError("Session policy requires the opened work for workId.")
   }
 
   const epoch = ++sessionEpoch
-  let baseline = deck.content_hash
+  let baseline = work.content_hash
   let lastError: SessionElefError | null = null
   let lastPollErrorKey: unknown = null
   let disposed = false
@@ -202,7 +202,7 @@ export function createWorkSession({ transport: transportOption, policy: policyOp
       title,
       kind,
       text: getText(),
-      sourceFile: deck.source_file,
+      sourceFile: work.source_file,
       baseline: { revision: baseline }
     }
   }
@@ -279,7 +279,7 @@ export function createWorkSession({ transport: transportOption, policy: policyOp
     setTimer,
     clearTimer: clearTimerOption
   })
-  flow.activate(deck)
+  flow.activate(work)
 
   async function handleExternalEvent(event: SessionFileEvent): Promise<void> {
     if (typeof transport.readSourceSnapshot !== "function") return
@@ -339,7 +339,7 @@ export function createWorkSession({ transport: transportOption, policy: policyOp
       if (typeof poll !== "function") return
       const events = await poll()
       for (const event of events || []) {
-        if (disposed || !event || event.deck_id !== workId) continue
+        if (disposed || !event || event.work_id !== workId) continue
         await handleExternalEvent(event)
       }
     } catch (error) {

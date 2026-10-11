@@ -1,6 +1,6 @@
 import test from "node:test"
 import assert from "node:assert/strict"
-import { prepareDeckOpen } from "@elef/editor-runtime/test-internals"
+import { prepareWorkOpen } from "@elef/editor-runtime/test-internals"
 import { createTransportAdapter } from "../src/transport-adapter.js"
 
 const hashA = "a".repeat(64)
@@ -29,7 +29,7 @@ test("same-work reopen rereads edits saved while its earlier snapshot was pendin
   } })
   await adapter.openWorkFolder("A")
   let baseline = source
-  const opening = prepareDeckOpen("A", {
+  const opening = prepareWorkOpen("A", {
     read: id => adapter.readWorkFolder(id), prepare: async () => ({}),
     isDirty: () => source !== baseline,
     flushSave: async () => { await adapter.saveSource("A", source); baseline = source; return true }
@@ -37,8 +37,8 @@ test("same-work reopen rereads edits saved while its earlier snapshot was pendin
   source = "edited while reopening"
   reading.resolve({ id: "A", source: "original", content_hash: hashA })
   const transition = await opening
-  assert.equal(transition.deck.source, source)
-  assert.equal(transition.deck.content_hash, hashB)
+  assert.equal(transition.work.source, source)
+  assert.equal(transition.work.content_hash, hashB)
   assert.equal(reads, 3)
   assert.deepEqual(saves, [{ id: "A", source, baseHash: hashA }])
 })
@@ -57,7 +57,7 @@ test("a same-work read never authorizes overwriting an external version while lo
     assert.fail("An external version must not be overwritten")
   } })
   await adapter.openWorkFolder("A")
-  const opening = prepareDeckOpen("A", {
+  const opening = prepareWorkOpen("A", {
     read: id => adapter.readWorkFolder(id), prepare: async () => ({}), isDirty: () => local !== "original",
     flushSave: async () => {
       try { await adapter.saveSource("A", local); return true }
@@ -91,7 +91,7 @@ test("typing during a new document's graph preparation saves to the old work bef
     return { content_hash: hashA }
   } })
   await adapter.openWorkFolder("A")
-  const opening = prepareDeckOpen("B", {
+  const opening = prepareWorkOpen("B", {
     read: id => adapter.readWorkFolder(id), prepare: async () => { await graph.promise; return { titles: ["A", "B"] } },
     isDirty: () => local !== baseline,
     flushSave: async () => { await adapter.saveSource(owner, local); baseline = local; return true }
@@ -105,9 +105,9 @@ test("typing during a new document's graph preparation saves to the old work bef
   assert.equal(disk.B.source, "B original")
   assert.equal(saves.length, 1)
   assert.equal(owner, "A", "Preparation must not change save ownership")
-  local = transition.deck.source
-  adapter.activateWorkFolder(transition.deck)
-  owner = transition.deck.id
+  local = transition.work.source
+  adapter.activateWorkFolder(transition.work)
+  owner = transition.work.id
   assert.equal(owner, "B")
   assert.equal(local, "B original")
 })
@@ -117,7 +117,7 @@ test("same-work autosave completing during preparation invalidates an earlier cl
   let disk = { id: "A", source: "old", content_hash: hashA }
   let revision = 0
   let reads = 0
-  const opening = prepareDeckOpen("A", {
+  const opening = prepareWorkOpen("A", {
     read: async () => { reads += 1; return { ...disk } },
     prepare: async () => { await graph.promise; return {} },
     isDirty: () => false, getRevision: () => revision,
@@ -129,7 +129,7 @@ test("same-work autosave completing during preparation invalidates an earlier cl
   graph.resolve()
   const transition = await opening
   assert.equal(reads, 2)
-  assert.equal(transition.deck.source, "already autosaved")
-  assert.equal(transition.deck.content_hash, hashB)
+  assert.equal(transition.work.source, "already autosaved")
+  assert.equal(transition.work.content_hash, hashB)
   assert.equal(transition.revision, revision)
 })

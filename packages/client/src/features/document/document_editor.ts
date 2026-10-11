@@ -188,7 +188,7 @@ export class DocumentEditor {
     return (this.readyEditor ?? this.cachedEditor) as DocumentEditorSeam
   }
 
-  // Deck kind can change under a live editor (desktop switches decks without
+  // Work kind can change under a live editor (desktop switches works without
   // remounting); the host adapter syncs it through this setter.
   setKind(kind: string | undefined): void {
     this.kind = kind
@@ -235,7 +235,7 @@ export class DocumentEditor {
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
     // The host can connect this feature after the first preview event when
-    // a desktop deck is opened. Restore the toggle from the installed preview
+    // a desktop work is opened. Restore the toggle from the installed preview
     // state so that a successful render cannot leave Visual permanently disabled.
     this.restorePreviewToggle?.(this.element)
     this.positionControlOutsidePointerDown = (event) => {

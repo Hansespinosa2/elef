@@ -104,7 +104,7 @@ const REMOTE_FONT_FALLBACK = "Arial"
 let pptxLibraryPromise: Promise<void> | undefined
 
 // Orchestrates one model-to-blob export: loads the generator library,
-// builds the deck, renders slides off-screen, and returns the file blob.
+// builds the presentation, renders slides off-screen, and returns the file blob.
 // Seams exist so unit tests drive orchestration without a browser
 // (P07-04): pass a fake PptxGenJS class, a linkedom document, and stub
 // media/render steps.

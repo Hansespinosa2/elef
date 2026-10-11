@@ -1,12 +1,12 @@
-export interface TitleSaveDeck {
+export interface TitleSaveWork {
   id: string
   name: string
 }
 
 export interface TitleSaveFlowOptions {
-  getDeck(): TitleSaveDeck | null | undefined
+  getWork(): TitleSaveWork | null | undefined
   getTitle(): unknown
-  renameDeck(deck: TitleSaveDeck, title: string): Promise<unknown>
+  renameWork(work: TitleSaveWork, title: string): Promise<unknown>
   onRenamed?: (renamed: unknown, title: string) => void
   onState?: (state: string, details: { dirty: boolean; blocked: boolean }) => void
   onError?: (error: unknown) => void
@@ -16,9 +16,9 @@ export interface TitleSaveFlowOptions {
 }
 
 export function createTitleSaveFlow({
-  getDeck,
+  getWork,
   getTitle,
-  renameDeck,
+  renameWork,
   onRenamed = () => {},
   onState = () => {},
   onError = () => {},
@@ -38,13 +38,13 @@ export function createTitleSaveFlow({
 
   const title = (): string => String(getTitle() ?? "").trim()
   const hasChange = (): boolean => {
-    const deck = getDeck()
-    return Boolean(deck && title() !== deck.name)
+    const work = getWork()
+    return Boolean(work && title() !== work.name)
   }
   const setState = (state: string): void => onState(state, { dirty: dirty || Boolean(worker), blocked })
 
   function schedule(wait: number = delay): void {
-    if (!getDeck()) return
+    if (!getWork()) return
     if (!hasChange()) {
       dirty = false
       blocked = false
@@ -79,10 +79,10 @@ export function createTitleSaveFlow({
     dirty = true
     worker = (async () => {
       while (hasChange()) {
-        const deck = getDeck()
+        const work = getWork()
         const nextTitle = title()
-        if (!deck || !nextTitle) {
-          const error = Object.assign(new Error("A deck title cannot be empty."), {
+        if (!work || !nextTitle) {
+          const error = Object.assign(new Error("A Work title cannot be empty."), {
             code: "invalid_input",
             retryable: false
           })
@@ -94,8 +94,8 @@ export function createTitleSaveFlow({
 
         setState("Saving title…")
         try {
-          const renamed = await renameDeck(deck, nextTitle)
-          if (getDeck()?.id !== deck.id) return false
+          const renamed = await renameWork(work, nextTitle)
+          if (getWork()?.id !== work.id) return false
           onRenamed(renamed, nextTitle)
         } catch (error) {
           blocked = true

@@ -68,8 +68,8 @@ test("the desktop packages Rails-owned host markup and styles", () => {
     [".library-tab", ".library-tab"],
     [".search-box", ".library-shared-view .search-box"],
     [".library-card-preview", ".library-shared-view .library-card-preview"],
-    [".deck-action", ".library-shared-view .deck-action"],
-    [".deck-warning", ".library-shared-view .deck-warning"],
+    [".work-action", ".library-shared-view .work-action"],
+    [".work-warning", ".library-shared-view .work-warning"],
     [".notice", ".library-shared-view .notice"],
     [".library-no-results", ".library-no-results"]
   ])
@@ -91,8 +91,8 @@ test("desktop uses the Rails app shell and shared editor width instead of a seco
   assert.equal(document.body.classList.contains("elef-app"), true)
   assert.ok(document.querySelector("header.app-header.desktop-app-header"))
   assert.ok(document.querySelector("main.app-shell.desktop-app-shell"))
-  assert.equal(document.querySelector(".sidebar, .topbar, .deck-detail-card"), null)
-  assert.ok(document.querySelector("#deck-view form.file-library-editor-form"))
+  assert.equal(document.querySelector(".sidebar, .topbar, .work-detail-card"), null)
+  assert.ok(document.querySelector("#work-view form.file-library-editor-form"))
   assert.match(shellStyles, /--canvas: var\(--oradia-slate-950\)/)
   assert.match(shellStyles, /:root\[data-theme="light"\][^{]*\{[^}]*--oradia-slate-950: #f5f4f0/)
   assert.match(shellStyles, /@media \(prefers-color-scheme: light\)[\s\S]*:root\[data-theme="system"\]/)
@@ -105,7 +105,7 @@ test("the native entry point only wires Tauri APIs into the shared application",
   assert.doesNotMatch(bootstrap, /document\.querySelector|innerHTML|\.textContent|\.classList/)
   assert.doesNotMatch(bootstrap, /desktop-shell\.css|desktop-rendered-content\.css/)
   assert.match(bootstrap, /createFileLibraryTransport\(\{ invoke \}\)/)
-  assert.match(application, /fileLibrary\.listDecks\(\)/)
+  assert.match(application, /fileLibrary\.listWorkFolders\(\)/)
   assert.doesNotMatch(application, /\binvoke\s*\(/)
   assert.doesNotMatch(application, /["'](?:get_library_status|list_work_folders|create_work_folder|save_source|install_update)["']/)
   assert.match(fileLibraryTransport, /listWorkFolders: \(\) => invoke\("list_work_folders"\)/)
@@ -156,10 +156,10 @@ test("Rails and desktop share one sanitized preview insertion path", () => {
 test("the shared application references elements present in its host template", () => {
   const ids = new Set([...application.matchAll(/document\.querySelector\(["']#([\w-]+)/g)].map(match => match[1]))
   const dynamicallyRendered = new Set([
-    "desktop-editor-field", "desktop-editor-title", "deck-source", "visual-mode", "desktop-preview", "library-count",
+    "desktop-editor-field", "desktop-editor-title", "work-source", "visual-mode", "desktop-preview", "library-count",
     "save-state", "retry-save",
-    "library-description", "library-search", "show-deck-list", "show-documents", "show-presentations",
-    "notice", "document-graph-view", "deck-list", "library-load-more", "empty-library", "library-no-results"
+    "library-description", "library-search", "show-work-list", "show-documents", "show-presentations",
+    "notice", "document-graph-view", "work-list", "library-load-more", "empty-library", "library-no-results"
   ])
   const missing = [...ids].filter(id => !document.getElementById(id) && !dynamicallyRendered.has(id))
   assert.deepEqual(missing, [])
@@ -175,11 +175,11 @@ test("the desktop host defaults to Rails' Visual mode and gates it until preview
   assert.match(application, /sourceName: "presentation\[source\]"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "editor"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "library"/)
-  assert.match(application, /editor\.loadDocument\(deck\.source\)[\s\S]*?editor\.setEditingMode\("visual", \{ restoreCaret: false \}\)/)
+  assert.match(application, /editor\.loadDocument\(work\.source\)[\s\S]*?editor\.setEditingMode\("visual", \{ restoreCaret: false \}\)/)
   const editorController = await read("packages/editor-runtime/src/controllers/editor_controller.ts")
   assert.match(editorController, /this\.form\?\.dispatchEvent\(new CustomEvent\("elef:editor-mode-change"/)
   assert.match(application, /theme: "dark"/)
-  assert.match(application, /void openDeck\(target\.workId\)/)
+  assert.match(application, /void openWork\(target\.workId\)/)
   assert.match(application, /presentWork: work => \{[\s\S]*?startPresentation\(\)/)
   assert.match(application, /configureEditorKind\(elements\.editorField\.closest\("\.editor-shell"\), isDocument \? "document" : "presentation"/)
   assert.doesNotMatch(application, /elements\.editorInput\.name = isDocument/)
@@ -214,8 +214,8 @@ test("the file-backed host mounts the shared library view and graph", () => {
   assert.match(application, /libraryHost = createLibraryHost\(status\)/)
   assert.match(application, /shell = await mountElef\(mount, libraryHost, \{/)
   assert.match(application, /onLibraryEvent: handleLibraryEvent/)
-  assert.doesNotMatch(application, /renderLibraryView|setLibraryViewTab|renderDecks/)
-  assert.match(clientLibrary, /show-deck-list/)
+  assert.doesNotMatch(application, /renderLibraryView|setLibraryViewTab|renderWorks/)
+  assert.match(clientLibrary, /show-work-list/)
   assert.match(clientLibrary, /show-documents/)
   assert.match(clientLibrary, /show-presentations/)
   assert.match(clientLibrary, /data-library-tab=\{name\}/)
@@ -227,7 +227,7 @@ test("both hosts render the graph through the shared client module, never Stimul
   const clientShell = await read("apps/web/app/javascript/controllers/client_shell_controller.js")
   const graphPartial = await read("apps/web/app/views/presentations/_document_graph.html.erb")
   assert.match(application, /renderGraphView\(slot, graph\)/)
-  assert.match(application, /new GraphController\(slot, graph, \{ onOpenDeck/)
+  assert.match(application, /new GraphController\(slot, graph, \{ onOpenWork/)
   assert.match(application, /createRequestGuard/)
   assert.match(application, /graphRequests\.isCurrent\(request\)/)
   assert.match(application, /graphController\?\.destroy\(\)/)

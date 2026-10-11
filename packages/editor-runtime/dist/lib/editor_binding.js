@@ -1,7 +1,7 @@
 import { applyEditorSource } from "./editor_source.js";
 function createCodeMirrorBinding({
   getEditor,
-  getDeckId,
+  getWorkId,
   getFallbackValue,
   setFallbackValue,
   waitForEditor,
@@ -11,11 +11,11 @@ function createCodeMirrorBinding({
   function getText() {
     return getEditor()?.sourceValue ?? getFallbackValue();
   }
-  function setText(source, { id = getDeckId(), expectedSource = getText() } = {}) {
+  function setText(source, { id = getWorkId(), expectedSource = getText() } = {}) {
     return applyEditorSource(source, {
       id,
       expectedSource,
-      getDeckId,
+      getWorkId,
       getSource: getText,
       waitForEditor,
       setFallback: setFallbackValue,

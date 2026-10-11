@@ -99,7 +99,7 @@ const EDITOR_VIEW = `
     <dialog id="conflict-dialog" class="conflict-dialog" data-autosave-target="conflict" aria-labelledby="conflict-title" aria-describedby="conflict-message">
       <div class="conflict-content">
         <p class="conflict-eyebrow">EXTERNAL CHANGE</p>
-        <h2 id="conflict-title">This deck changed elsewhere</h2>
+        <h2 id="conflict-title">This Work changed elsewhere</h2>
         <p id="conflict-message" class="conflict-explanation" data-autosave-target="conflictMessage">A newer version is active; your draft was preserved.</p>
         <div class="conflict-columns">
           <section><h3>Your edits</h3><pre id="conflict-local" class="conflict-source" data-autosave-target="localSource"></pre></section>
@@ -135,7 +135,7 @@ function mountEditorHosts(root = globalThis.document) {
 }
 function renderEditorView(container, config) {
   if (!container?.ownerDocument) throw new TypeError("Editor view needs a DOM container");
-  if (!config || !["document", "presentation"].includes(config.kind)) throw new TypeError("Editor view needs a supported deck kind");
+  if (!config || !["document", "presentation"].includes(config.kind)) throw new TypeError("Editor view needs a supported work kind");
   const doc = container.ownerDocument;
   const template = doc.createElement("template");
   template.innerHTML = EDITOR_VIEW;
@@ -246,7 +246,7 @@ function renderEditorView(container, config) {
 }
 function configureEditorKind(root, kind, { documentTitles = [], sourceName, showTitle = false, formControllers } = {}) {
   if (!root?.querySelector) throw new TypeError("Editor kind needs a rendered editor view");
-  if (!["document", "presentation"].includes(kind)) throw new TypeError("Editor view needs a supported deck kind");
+  if (!["document", "presentation"].includes(kind)) throw new TypeError("Editor view needs a supported work kind");
   const isDocument = kind === "document";
   const sourceField = root.querySelector(".source-field");
   const sourceSurface = root.querySelector("[data-editor-target='surface']");
@@ -304,7 +304,7 @@ function enableVisualMode(root) {
   const button = root?.querySelector?.("[data-editor-target='visualButton']");
   if (!button) return false;
   button.disabled = false;
-  button.title = "Edit the rendered deck visually";
+  button.title = "Edit the rendered Work visually";
   return true;
 }
 function setPressed(button, pressed) {

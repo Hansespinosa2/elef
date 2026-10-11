@@ -29,10 +29,10 @@ void downloadBlob;
 
 function testModel() {
   return {
-    filename: "deck.pptx",
+    filename: "work.pptx",
     version: "draft",
     presentation: {
-      title: "Deck",
+      title: "Work",
       theme: "dark",
       typography: "technical",
       fonts: { technical: "Arial, sans-serif", body: "Georgia, serif" },
@@ -232,7 +232,7 @@ test("pptx presentation creation honors model style", () => {
   };
   assert.equal(defined.layout, "ELEF_16_9");
   assert.equal(pptx.author, "Elef");
-  assert.equal(pptx.title, "Deck");
+  assert.equal(pptx.title, "Work");
   assert.equal((pptx.theme as Record<string, unknown>).headFontFace, "Arial");
 });
 

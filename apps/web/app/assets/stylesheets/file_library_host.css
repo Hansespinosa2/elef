@@ -102,7 +102,7 @@ button:disabled { cursor: not-allowed; opacity: 0.48; }
 body[data-desktop-view="editor"] .desktop-library-location,
 body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
 .desktop-app-shell { flex: 1; max-width: 1440px; min-width: 0; width: 100%; }
-.library-view, .deck-view { margin: 0; max-width: none; padding: 0; width: 100%; }
+.library-view, .work-view { margin: 0; max-width: none; padding: 0; width: 100%; }
 .native-eyebrow { color: var(--accent); font-size: 0.7rem; font-weight: 760; letter-spacing: .15em; margin: 0 0 0.625rem; }
 .statusbar { align-items: center; border-top: 1px solid var(--line); color: var(--faint); display: flex; font-size: 0.65rem; justify-content: space-between; min-height: 2rem; padding: 0 clamp(1rem, 4vw, 3rem); }
 .status-right { color: var(--muted); }
@@ -121,7 +121,7 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
 .large-button span { margin-left: 8px; }
 .welcome-footnote { margin-top: 15px; color: var(--faint); font-size: 10px; }
 .restore-draft { margin-top: 0.75rem; }
-.deck-notice { margin-bottom: 1rem; }
+.work-notice { margin-bottom: 1rem; }
 .desktop-save-note { color: var(--muted); font-size: 0.75rem; line-height: 1.5; margin: 0 0 1rem; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 25px; }
 .authoring-settings-link { width: 100%; margin-top: 18px; }
@@ -129,70 +129,70 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
 .dialog-copy { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .update-notes { max-height: 180px; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--canvas); color: var(--ink); font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
 .presentation-mode-exit { display: none; }
-.presenting-deck .desktop-app-header,
-.presenting-deck .statusbar,
-.presenting-deck .desktop-app-shell > :not(#deck-view) { display: none !important; }
-.presenting-deck .desktop-app-shell,
-.presenting-deck .deck-view,
-.presenting-deck #desktop-editor-form,
-.presenting-deck #desktop-preview { display: block !important; width: 100vw; height: 100vh; min-height: 0; margin: 0; padding: 0; border: 0; }
-.presenting-deck .desktop-app-shell { max-width: none; position: fixed; inset: 0; z-index: 10000; }
-.presenting-deck .deck-view { position: fixed; inset: 0; z-index: 10000; background: #000; }
-.presenting-deck #deck-view > :not(#desktop-editor-form) { display: none !important; }
-.presenting-deck .editor-shell-header,
-.presenting-deck .editor-toolbar,
-.presenting-deck .desktop-save-note,
-.presenting-deck .restore-draft,
-.presenting-deck .slide-overview,
-.presenting-deck .media-editor-controls,
-.presenting-deck .preview-warnings,
-.presenting-deck [data-preview-target="status"],
-.presenting-deck [data-preview-target="retry"] { display: none !important; }
-.presenting-deck #desktop-editor-form { position: fixed; inset: 0; overflow: hidden; }
-.presenting-deck .source-field,
-.presenting-deck .editor-surface,
-.presenting-deck .editor-input-proxy,
-.presenting-deck .snippet-palette { display: none !important; }
-.presenting-deck #desktop-preview { overflow: hidden; background: #000; }
-.presenting-deck #desktop-preview.editor-projection.preview-pane { position: fixed; inset: 0; max-height: none; min-height: 0; height: 100vh; width: 100vw; overflow: hidden; border: 0; box-shadow: none; }
-.presenting-deck .slide-frame { display: none !important; }
-.presenting-deck .slide-frame.is-active-presentation-slide { display: block !important; position: fixed; inset: 0; width: 100vw; height: 100vh; aspect-ratio: auto; overflow: hidden; }
-.presenting-deck .slide-frame > .slide { border: 0; border-radius: 0; height: 100vh; padding: 7vh 8vw; width: 100vw; }
-.presenting-deck .presentation-editor-block-controls,
-.presenting-deck .presentation-editor-slide-toolbar { display: none !important; }
-.presenting-deck .presentation-mode-exit { display: inline-flex; position: fixed; top: 16px; right: 20px; z-index: 10002; gap: 12px; align-items: center; padding: 9px 13px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: #fff; }
-.presenting-deck .presentation-mode-exit kbd { color: #bbb; }
+.presenting-work .desktop-app-header,
+.presenting-work .statusbar,
+.presenting-work .desktop-app-shell > :not(#work-view) { display: none !important; }
+.presenting-work .desktop-app-shell,
+.presenting-work .work-view,
+.presenting-work #desktop-editor-form,
+.presenting-work #desktop-preview { display: block !important; width: 100vw; height: 100vh; min-height: 0; margin: 0; padding: 0; border: 0; }
+.presenting-work .desktop-app-shell { max-width: none; position: fixed; inset: 0; z-index: 10000; }
+.presenting-work .work-view { position: fixed; inset: 0; z-index: 10000; background: #000; }
+.presenting-work #work-view > :not(#desktop-editor-form) { display: none !important; }
+.presenting-work .editor-shell-header,
+.presenting-work .editor-toolbar,
+.presenting-work .desktop-save-note,
+.presenting-work .restore-draft,
+.presenting-work .slide-overview,
+.presenting-work .media-editor-controls,
+.presenting-work .preview-warnings,
+.presenting-work [data-preview-target="status"],
+.presenting-work [data-preview-target="retry"] { display: none !important; }
+.presenting-work #desktop-editor-form { position: fixed; inset: 0; overflow: hidden; }
+.presenting-work .source-field,
+.presenting-work .editor-surface,
+.presenting-work .editor-input-proxy,
+.presenting-work .snippet-palette { display: none !important; }
+.presenting-work #desktop-preview { overflow: hidden; background: #000; }
+.presenting-work #desktop-preview.editor-projection.preview-pane { position: fixed; inset: 0; max-height: none; min-height: 0; height: 100vh; width: 100vw; overflow: hidden; border: 0; box-shadow: none; }
+.presenting-work .slide-frame { display: none !important; }
+.presenting-work .slide-frame.is-active-presentation-slide { display: block !important; position: fixed; inset: 0; width: 100vw; height: 100vh; aspect-ratio: auto; overflow: hidden; }
+.presenting-work .slide-frame > .slide { border: 0; border-radius: 0; height: 100vh; padding: 7vh 8vw; width: 100vw; }
+.presenting-work .presentation-editor-block-controls,
+.presenting-work .presentation-editor-slide-toolbar { display: none !important; }
+.presenting-work .presentation-mode-exit { display: inline-flex; position: fixed; top: 16px; right: 20px; z-index: 10002; gap: 12px; align-items: center; padding: 9px 13px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: #fff; }
+.presenting-work .presentation-mode-exit kbd { color: #bbb; }
 
 @media print {
   @page { margin: 12mm; }
-  body.printing-deck { min-width: 0; color: #000; background: #fff; }
-  body.printing-deck.elef-app { background: #fff !important; color: #000 !important; }
-  .printing-deck .desktop-app-shell,
-  .printing-deck .deck-view,
-  .printing-deck #desktop-editor-form { display: block !important; min-height: 0; width: 100%; margin: 0; padding: 0; border: 0; box-shadow: none; }
-  .printing-deck .desktop-app-header,
-  .printing-deck .editor-toolbar,
-  .printing-deck .desktop-save-note,
-  .printing-deck .restore-draft,
-  .printing-deck #retry-save,
-  .printing-deck .statusbar,
-  .printing-deck .media-editor-controls,
-  .printing-deck .source-field,
-  .printing-deck .editor-surface,
-  .printing-deck .editor-input-proxy,
-  .printing-deck .snippet-palette,
-  .printing-deck .slide-overview,
-  .printing-deck .preview-warnings,
-  .printing-deck [data-preview-target="status"],
-  .printing-deck [data-preview-target="retry"],
-  .printing-deck .deck-notice { display: none !important; }
-  .printing-deck #desktop-preview { display: block !important; position: static; max-height: none; min-height: 0; overflow: visible; background: #fff; }
-  .printing-deck .slide-frame { width: 100%; aspect-ratio: 16 / 9; overflow: visible; break-after: page; page-break-after: always; }
-  .printing-deck .slide-frame:last-child { break-after: auto; page-break-after: auto; }
-  .printing-deck .slide-frame > .slide { position: static; width: 100%; height: 100%; border: 0; border-radius: 0; overflow: visible; }
-  .printing-deck .presentation-editor-block-controls,
-  .printing-deck .presentation-editor-slide-toolbar { display: none !important; }
-  .printing-deck .document-editor-block { break-inside: avoid; }
+  body.printing-work { min-width: 0; color: #000; background: #fff; }
+  body.printing-work.elef-app { background: #fff !important; color: #000 !important; }
+  .printing-work .desktop-app-shell,
+  .printing-work .work-view,
+  .printing-work #desktop-editor-form { display: block !important; min-height: 0; width: 100%; margin: 0; padding: 0; border: 0; box-shadow: none; }
+  .printing-work .desktop-app-header,
+  .printing-work .editor-toolbar,
+  .printing-work .desktop-save-note,
+  .printing-work .restore-draft,
+  .printing-work #retry-save,
+  .printing-work .statusbar,
+  .printing-work .media-editor-controls,
+  .printing-work .source-field,
+  .printing-work .editor-surface,
+  .printing-work .editor-input-proxy,
+  .printing-work .snippet-palette,
+  .printing-work .slide-overview,
+  .printing-work .preview-warnings,
+  .printing-work [data-preview-target="status"],
+  .printing-work [data-preview-target="retry"],
+  .printing-work .work-notice { display: none !important; }
+  .printing-work #desktop-preview { display: block !important; position: static; max-height: none; min-height: 0; overflow: visible; background: #fff; }
+  .printing-work .slide-frame { width: 100%; aspect-ratio: 16 / 9; overflow: visible; break-after: page; page-break-after: always; }
+  .printing-work .slide-frame:last-child { break-after: auto; page-break-after: auto; }
+  .printing-work .slide-frame > .slide { position: static; width: 100%; height: 100%; border: 0; border-radius: 0; overflow: visible; }
+  .printing-work .presentation-editor-block-controls,
+  .printing-work .presentation-editor-slide-toolbar { display: none !important; }
+  .printing-work .document-editor-block { break-inside: avoid; }
 }
 
 @media (max-width: 960px) {

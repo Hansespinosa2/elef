@@ -5,7 +5,7 @@ import { buildEditorMap, buildEditorStructure } from "@elef/work-model"
 
 test("presentation preview builds editable source ranges and ignores slide delimiters in code fences", () => {
   const source = "---\ntheme: dark\n---\n# One\n\nText 😀\n\n```md\n---\n```\n---\n# Two"
-  const preview = renderPreviewCore({ source, title: "Deck" })
+  const preview = renderPreviewCore({ source, title: "Work" })
 
   assert.equal(preview.editor_map.slides.length, 2)
   assert.equal(preview.editor_map.front_matter?.body_start, source.indexOf("# One"))
@@ -65,7 +65,7 @@ test("document preview renders basic Markdown with safe content-addressed local 
   const digest = "a".repeat(64)
   const preview = renderPreviewCore({
     kind: "document",
-    deckId: "document-1",
+    workId: "document-1",
     source: "# Notes\n\n![Diagram](elef-asset:" + digest + " \"fit:cover\")\n\n![Remote](https://example.com/diagram.png)\n\n<script>alert(1)</script>",
     mediaBaseUrl: "elefasset://localhost/document-1"
   })
@@ -119,7 +119,7 @@ test("renderer links resolve portable document keys and aliases from Markdown", 
     }]
   })
 
-  assert.equal((preview.html.match(/href="#deck\/manifest-id"/g) || []).length, 2)
+  assert.equal((preview.html.match(/href="#work\/manifest-id"/g) || []).length, 2)
   assert.match(preview.html, />by key<\/a>/)
   assert.match(preview.html, />by alias<\/a>/)
 })
@@ -135,12 +135,12 @@ test("document projection keeps trailing list and quote lines editable", () => {
 test("wiki links resolve through local document IDs and math stays inert", () => {
   const preview = renderPreviewCore({
     kind: "document",
-    deckId: "source",
+    workId: "source",
     source: "# Source\n\n[[Target|open target]] and $x^2$.",
     documentNodes: [{ id: "target-id", title: "Target" }]
   })
 
-  assert.match(preview.html, /href="#deck\/target-id"/)
+  assert.match(preview.html, /href="#work\/target-id"/)
   assert.match(preview.html, />open target<\/a>/)
   assert.match(preview.html, /<span class="katex"/)
   assert.doesNotMatch(preview.html, /javascript:/i)
@@ -159,10 +159,10 @@ test("shared Markdown block renderer keeps media resolution explicit and support
   assert.deepEqual(collectMediaReferences("See [[Target|Display]] and [[Other]] for context."), [])
 
   const local = renderMarkdownBlock(source, {
-    mediaBaseUrl: "elefasset://localhost/deck-id",
+    mediaBaseUrl: "elefasset://localhost/work-id",
     mediaMap: { "elef-asset:clip": { src: "/media/clip.mp4", contentType: "video/mp4" } }
   })
-  assert.match(local, /elefasset:\/\/localhost\/deck-id\/path\/images\/diagram\.png/)
+  assert.match(local, /elefasset:\/\/localhost\/work-id\/path\/images\/diagram\.png/)
   assert.match(local, /<video[^>]+src="\/media\/clip\.mp4"[^>]+controls playsinline/)
   assert.doesNotMatch(local, /example\.com/)
 
@@ -176,7 +176,7 @@ test("bare projections omit remote images without a media base", () => {
     source: "![Remote diagram](/diagram.svg)",
     kind: "document",
     title: "Diagram",
-    deckId: "deck-id"
+    workId: "work-id"
   })
   assert.doesNotMatch(desktop.html, /src="\/diagram\.svg"/)
 })
@@ -185,7 +185,7 @@ test("the shared renderer does not invent a desktop asset protocol when no media
   const digest = "a".repeat(64)
   const preview = renderPreviewCore({
     source: `![Missing](elef-asset:${digest})`,
-    deckId: "deck-id"
+    workId: "work-id"
   })
 
   assert.doesNotMatch(preview.html, /elefasset:\/\//)

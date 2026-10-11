@@ -261,7 +261,7 @@ try {
       openStageSamples.set(name, values)
     }
   }
-  for (const name of ["readDeck", "prepareDeck", "editorReady", "loadDocument", "deckViewSetup", "previewRefresh"]) {
+  for (const name of ["readWork", "prepareWork", "editorReady", "loadDocument", "workViewSetup", "previewRefresh"]) {
     assert.equal(openStageSamples.get(name)?.length, launchCount, `Expected ${launchCount} native open measurements for ${name}`)
   }
   report.p95OpenStageMilliseconds = Object.fromEntries([...openStageSamples]

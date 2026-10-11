@@ -1,7 +1,7 @@
 async function applyEditorSource(source, {
   id,
   expectedSource,
-  getDeckId,
+  getWorkId,
   getSource,
   waitForEditor,
   setFallback,
@@ -10,7 +10,7 @@ async function applyEditorSource(source, {
 }) {
   const controller = await waitForEditor();
   materializeEdits();
-  if (getDeckId() !== id || getSource() !== expectedSource) return false;
+  if (getWorkId() !== id || getSource() !== expectedSource) return false;
   if (controller) controller.setExternalValue(source);
   else setFallback(source);
   return true;

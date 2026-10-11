@@ -87,7 +87,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
 
   // Prefetch the deferred preview renderer on the first post-mount idle
   // turn: the first card preview would otherwise parse ~600KB of KaTeX,
-  // highlight.js and markdown-it beside its snapshot, and a deck open that
+  // highlight.js and markdown-it beside its snapshot, and a work open that
   // follows the list would share that parse. Best effort; a failed prefetch
   // is retried by the preview load itself and degrades as usual.
   useEffect(() => {
@@ -161,7 +161,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
     if (dialogOpen) {
       if (typeof dialog.showModal === "function") dialog.showModal();
       else dialog.setAttribute("open", "");
-      (dialog.querySelector("#new-deck-name") as HTMLElement | null)?.focus?.();
+      (dialog.querySelector("#new-work-name") as HTMLElement | null)?.focus?.();
     } else if (typeof dialog.close === "function") {
       if (dialog.open) dialog.close();
     } else {
@@ -276,9 +276,9 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
           <input
             id="library-search"
             type="search"
-            placeholder="Search decks"
+            placeholder="Search Works"
             autoComplete="off"
-            aria-label="Search decks"
+            aria-label="Search Works"
             value={query}
             onInput={(event) => {
               setQuery(event.currentTarget.value);
@@ -294,7 +294,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
           {(Object.keys(KIND_LABELS) as LibraryFilter[]).map((name) => (
             <a
               key={name}
-              id={name === "all" ? "show-deck-list" : name === "documents" ? "show-documents" : "show-presentations"}
+              id={name === "all" ? "show-work-list" : name === "documents" ? "show-documents" : "show-presentations"}
               className={`library-tab${name === filter ? " is-active" : ""}`}
               data-library-tab={name}
               href={libraryHref(name)}
@@ -324,7 +324,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
         />
         <div data-client-slot-target="lineage" />
         <section
-          id="deck-list"
+          id="work-list"
           className="library-list mt-8 grid gap-4"
           role="list"
           aria-label={`Saved ${filter}`}
@@ -346,11 +346,11 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
           id="library-load-more"
           className="button secondary library-load-more mt-6"
           type="button"
-          aria-controls="deck-list"
+          aria-controls="work-list"
           hidden={!hasMore}
           onClick={() => setVisibleCount((count) => count + LIBRARY_RENDER_BATCH_SIZE)}
         >
-          Load more decks
+          Load more Works
         </button>
         <div
           id="empty-library"
@@ -375,15 +375,15 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
           </button>
         </div>
         <p id="library-no-results" className="library-no-results" role="status" hidden={query.trim() === "" || visible.length > 0}>
-          No decks match this search.
+          No Works match this search.
         </p>
       </section>
 
       <dialog ref={dialogRef} id="create-dialog" className="app-dialog" onCancel={() => setDialogOpen(false)}>
         <form id="create-form" onSubmit={(event) => void create(event)}>
-          <label htmlFor="new-deck-name">Name</label>
+          <label htmlFor="new-work-name">Name</label>
           <input
-            id="new-deck-name"
+            id="new-work-name"
             name="name"
             required
             maxLength={120}
@@ -392,9 +392,9 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
             value={dialogName}
             onInput={(event) => setDialogName(event.currentTarget.value)}
           />
-          <label htmlFor="new-deck-kind">Format</label>
+          <label htmlFor="new-work-kind">Format</label>
           <select
-            id="new-deck-kind"
+            id="new-work-kind"
             name="kind"
             value={dialogKind}
             onChange={(event) => setDialogKind(event.currentTarget.value === "document" ? "document" : "presentation")}

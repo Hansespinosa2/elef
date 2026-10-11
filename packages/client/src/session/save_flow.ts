@@ -10,7 +10,7 @@ const RETRY_DELAYS = [1_000, 3_000, 10_000, 30_000]
 // this only decides whether the cheap call-free reload may run.
 const SUSPICIOUS_MIN_LOCAL_CHARS = 200
 
-export interface SaveDeck {
+export interface SaveWork {
   id: string
   content_hash: string
   source: string
@@ -151,7 +151,7 @@ export function createSaveFlow({
   const clearTimer = (timer: ReturnType<typeof setTimeout> | null): void => {
     clearTimerOption(timer ?? undefined)
   }
-  let activeDeck: SaveDeck | null = null
+  let activeWork: SaveWork | null = null
   let activeConflict: SaveConflict | null = null
   let dirty = false
   let blocked = false
@@ -166,12 +166,12 @@ export function createSaveFlow({
   const discardedDrafts: Array<{ id: string; source: string }> = []
 
   function setStatus(value: string): void {
-    onState(value, { dirty: dirty || Boolean(sourceMutation), blocked, conflict: activeConflict, discardedDrafts: discardedDrafts.length, canRestoreDraft: discardedDrafts.some(draft => draft.id === activeDeck?.id) })
+    onState(value, { dirty: dirty || Boolean(sourceMutation), blocked, conflict: activeConflict, discardedDrafts: discardedDrafts.length, canRestoreDraft: discardedDrafts.some(draft => draft.id === activeWork?.id) })
   }
 
   function schedule(delay: number = saveDelay): void {
-    if (!activeDeck || activeConflict) return
-    if (!saveWorker && getSnapshot() === activeDeck.savedSnapshot) {
+    if (!activeWork || activeConflict) return
+    if (!saveWorker && getSnapshot() === activeWork.savedSnapshot) {
       dirty = false
       blocked = false
       blockedSnapshot = null
@@ -194,14 +194,14 @@ export function createSaveFlow({
   }
 
   function rememberDraft(source: string): void {
-    if (!activeDeck) return
-    discardedDrafts.push({ id: activeDeck.id, source })
+    if (!activeWork) return
+    discardedDrafts.push({ id: activeWork.id, source })
     while (discardedDrafts.length > Math.max(0, maxDiscardedDrafts)) discardedDrafts.shift()
     setStatus("Saved external version")
   }
 
   function handleConflict({ id, details = {} }: { id: string; details?: ConflictDetailsInput }): boolean | undefined {
-    if (activeDeck?.id !== id) return
+    if (activeWork?.id !== id) return
     const diskSource = typeof details.current?.source === "string" ? details.current.source : ""
     const diskHash = getConflictBaseline(details)
     if (!isValidConflictBaseline(diskHash)) {
@@ -217,7 +217,7 @@ export function createSaveFlow({
       diskHash: diskHash as string,
       diskSnapshot: getConflictSnapshot(details),
       diskSource,
-      diskSourceFile: details.current?.source_file || activeDeck.source_file,
+      diskSourceFile: details.current?.source_file || activeWork.source_file,
       localSource: getSource(),
       current: details.current,
       message: details.message,
@@ -234,7 +234,7 @@ export function createSaveFlow({
   }
 
   async function checkExternalChange(id: string, snapshot: ExternalSnapshot): Promise<string> {
-    if (!activeDeck || activeDeck.id !== id) return "inactive"
+    if (!activeWork || activeWork.id !== id) return "inactive"
     materializeEdits()
     if (sourceMutation) return "busy"
     if (!snapshot || !isValidConflictBaseline(snapshot.content_hash)) {
@@ -245,8 +245,8 @@ export function createSaveFlow({
       onError(error)
       return "invalid"
     }
-    const sourceFileChanged = typeof snapshot.source_file === "string" && snapshot.source_file !== activeDeck.source_file
-    if (snapshot.content_hash === activeDeck.content_hash && !sourceFileChanged) return "current"
+    const sourceFileChanged = typeof snapshot.source_file === "string" && snapshot.source_file !== activeWork.source_file
+    if (snapshot.content_hash === activeWork.content_hash && !sourceFileChanged) return "current"
     if (activeConflict?.diskHash === snapshot.content_hash && activeConflict.diskSourceFile === snapshot.source_file) {
       return "conflict"
     }
@@ -254,13 +254,13 @@ export function createSaveFlow({
     if (!activeConflict && snapshot.source === getSource()) {
       revision += 1
       acceptDiskVersion(id, snapshot.content_hash)
-      activeDeck.content_hash = snapshot.content_hash
-      activeDeck.source = snapshot.source
-      activeDeck.source_file = snapshot.source_file || activeDeck.source_file
+      activeWork.content_hash = snapshot.content_hash
+      activeWork.source = snapshot.source
+      activeWork.source_file = snapshot.source_file || activeWork.source_file
       return sourceFileChanged ? "source-file-changed" : "matching-local"
     }
 
-    if (dirty || getSnapshot() !== activeDeck.savedSnapshot || activeConflict) {
+    if (dirty || getSnapshot() !== activeWork.savedSnapshot || activeConflict) {
       dirty = true
       handleConflict({
         id,
@@ -276,21 +276,21 @@ export function createSaveFlow({
     clearTimer(retryTimer)
     saveTimer = null
     retryTimer = null
-    const deck = activeDeck
-    const applied = await applySource(snapshot.source, deck)
-    if (activeDeck !== deck) return "inactive"
+    const work = activeWork
+    const applied = await applySource(snapshot.source, work)
+    if (activeWork !== work) return "inactive"
     if (!applied) {
       handleConflict({ id, details: { disk_hash: snapshot.content_hash, current: snapshot } })
       return "conflict"
     }
     acceptDiskVersion(id, snapshot.content_hash)
     revision += 1
-    deck.content_hash = snapshot.content_hash
-    deck.source = snapshot.source
-    deck.source_file = snapshot.source_file || deck.source_file
-    deck.savedSnapshot = getSnapshot()
+    work.content_hash = snapshot.content_hash
+    work.source = snapshot.source
+    work.source_file = snapshot.source_file || work.source_file
+    work.savedSnapshot = getSnapshot()
     activeConflict = null
-    dirty = getSnapshot() !== deck.savedSnapshot
+    dirty = getSnapshot() !== work.savedSnapshot
     blocked = false
     retryAttempt = 0
     if (dirty) schedule()
@@ -299,7 +299,7 @@ export function createSaveFlow({
   }
 
   async function resolveExternalChange(id: string, snapshot: ExternalSnapshot): Promise<string> {
-    if (!activeDeck || activeDeck.id !== id) return "inactive"
+    if (!activeWork || activeWork.id !== id) return "inactive"
     materializeEdits()
     if (sourceMutation) return "busy"
     if (!mergeExternalChange || !takeSnapshot) return checkExternalChange(id, snapshot)
@@ -318,7 +318,7 @@ export function createSaveFlow({
     // merge or snapshot calls. Only a suspicious-looking rewrite diverts
     // through snapshots and the merge consult below, and any outcome other
     // than a clean merge takes the conflict path (P02-07).
-    const wasClean = !dirty && getSnapshot() === activeDeck.savedSnapshot && !activeConflict
+    const wasClean = !dirty && getSnapshot() === activeWork.savedSnapshot && !activeConflict
     const localSource = getSource()
     if (wasClean && !isSuspiciousExternalChange(localSource, snapshot.source)) {
       return checkExternalChange(id, snapshot)
@@ -354,16 +354,16 @@ export function createSaveFlow({
       return checkExternalChange(id, snapshot)
     }
     if (wasClean) return checkExternalChange(id, snapshot)
-    const deck = activeDeck
-    if (!(await applySource(outcome.source, deck, { preserveMetadata: true })) || activeDeck !== deck) {
-      if (activeDeck?.id === id) return checkExternalChange(id, snapshot)
+    const work = activeWork
+    if (!(await applySource(outcome.source, work, { preserveMetadata: true })) || activeWork !== work) {
+      if (activeWork?.id === id) return checkExternalChange(id, snapshot)
       return "inactive"
     }
     acceptDiskVersion(id, snapshot.content_hash)
     revision += 1
-    deck.content_hash = snapshot.content_hash
-    deck.source = snapshot.source
-    deck.source_file = snapshot.source_file || deck.source_file
+    work.content_hash = snapshot.content_hash
+    work.source = snapshot.source
+    work.source_file = snapshot.source_file || work.source_file
     activeConflict = null
     dirty = true
     setStatus("Saving merged changes…")
@@ -375,9 +375,9 @@ export function createSaveFlow({
     if (sourceMutation) return false
     clearTimer(saveTimer)
     saveTimer = null
-    if (!activeDeck || activeConflict) return !dirty
+    if (!activeWork || activeConflict) return !dirty
     if (saveWorker) return saveWorker
-    if (!dirty && getSnapshot() === activeDeck.savedSnapshot) return true
+    if (!dirty && getSnapshot() === activeWork.savedSnapshot) return true
     dirty = true
     if (blocked && !force) return false
     if (force) {
@@ -391,28 +391,28 @@ export function createSaveFlow({
     }
 
     saveWorker = (async () => {
-      while (activeDeck && dirty && !activeConflict && !sourceMutation) {
-        const deck: SaveDeck = activeDeck
+      while (activeWork && dirty && !activeConflict && !sourceMutation) {
+        const work: SaveWork = activeWork
         const source = getSource()
         const snapshot = getSnapshot()
         setStatus("Saving…")
         try {
-          const result = await saveSource(deck.id, source, { snapshot })
-          if (activeDeck !== deck) return false
+          const result = await saveSource(work.id, source, { snapshot })
+          if (activeWork !== work) return false
           revision += 1
-          deck.content_hash = result.content_hash
-          deck.source = typeof result.source === "string" ? result.source : source
-          deck.savedSnapshot = typeof result.snapshot === "string" ? result.snapshot : snapshot
+          work.content_hash = result.content_hash
+          work.source = typeof result.source === "string" ? result.source : source
+          work.savedSnapshot = typeof result.snapshot === "string" ? result.snapshot : snapshot
           retryAttempt = 0
           blocked = false
           blockedSnapshot = null
-          dirty = getSnapshot() !== deck.savedSnapshot
+          dirty = getSnapshot() !== work.savedSnapshot
           setStatus(dirty ? "Unsaved changes" : "Saved")
         } catch (error) {
           dirty = true
           const failure = asTransportFailure(error)
           if (failure.code === "conflict") {
-            if (!activeConflict && !handleConflict({ id: deck.id, details: (failure.details ?? {}) as ConflictDetailsInput })) {
+            if (!activeConflict && !handleConflict({ id: work.id, details: (failure.details ?? {}) as ConflictDetailsInput })) {
               blocked = true
               setStatus("Save blocked · retry manually")
             }
@@ -433,7 +433,7 @@ export function createSaveFlow({
           setStatus("Save failed")
           const retryDelay = RETRY_DELAYS[Math.min(retryAttempt, RETRY_DELAYS.length - 1)] ?? 30_000
           retryAttempt += 1
-          if (!retryTimer && activeDeck === deck) {
+          if (!retryTimer && activeWork === work) {
             retryTimer = setTimer(() => {
               retryTimer = null
               void flush({ force: true })
@@ -450,18 +450,18 @@ export function createSaveFlow({
       return await saveWorker
     } finally {
       saveWorker = null
-      if (activeDeck && dirty && !activeConflict && !blocked && !retryTimer && !saveTimer) schedule(0)
+      if (activeWork && dirty && !activeConflict && !blocked && !retryTimer && !saveTimer) schedule(0)
     }
   }
 
-  function activate(deck: SaveDeck): void {
+  function activate(work: SaveWork): void {
     revision += 1
     clearTimer(saveTimer)
     clearTimer(retryTimer)
     saveTimer = null
     retryTimer = null
-    activeDeck = deck
-    activeDeck.savedSnapshot = getSnapshot()
+    activeWork = work
+    activeWork.savedSnapshot = getSnapshot()
     activeConflict = null
     dirty = false
     blocked = false
@@ -492,13 +492,13 @@ export function createSaveFlow({
     if (dirty && !activeConflict) schedule(0)
   }
 
-  async function applySource(source: string, deck: SaveDeck, options: { preserveMetadata?: boolean } = {}): Promise<boolean> {
+  async function applySource(source: string, work: SaveWork, options: { preserveMetadata?: boolean } = {}): Promise<boolean> {
     if (sourceMutation) return false
     const token = {}
     sourceMutation = token
     try {
-      const applied = await setSource(source, { id: deck.id, expectedSource: getSource(), ...options })
-      return applied !== false && activeDeck === deck
+      const applied = await setSource(source, { id: work.id, expectedSource: getSource(), ...options })
+      return applied !== false && activeWork === work
     } catch (error) {
       onError(error)
       return false
@@ -508,35 +508,35 @@ export function createSaveFlow({
   }
 
   async function useDiskVersion(): Promise<boolean> {
-    if (!activeConflict || !activeDeck || sourceMutation) return false
+    if (!activeConflict || !activeWork || sourceMutation) return false
     materializeEdits()
     const conflict = activeConflict
-    const deck = activeDeck
+    const work = activeWork
     rememberDraft(getSource())
-    if (!(await applySource(conflict.diskSource, deck)) || activeConflict !== conflict) return false
+    if (!(await applySource(conflict.diskSource, work)) || activeConflict !== conflict) return false
     acceptDiskVersion(conflict.id, conflict.diskHash)
     revision += 1
-    deck.content_hash = conflict.diskHash
-    deck.source = conflict.diskSource
-    deck.source_file = conflict.diskSourceFile
-    deck.savedSnapshot = conflict.diskSnapshot
+    work.content_hash = conflict.diskHash
+    work.source = conflict.diskSource
+    work.source_file = conflict.diskSourceFile
+    work.savedSnapshot = conflict.diskSnapshot
     activeConflict = null
-    dirty = getSnapshot() !== deck.savedSnapshot
+    dirty = getSnapshot() !== work.savedSnapshot
     if (dirty) schedule()
     else setStatus("Saved")
     return true
   }
 
   function keepLocalVersion(): boolean {
-    if (!activeConflict || !activeDeck || sourceMutation) return false
+    if (!activeConflict || !activeWork || sourceMutation) return false
     materializeEdits()
     const conflict = activeConflict
     acceptDiskVersion(conflict.id, conflict.diskHash)
     revision += 1
-    activeDeck.content_hash = conflict.diskHash
-    activeDeck.source = conflict.diskSource
-    activeDeck.source_file = conflict.diskSourceFile
-    activeDeck.savedSnapshot = conflict.diskSnapshot
+    activeWork.content_hash = conflict.diskHash
+    activeWork.source = conflict.diskSource
+    activeWork.source_file = conflict.diskSourceFile
+    activeWork.savedSnapshot = conflict.diskSnapshot
     activeConflict = null
     dirty = true
     setStatus("Saving your chosen version…")
@@ -545,34 +545,34 @@ export function createSaveFlow({
   }
 
   async function saveMergedVersion(mergedSource: string): Promise<boolean> {
-    if (!activeConflict || !activeDeck || sourceMutation) return false
+    if (!activeConflict || !activeWork || sourceMutation) return false
     materializeEdits()
     const conflict = activeConflict
-    const deck = activeDeck
-    if (!(await applySource(mergedSource, deck, { preserveMetadata: true })) || activeConflict !== conflict) return false
+    const work = activeWork
+    if (!(await applySource(mergedSource, work, { preserveMetadata: true })) || activeConflict !== conflict) return false
     acceptDiskVersion(conflict.id, conflict.diskHash)
     revision += 1
-    deck.content_hash = conflict.diskHash
-    deck.source = conflict.diskSource
-    deck.source_file = conflict.diskSourceFile
-    deck.savedSnapshot = conflict.diskSnapshot
+    work.content_hash = conflict.diskHash
+    work.source = conflict.diskSource
+    work.source_file = conflict.diskSourceFile
+    work.savedSnapshot = conflict.diskSnapshot
     activeConflict = null
-    dirty = getSnapshot() !== deck.savedSnapshot
+    dirty = getSnapshot() !== work.savedSnapshot
     if (dirty) void flush({ force: true })
     else setStatus("Saved external version")
     return true
   }
 
   async function restoreDraft(): Promise<boolean> {
-    if (!activeDeck || sourceMutation || activeConflict) return false
+    if (!activeWork || sourceMutation || activeConflict) return false
     materializeEdits()
-    const deck = activeDeck
-    const index = findLastIndexWhere(discardedDrafts, draft => draft.id === deck.id)
+    const work = activeWork
+    const index = findLastIndexWhere(discardedDrafts, draft => draft.id === work.id)
     if (index < 0) return false
     const draft = discardedDrafts[index]
     if (!draft) return false
-    if (!(await applySource(draft.source, deck))) {
-      if (activeDeck === deck && !activeConflict && (dirty || getSource() !== deck.source)) schedule(0)
+    if (!(await applySource(draft.source, work))) {
+      if (activeWork === work && !activeConflict && (dirty || getSource() !== work.source)) schedule(0)
       return false
     }
     discardedDrafts.splice(discardedDrafts.indexOf(draft), 1)
@@ -586,7 +586,7 @@ export function createSaveFlow({
     clearTimer(retryTimer)
     saveTimer = null
     retryTimer = null
-    activeDeck = null
+    activeWork = null
     activeConflict = null
     dirty = false
     blocked = false
@@ -616,8 +616,8 @@ export function createSaveFlow({
     get conflict() { return activeConflict },
     get discardedDraftCount() { return discardedDrafts.length },
     get canRestoreDraft() {
-      const deck = activeDeck
-      return Boolean(deck && discardedDrafts.some(draft => draft.id === deck.id))
+      const work = activeWork
+      return Boolean(work && discardedDrafts.some(draft => draft.id === work.id))
     }
   }
 }

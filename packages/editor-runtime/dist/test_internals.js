@@ -211,7 +211,7 @@ function waitForEditorController(field, findController, { timeoutMs = 5e3 } = {}
   });
 }
 function editorUnavailable() {
-  return Object.assign(new Error("The editor did not finish loading. Try closing and reopening this deck."), {
+  return Object.assign(new Error("The editor did not finish loading. Try closing and reopening this Work."), {
     code: "editor_unavailable",
     retryable: true
   });
@@ -221,7 +221,7 @@ function editorUnavailable() {
 async function applyEditorSource(source, {
   id,
   expectedSource,
-  getDeckId,
+  getWorkId,
   getSource,
   waitForEditor,
   setFallback,
@@ -230,7 +230,7 @@ async function applyEditorSource(source, {
 }) {
   const controller = await waitForEditor();
   materializeEdits();
-  if (getDeckId() !== id || getSource() !== expectedSource) return false;
+  if (getWorkId() !== id || getSource() !== expectedSource) return false;
   if (controller) controller.setExternalValue(source);
   else setFallback(source);
   return true;
@@ -338,7 +338,7 @@ var EDITOR_VIEW = `
     <dialog id="conflict-dialog" class="conflict-dialog" data-autosave-target="conflict" aria-labelledby="conflict-title" aria-describedby="conflict-message">
       <div class="conflict-content">
         <p class="conflict-eyebrow">EXTERNAL CHANGE</p>
-        <h2 id="conflict-title">This deck changed elsewhere</h2>
+        <h2 id="conflict-title">This Work changed elsewhere</h2>
         <p id="conflict-message" class="conflict-explanation" data-autosave-target="conflictMessage">A newer version is active; your draft was preserved.</p>
         <div class="conflict-columns">
           <section><h3>Your edits</h3><pre id="conflict-local" class="conflict-source" data-autosave-target="localSource"></pre></section>
@@ -374,7 +374,7 @@ function mountEditorHosts(root = globalThis.document) {
 }
 function renderEditorView(container, config) {
   if (!container?.ownerDocument) throw new TypeError("Editor view needs a DOM container");
-  if (!config || !["document", "presentation"].includes(config.kind)) throw new TypeError("Editor view needs a supported deck kind");
+  if (!config || !["document", "presentation"].includes(config.kind)) throw new TypeError("Editor view needs a supported work kind");
   const doc = container.ownerDocument;
   const template = doc.createElement("template");
   template.innerHTML = EDITOR_VIEW;
@@ -485,7 +485,7 @@ function renderEditorView(container, config) {
 }
 function configureEditorKind(root, kind, { documentTitles = [], sourceName, showTitle = false, formControllers } = {}) {
   if (!root?.querySelector) throw new TypeError("Editor kind needs a rendered editor view");
-  if (!["document", "presentation"].includes(kind)) throw new TypeError("Editor view needs a supported deck kind");
+  if (!["document", "presentation"].includes(kind)) throw new TypeError("Editor view needs a supported work kind");
   const isDocument = kind === "document";
   const sourceField = root.querySelector(".source-field");
   const sourceSurface = root.querySelector("[data-editor-target='surface']");
@@ -543,7 +543,7 @@ function enableVisualMode(root) {
   const button = root?.querySelector?.("[data-editor-target='visualButton']");
   if (!button) return false;
   button.disabled = false;
-  button.title = "Edit the rendered deck visually";
+  button.title = "Edit the rendered Work visually";
   return true;
 }
 function setPressed(button, pressed) {
@@ -596,8 +596,8 @@ function mermaidAssetUrl() {
   return document.querySelector('meta[name="elef-mermaid-url"]')?.content || null;
 }
 
-// src/lib/deck_open_flow.ts
-function createDeckOpenFlow(open) {
+// src/lib/work_open_flow.ts
+function createWorkOpenFlow(open) {
   let previous = Promise.resolve();
   return (id) => {
     const request = previous.then(() => open(id));
@@ -606,18 +606,18 @@ function createDeckOpenFlow(open) {
     return request;
   };
 }
-async function prepareDeckOpen(id, { read, prepare, isDirty, flushSave, getRevision = () => void 0 }) {
+async function prepareWorkOpen(id, { read, prepare, isDirty, flushSave, getRevision = () => void 0 }) {
   let target = id;
   while (true) {
     const revision = getRevision();
-    const deck = await read(target);
-    const prepared = await prepare(deck);
+    const work = await read(target);
+    const prepared = await prepare(work);
     if (isDirty()) {
       if (!await flushSave()) return null;
     } else if (getRevision() === revision) {
-      return { deck, prepared, revision };
+      return { work, prepared, revision };
     }
-    target = deck.id;
+    target = work.id;
   }
 }
 
@@ -676,7 +676,7 @@ function bindEditorAction(root, action, handler, { events = ["click"] } = {}) {
 // src/lib/editor_binding.ts
 function createCodeMirrorBinding({
   getEditor,
-  getDeckId,
+  getWorkId,
   getFallbackValue,
   setFallbackValue,
   waitForEditor,
@@ -686,11 +686,11 @@ function createCodeMirrorBinding({
   function getText() {
     return getEditor()?.sourceValue ?? getFallbackValue();
   }
-  function setText(source, { id = getDeckId(), expectedSource = getText() } = {}) {
+  function setText(source, { id = getWorkId(), expectedSource = getText() } = {}) {
     return applyEditorSource(source, {
       id,
       expectedSource,
-      getDeckId,
+      getWorkId,
       getSource: getText,
       waitForEditor,
       setFallback: setFallbackValue,
@@ -845,13 +845,13 @@ function createRendererClient({
       }
     });
   }
-  const WARMUP_DECK = "# Warmup\n\nInline $x^2$ math.\n\n```js\nconst warm = 1\n```\n\n---\n\nSecond slide.\n";
+  const WARMUP_WORK = "# Warmup\n\nInline $x^2$ math.\n\n```js\nconst warm = 1\n```\n\n---\n\nSecond slide.\n";
   function warmup() {
     if (!warmupPromise) {
       warmupPromise = (async () => {
         try {
           const prewarmed = ensureWorker();
-          prewarmed.postMessage({ id: WARMUP_ID, input: { source: WARMUP_DECK } });
+          prewarmed.postMessage({ id: WARMUP_ID, input: { source: WARMUP_WORK } });
           prewarmed.postMessage({ id: WARMUP_ID, input: { kind: "markdown-block", source: "Elef" } });
         } catch (_error) {
         }
@@ -913,11 +913,11 @@ export {
   clientMountController,
   configureEditorKind,
   createCodeMirrorBinding,
-  createDeckOpenFlow,
   createDocumentGraphCache,
   createDocumentState,
   createRendererClient,
   createRequestGuard,
+  createWorkOpenFlow,
   desktopFeatureEnabled,
   editorActionControl,
   editorFor,
@@ -930,7 +930,7 @@ export {
   mermaidAssetUrl,
   mountEditorHosts,
   percentile95,
-  prepareDeckOpen,
+  prepareWorkOpen,
   presentConflictDialog,
   renderEditorView,
   renderWorkerMessage,

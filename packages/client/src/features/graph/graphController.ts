@@ -18,7 +18,7 @@ import {
 } from "./graphLayout.js";
 
 export interface GraphControllerOptions {
-  onOpenDeck?: (deckId: string) => void;
+  onOpenWork?: (workId: string) => void;
   scheduleFrame?: (callback: () => void) => number;
   cancelFrame?: (handle: number) => void;
 }
@@ -41,7 +41,7 @@ export class GraphController {
   private alpha = 0.9;
   private frame = 0;
   private disposers: Array<() => void> = [];
-  private onOpenDeck: ((deckId: string) => void) | undefined;
+  private onOpenWork: ((workId: string) => void) | undefined;
   private scheduleFrame: (callback: () => void) => number;
   private cancelFrame: (handle: number) => void;
 
@@ -49,7 +49,7 @@ export class GraphController {
     this.root = root;
     this.data = data;
     this.states = initNodeStates(data);
-    this.onOpenDeck = options.onOpenDeck;
+    this.onOpenWork = options.onOpenWork;
     this.scheduleFrame = options.scheduleFrame ?? defaultScheduleFrame;
     this.cancelFrame = options.cancelFrame ?? ((handle) => {
       const caf = (globalThis as { cancelAnimationFrame?: (h: number) => void }).cancelAnimationFrame;
@@ -208,9 +208,9 @@ export class GraphController {
         node.removeEventListener("blur", leave);
       });
       const click = (event: Event): void => {
-        if (!this.onOpenDeck) return;
+        if (!this.onOpenWork) return;
         event.preventDefault();
-        this.onOpenDeck(id);
+        this.onOpenWork(id);
       };
       node.addEventListener("click", click);
       this.disposers.push(() => node.removeEventListener("click", click));

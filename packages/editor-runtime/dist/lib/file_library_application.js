@@ -1,4 +1,4 @@
-import { createDeckOpenFlow, prepareDeckOpen } from "./deck_open_flow.js";
+import { createWorkOpenFlow, prepareWorkOpen } from "./work_open_flow.js";
 import { measurePaintedAction } from "./performance_measurement.js";
 import { editorFor } from "./editor_controller_lookup.js";
 import { mountHostPresentationEditor } from "./presentation_editor_host.js";
@@ -13,9 +13,9 @@ import { createRendererClient } from "./renderer_worker_client.js";
 import { applyDesktopFeatureFlags } from "./feature_flags.js";
 import { configureEditorKind, renderEditorView } from "./editor_view.js";
 import { CREATE_WORK_EVENT, GraphController, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute, renderGraphView } from "@elef/client";
-function ensureDeckHash(deck) {
-  deck.content_hash ??= "";
-  return deck;
+function ensureWorkFolderHash(workFolder) {
+  workFolder.content_hash ??= "";
+  return workFolder;
 }
 function shellElement(selector) {
   return document.querySelector(selector);
@@ -30,7 +30,7 @@ function startFileLibraryApplication(platform) {
     createCloseFlow,
     createTransportAdapter,
     installFetchTransport,
-    mediaUrlsForDeck,
+    mediaUrlsForWorkFolder,
     checkForUpdate,
     createIdleUpdateCheck,
     installPendingUpdate,
@@ -44,10 +44,10 @@ function startFileLibraryApplication(platform) {
   const readPreviewTrace = installFetchTransport({
     renderer,
     getContext: async (source) => ({
-      kind: activeDeck?.source_file === "document.md" ? "document" : "presentation",
-      title: document.querySelector("#desktop-editor-title")?.value.trim() || activeDeck?.name || "Untitled",
-      deckId: activeDeck?.id || "",
-      mediaBaseUrl: activeDeck ? mediaUrlsForDeck(activeDeck).assetBaseUrl : "",
+      kind: activeWorkFolder?.source_file === "document.md" ? "document" : "presentation",
+      title: document.querySelector("#desktop-editor-title")?.value.trim() || activeWorkFolder?.name || "Untitled",
+      workId: activeWorkFolder?.id || "",
+      mediaBaseUrl: activeWorkFolder ? mediaUrlsForWorkFolder(activeWorkFolder).assetBaseUrl : "",
       documentNodes: await previewDocumentNodes(source)
     })
   });
@@ -57,7 +57,7 @@ function startFileLibraryApplication(platform) {
     sourceName: "presentation[source]",
     mode: "visual",
     visualDisabled: true,
-    visualDisabledMessage: "Open a deck to render its preview",
+    visualDisabledMessage: "Open a Work to render its preview",
     showTitle: true,
     showSubmit: false,
     showSaveStatus: false,
@@ -66,14 +66,14 @@ function startFileLibraryApplication(platform) {
     documentTitles: [],
     ids: {
       field: "desktop-editor-field",
-      source: "deck-source",
-      surface: "deck-source-editor",
-      label: "deck-source-label",
+      source: "work-source",
+      surface: "work-source-editor",
+      label: "work-source-label",
       title: "desktop-editor-title",
       visualMode: "visual-mode",
       sourceMode: "source-mode",
-      theme: "deck-theme",
-      typography: "deck-typography",
+      theme: "work-theme",
+      typography: "work-typography",
       preview: "desktop-preview"
     }
   });
@@ -88,8 +88,8 @@ function startFileLibraryApplication(platform) {
     libraryName: document.querySelector("#library-name"),
     welcome: document.querySelector("#welcome-view"),
     library: document.querySelector("#library-view"),
-    deckView: document.querySelector("#deck-view"),
-    deckTitle: document.querySelector("#deck-title"),
+    workView: document.querySelector("#work-view"),
+    workTitle: document.querySelector("#work-title"),
     status: document.querySelector("#status-text"),
     settingsDialog: document.querySelector("#settings-dialog"),
     settingsForm: document.querySelector("#settings-form"),
@@ -97,7 +97,7 @@ function startFileLibraryApplication(platform) {
     aboutDialog: document.querySelector("#about-dialog"),
     editorField: document.querySelector("#desktop-editor-field"),
     editorForm: document.querySelector("#desktop-editor-form"),
-    editorInput: document.querySelector("#deck-source"),
+    editorInput: document.querySelector("#work-source"),
     titleInput: document.querySelector("#desktop-editor-title"),
     restoreDraft: document.querySelector("#restore-local-draft"),
     importConflictDialog: document.querySelector("#import-conflict-dialog"),
@@ -110,8 +110,8 @@ function startFileLibraryApplication(platform) {
   };
   let library = null;
   let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} };
-  let decks = [];
-  let activeDeck = null;
+  let workFolders = [];
+  let activeWorkFolder = null;
   let presentationEditorHandle = null;
   let saveFlow = null;
   let sessionStatusKind = "clean";
@@ -127,7 +127,7 @@ function startFileLibraryApplication(platform) {
   let titleFlow = null;
   const startupUpdateCheck = createIdleUpdateCheck(
     () => checkForUpdates(false),
-    () => !elements.deckView.hidden
+    () => !elements.workView.hidden
   );
   const authoringHostDialog = document.querySelector("#authoring-dialog");
   const authoringMount = document.querySelector("#authoring-settings-mount");
@@ -171,7 +171,7 @@ function startFileLibraryApplication(platform) {
   const sessionTransport = {
     ...transport,
     saveSource: async (id, source) => {
-      const isDocument = decks.find((deck) => deck.id === id)?.source_file === "document.md";
+      const isDocument = workFolders.find((workFolder) => workFolder.id === id)?.source_file === "document.md";
       if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__ && e2eNextSaveDelayMs > 0) {
         const delay = e2eNextSaveDelayMs;
         e2eNextSaveDelayMs = 0;
@@ -182,12 +182,12 @@ function startFileLibraryApplication(platform) {
       return result;
     }
   };
-  function openSession(deck) {
+  function openSession(workFolder) {
     closeSession();
-    lastSourceFile = deck.source_file;
+    lastSourceFile = workFolder.source_file;
     const adapter = createCodeMirrorBinding({
       getEditor: () => editorFor(elements.editorField),
-      getDeckId: () => activeDeck?.id,
+      getWorkId: () => activeWorkFolder?.id,
       getFallbackValue: () => elements.editorInput.value,
       setFallbackValue: (value) => {
         elements.editorInput.value = value;
@@ -198,9 +198,9 @@ function startFileLibraryApplication(platform) {
     const session = createWorkSession({
       transport: sessionTransport,
       policy: {
-        workId: deck.id,
-        kind: deck.source_file === "document.md" ? "document" : "presentation",
-        deck,
+        workId: workFolder.id,
+        kind: workFolder.source_file === "document.md" ? "document" : "presentation",
+        work: workFolder,
         getText: adapter.getText,
         setText: adapter.setText,
         saveDelay: quietSavePolicy.saveDelay,
@@ -214,8 +214,8 @@ function startFileLibraryApplication(platform) {
     session.onStatus((status) => {
       sessionStatusKind = status.kind;
       elements.restoreDraft.hidden = !session.canRestoreDraft;
-      if (activeDeck && activeDeck.source_file !== lastSourceFile) {
-        lastSourceFile = activeDeck.source_file;
+      if (activeWorkFolder && activeWorkFolder.source_file !== lastSourceFile) {
+        lastSourceFile = activeWorkFolder.source_file;
         syncSourceLabel();
       }
       if (status.kind === "clean" && openFilesWaitingForSave) {
@@ -224,8 +224,8 @@ function startFileLibraryApplication(platform) {
       }
     });
     session.onExternalChange((snapshot) => {
-      if (snapshot.removed || !activeDeck) return;
-      if (activeDeck.source_file === "document.md" && (snapshot.baseline.revision !== activeDeck.content_hash || snapshot.sourceFile !== activeDeck.source_file)) {
+      if (snapshot.removed || !activeWorkFolder) return;
+      if (activeWorkFolder.source_file === "document.md" && (snapshot.baseline.revision !== activeWorkFolder.content_hash || snapshot.sourceFile !== activeWorkFolder.source_file)) {
         documentGraphCache.invalidate();
       }
     });
@@ -241,11 +241,11 @@ function startFileLibraryApplication(platform) {
     sessionStatusKind = "clean";
   }
   titleFlow = createTitleSaveFlow({
-    getDeck: () => activeDeck,
+    getWork: () => activeWorkFolder,
     getTitle: () => elements.titleInput.value,
-    renameDeck,
+    renameWork,
     onRenamed: (renamed) => {
-      elements.deckTitle.textContent = renamed.name;
+      elements.workTitle.textContent = renamed.name;
       shellElement("#breadcrumb-current").textContent = renamed.name;
     },
     onState: () => {
@@ -329,8 +329,8 @@ function startFileLibraryApplication(platform) {
           const traceStart = readPreviewTrace?.().length || 0;
           const openStageStart = openStageMeasurements.length;
           const measured = await measurePaintedAction(async () => {
-            await openDeck(id);
-            if (activeDeck?.id !== id || elements.editorForm.dataset.loadedDeckId !== id || shellElement("#visual-mode").disabled) throw new Error("The measured deck did not finish rendering.");
+            await openWork(id);
+            if (activeWorkFolder?.id !== id || elements.editorForm.dataset.loadedWorkId !== id || shellElement("#visual-mode").disabled) throw new Error("The measured Work did not finish rendering.");
             const projection = elements.editorForm.querySelector(".presentation-editor-projection");
             if (!projection) throw new Error("The measured presentation projection did not render.");
             return { id, slides: projection.querySelectorAll(".slide-frame > .slide").length };
@@ -350,7 +350,7 @@ function startFileLibraryApplication(platform) {
             await refreshLibrary();
             const notice = document.querySelector("#notice");
             if (notice && !notice.hidden && notice.dataset.tone === "error") throw new Error("The measured library refresh failed.");
-            return { total: decks.length, rendered: document.querySelectorAll("#deck-list .library-card").length };
+            return { total: workFolders.length, rendered: document.querySelectorAll("#work-list .library-card").length };
           });
         },
         typingValue: () => currentSource(),
@@ -428,11 +428,11 @@ function startFileLibraryApplication(platform) {
     document.body.dataset.desktopView = "library";
     elements.welcome.hidden = Boolean(library);
     elements.library.hidden = !library;
-    elements.deckView.hidden = true;
+    elements.workView.hidden = true;
     elements.libraryName.textContent = library ? library.root.split(/[\\/]/).filter(Boolean).at(-1) || library.root : "No library selected";
-    shellElement("#new-deck").disabled = !library;
+    shellElement("#new-work").disabled = !library;
     shellElement("#import-elef").disabled = !library;
-    shellElement("#breadcrumb-current").textContent = "Decks";
+    shellElement("#breadcrumb-current").textContent = "Works";
     if (libraryShown) {
       shell.setFilter("all");
       void refreshLibrary();
@@ -465,7 +465,7 @@ function startFileLibraryApplication(platform) {
       if (!slot) return;
       graphController?.destroy();
       renderGraphView(slot, graph);
-      graphController = new GraphController(slot, graph, { onOpenDeck: (id) => void openDeck(id) });
+      graphController = new GraphController(slot, graph, { onOpenWork: (id) => void openWork(id) });
       slot.hidden = currentFilter() !== "documents";
     } catch (error) {
       showError(error);
@@ -474,16 +474,16 @@ function startFileLibraryApplication(platform) {
   async function refreshLibrary() {
     if (!library) return;
     try {
-      const [listedDecks] = await Promise.all([
-        fileLibrary.listDecks(),
+      const [listedWorkFolders] = await Promise.all([
+        fileLibrary.listWorkFolders(),
         loadDesktopAuthoringRegistry()
       ]);
-      decks = listedDecks.map(ensureDeckHash);
+      workFolders = listedWorkFolders.map(ensureWorkFolderHash);
       documentGraphCache.invalidate();
-      libraryHost?.noteListedDecks(listedDecks);
+      libraryHost?.noteListedWorkFolders(listedWorkFolders);
       await shell.refresh();
       if (currentFilter() === "documents") await showDocumentGraph();
-      setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`);
+      setStatus(`${workFolders.length} ${workFolders.length === 1 ? "Work" : "Works"}`);
       clearNotice();
     } catch (error) {
       showError(error);
@@ -504,11 +504,11 @@ function startFileLibraryApplication(platform) {
       await loadDesktopAuthoringRegistry();
       documentGraphCache.invalidate();
       libraryConfig = selected.config || libraryConfig;
-      decks = selected.decks.map(ensureDeckHash);
+      workFolders = selected.work_folders.map(ensureWorkFolderHash);
       applyTheme(libraryConfig.theme);
       showLibrary();
       if (selected.config_notice) showNotice(selected.config_notice, "error");
-      setStatus(`${decks.length} ${decks.length === 1 ? "deck" : "decks"}`);
+      setStatus(`${workFolders.length} ${workFolders.length === 1 ? "Work" : "Works"}`);
       if (await fileLibrary.pendingOpenedElefCount()) void processOpenedFiles();
     } catch (error) {
       showError(error);
@@ -519,38 +519,38 @@ function startFileLibraryApplication(platform) {
       new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })
     );
   }
-  const openDeck = createDeckOpenFlow(openDeckNow);
-  async function openDeckNow(id) {
+  const openWork = createWorkOpenFlow(openWorkNow);
+  async function openWorkNow(id) {
     const libraryWasHidden = elements.library.hidden;
     elements.library.hidden = true;
     const restoreLibrary = () => {
       elements.library.hidden = libraryWasHidden;
     };
     try {
-      if (document.body.classList.contains("presenting-deck")) await exitPresentation();
+      if (document.body.classList.contains("presenting-work")) await exitPresentation();
       elements.editorForm.previewController?.finishEditing();
       await Promise.resolve();
-      if (activeDeck && hasUnsavedChanges() && !await flushSave()) {
+      if (activeWorkFolder && hasUnsavedChanges() && !await flushSave()) {
         restoreLibrary();
         return false;
       }
-      delete elements.editorForm.dataset.loadedDeckId;
+      delete elements.editorForm.dataset.loadedWorkId;
       let transition;
       do {
-        transition = await prepareDeckOpen(id, {
-          read: (target) => measureOpenStage("readDeck", () => transport.readDeck(target)),
+        transition = await prepareWorkOpen(id, {
+          read: (target) => measureOpenStage("readWork", () => transport.readWorkFolder(target)),
           isDirty: hasUnsavedChanges,
           getRevision: () => saveFlow?.revision ?? 0,
           flushSave,
-          prepare: (deck2) => measureOpenStage("prepareDeck", async () => {
+          prepare: (work2) => measureOpenStage("prepareWork", async () => {
             await registerEditorRuntime();
             let documentTitles2 = [];
-            if (deck2.source_file === "document.md" || deck2.source.includes("[[")) {
+            if (work2.source_file === "document.md" || work2.source.includes("[[")) {
               try {
                 const graph = await documentGraphData();
-                documentTitles2 = deck2.source_file === "document.md" ? graph.nodes.map((node) => node.title) : [];
+                documentTitles2 = work2.source_file === "document.md" ? graph.nodes.map((node) => node.title) : [];
               } catch (_error) {
-                documentTitles2 = deck2.source_file === "document.md" ? decks.filter((item) => item.kind === "document").map((item) => item.name) : [];
+                documentTitles2 = work2.source_file === "document.md" ? workFolders.filter((item) => item.kind === "document").map((item) => item.name) : [];
               }
             }
             return { documentTitles: documentTitles2 };
@@ -558,20 +558,20 @@ function startFileLibraryApplication(platform) {
         });
       } while (transition && (hasUnsavedChanges() || (saveFlow?.revision ?? 0) !== transition.revision));
       if (!transition) {
-        if (activeDeck) elements.editorForm.dataset.loadedDeckId = activeDeck.id;
+        if (activeWorkFolder) elements.editorForm.dataset.loadedWorkId = activeWorkFolder.id;
         restoreLibrary();
         return false;
       }
-      const { deck, prepared } = transition;
+      const { work, prepared } = transition;
       const { documentTitles } = prepared;
-      const isDocument = deck.source_file === "document.md";
-      if (deck.id !== id) {
-        decks = decks.map((item) => item.id === id ? { ...item, id: deck.id } : item);
+      const isDocument = work.source_file === "document.md";
+      if (work.id !== id) {
+        workFolders = workFolders.map((item) => item.id === id ? { ...item, id: work.id } : item);
         documentGraphCache.invalidate();
         void shell.refresh();
       }
       closeSession();
-      activeDeck = null;
+      activeWorkFolder = null;
       try {
         configureEditorKind(elements.editorField.closest(".editor-shell"), isDocument ? "document" : "presentation", {
           documentTitles,
@@ -581,7 +581,7 @@ function startFileLibraryApplication(platform) {
         });
         const editor = await measureOpenStage("editorReady", () => editorFor(elements.editorField)?.editorReady ? editorFor(elements.editorField) : waitForEditorController(elements.editorField, editorFor));
         measureOpenStage("loadDocument", () => {
-          editor.loadDocument(deck.source);
+          editor.loadDocument(work.source);
           editor.setEditingMode("visual", { restoreCaret: false });
         });
       } catch (error) {
@@ -596,19 +596,19 @@ function startFileLibraryApplication(platform) {
         presentationEditorHandle = mountHostPresentationEditor(elements.editorForm);
       }
       const viewSetupStartedAt = typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__ ? performance.now() : null;
-      transport.activateDeck(deck, id);
-      activeDeck = deck;
-      openSession(deck);
-      elements.deckTitle.textContent = deck.name;
-      elements.deckTitle.hidden = !isDocument;
-      elements.titleInput.value = deck.name;
-      shellElement("#deck-kind").textContent = deck.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION";
-      shellElement("#deck-source-name").textContent = deck.source_file;
-      elements.editorField.dataset.editorInitialSourceValue = JSON.stringify(deck.source);
-      const mediaUrls = mediaUrlsForDeck(deck);
+      transport.activateWorkFolder(work, id);
+      activeWorkFolder = work;
+      openSession(work);
+      elements.workTitle.textContent = work.name;
+      elements.workTitle.hidden = !isDocument;
+      elements.titleInput.value = work.name;
+      shellElement("#work-kind").textContent = work.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION";
+      shellElement("#work-source-name").textContent = work.source_file;
+      elements.editorField.dataset.editorInitialSourceValue = JSON.stringify(work.source);
+      const mediaUrls = mediaUrlsForWorkFolder(work);
       elements.editorForm.dataset.previewUrlValue = mediaUrls.previewUrl;
       elements.editorForm.dataset.mediaEnabledValue = "true";
-      elements.editorForm.dataset.mediaWorkKindValue = deck.source_file === "document.md" ? "document" : "presentation";
+      elements.editorForm.dataset.mediaWorkKindValue = work.source_file === "document.md" ? "document" : "presentation";
       elements.editorForm.dataset.mediaUploadUrlValue = mediaUrls.uploadUrl;
       elements.editorForm.dataset.mediaAssetBaseUrlValue = mediaUrls.assetBaseUrl;
       elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles);
@@ -616,17 +616,17 @@ function startFileLibraryApplication(platform) {
       visualButton.disabled = true;
       visualButton.title = "Rendering preview\u2026";
       elements.editorInput.disabled = false;
-      shellElement("#deck-id").textContent = deck.id;
-      elements.editorForm.dataset.loadedDeckId = deck.id;
-      const notice = document.querySelector("#deck-notice");
-      notice.textContent = deck.notices.join(" ");
-      notice.hidden = deck.notices.length === 0;
+      shellElement("#work-id").textContent = work.id;
+      elements.editorForm.dataset.loadedWorkId = work.id;
+      const notice = document.querySelector("#work-notice");
+      notice.textContent = work.notices.join(" ");
+      notice.hidden = work.notices.length === 0;
       elements.library.hidden = true;
-      elements.deckView.hidden = false;
+      elements.workView.hidden = false;
       document.body.dataset.desktopView = "editor";
-      shellElement("#breadcrumb-current").textContent = deck.name;
-      setStatus("Deck opened");
-      if (viewSetupStartedAt !== null) recordOpenStage("deckViewSetup", viewSetupStartedAt);
+      shellElement("#breadcrumb-current").textContent = work.name;
+      setStatus("Work opened");
+      if (viewSetupStartedAt !== null) recordOpenStage("workViewSetup", viewSetupStartedAt);
       await measureOpenStage("previewRefresh", () => elements.editorForm.previewController?.refresh());
       return true;
     } catch (error) {
@@ -634,45 +634,45 @@ function startFileLibraryApplication(platform) {
       return false;
     }
   }
-  async function renameDeck(deck, name) {
-    if (typeof name !== "string" || name.trim() === deck.name) return;
-    const renamed = await fileLibrary.renameDeck(deck.id, name.trim());
-    if (activeDeck && activeDeck.id === deck.id) Object.assign(activeDeck, renamed);
-    decks = decks.map((item) => item.id === deck.id ? { ...item, ...renamed } : item);
+  async function renameWork(workFolder, name) {
+    if (typeof name !== "string" || name.trim() === workFolder.name) return;
+    const renamed = await fileLibrary.renameWorkFolder(workFolder.id, name.trim());
+    if (activeWorkFolder && activeWorkFolder.id === workFolder.id) Object.assign(activeWorkFolder, renamed);
+    workFolders = workFolders.map((item) => item.id === workFolder.id ? { ...item, ...renamed } : item);
     await shell.refresh();
     return renamed;
   }
   function handleLibraryEvent(event) {
     if (event.type === "renamed") {
-      if (activeDeck && activeDeck.id === event.work.id) Object.assign(activeDeck, { name: event.work.title });
-      decks = decks.map((item) => item.id === event.work.id ? { ...item, name: event.work.title } : item);
+      if (activeWorkFolder && activeWorkFolder.id === event.work.id) Object.assign(activeWorkFolder, { name: event.work.title });
+      workFolders = workFolders.map((item) => item.id === event.work.id ? { ...item, name: event.work.title } : item);
     }
     if (event.type === "deleted") {
-      if (activeDeck?.id === event.work.id) {
-        activeDeck = null;
+      if (activeWorkFolder?.id === event.work.id) {
+        activeWorkFolder = null;
         closeSession();
       }
-      decks = decks.filter((item) => item.id !== event.work.id);
+      workFolders = workFolders.filter((item) => item.id !== event.work.id);
       setStatus(`Moved \u201C${event.work.title}\u201D to Trash`);
     }
     if (currentFilter() === "documents") void showDocumentGraph();
   }
   function showImportConflict(error) {
-    const incoming = error.details?.incoming_name || "This deck";
-    const existing = error.details?.existing_name || "an existing deck";
+    const incoming = error.details?.incoming_name || "This Work";
+    const existing = error.details?.existing_name || "an existing Work";
     elements.importConflictMessage.textContent = `\u201C${incoming}\u201D has the same identity as \u201C${existing}\u201D.`;
     elements.importConflictDialog.showModal();
   }
   async function completeImport(imported) {
-    if (imported.replaced && activeDeck?.id === imported.deck.id) {
-      activeDeck = null;
+    if (imported.replaced && activeWorkFolder?.id === imported.work_folder.id) {
+      activeWorkFolder = null;
       closeSession();
       showLibrary();
     }
     await refreshLibrary();
-    setStatus((imported.replaced ? "Replaced" : "Imported") + ` \u201C${imported.deck.name}\u201D`);
+    setStatus((imported.replaced ? "Replaced" : "Imported") + ` \u201C${imported.work_folder.name}\u201D`);
     if (imported.name_collision) {
-      showNotice(`A deck with an equivalent name already exists. Imported as \u201C${imported.deck.name}\u201D.`, "warning");
+      showNotice(`A Work with an equivalent name already exists. Imported as \u201C${imported.work_folder.name}\u201D.`, "warning");
     }
   }
   async function processOpenedFiles() {
@@ -773,21 +773,21 @@ function startFileLibraryApplication(platform) {
       showError(error);
     }
   }
-  async function exportCurrentDeck() {
-    if (!activeDeck) {
-      showNotice("Open a deck before exporting it.");
+  async function exportCurrentWork() {
+    if (!activeWorkFolder) {
+      showNotice("Open a Work before exporting it.");
       return;
     }
     if (hasUnsavedChanges() && !await flushSave({ force: true })) return;
     try {
-      if (await fileLibrary.exportElef(activeDeck.id)) setStatus("Deck exported");
+      if (await fileLibrary.exportElef(activeWorkFolder.id)) setStatus("Work exported");
     } catch (error) {
       showError(error);
     }
   }
-  async function importDeck() {
+  async function importWork() {
     if (!library) {
-      showNotice("Choose a library before importing a deck.");
+      showNotice("Choose a library before importing a Work.");
       return;
     }
     if (hasUnsavedChanges() && !await flushSave()) return;
@@ -861,21 +861,21 @@ function startFileLibraryApplication(platform) {
       later.disabled = false;
     }
   }
-  async function printCurrentDeck() {
-    if (!activeDeck) {
-      showNotice("Open a deck before printing it.");
+  async function printCurrentWork() {
+    if (!activeWorkFolder) {
+      showNotice("Open a Work before printing it.");
       return;
     }
     if (hasUnsavedChanges() && !await flushSave()) return;
     const preview = document.querySelector("#desktop-preview");
     if (!preview.childElementCount && !await elements.editorForm.previewController?.refresh()) {
-      showNotice("Render the deck before printing it.", "error");
+      showNotice("Render the Work before printing it.", "error");
       return;
     }
-    document.body.classList.add("printing-deck");
+    document.body.classList.add("printing-work");
     await new Promise((resolve) => requestAnimationFrame(resolve));
     window.addEventListener("afterprint", () => {
-      document.body.classList.remove("printing-deck");
+      document.body.classList.remove("printing-work");
     }, { once: true });
     window.print();
   }
@@ -900,8 +900,8 @@ function startFileLibraryApplication(platform) {
     presentationMount?.resync();
   }
   async function startPresentation() {
-    if (!activeDeck || activeDeck.source_file === "document.md") {
-      showNotice("Open a presentation deck to start presentation mode.");
+    if (!activeWorkFolder || activeWorkFolder.source_file === "document.md") {
+      showNotice("Open a presentation Work to start presentation mode.");
       return;
     }
     if (!await elements.editorForm.previewController?.refresh()) {
@@ -913,7 +913,7 @@ function startFileLibraryApplication(platform) {
       showNotice("This presentation has no slides to show.", "error");
       return;
     }
-    document.body.classList.add("presenting-deck");
+    document.body.classList.add("presenting-work");
     elements.presentationExit.hidden = false;
     document.addEventListener("keydown", presentationKeydown, true);
     try {
@@ -925,14 +925,14 @@ function startFileLibraryApplication(platform) {
     }
   }
   function presentationKeydown(event) {
-    if (!document.body.classList.contains("presenting-deck")) return;
+    if (!document.body.classList.contains("presenting-work")) return;
     if (event.key !== "Escape") return;
     event.preventDefault();
     void exitPresentation();
   }
   async function exitPresentation() {
-    if (!document.body.classList.contains("presenting-deck")) return;
-    document.body.classList.remove("presenting-deck");
+    if (!document.body.classList.contains("presenting-work")) return;
+    document.body.classList.remove("presenting-work");
     elements.presentationExit.hidden = true;
     document.removeEventListener("keydown", presentationKeydown, true);
     presentationMount?.destroy();
@@ -965,15 +965,15 @@ function startFileLibraryApplication(platform) {
     conflictDialog.close();
   }
   function syncSourceLabel() {
-    if (!activeDeck) return;
-    shellElement("#deck-source-name").textContent = activeDeck.source_file;
-    shellElement("#deck-kind").textContent = activeDeck.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION";
+    if (!activeWorkFolder) return;
+    shellElement("#work-source-name").textContent = activeWorkFolder.source_file;
+    shellElement("#work-kind").textContent = activeWorkFolder.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION";
   }
   async function handleMenuAction(action) {
     if (action === "quit") return getCurrentWindow().close();
     if (action === "choose-library") return chooseLibrary();
     if (action === "refresh-library") return refreshLibrary();
-    if (action === "open-deck") {
+    if (action === "open-work") {
       if (!library) return chooseLibrary();
       if (hasUnsavedChanges() && !await flushSave()) return;
       showLibrary();
@@ -983,13 +983,13 @@ function startFileLibraryApplication(platform) {
     if (action === "new-presentation") return showCreateDialog("presentation");
     if (action === "new-document") return showCreateDialog("document");
     if (action === "save") return flushSave({ force: true });
-    if (action === "export-elef") return exportCurrentDeck();
-    if (action === "import-elef") return importDeck();
+    if (action === "export-elef") return exportCurrentWork();
+    if (action === "import-elef") return importWork();
     if (action === "settings") return showSettings();
     if (action === "check-for-updates") return checkForUpdates(true);
     if (action === "about") return elements.aboutDialog.showModal();
     if (action === "start-presentation") return startPresentation();
-    if (action === "print") return printCurrentDeck();
+    if (action === "print") return printCurrentWork();
   }
   shellElement("#choose-library").addEventListener("click", () => void chooseLibrary());
   shellElement("#change-library").addEventListener("click", () => void chooseLibrary());
@@ -998,11 +998,11 @@ function startFileLibraryApplication(platform) {
     shellElement("#back-to-library").click();
   });
   shellElement("#open-settings").addEventListener("click", () => void showSettings());
-  shellElement("#new-deck").addEventListener("click", () => {
+  shellElement("#new-work").addEventListener("click", () => {
     showCreateDialog(currentFilter() === "documents" ? "document" : "presentation");
   });
   shellElement("#refresh-library").addEventListener("click", () => void refreshLibrary());
-  shellElement("#import-elef").addEventListener("click", () => void importDeck());
+  shellElement("#import-elef").addEventListener("click", () => void importWork());
   shellElement("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then((saved) => {
@@ -1075,15 +1075,15 @@ function startFileLibraryApplication(platform) {
       // editor, tab targets only move the location hash for deep-linking.
       navigate: (target) => {
         if (!("url" in target)) {
-          void openDeck(target.workId);
+          void openWork(target.workId);
           return;
         }
         if (target.url.startsWith("#")) location.hash = target.url;
         if (parseLibraryRoute(target.url)?.filter === "documents") void showDocumentGraph();
       },
-      resolveMediaBaseUrl: (work) => mediaUrlsForDeck(work.id).assetBaseUrl,
+      resolveMediaBaseUrl: (work) => mediaUrlsForWorkFolder(work.id).assetBaseUrl,
       presentWork: (work) => {
-        void openDeck(work.id).then((opened) => {
+        void openWork(work.id).then((opened) => {
           if (opened) void startPresentation();
         });
       },
@@ -1095,12 +1095,12 @@ function startFileLibraryApplication(platform) {
       const [status] = await measureBootstrapStage("library-status", () => Promise.all([fileLibrary.getLibraryStatus(), openedFileListener]));
       library = status;
       libraryConfig = status?.config || libraryConfig;
-      decks = (status?.decks || []).map(ensureDeckHash);
+      workFolders = (status?.work_folders || []).map(ensureWorkFolderHash);
       await mountLibrary(status);
       applyTheme(libraryConfig.theme);
       measureBootstrapStage("initial-library-render", showLibrary);
       if (status?.config_notice) showNotice(status.config_notice, "error");
-      setStatus(library ? `${decks.length} ${decks.length === 1 ? "deck" : "decks"}` : "Choose a library folder to begin");
+      setStatus(library ? `${workFolders.length} ${workFolders.length === 1 ? "Work" : "Works"}` : "Choose a library folder to begin");
       libraryStatusLoaded = true;
     },
     waitForPaint: () => measureBootstrapStage("initial-paint", () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))),

@@ -549,7 +549,7 @@ assert 'pin "@elef/editor-runtime", to: "editor-runtime/dist/index.js"' in impor
 )
 assert '"lib/presentation_navigation"' not in client_presentation, "the shared controller must not keep host-owned key mapping"
 for shared_module in (
-    "deck_open_flow", "document_graph_cache", "editor_ready",
+    "work_open_flow", "document_graph_cache", "editor_ready",
     "feature_flags", "performance_measurement", "renderer_worker_client",
     "request_identity", "editor_binding",
 ):
@@ -683,7 +683,7 @@ assert not desktop_frontend_dom_violations, (
     "Desktop frontend adapters must not implement product DOM or presentation logic: "
     + ", ".join(desktop_frontend_dom_violations)
 )
-for shared_test in ("authoring-settings.test.js", "deck-open-flow.test.js", "feature-flags.test.js", "renderer-client.test.js", "renderer.test.js", "renderer-fixtures.test.js"):
+for shared_test in ("authoring-settings.test.js", "work-open-flow.test.js", "feature-flags.test.js", "renderer-client.test.js", "renderer.test.js", "renderer-fixtures.test.js"):
     assert not (ROOT / "apps/desktop/frontend/tests" / shared_test).exists(), f"shared behavior tests must stay under apps/web/test/javascript: {shared_test}"
 assert not (ROOT / "apps/desktop/frontend/tests/host-page.test.js").exists(), "host template tests must stay with the Rails-owned frontend"
 

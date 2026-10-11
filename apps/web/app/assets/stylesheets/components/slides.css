@@ -123,7 +123,7 @@
 }
 
 .presentation-mode .slide-block.is-presentation-reveal-hidden,
-.presenting-deck .slide-block.is-presentation-reveal-hidden {
+.presenting-work .slide-block.is-presentation-reveal-hidden {
   pointer-events: none !important;
   visibility: hidden !important;
 }
