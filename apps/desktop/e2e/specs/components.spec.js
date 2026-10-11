@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises"
 import { readHostStylesheets as hostStylesheets, renderPreview } from "./shared_helpers.js"
 
 const slidePositionFixtures = JSON.parse(
-  await readFile(new URL("../../../../docs/align-directives-grammar/fixtures.json", import.meta.url), "utf8")
+  await readFile(new URL("../../../../packages/work-model/test/fixtures/align_grammar.json", import.meta.url), "utf8")
 ).fixtures
 
 async function setStaticFixture(page, fixturePath, styles) {

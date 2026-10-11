@@ -13,7 +13,8 @@ Each fact has exactly one home; everything else links to it.
 | boundaries, ownership, contracts, change-routing examples | `docs/architecture.md` |
 | setup, validation tiers, feature/bug workflow, commands | `docs/development.md` |
 | domain runbooks (desktop, deployment, media/printing) | `docs/desktop/**`, `docs/mac-mini-deployment.md`, `docs/presentation-media-and-printing.md` |
-| authoring references (reveals, align grammar) | `docs/animation/reveals.md`, `docs/align-directives-grammar/` (spec + machine-read `fixtures.json`) |
+| authoring references (reveals) | `docs/animation/reveals.md` |
+| `:::align` / `:::position` grammar | `packages/work-model/src/slide_position_layout.ts` header + `packages/work-model/test/fixtures/align_grammar.json` (machine-read corpus) |
 | `:::art` syntax | `packages/work-model/src/art_source.ts` header; behavior pinned by `art_contract` + the `art_*` suites, not prose |
 | contract types and signatures | code in `packages/contracts` (documented by code, not prose) |
 | agent routing + safety | `AGENTS.md` (short router) |

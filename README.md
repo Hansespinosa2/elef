@@ -22,4 +22,3 @@ The development guide covers the current Omarchy server, clean local setup, the 
 ## Authoring references
 
 - [Slide reveals](docs/animation/reveals.md) — `:::step` syntax and Present behavior.
-- [Slide position grammar](docs/align-directives-grammar/SPECIFICATION.md) — `:::align`/`:::position` placement rules and fixtures.

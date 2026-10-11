@@ -11,7 +11,7 @@ vm.runInContext(
 )
 const { renderPreview } = sandbox.ElefRenderer
 
-const corpus = JSON.parse(await readFile(new URL("../../../../docs/align-directives-grammar/fixtures.json", import.meta.url), "utf8"))
+const corpus = JSON.parse(await readFile(new URL("../../../../packages/work-model/test/fixtures/align_grammar.json", import.meta.url), "utf8"))
 
 function renderedBlocks(container) {
   return [...container.querySelectorAll(".slide-block")]

@@ -2,6 +2,19 @@
 // (top/middle/bottom) and groups middle runs and the trailing bottom lane
 // into entries the projection and exporters share. Non-trailing bottom
 // blocks demote to top with a warning. Pure: no DOM, no host.
+//
+// Grammar sketch (owner of :::align / :::position semantics; the two names
+// are aliases): values are whitespace-separated and case-insensitive,
+// horizontal left/center/right, vertical top/middle/bottom. A directive
+// binds exactly the block below it; a dangling directive is dropped with a
+// warning, and blocks default to explicit left top. A middle block anchors
+// a stack absorbing following top/middle and preceding bottom blocks
+// (consecutive middles merge); the stack centers as one unit, or docks
+// flush-bottom above a trailing bottom lane. Bottom pins only in the
+// trailing run; any other bottom demotes to top with a warning. Each
+// column is an independent context and the extracted column title is
+// forced top. Corpus and semantics: test/fixtures/align_grammar.json plus
+// the renderer and e2e suites that consume it.
 export const NON_TRAILING_BOTTOM_WARNING = "Only trailing bottom blocks pin; this block was treated as top."
 
 export interface SlidePositionBlock {
