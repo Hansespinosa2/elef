@@ -113,13 +113,14 @@ assert.match(unknownSource, /^:::future-directive/m)
 assert.equal(STABLE_PROFILE_SOURCE, unknownSource, "the Stable runtime must consume the manifested unknown-directive source fixture")
 assert.match(unknownSource, /\[Elef documentation\]\(https:\/\/example\.com\/docs\)/)
 
-const [runtimeRunner, webSpec, desktopSpec] = await Promise.all([
+const [runtimeRunner, webSpec, desktopSpec, richSeeder] = await Promise.all([
   readFile(path.join(repoRoot, "apps/desktop/e2e/run.mjs"), "utf8"),
   readFile(path.join(repoRoot, "apps/desktop/e2e/specs/web.spec.js"), "utf8"),
-  readFile(path.join(repoRoot, "apps/desktop/e2e/specs/desktop.spec.js"), "utf8")
+  readFile(path.join(repoRoot, "apps/desktop/e2e/specs/desktop.spec.js"), "utf8"),
+  readFile(path.join(repoRoot, "apps/desktop/e2e/seed-rich-rendering.mjs"), "utf8")
 ])
-assert.match(runtimeRunner, /rich\.assets\.attach/, "Rails rich fixture must attach the checked-in local image")
-assert.match(runtimeRunner, /RICH_RENDERING_SOURCE/, "native rich fixture must be seeded from its checked-in source")
+assert.match(webSpec, /rich\.assets\.attach/, "Rails rich fixture must attach the checked-in local image")
+assert.match(richSeeder, /RICH_RENDERING_SOURCE/, "native rich fixture must be seeded from its checked-in source")
 assert.match(webSpec, /richRenderingMediaWorkflow\(new WebEditorUi\(page\)\)/)
 assert.match(desktopSpec, /richRenderingMediaWorkflow\(new DesktopEditorUi\(\)\)/)
 const [stableSpec, stableSmoke, identitySpec, identitySmoke] = await Promise.all([

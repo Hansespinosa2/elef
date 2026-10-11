@@ -333,11 +333,21 @@ export function createSaveFlow({
       })
       return "conflict"
     }
+    // A save (or conflict resolution) that lands while the merge awaits
+    // leaves this snapshot older than the base. Applying it would clobber
+    // the fresh base and flush into a self-inflicted conflict, so every
+    // post-await exit below drops the stale merge as superseded; the
+    // watcher's later event for the newer bytes re-drives resolution.
+    const mergeWork = activeWork
+    const baseBeforeMerge = mergeWork ? mergeWork.content_hash : null
+    const mergeSuperseded = (): boolean =>
+      mergeWork !== null && activeWork === mergeWork && activeWork.content_hash !== baseBeforeMerge
     try {
       await takeSnapshot(id, "pre-merge", localSource)
       await takeSnapshot(id, "external-change")
     } catch (error) {
       onError(error)
+      if (mergeSuperseded()) return "superseded"
       if (wasClean) return conflictUnverifiable()
       return checkExternalChange(id, snapshot)
     }
@@ -346,9 +356,11 @@ export function createSaveFlow({
       outcome = await mergeExternalChange(id, localSource)
     } catch (error) {
       onError(error)
+      if (mergeSuperseded()) return "superseded"
       if (wasClean) return conflictUnverifiable()
       return checkExternalChange(id, snapshot)
     }
+    if (mergeSuperseded()) return "superseded"
     if (!outcome || outcome.kind !== "merged" || typeof outcome.source !== "string") {
       if (wasClean) return conflictUnverifiable()
       return checkExternalChange(id, snapshot)
