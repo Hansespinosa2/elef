@@ -174,6 +174,11 @@ await build({
   target: "es2022",
   outfile: path.join(assets, "renderer-worker.js"),
   minify: true,
+  define: {
+    __ELEF_E2E__: JSON.stringify(e2eBuild),
+    __ELEF_DESKTOP_PROFILE__: JSON.stringify(profile),
+    __ELEF_DESKTOP_PLATFORM__: JSON.stringify(process.platform === "darwin" ? "macos" : process.platform)
+  },
   plugins: [appSourceAlias]
 })
 

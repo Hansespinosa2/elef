@@ -40,6 +40,7 @@ globalThis.ElefRenderer = Object.freeze({
   renderArtBlock,
   renderMarkdownBlock,
   renderPreview,
+  renderPreviewCore,
   buildEditorMap,
   buildEditorStructure,
   buildDocumentGraph,

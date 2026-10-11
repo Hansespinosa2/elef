@@ -48,6 +48,7 @@ export async function runStableProfileSmoke(env) {
     "--prefix",
     "apps/desktop/frontend",
     "--",
+    "--debug",
     "--config",
     "src-tauri/tauri.e2e-stable.conf.json",
     "--features",

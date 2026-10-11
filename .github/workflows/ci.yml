@@ -329,8 +329,10 @@ jobs:
       - name: Build test-only N-1 and N desktop updater packages
         run: node apps/desktop/e2e/build-update-fixtures.mjs
       - name: Run shared scenarios with external network blocked
+        # No ELEF_E2E_PACKAGED_UPDATES: Linux upgrades through its package
+        # manager and never self-installs, and its e2e binary builds without
+        # install fixtures; packaged-update coverage is macOS-only.
         env:
-          ELEF_E2E_PACKAGED_UPDATES: "1"
           CI: "true"
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
