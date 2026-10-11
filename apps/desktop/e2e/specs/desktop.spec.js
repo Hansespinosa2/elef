@@ -1084,29 +1084,41 @@ class DesktopEditorUi {
         throw new Error(`${error.message}; desktop state: ${JSON.stringify(state)}; disk source: ${JSON.stringify(diskSource)}`)
       })
     }
-    await browser.waitUntil(async () => (await browser.execute(() => window.__elefSaveTestHooks?.saveStatus())) === "clean", {
-      timeout: 10_000,
-      timeoutMsg: "The desktop editor did not finish saving"
-    }).catch(async error => {
-      const state = await browser.execute(() => {
-        const saveStatus = (() => { try { return window.__elefSaveTestHooks?.saveStatus?.() ?? "<missing>" } catch (hookError) { return `THREW:${hookError.message}` } })()
-        return {
-          saveStatus,
-          status: document.querySelector("#status-text")?.textContent || "<missing>",
-          notice: document.querySelector("#notice")?.textContent || "",
-          workId: document.querySelector("#work-id")?.textContent || "",
-          workTitle: document.querySelector("#work-title")?.textContent || "",
-          titleInput: document.querySelector("#desktop-editor-title")?.value ?? "<no-input>",
-          dialogs: [...document.querySelectorAll("dialog")].map(d => ({ id: d.id || "<noid>", open: d.open, text: (d.textContent || "").slice(0, 160) })),
-          libraryHidden: document.querySelector("#library-view")?.hidden ?? "<missing>",
-          workViewHidden: document.querySelector("#work-view")?.hidden ?? "<missing>",
-          editorMode: document.querySelector("#desktop-editor-form")?.dataset.editorMode || "",
-          loadedWorkId: document.querySelector("#desktop-editor-form")?.dataset.loadedWorkId || "",
-          controllerErrors: window.__elefE2EControllerErrors?.slice(-5) || []
+    {
+      const trace = []
+      const deadline = Date.now() + 10_000
+      for (;;) {
+        const sample = await browser.execute(() => {
+          let saveStatus
+          try { saveStatus = window.__elefSaveTestHooks?.saveStatus?.() ?? "<missing>" } catch (hookError) { saveStatus = `THREW:${hookError.message}` }
+          return {
+            saveStatus,
+            status: document.querySelector("#status-text")?.textContent || "<missing>",
+            notice: (document.querySelector("#notice")?.textContent || "").slice(0, 120)
+          }
+        }).catch(execError => ({ saveStatus: `EXECFAIL:${execError.message}`, status: "?", notice: "" }))
+        const prev = trace[trace.length - 1]
+        if (!prev || prev.s !== sample.saveStatus || prev.t !== sample.status) {
+          trace.push({ at: Date.now(), s: sample.saveStatus, t: sample.status, n: sample.notice })
         }
-      }).catch(diagError => ({ diagnosticError: diagError.message }))
-      throw new Error(`${error.message}; SAVE-DIAG: ${JSON.stringify(state)}`)
-    })
+        if (sample.saveStatus === "clean") break
+        if (Date.now() >= deadline) {
+          const dom = await browser.execute(() => ({
+            workId: document.querySelector("#work-id")?.textContent || "",
+            workTitle: document.querySelector("#work-title")?.textContent || "",
+            titleInput: document.querySelector("#desktop-editor-title")?.value ?? "<no-input>",
+            dialogs: [...document.querySelectorAll("dialog")].map(d => ({ id: d.id || "<noid>", open: d.open, text: (d.textContent || "").slice(0, 160) })),
+            libraryHidden: document.querySelector("#library-view")?.hidden ?? "<missing>",
+            workViewHidden: document.querySelector("#work-view")?.hidden ?? "<missing>",
+            editorMode: document.querySelector("#desktop-editor-form")?.dataset.editorMode || "",
+            loadedWorkId: document.querySelector("#desktop-editor-form")?.dataset.loadedWorkId || "",
+            controllerErrors: window.__elefE2EControllerErrors?.slice(-5) || []
+          })).catch(diagError => ({ diagnosticError: diagError.message }))
+          throw new Error(`The desktop editor did not finish saving; STATUS-TRACE: ${JSON.stringify(trace)}; DOM: ${JSON.stringify(dom)}`)
+        }
+        await new Promise(resolve => setTimeout(resolve, 250))
+      }
+    }
   }
 
   async showVisualMode() {
