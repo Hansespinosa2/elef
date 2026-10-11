@@ -316,7 +316,8 @@ try {
         ELEF_E2E_APP_BINARY: stableBinary,
         ELEF_E2E_INSTALLED_ARTIFACT: stableBinary,
         ELEF_E2E_PRE_RELEASE_STATE: stableStatePath,
-        ELEF_E2E_EXPECTED_PRE_RELEASE_STATE: preReleaseState
+        ELEF_E2E_EXPECTED_PRE_RELEASE_STATE: preReleaseState,
+        TAURI_WEBDRIVER_PORT: process.env.TAURI_WEBDRIVER_PORT || "4445"
       }
       // The Stable packaged app must boot from its app-data selection (the
       // identity-probe path), not the harness library override.
