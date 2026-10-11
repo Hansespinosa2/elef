@@ -17,13 +17,13 @@ The Rails web app persists through its own application stack. Desktop decks must
 
 ## Decision
 
-Desktop uses Tauri commands backed by `elef-core`; it does not bundle Rails or a database server. Rails remains responsible for web persistence. The desktop integration boundary is described in [transport-adapter.md](../transport-adapter.md).
+Desktop uses Tauri commands backed by `local-store`; it does not bundle Rails or a database server. Rails remains responsible for web persistence. The desktop integration boundary is described in [transport-adapter.md](../transport-adapter.md).
 
 ## Consequences
 
 - File operations can be tested without the UI or Tauri runtime.
 - The web product and desktop product share frontend behavior while using host-specific persistence adapters.
-- `elef-core` has no Tauri dependency; the architecture check enforces this boundary.
+- `local-store` has no Tauri dependency; the architecture check enforces this boundary.
 
 ## Revisit when
 

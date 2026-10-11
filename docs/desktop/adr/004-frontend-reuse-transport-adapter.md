@@ -9,7 +9,7 @@
 > Shared interactive UI lives in `packages/client` (React) and
 > `packages/editor-runtime` (Stimulus editor shell); both hosts consume
 > those packages and no host imports from the other host. See ADR-011 for
-> the v9 steady state. The record below is kept for history.
+> the steady state. The record below is kept for history.
 
 ## Context
 

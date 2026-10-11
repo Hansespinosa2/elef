@@ -48,14 +48,14 @@ Rails suites need ambient `PGPASSWORD` for the local PostgreSQL test database (s
 | Change | First check |
 |---|---|
 | Rails-owned JavaScript (host adapters, web-only behavior) | npm run test:javascript |
-| Host-neutral client UI or behavior | npm test --prefix packages/client |
+| Host-neutral client UI or behavior | npm run typecheck --prefix packages/client, then npm test --prefix packages/client |
 | Shared Stimulus editor shell (`packages/editor-runtime`) | npm run typecheck --prefix packages/editor-runtime, then npm run test:javascript |
-| Pure Work semantics or transforms | npm test --prefix packages/work-model |
+| Pure Work semantics or transforms | npm run typecheck --prefix packages/work-model, then npm test --prefix packages/work-model |
 | Desktop transport/native frontend adapter | npm test --prefix apps/desktop/frontend |
 | E2E harness helpers | npm run test:unit --prefix apps/desktop/e2e |
 | Rust deck storage or archive behavior | cargo test --manifest-path Cargo.toml -p local-store --locked |
 | Rails model, service, controller, or request behavior | bin/rails test test/path_to_focused_test.rb (from apps/web/) |
-| Renderer implementation | npm run renderer:build, then npm run test:javascript |
+| Renderer implementation | npm run typecheck --prefix packages/renderer, then npm run renderer:build, then npm run test:javascript |
 
 Run Rails `bin/*` commands from `apps/web/`; rake tasks resolve the Rakefile from the working directory.
 
@@ -69,7 +69,7 @@ cargo fmt --manifest-path Cargo.toml --all -- --check
 cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
 ~~~
 
-Package TypeScript holds the strictest bar: `strict` + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` (see `tsconfig.base.json`), verified by each package's typecheck. Contortion guard: write explicit narrowing guards instead of `!` assertions; a per-file documented relaxation needs a recorded justification and stays the exception, never the pattern.
+Package TypeScript holds the strictest bar: `strict` + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` (see `tsconfig.base.json`). Run the owning package's `typecheck` script for every package you touch — the `npm test` runners bundle with esbuild and do not typecheck. `bin/check quick` runs the contracts and client typechecks only; work-model, renderer, and editor-runtime typechecks run solely when invoked directly. Contortion guard: write explicit narrowing guards instead of `!` assertions; a per-file documented relaxation needs a recorded justification and stays the exception, never the pattern.
 
 ## Web and desktop parity
 

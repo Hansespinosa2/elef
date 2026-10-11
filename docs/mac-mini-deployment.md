@@ -29,7 +29,7 @@ Keep the branch contract simple:
 
 ## Automatic deployment
 
-Pull requests run the seven required CI checks. After merge, a lightweight
+Pull requests run the eleven required CI checks. After merge, a lightweight
 workflow verifies that those checks succeeded in the PR's test run and that
 the merged source tree is exactly the tree tested by CI. It then advances one
 of these refs to the approved commit without rerunning the suite:
@@ -101,19 +101,6 @@ Rails runs `db:prepare` when the new container starts; that task applies
 pending migrations. Keep schema changes compatible with the previous app
 version when possible. The production backup is on the Mac mini, so copy
 timestamped backups to another device regularly.
-
-## Host rehome cutover (H4)
-
-The repository rehomed its hosts: Rails lives under `apps/web`,
-the Tauri shell under `apps/desktop`, Compose files and `*-instance`
-helpers under the checkout's `ops/`, and release scripts under
-`tooling/release`. No temporary compatibility paths were retained.
-Any watcher-side reference to the old `scripts/`, `compose.*.yml`,
-`Dockerfile*`, `.env.*.example`, or `bin/` locations must move to the
-matching `dev/ops/...` or `dev/apps/web/...` path. Verify with a `dev`
-deployment before promoting to `main`; the phase stays internally
-complete but not release-ready until the owner confirms the live
-deployment.
 
 ## One-time setup
 

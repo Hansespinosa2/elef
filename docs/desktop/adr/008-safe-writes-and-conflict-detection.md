@@ -31,7 +31,7 @@ Auto-save is continuous, and other programs (editors, Dropbox, iCloud, Syncthing
 sequenceDiagram
     participant E as Editor controllers
     participant A as Adapter
-    participant C as elef-core
+    participant C as local-store
     participant D as Disk
     E->>A: autosave {source}
     A->>C: save_source {id, source, base_hash}
@@ -71,3 +71,7 @@ Saves are shown to miss the autosave budget, or the residual race is observed in
 ### Documentation amendment — 2026-10-07
 
 The historical architecture reference now points to the consolidated repository guide. The save and conflict decision is unchanged.
+
+### Documentation amendment — 2026-10-11
+
+The sequence diagram names the storage crate `local-store` (renamed from `elef-core`). No decision change.

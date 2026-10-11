@@ -12,7 +12,7 @@ The web app's threat model doesn't transfer. On desktop the webview has IPC to a
 ## Options considered
 
 - **Sanitizer only.** Rejected: one bug in a Markdown-to-HTML pipeline becomes file access.
-- **Sandboxed iframe as the IPC boundary.** Rejected as a *sole* defense: Tauri advisories describe iframes reaching IPC, and on Linux iframes cannot be told apart from windows ([security.md](../security.md) §5).
+- **Sandboxed iframe as the IPC boundary.** Rejected as a *sole* defense: Tauri advisories describe iframes reaching IPC, and on Linux iframes cannot be told apart from windows (see the webview boundary in [security.md](../security.md)).
 - **Layered controls where each layer assumes the previous one failed** (chosen).
 
 ## Decision
@@ -35,7 +35,7 @@ No new Tauri command ships without a capability review (what it can touch, why t
 - The command allowlist and the CSP are testable contracts; hostile-input and boundary checks are described in [development and testing](../../development.md).
 - Hostile fixtures (script payloads, traversal paths, zip-slip archives, zip-bombs) must be neutralized in CI.
 - Remote images are blocked in v1 because a static CSP cannot express a per-deck opt-in. This supersedes the earlier "opt-in per deck" wording, which could not be implemented as written.
-- Residual risk is documented, not hidden ([security.md](../security.md) §6).
+- Residual risk is documented, not hidden (see [security.md](../security.md)).
 
 ## Revisit when
 
@@ -48,3 +48,7 @@ Accepted after the shared hostile-deck workflow passed against the real Tauri We
 ### Documentation amendment — 2026-10-07
 
 The retired test-strategy and S5 report links now point to the consolidated development guide and security spec. Security decision and acceptance evidence are unchanged.
+
+### Documentation amendment — 2026-10-11
+
+The `security.md` section-number references (§5, §6) now point at the live document, which uses named sections. No decision change.

@@ -86,6 +86,13 @@ Each package exists for exactly one reason; anything else is a module inside its
 
 `apps/desktop/frontend` and `apps/desktop/e2e` carry a `package.json` as host-owned build/test tooling with one consumer each; they are not architectural packages and need no justification.
 
+A new package, crate, or top-level directory must pass this admission test in writing before it is created; otherwise the code is a module inside its semantic owner:
+
+1. It owns exactly one reason that no existing package owns, stated in one sentence for the table above.
+2. It is consumed through a narrowed public entry point (no subpath imports into its internals).
+3. Its dependency direction fits the one-way order in [Dependency rules](#dependency-rules) with no new upward import.
+4. Size, importance, symmetry, or hypothetical reuse are not drivers; a second consumer does not by itself justify a package.
+
 ## Dependency rules
 
 These hold everywhere and are machine-checked (`tooling/check_boundaries.py`, `apps/web/script/check_frontend_ownership.py`):

@@ -30,7 +30,7 @@ Keep the AppImage in the location from which you want to launch it. If it report
 
 On first launch, choose a library folder or create one, for example ~/Elef. Each deck is a folder inside that library with a Markdown source file and any local assets. You can keep using folders that already contain Elef decks.
 
-Open a deck from the library. The source editor and visual editor share the web app's authoring controllers. Changes save automatically; **File → Save** requests an immediate save. Inserted media is stored with the deck. **View → Document Graph** shows links among documents in the library.
+Open a deck from the library. The source editor and visual editor share the web app's authoring controllers. Changes save automatically; **File → Save** requests an immediate save. Inserted media is stored with the deck. In the library, the **Documents** tab shows the Document network panel with links among documents.
 
 If another editor or sync tool changes the open source file, Elef checks for that change before saving. Use the conflict dialog to keep your edits, load the disk version, or merge. A conflict or failed save keeps the window open until the source is safe. Undo and redo are available for the current editing session; v1 does not keep a revision history after closing.
 
@@ -40,7 +40,7 @@ Choose **File → Export Deck…** and save the .elef archive. Move that file by
 
 ## Updates and offline use
 
-Elef checks for updates when it starts. To check at another time, choose **Help → Check for Updates**. When a signed update is available, review the version and choose Install; Elef saves or asks you to resolve any open edits before restarting.
+Elef checks for updates when it starts. To check at another time, choose **Help → Check for Updates…**. When a signed update is available, review the version and choose Install; Elef saves or asks you to resolve any open edits before restarting.
 
 Deck editing, rendering, local media, library search, and the document graph work offline. Update checks need a network connection and fail without blocking the app. v1 does not synchronize libraries between devices; move a deck folder or .elef archive yourself.
 

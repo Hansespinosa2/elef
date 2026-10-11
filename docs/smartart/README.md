@@ -41,4 +41,4 @@ Art-looking text in code fences, display math, blockquotes, indented code, or ne
 
 Use `:art` in the directive palette to insert the modifier without rewriting list markers or content.
 
-For implementation details, measured acceptance fixtures, requirement coverage, and current external blockers, see [the Constitution](CONSTITUTION.md), [integration map](INTEGRATION-MAP.md), and [verification manifest](VERIFICATION.json).
+For the normative requirement catalog, its verification manifest, and the current code map, see [the Constitution](CONSTITUTION.md), [VERIFICATION.json](VERIFICATION.json), and the [integration map](INTEGRATION-MAP.md). The catalog and manifest are machine-checked by `apps/web/script/check_art_traceability.py`; requirement IDs must stay in sync across the two files.
