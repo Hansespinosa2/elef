@@ -61,7 +61,7 @@ class PptxExportTest < ApplicationSystemTestCase
     presentation_count = Presentation.count
     visit new_presentation_path
     capture_pptx_blob
-    fill_in "Title", with: "Unsaved new deck"
+    fill_in "Title", with: "Unsaved new work"
     fill_in "Markdown source", with: "# Unsaved new slide\n\nDraft body."
     find("button", text: "Download PPTX draft").click
     assert_selector '[role="status"]', text: "PowerPoint downloaded.", wait: 15

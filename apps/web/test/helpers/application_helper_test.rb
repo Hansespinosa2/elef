@@ -7,7 +7,7 @@ require "test_helper"
 class ApplicationHelperTest < ActionView::TestCase
   test "labels both kinds of work" do
     document = Document.create!(title: "Helper document", source: "# Helper document")
-    presentation = Presentation.create!(title: "Helper deck", source: "# Helper deck")
+    presentation = Presentation.create!(title: "Helper work", source: "# Helper work")
 
     assert_equal "Document", work_type_label(document)
     assert_equal "Presentation", work_type_label(presentation)
@@ -15,7 +15,7 @@ class ApplicationHelperTest < ActionView::TestCase
 
   test "routes every per-work path to the matching work kind" do
     document = Document.create!(title: "Helper document", source: "# Helper document")
-    presentation = Presentation.create!(title: "Helper deck", source: "# Helper deck")
+    presentation = Presentation.create!(title: "Helper work", source: "# Helper work")
 
     assert_equal edit_document_path(document), work_edit_path(document)
     assert_equal edit_presentation_path(presentation), work_edit_path(presentation)
@@ -51,7 +51,7 @@ class ApplicationHelperTest < ActionView::TestCase
 
   test "scopes rename forms and dom ids by work kind" do
     document = Document.create!(title: "Scoped document", source: "# Scoped document")
-    presentation = Presentation.create!(title: "Scoped deck", source: "# Scoped deck")
+    presentation = Presentation.create!(title: "Scoped work", source: "# Scoped work")
 
     assert_equal "document", work_param_key(document)
     assert_equal "presentation", work_param_key(presentation)
@@ -86,7 +86,7 @@ class ApplicationHelperTest < ActionView::TestCase
     Document.create!(title: "Linkable target", source: "# Linkable target", workspace: workspace)
     Document.create!(title: "Notes", source: "# Notes", workspace: workspace)
     Document.create!(title: "Unfinished]title", source: "# Bracketed", workspace: workspace)
-    Presentation.create!(title: "Deck target", source: "# Deck target", workspace: workspace)
+    Presentation.create!(title: "Work target", source: "# Work target", workspace: workspace)
 
     assert_equal ["Linkable target", "Notes"], document_link_titles(workspace: workspace)
   end
@@ -107,7 +107,7 @@ class ApplicationHelperTest < ActionView::TestCase
     Document.create!(title: "Unfinished]title", source: "# Not linkable", workspace: workspace)
     other_workspace = Workspace.create!(name: "Other projection workspace", slug: "other-projection-workspace")
     Document.create!(title: "Private notes", source: "# Private notes", workspace: other_workspace)
-    presentation = Presentation.create!(title: "Projection deck", workspace: workspace, source: <<~MARKDOWN)
+    presentation = Presentation.create!(title: "Projection work", workspace: workspace, source: <<~MARKDOWN)
       ---
       theme: dark
       typography: technical
@@ -141,7 +141,7 @@ class ApplicationHelperTest < ActionView::TestCase
     options = captured.fetch(:options)
     assert_equal "presentation", options.fetch(:kind)
     assert_equal "Draft title", options.fetch(:title)
-    assert_equal presentation.id, options.fetch(:deck_id)
+    assert_equal presentation.id, options.fetch(:work_id)
     assert_equal({ theme: "dark", typography: "technical" }, options.fetch(:style))
     assert_equal({ section: true, subsection: false, footnote: true, slide_count: false }, options.fetch(:margin_settings))
     assert_respond_to options.fetch(:media_resolver), :call

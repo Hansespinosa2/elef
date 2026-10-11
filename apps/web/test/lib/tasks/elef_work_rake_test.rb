@@ -80,31 +80,31 @@ class ElefWorkRakeTest < ActiveSupport::TestCase
   end
 
   test "imports an exported presentation given as the task argument" do
-    package = write_package(Presentation.create!(title: "Exported deck", source: "# Exported deck\n\nBody"))
+    package = write_package(Presentation.create!(title: "Exported work", source: "# Exported work\n\nBody"))
 
     assert_difference("Work.count", 1) do
       out, = capture_io { invoke_successfully("elef:work:import", package) }
-      assert_equal "Imported presentation #{Work.maximum(:id)}: Exported deck\n", out
+      assert_equal "Imported presentation #{Work.maximum(:id)}: Exported work\n", out
     end
   end
 
   test "falls back to the PACKAGE environment variable when no argument is given" do
-    ENV["PACKAGE"] = write_package(Presentation.create!(title: "Env deck", source: "# Env deck"))
+    ENV["PACKAGE"] = write_package(Presentation.create!(title: "Env work", source: "# Env work"))
 
     assert_difference("Work.count", 1) do
       out, = capture_io { invoke_successfully("elef:work:import") }
-      assert_equal "Imported presentation #{Work.maximum(:id)}: Env deck\n", out
+      assert_equal "Imported presentation #{Work.maximum(:id)}: Env work\n", out
     end
   end
 
   test "prefers the task argument over the PACKAGE environment variable" do
-    from_environment = write_package(Presentation.create!(title: "Environment deck", source: "# Environment"), name: "environment.zip")
-    from_argument = write_package(Presentation.create!(title: "Argument deck", source: "# Argument"), name: "argument.zip")
+    from_environment = write_package(Presentation.create!(title: "Environment work", source: "# Environment"), name: "environment.zip")
+    from_argument = write_package(Presentation.create!(title: "Argument work", source: "# Argument"), name: "argument.zip")
     ENV["PACKAGE"] = from_environment
 
     assert_difference("Work.count", 1) do
       out, = capture_io { invoke_successfully("elef:work:import", from_argument) }
-      assert_equal "Imported presentation #{Work.maximum(:id)}: Argument deck\n", out
+      assert_equal "Imported presentation #{Work.maximum(:id)}: Argument work\n", out
     end
   end
 

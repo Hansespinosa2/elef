@@ -35,7 +35,7 @@ class PresentationReleaseTest < ActiveSupport::TestCase
   end
 
   test "validates that source_revision belongs to the associated work" do
-    other_pres = Presentation.create!(title: "Other Deck", source: "# Other")
+    other_pres = Presentation.create!(title: "Other Work", source: "# Other")
     other_revision = other_pres.latest_checkpoint
     invalid_release = PresentationRelease.new(
       work: @presentation,

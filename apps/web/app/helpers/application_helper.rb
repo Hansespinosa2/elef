@@ -90,7 +90,7 @@ module ApplicationHelper
       source,
       kind: work.document? ? "document" : "presentation",
       title: title,
-      deck_id: work.id,
+      work_id: work.id,
       media_resolver: WorkAssets.resolver_for(work),
       document_nodes: document_nodes,
       style: { theme: work.theme, typography: work.typography },

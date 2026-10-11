@@ -46,7 +46,7 @@ export default class extends Controller {
       placeBranch(root, nextLane++)
       nextLane += 0.15
     })
-    // Independent decks form a compact shelf beneath the connected families.
+    // Independent works form a compact shelf beneath the connected families.
     const independent = roots.filter(root => !children.get(root.id).length)
     independent.forEach((root, index) => {
       root.lane = nextLane + Math.floor(index / 3)

@@ -42,7 +42,7 @@ function fakeTimers() {
 function setup(overrides = {}) {
   const { initialSource, ...flowOverrides } = overrides
   let source = initialSource ?? "old"
-  const deck = { id: "deck-1", source, source_file: "talk.md", content_hash: hash("a") }
+  const work = { id: "work-1", source, source_file: "talk.md", content_hash: hash("a") }
   const calls = []
   const accepted = []
   const conflicts = []
@@ -61,8 +61,8 @@ function setup(overrides = {}) {
     onError: error => errors.push(error),
     ...flowOverrides
   })
-  flow.activate(deck)
-  return { deck, flow, calls, accepted, conflicts, states, errors, setSource: value => { source = value }, getSource: () => source }
+  flow.activate(work)
+  return { work, flow, calls, accepted, conflicts, states, errors, setSource: value => { source = value }, getSource: () => source }
 }
 
 test("save orchestration serializes writes and drains edits made during an in-flight save", async () => {
@@ -85,7 +85,7 @@ test("save orchestration serializes writes and drains edits made during an in-fl
 
   assert.equal(await saving, true)
   assert.deepEqual(calls, ["first edit", "latest edit"])
-  assert.equal(context.deck.source, "latest edit")
+  assert.equal(context.work.source, "latest edit")
   assert.equal(context.flow.dirty, false)
 })
 
@@ -105,7 +105,7 @@ test("a shared snapshot drains metadata changes made during a source save", asyn
     getSnapshot: () => `${source.value}\u001f${metadata.value}`,
     setSource: async value => { source.value = value }
   })
-  flow.activate({ id: "deck-1", source: source.value, content_hash: hash("a") })
+  flow.activate({ id: "work-1", source: source.value, content_hash: hash("a") })
   metadata.value = "first title"
   flow.noteChange()
   const saving = flow.flush({ force: true })
@@ -135,7 +135,7 @@ test("paused autosave holds edits until an explicit flush", async () => {
   assert.equal(context.calls.length, 0)
 
   assert.equal(await context.flow.flush({ force: true }), true)
-  assert.deepEqual(context.calls, [["deck-1", "local edit"]])
+  assert.deepEqual(context.calls, [["work-1", "local edit"]])
   assert.equal(context.flow.dirty, false)
   context.flow.resume()
   assert.equal(timers.count(), 0)
@@ -157,7 +157,7 @@ test("conflicts stop automatic writes until a deliberate choice updates the disk
   assert.equal(context.calls.length, 0)
 
   await context.flow.useDiskVersion()
-  assert.deepEqual(context.accepted, [["deck-1", hash("d")]])
+  assert.deepEqual(context.accepted, [["work-1", hash("d")]])
   assert.equal(context.getSource(), "outside")
   assert.equal(context.flow.dirty, false)
   assert.equal(context.states.at(-1), "Saved")
@@ -167,18 +167,18 @@ test("conflicts stop automatic writes until a deliberate choice updates the disk
 
 test("external edits reload clean buffers and surface conflicts when local edits exist", async () => {
   const context = setup()
-  const first = await context.flow.checkExternalChange("deck-1", {
+  const first = await context.flow.checkExternalChange("work-1", {
     content_hash: hash("d"),
     source: "external clean edit"
   })
   assert.equal(first, "reloaded")
   assert.equal(context.getSource(), "external clean edit")
-  assert.equal(context.deck.content_hash, hash("d"))
-  assert.deepEqual(context.accepted, [["deck-1", hash("d")]])
+  assert.equal(context.work.content_hash, hash("d"))
+  assert.deepEqual(context.accepted, [["work-1", hash("d")]])
 
   context.setSource("local unsaved edit")
   context.flow.noteChange()
-  const second = await context.flow.checkExternalChange("deck-1", {
+  const second = await context.flow.checkExternalChange("work-1", {
     content_hash: hash("e"),
     source: "external concurrent edit"
   })
@@ -204,13 +204,13 @@ function mergeSetup(outcome, local = "old") {
 
 test("a suspicious external rewrite conflicts on a clean buffer instead of reloading silently", async () => {
   const context = mergeSetup({ kind: "suspicious" })
-  const result = await context.flow.resolveExternalChange("deck-1", {
+  const result = await context.flow.resolveExternalChange("work-1", {
     content_hash: hash("d"),
     source: ""
   })
   assert.equal(result, "conflict")
-  assert.deepEqual(context.merges, [["deck-1", "old"]])
-  assert.deepEqual(context.snapshots, [["deck-1", "pre-merge", "old"], ["deck-1", "external-change", undefined]])
+  assert.deepEqual(context.merges, [["work-1", "old"]])
+  assert.deepEqual(context.snapshots, [["work-1", "pre-merge", "old"], ["work-1", "external-change", undefined]])
   assert.equal(context.getSource(), "old")
   assert.equal(context.conflicts.length, 1)
   assert.equal(context.conflicts[0].diskSource, "")
@@ -219,20 +219,20 @@ test("a suspicious external rewrite conflicts on a clean buffer instead of reloa
 test("an overlapping external rewrite conflicts on a clean buffer", async () => {
   const local = "x".repeat(275)
   const context = mergeSetup({ kind: "overlap" }, local)
-  const result = await context.flow.resolveExternalChange("deck-1", {
+  const result = await context.flow.resolveExternalChange("work-1", {
     content_hash: hash("d"),
     source: "external rewrite"
   })
   assert.equal(result, "conflict")
-  assert.deepEqual(context.merges, [["deck-1", local]])
-  assert.deepEqual(context.snapshots, [["deck-1", "pre-merge", local], ["deck-1", "external-change", undefined]])
+  assert.deepEqual(context.merges, [["work-1", local]])
+  assert.deepEqual(context.snapshots, [["work-1", "pre-merge", local], ["work-1", "external-change", undefined]])
   assert.equal(context.getSource(), local)
 })
 
 test("a clean merge result still reloads a clean buffer silently", async () => {
   const local = "x".repeat(275)
   const context = mergeSetup({ kind: "merged", source: "external clean edit" }, local)
-  const result = await context.flow.resolveExternalChange("deck-1", {
+  const result = await context.flow.resolveExternalChange("work-1", {
     content_hash: hash("d"),
     source: "external clean edit"
   })
@@ -244,7 +244,7 @@ test("a clean merge result still reloads a clean buffer silently", async () => {
 test("a merge failure on a clean buffer conflicts instead of reloading silently", async () => {
   const local = "x".repeat(275)
   const context = mergeSetup(Object.assign(new Error("merge unavailable"), { code: "storage_unavailable", retryable: true }), local)
-  const result = await context.flow.resolveExternalChange("deck-1", {
+  const result = await context.flow.resolveExternalChange("work-1", {
     content_hash: hash("d"),
     source: "external rewrite"
   })
@@ -255,7 +255,7 @@ test("a merge failure on a clean buffer conflicts instead of reloading silently"
 
 test("an ordinary external edit reloads a clean buffer without consulting merge", async () => {
   const context = mergeSetup({ kind: "overlap" })
-  const result = await context.flow.resolveExternalChange("deck-1", {
+  const result = await context.flow.resolveExternalChange("work-1", {
     content_hash: hash("d"),
     source: "external clean edit"
   })
@@ -277,7 +277,7 @@ test("the clean pre-gate trips on the exact suspicious boundaries", async () => 
   ]
   for (const [local, external, expected] of cases) {
     const context = mergeSetup({ kind: "overlap" }, local)
-    const result = await context.flow.resolveExternalChange("deck-1", {
+    const result = await context.flow.resolveExternalChange("work-1", {
       content_hash: hash("d"),
       source: external
     })
@@ -286,9 +286,9 @@ test("the clean pre-gate trips on the exact suspicious boundaries", async () => 
   }
 })
 
-test("external snapshots for a closed or inactive deck are ignored", async () => {
+test("external snapshots for a closed or inactive work are ignored", async () => {
   const context = setup()
-  assert.equal(await context.flow.checkExternalChange("other-deck", {
+  assert.equal(await context.flow.checkExternalChange("other-work", {
     content_hash: hash("d"), source: "other source"
   }), "inactive")
 })
@@ -297,7 +297,7 @@ test("an external snapshot matching the in-flight local bytes advances the save 
   const context = setup()
   context.setSource("local edit")
   context.flow.noteChange()
-  const result = await context.flow.checkExternalChange("deck-1", {
+  const result = await context.flow.checkExternalChange("work-1", {
     content_hash: hash("d"),
     source: "local edit"
   })
@@ -306,23 +306,23 @@ test("an external snapshot matching the in-flight local bytes advances the save 
   assert.equal(context.accepted.at(-1)[1], hash("d"))
 })
 
-test("external source-file selection changes update a clean deck and conflict with dirty edits", async () => {
+test("external source-file selection changes update a clean work and conflict with dirty edits", async () => {
   const context = setup()
-  const sameBytes = await context.flow.checkExternalChange("deck-1", {
+  const sameBytes = await context.flow.checkExternalChange("work-1", {
     content_hash: hash("a"), source: "old", source_file: "presentation.md"
   })
   assert.equal(sameBytes, "source-file-changed")
-  assert.equal(context.deck.source_file, "presentation.md")
+  assert.equal(context.work.source_file, "presentation.md")
 
   context.setSource("local unsaved edit")
   context.flow.noteChange()
-  const result = await context.flow.checkExternalChange("deck-1", {
+  const result = await context.flow.checkExternalChange("work-1", {
     content_hash: hash("a"), source: "old", source_file: "document.md"
   })
   assert.equal(result, "conflict")
   assert.equal(context.conflicts.at(-1).diskSourceFile, "document.md")
   assert.equal(await context.flow.useDiskVersion(), true)
-  assert.equal(context.deck.source_file, "document.md")
+  assert.equal(context.work.source_file, "document.md")
 })
 
 test("keeping local content and a merged version both save against the accepted disk hash", async () => {
@@ -333,26 +333,26 @@ test("keeping local content and a merged version both save against the accepted 
       return { content_hash: hash("e") }
     }
   })
-  context.flow.handleConflict({ id: "deck-1", details: { disk_hash: hash("d"), current: { source: "disk" } } })
+  context.flow.handleConflict({ id: "work-1", details: { disk_hash: hash("d"), current: { source: "disk" } } })
   context.setSource("local")
   context.flow.keepLocalVersion()
   await context.flow.flush()
-  assert.deepEqual(context.accepted[0], ["deck-1", hash("d")])
+  assert.deepEqual(context.accepted[0], ["work-1", hash("d")])
   assert.deepEqual(saves, ["local"])
 
-  context.flow.handleConflict({ id: "deck-1", details: { disk_hash: hash("f"), current: { source: "disk v2" } } })
+  context.flow.handleConflict({ id: "work-1", details: { disk_hash: hash("f"), current: { source: "disk v2" } } })
   await context.flow.saveMergedVersion("merged")
   await context.flow.flush()
-  assert.deepEqual(context.accepted[1], ["deck-1", hash("f")])
+  assert.deepEqual(context.accepted[1], ["work-1", hash("f")])
   assert.deepEqual(saves, ["local", "merged"])
-  assert.equal(context.deck.source, "merged")
+  assert.equal(context.work.source, "merged")
 })
 
 test("discarded drafts are bounded", async () => {
   const context = setup({ maxDiscardedDrafts: 2 })
   for (let index = 0; index < 3; index += 1) {
     context.setSource(`draft ${index}`)
-    context.flow.handleConflict({ id: "deck-1", details: { disk_hash: hash(String(index + 2)), current: { source: `disk ${index}` } } })
+    context.flow.handleConflict({ id: "work-1", details: { disk_hash: hash(String(index + 2)), current: { source: `disk ${index}` } } })
     await context.flow.useDiskVersion()
   }
 
@@ -394,7 +394,7 @@ test("permanent save failures stop retrying until the source changes or the user
   const context = setup({
     saveSource: async () => {
       attempts += 1
-      throw Object.assign(new Error("deck was removed"), { code: "not_found", retryable: false })
+      throw Object.assign(new Error("work was removed"), { code: "not_found", retryable: false })
     }
   })
   context.setSource("local")
@@ -453,23 +453,23 @@ test("undo to the old baseline waits for the outstanding write and persists the 
   await Promise.all([first, leaving])
   assert.equal(navigationAllowed, true)
   assert.deepEqual(calls, ["new", "old"])
-  assert.equal(context.deck.source, "old")
+  assert.equal(context.work.source, "old")
 })
 
-test("discarded recovery drafts belong to their deck across switching and reopening", async () => {
+test("discarded recovery drafts belong to their work across switching and reopening", async () => {
   const context = setup()
-  context.setSource("deck A draft")
-  context.flow.handleConflict({ id: context.deck.id, details: { disk_hash: hash("b"), current: { source: "external" } } })
+  context.setSource("work A draft")
+  context.flow.handleConflict({ id: context.work.id, details: { disk_hash: hash("b"), current: { source: "external" } } })
   await context.flow.useDiskVersion()
-  context.setSource("deck B")
-  context.flow.activate({ id: "deck-2", source: "deck B", content_hash: hash("c") })
+  context.setSource("work B")
+  context.flow.activate({ id: "work-2", source: "work B", content_hash: hash("c") })
   assert.equal(context.flow.canRestoreDraft, false)
   assert.equal(await context.flow.restoreDraft(), false)
-  assert.equal(context.getSource(), "deck B")
-  context.flow.activate(context.deck)
+  assert.equal(context.getSource(), "work B")
+  context.flow.activate(context.work)
   assert.equal(context.flow.canRestoreDraft, true)
   await context.flow.restoreDraft()
-  assert.equal(context.getSource(), "deck A draft")
+  assert.equal(context.getSource(), "work A draft")
   await context.flow.flush()
 })
 
@@ -483,7 +483,7 @@ test("disk and merge choices keep their conflict and original fingerprint until 
     } })
     context.setSource("local draft")
     context.flow.noteChange()
-    context.flow.handleConflict({ id: context.deck.id, details: {
+    context.flow.handleConflict({ id: context.work.id, details: {
       disk_hash: hash("b"), current: { source: "external", source_file: "talk.md" }
     } })
     const resolution = choice === "disk" ? context.flow.useDiskVersion() : context.flow.saveMergedVersion("merged")
@@ -493,10 +493,10 @@ test("disk and merge choices keep their conflict and original fingerprint until 
     assert.equal(context.flow.keepLocalVersion(), false)
     assert.deepEqual(context.accepted, [])
     assert.deepEqual(context.calls, [])
-    assert.equal(context.deck.content_hash, hash("a"))
+    assert.equal(context.work.content_hash, hash("a"))
     applying.resolve()
     assert.equal(await resolution, true)
-    assert.deepEqual(context.accepted, [[context.deck.id, hash("b")]])
+    assert.deepEqual(context.accepted, [[context.work.id, hash("b")]])
     assert.equal(context.flow.conflict, null)
     assert.equal(context.getSource(), choice === "disk" ? "external" : "merged")
   }
@@ -505,10 +505,10 @@ test("disk and merge choices keep their conflict and original fingerprint until 
 test("typing while a clean external reload waits becomes a conflict without advancing its fingerprint", async () => {
   const ready = deferred()
   const context = setup({ setSource: (source, origin) => applyEditorSource(source, {
-    ...origin, getDeckId: () => context.deck.id, getSource: context.getSource,
+    ...origin, getWorkId: () => context.work.id, getSource: context.getSource,
     waitForEditor: () => ready.promise, setFallback: () => assert.fail("fallback")
   }) })
-  const reloading = context.flow.checkExternalChange(context.deck.id, { source: "external", content_hash: hash("b"), source_file: "talk.md" })
+  const reloading = context.flow.checkExternalChange(context.work.id, { source: "external", content_hash: hash("b"), source_file: "talk.md" })
   assert.equal(context.flow.dirty, true)
   assert.equal(await context.flow.flush(), false)
   context.setSource("new local edit")
@@ -516,16 +516,16 @@ test("typing while a clean external reload waits becomes a conflict without adva
   ready.resolve({ setExternalValue: context.setSource })
   assert.equal(await reloading, "conflict")
   assert.equal(context.getSource(), "new local edit")
-  assert.equal(context.deck.content_hash, hash("a"))
+  assert.equal(context.work.content_hash, hash("a"))
   assert.deepEqual(context.accepted, [])
   assert.equal(context.flow.conflict.diskSource, "external")
 })
 
-test("an obsolete external reload does not clear another deck's edits after readiness", async () => {
+test("an obsolete external reload does not clear another work's edits after readiness", async () => {
   const applying = deferred()
   const context = setup({ setSource: () => applying.promise })
-  const reloading = context.flow.checkExternalChange(context.deck.id, { source: "external A", content_hash: hash("b") })
-  const next = { id: "deck-2", source: "B original", source_file: "document.md", content_hash: hash("c") }
+  const reloading = context.flow.checkExternalChange(context.work.id, { source: "external A", content_hash: hash("b") })
+  const next = { id: "work-2", source: "B original", source_file: "document.md", content_hash: hash("c") }
   context.flow.activate(next)
   context.setSource("B edited")
   context.flow.noteChange()
@@ -546,7 +546,7 @@ test("recovery remains owned and blocks leaving until its source has applied", a
   } })
   context.setSource("draft A")
   context.flow.noteChange()
-  context.flow.handleConflict({ id: context.deck.id, details: { disk_hash: hash("b"), current: { source: "external" } } })
+  context.flow.handleConflict({ id: context.work.id, details: { disk_hash: hash("b"), current: { source: "external" } } })
   await context.flow.useDiskVersion()
   block = deferred()
   const recovering = context.flow.restoreDraft()
@@ -572,12 +572,12 @@ test("external snapshot arrival before a visual frame flush preserves the visual
     context.flow.noteChange()
   } })
   assert.equal(context.flow.dirty, false)
-  assert.equal(await context.flow.checkExternalChange(context.deck.id, {
+  assert.equal(await context.flow.checkExternalChange(context.work.id, {
     source: "external", content_hash: hash("b"), source_file: "talk.md"
   }), "conflict")
   assert.equal(context.getSource(), "visual edit waiting for its frame")
   assert.equal(context.flow.conflict.localSource, "visual edit waiting for its frame")
-  assert.equal(context.deck.content_hash, hash("a"))
+  assert.equal(context.work.content_hash, hash("a"))
   assert.deepEqual(context.accepted, [])
 })
 
@@ -593,7 +593,7 @@ test("typing during refused recovery resumes autosave while retaining the recove
   })
   context.setSource("recoverable draft")
   context.flow.noteChange()
-  context.flow.handleConflict({ id: context.deck.id, details: { disk_hash: hash("b"), current: { source: "external" } } })
+  context.flow.handleConflict({ id: context.work.id, details: { disk_hash: hash("b"), current: { source: "external" } } })
   await context.flow.useDiskVersion()
   pending = deferred()
   const recovering = context.flow.restoreDraft()
@@ -605,7 +605,7 @@ test("typing during refused recovery resumes autosave while retaining the recove
   assert.equal(context.flow.discardedDraftCount, 1)
   assert.equal(timers.count(), 1)
   await timers.advance(0)
-  assert.deepEqual(context.calls, [[context.deck.id, "newer typing"]])
+  assert.deepEqual(context.calls, [[context.work.id, "newer typing"]])
   assert.equal(context.getSource(), "newer typing")
   assert.equal(context.flow.dirty, false)
   assert.equal(context.flow.discardedDraftCount, 1)

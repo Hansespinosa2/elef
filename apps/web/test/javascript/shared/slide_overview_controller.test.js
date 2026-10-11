@@ -46,7 +46,7 @@ test("slide overview thumbnails clone only inert slide content", () => {
               <div class="presentation-editor-slide-toolbar">Toolbar controls</div>
               <h1>Visible heading</h1>
               <div contenteditable="true" data-action="input-&gt;visual-editor#projectionInput" data-editor-block-id="block-1">
-                <a href="#deck/other" data-action="click-&gt;documents#open">Linked text</a>
+                <a href="#work/other" data-action="click-&gt;documents#open">Linked text</a>
               </div>
             </section>
           </div>
@@ -186,7 +186,7 @@ test("slide overview selection resolves cards from neutral native events", () =>
 
 test("slide overview source ranges skip front matter and fenced dividers", () => {
   const overview = new SlideOverview({})
-  const source = "---\ntitle: Deck\n---\nOne\n```\n---\n```\n---\nTwo"
+  const source = "---\ntitle: Work\n---\nOne\n```\n---\n```\n---\nTwo"
   const ranges = overview.sourceRanges(source)
   assert.equal(ranges.length, 2)
   assert.equal(source.slice(ranges[0].start, ranges[0].end).includes("One"), true)

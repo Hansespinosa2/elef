@@ -20,7 +20,7 @@ test("Rails importmap pins the shared appearance source mapper", async () => {
 })
 
 test("the shared appearance controller commits selected styles to Markdown", () => {
-  const body = "# Shared deck\n\nKeep this body.\n"
+  const body = "# Shared work\n\nKeep this body.\n"
   const sourceField = { value: body }
   const applied = []
   const editor = {

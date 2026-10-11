@@ -38,7 +38,7 @@ async function flush(rounds = 100) {
 function setup(overrides = {}) {
   const timers = fakeTimers()
   let text = overrides.text ?? "old"
-  const deck = { id: "deck-1", source: text, source_file: "talk.md", content_hash: hash("a") }
+  const work = { id: "work-1", source: text, source_file: "talk.md", content_hash: hash("a") }
   const state = {
     saves: [],
     accepted: [],
@@ -83,9 +83,9 @@ function setup(overrides = {}) {
   const session = createWorkSession({
     transport: overrides.transport ?? transport,
     policy: {
-      workId: "deck-1",
+      workId: "work-1",
       kind: "presentation",
-      deck,
+      work,
       getText: () => text,
       setText: async value => { text = value; return true },
       saveDelay: 50,
@@ -164,7 +164,7 @@ test("a save that outlives its session fails cancelled without moving the baseli
 
 test("work session exposes the contract surface and starts clean", async () => {
   const { session, statuses } = setup()
-  assert.equal(session.workId, "deck-1")
+  assert.equal(session.workId, "work-1")
   assert.equal(session.kind, "presentation")
   assert.equal(session.getText(), "old")
   assert.equal(session.dirty, false)
@@ -176,19 +176,19 @@ test("work session exposes the contract surface and starts clean", async () => {
 
 test("work session validates transport and policy", () => {
   const timers = fakeTimers()
-  const deck = { id: "deck-1", source: "old", source_file: "talk.md", content_hash: hash("a") }
+  const work = { id: "work-1", source: "old", source_file: "talk.md", content_hash: hash("a") }
   const transport = { saveSource: async () => ({}), acceptDiskVersion: () => {} }
-  const policy = { workId: "deck-1", deck, getText: () => "old" }
+  const policy = { workId: "work-1", work, getText: () => "old" }
   assert.throws(() => createWorkSession({}), TypeError)
   assert.throws(() => createWorkSession({ transport: {}, policy }), TypeError)
   assert.throws(() => createWorkSession({ transport, policy: null }), TypeError)
   assert.throws(() => createWorkSession({ transport, policy: { ...policy, workId: "" } }), TypeError)
   assert.throws(() => createWorkSession({ transport, policy: { ...policy, getText: null } }), TypeError)
-  assert.throws(() => createWorkSession({ transport, policy: { ...policy, deck: { ...deck, id: "other" } } }), TypeError)
-  assert.throws(() => createWorkSession({ transport, policy: { ...policy, deck: { ...deck, content_hash: "" } } }), TypeError)
-  assert.throws(() => createWorkSession({ transport, policy: { ...policy, deck: { ...deck, content_hash: null } } }), TypeError)
+  assert.throws(() => createWorkSession({ transport, policy: { ...policy, work: { ...work, id: "other" } } }), TypeError)
+  assert.throws(() => createWorkSession({ transport, policy: { ...policy, work: { ...work, content_hash: "" } } }), TypeError)
+  assert.throws(() => createWorkSession({ transport, policy: { ...policy, work: { ...work, content_hash: null } } }), TypeError)
   // Baselines are opaque: web revision tokens (`lock_version:digest`) bind like content hashes.
-  createWorkSession({ transport, policy: { ...policy, deck: { ...deck, content_hash: "3:digest" } } }).dispose()
+  createWorkSession({ transport, policy: { ...policy, work: { ...work, content_hash: "3:digest" } } }).dispose()
   void timers
 })
 
@@ -229,7 +229,7 @@ test("work session saves local edits and tracks the baseline", async () => {
   assert.deepEqual(statuses, ["clean", "dirty"])
   await timers.advance(50)
   await flush()
-  assert.deepEqual(state.saves, [["deck-1", "new", { snapshot: "new" }]])
+  assert.deepEqual(state.saves, [["work-1", "new", { snapshot: "new" }]])
   assert.deepEqual(statuses, ["clean", "dirty", "saving", "clean"])
   assert.deepEqual(await session.flush(), { kind: "clean", baseline: { revision: hash("b") } })
   state.savedHash = hash("d")
@@ -265,21 +265,21 @@ test("work session merges clean external changes silently", async () => {
     return { kind: "merged", source: "ONE\nTWO\n" }
   }
   await session.replaceText("ONE\ntwo\n")
-  state.pollQueue.push({ deck_id: "other", kind: "SourceChanged" }, { deck_id: "deck-1", kind: "SourceChanged" })
+  state.pollQueue.push({ work_id: "other", kind: "SourceChanged" }, { work_id: "work-1", kind: "SourceChanged" })
   await timers.advance(100)
   await flush()
-  assert.deepEqual(state.reads, ["deck-1"])
+  assert.deepEqual(state.reads, ["work-1"])
   assert.deepEqual(state.snapshots, [
-    ["deck-1", "pre-merge", "ONE\ntwo\n"],
-    ["deck-1", "external-change", undefined]
+    ["work-1", "pre-merge", "ONE\ntwo\n"],
+    ["work-1", "external-change", undefined]
   ])
-  assert.deepEqual(state.merges, [["deck-1", "ONE\ntwo\n"]])
+  assert.deepEqual(state.merges, [["work-1", "ONE\ntwo\n"]])
   assert.equal(fixture.getText(), "ONE\nTWO\n")
-  assert.deepEqual(state.saves, [["deck-1", "ONE\nTWO\n", { snapshot: "ONE\nTWO\n" }]])
-  assert.deepEqual(state.accepted, [["deck-1", hash("c")]])
+  assert.deepEqual(state.saves, [["work-1", "ONE\nTWO\n", { snapshot: "ONE\nTWO\n" }]])
+  assert.deepEqual(state.accepted, [["work-1", hash("c")]])
   assert.equal(conflicts.length, 0)
   assert.deepEqual(externals, [{
-    id: "deck-1",
+    id: "work-1",
     workspaceId: "",
     title: "",
     kind: "presentation",
@@ -296,12 +296,12 @@ test("work session routes overlap to the conflict path after snapshotting", asyn
   const { session, state, timers, conflicts } = fixture
   state.readImpl = async () => ({ source: "disk", source_file: "talk.md", content_hash: hash("c") })
   await session.replaceText("local")
-  state.pollQueue.push({ deck_id: "deck-1", kind: "SourceChanged" })
+  state.pollQueue.push({ work_id: "work-1", kind: "SourceChanged" })
   await timers.advance(100)
   await flush()
   assert.deepEqual(state.snapshots, [
-    ["deck-1", "pre-merge", "local"],
-    ["deck-1", "external-change", undefined]
+    ["work-1", "pre-merge", "local"],
+    ["work-1", "external-change", undefined]
   ])
   assert.equal(conflicts.length, 1)
   assert.equal(fixture.getText(), "local")
@@ -316,7 +316,7 @@ test("work session never auto-loads suspicious changes", async () => {
   state.readImpl = async () => ({ source: "disk", source_file: "talk.md", content_hash: hash("c") })
   state.mergeImpl = async () => ({ kind: "suspicious" })
   await session.replaceText("local")
-  state.pollQueue.push({ deck_id: "deck-1", kind: "SourceChanged" })
+  state.pollQueue.push({ work_id: "work-1", kind: "SourceChanged" })
   await timers.advance(100)
   await flush()
   assert.deepEqual(state.snapshots.map(entry => entry[1]), ["pre-merge", "external-change"])
@@ -337,7 +337,7 @@ test("work session falls back to conflict when merge hooks fail or misbehave", a
     state.readImpl = async () => ({ source: "disk", source_file: "talk.md", content_hash: hash("c") })
     state.mergeImpl = mergeImpl
     await session.replaceText("local")
-    state.pollQueue.push({ deck_id: "deck-1", kind: "SourceChanged" })
+    state.pollQueue.push({ work_id: "work-1", kind: "SourceChanged" })
     await timers.advance(100)
     await flush()
     assert.equal(conflicts.length, 1)
@@ -350,7 +350,7 @@ test("work session falls back to conflict when merge hooks fail or misbehave", a
   failing.transport.takeSnapshot = async () => { throw Object.assign(new Error("disk full"), { code: "storage_unavailable" }) }
   failing.state.readImpl = async () => ({ source: "disk", source_file: "talk.md", content_hash: hash("c") })
   await failing.session.replaceText("local")
-  failing.state.pollQueue.push({ deck_id: "deck-1", kind: "SourceChanged" })
+  failing.state.pollQueue.push({ work_id: "work-1", kind: "SourceChanged" })
   await failing.timers.advance(100)
   await flush()
   assert.equal(failing.conflicts.length, 1)
@@ -362,7 +362,7 @@ test("work session reloads clean external changes without merging", async () => 
   const fixture = setup()
   const { session, state, timers, conflicts, externals } = fixture
   state.readImpl = async () => ({ source: "disk v2", source_file: "talk.md", content_hash: hash("c") })
-  state.pollQueue.push({ deck_id: "deck-1", kind: "SourceChanged" })
+  state.pollQueue.push({ work_id: "work-1", kind: "SourceChanged" })
   await timers.advance(100)
   await flush()
   assert.equal(fixture.getText(), "disk v2")
@@ -378,7 +378,7 @@ test("work session reports removal without touching the editor", async () => {
   const { session, state, timers, externals, errors } = fixture
   const missing = Object.assign(new Error("gone"), { code: "not_found", retryable: false })
   state.readImpl = async () => { throw missing }
-  state.pollQueue.push({ deck_id: "deck-1", kind: "SourceRemoved" })
+  state.pollQueue.push({ work_id: "work-1", kind: "SourceRemoved" })
   await timers.advance(100)
   await flush()
   assert.equal(fixture.getText(), "local edits")
@@ -386,7 +386,7 @@ test("work session reports removal without touching the editor", async () => {
   assert.equal(externals[0].removed, true)
   assert.equal(externals[0].text, "local edits")
   assert.equal(errors.length, 1)
-  state.pollQueue.push({ deck_id: "deck-1", kind: "SourceRemoved" })
+  state.pollQueue.push({ work_id: "work-1", kind: "SourceRemoved" })
   await timers.advance(100)
   await flush()
   assert.equal(errors.length, 1)
@@ -396,18 +396,18 @@ test("work session reports removal without touching the editor", async () => {
 test("work session without merge hooks uses the legacy external path", async () => {
   const timers = fakeTimers()
   let text = "old"
-  const deck = { id: "deck-1", source: "old", source_file: "talk.md", content_hash: hash("a") }
+  const work = { id: "work-1", source: "old", source_file: "talk.md", content_hash: hash("a") }
   const conflicts = []
   const session = createWorkSession({
     transport: {
       saveSource: async () => ({ content_hash: hash("b") }),
       acceptDiskVersion: () => {},
       readSourceSnapshot: async () => ({ source: "disk", source_file: "talk.md", content_hash: hash("c") }),
-      pollFileEvents: async () => [{ deck_id: "deck-1", kind: "SourceChanged" }]
+      pollFileEvents: async () => [{ work_id: "work-1", kind: "SourceChanged" }]
     },
     policy: {
-      workId: "deck-1",
-      deck,
+      workId: "work-1",
+      work,
       getText: () => text,
       setText: async value => { text = value; return true },
       saveDelay: 50,
@@ -453,7 +453,7 @@ test("work session maps conflicts and failures through flush", async () => {
   assert.deepEqual(await session.flush(), {
     kind: "conflict",
     current: {
-      id: "deck-1",
+      id: "work-1",
       workspaceId: "",
       title: "",
       kind: "presentation",
@@ -494,7 +494,7 @@ test("work session exposes host orchestration extras", async () => {
   assert.equal(session.saving, false)
   assert.equal(session.canRestoreDraft, false)
   assert.equal(session.discardedDraftCount, 0)
-  assert.equal(session.handleConflict({ id: "deck-1", details: { disk_hash: hash("c"), current: { source: "disk", source_file: "talk.md" } } }), true)
+  assert.equal(session.handleConflict({ id: "work-1", details: { disk_hash: hash("c"), current: { source: "disk", source_file: "talk.md" } } }), true)
   assert.equal(conflicts.length, 1)
   session.keepLocalVersion()
   await flush()
@@ -505,7 +505,7 @@ test("work session exposes host orchestration extras", async () => {
 test("work session extras resolve conflicts and restore drafts", async () => {
   const fixture = setup({ text: "local" })
   const { session, state } = fixture
-  session.handleConflict({ id: "deck-1", details: { disk_hash: hash("c"), current: { source: "disk", source_file: "talk.md" } } })
+  session.handleConflict({ id: "work-1", details: { disk_hash: hash("c"), current: { source: "disk", source_file: "talk.md" } } })
   assert.equal(await session.useDiskVersion(), true)
   assert.equal(fixture.getText(), "disk")
   assert.equal(session.canRestoreDraft, true)
@@ -558,7 +558,7 @@ test("periodic snapshots fire while the session is dirty and stop once saved", a
   await flush()
   await timers.advance(1000)
   await flush()
-  assert.deepEqual(state.snapshots, [["deck-1", "periodic", "NEW"], ["deck-1", "periodic", "NEW"]])
+  assert.deepEqual(state.snapshots, [["work-1", "periodic", "NEW"], ["work-1", "periodic", "NEW"]])
   await timers.advance(5000)
   await flush()
   assert.equal(session.dirty, false)
@@ -606,6 +606,6 @@ test("snapshot cadence failures report once and keep the cadence alive", async (
   }
   await timers.advance(1000)
   await flush()
-  assert.deepEqual(state.snapshots, [["deck-1", "periodic", "NEW"]])
+  assert.deepEqual(state.snapshots, [["work-1", "periodic", "NEW"]])
   session.dispose()
 })

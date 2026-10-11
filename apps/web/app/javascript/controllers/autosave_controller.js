@@ -46,7 +46,7 @@ export default class extends Controller {
       ? `${workKind}:${this.workIdValue}:${this.hasWorkIdentityValue ? this.workIdentityValue : "legacy"}`
       : `${workKind}:new:${window.location.pathname}`
     this.database = this.openDatabase()
-    this.flowDeckId = this.hasWorkIdValue ? String(this.workIdValue) : this.localDraftKey
+    this.flowWorkId = this.hasWorkIdValue ? String(this.workIdValue) : this.localDraftKey
     // The web editor persists through the shared session (constructed
     // activated: one session per edited work, disposed on disconnect).
     this.flow = this.createSession()
@@ -154,10 +154,10 @@ export default class extends Controller {
         }
       },
       policy: {
-        workId: this.flowDeckId,
+        workId: this.flowWorkId,
         kind: this.hasWorkKindValue ? this.workKindValue : "presentation",
-        deck: {
-          id: this.flowDeckId,
+        work: {
+          id: this.flowWorkId,
           source: this.currentSource(),
           source_file: "",
           content_hash: this.currentRevisionBaseline()
@@ -180,7 +180,7 @@ export default class extends Controller {
 
   currentRevisionBaseline() {
     const token = this.element.querySelector('[name$="[base_revision]"]')?.value
-    return token || `initial:${this.flowDeckId}`
+    return token || `initial:${this.flowWorkId}`
   }
 
   currentSource() {
@@ -364,7 +364,7 @@ export default class extends Controller {
     const applied = await applyEditorSource(source, {
       id,
       expectedSource,
-      getDeckId: () => this.flowDeckId,
+      getWorkId: () => this.flowWorkId,
       getSource: () => this.currentSource(),
       waitForEditor: () => waitForEditorController(editorHost, editorFor),
       materializeEdits: () => this.materializeEditorEdits(),

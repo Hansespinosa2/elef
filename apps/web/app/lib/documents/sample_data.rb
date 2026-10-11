@@ -467,7 +467,7 @@ module Documents
           should work for a two-paragraph note and for a report long enough to
           require a table of contents, a methodology section, and several appendices.
           The same model should support both cases without forcing the short note
-          to look like a report or the report to behave like a slide deck.
+          to look like a report or the report to behave like a presentation.
 
           ### At a glance
 

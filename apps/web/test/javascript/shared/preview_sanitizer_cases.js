@@ -14,16 +14,16 @@
 
 export const CASES = [
   {
-    name: "sink strips executable markup and remote image sources while preserving deck-scoped media",
+    name: "sink strips executable markup and remote image sources while preserving work-scoped media",
     installs: [
       {
         html: `
     <section data-controller="document-pages mermaid-diagrams">
-      <div class="document-editor-block" data-editor-block-id="b1" data-editor-invoke="delete_deck" contenteditable="true" onclick="invoke('delete_deck')" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur">
-        <img src="https://example.com/remote.png" onerror="invoke('delete_deck')">
+      <div class="document-editor-block" data-editor-block-id="b1" data-editor-invoke="delete_work_folder" contenteditable="true" onclick="invoke('delete_work_folder')" data-action="input->visual-editor#projectionInput focus->visual-editor#blockFocus blur->visual-editor#blockBlur">
+        <img src="https://example.com/remote.png" onerror="invoke('delete_work_folder')">
         <img src="elefasset://localhost/id/sha" data-editor-image-source="true">
-        <img src="elefasset://localhost/id/other" data-editor-image-source="delete_deck">
-        <script>invoke('delete_deck')</script>
+        <img src="elefasset://localhost/id/other" data-editor-image-source="delete_work_folder">
+        <script>invoke('delete_work_folder')</script>
         <a href="javascript:alert(1)">bad</a>
       </div>
     </section>`,
@@ -142,12 +142,12 @@ export const CASES = [
     checks: [{ select: "button, label, select, option", exists: false }],
   },
   {
-    name: "preview sink keeps sanitized deck media inside editable figure captions",
+    name: "preview sink keeps sanitized work media inside editable figure captions",
     installs: [
       {
         html: `
-    <figure class="editor-media" onclick="invoke('delete_deck')">
-      <img src="elefasset://localhost/id/sha" data-editor-image-source="true" onerror="invoke('delete_deck')">
+    <figure class="editor-media" onclick="invoke('delete_work_folder')">
+      <img src="elefasset://localhost/id/sha" data-editor-image-source="true" onerror="invoke('delete_work_folder')">
       <figcaption class="editor-media-caption" aria-label="Editable image alt text">Diagram</figcaption>
     </figure>`,
         options: { mediaBaseUrl: "elefasset://localhost/id" },
@@ -162,27 +162,27 @@ export const CASES = [
     ],
   },
   {
-    name: "desktop asset URLs are rejected unless they stay under the trusted deck base",
+    name: "desktop asset URLs are rejected unless they stay under the trusted work base",
     installs: [
       {
         html: `
-    <img class="expected" src="elefasset://localhost/deck/image.png">
-    <img class="other-deck" src="elefasset://localhost/other/image.png">
-    <img class="traversal" src="elefasset://localhost/deck/%2e%2e/other/image.png">`,
-        options: { mediaBaseUrl: "elefasset://localhost/deck" },
+    <img class="expected" src="elefasset://localhost/work/image.png">
+    <img class="other-work" src="elefasset://localhost/other/image.png">
+    <img class="traversal" src="elefasset://localhost/work/%2e%2e/other/image.png">`,
+        options: { mediaBaseUrl: "elefasset://localhost/work" },
       },
     ],
     checks: [
-      { select: ".expected", attribute: "src", equals: "elefasset://localhost/deck/image.png" },
-      { select: ".other-deck", attribute: "src", absent: true },
+      { select: ".expected", attribute: "src", equals: "elefasset://localhost/work/image.png" },
+      { select: ".other-work", attribute: "src", absent: true },
       { select: ".traversal", attribute: "src", absent: true },
     ],
   },
   {
-    name: "desktop asset URLs are rejected without a trusted deck base",
+    name: "desktop asset URLs are rejected without a trusted work base",
     installs: [
       {
-        html: '<img class="unscoped" src="elefasset://localhost/deck/image.png">',
+        html: '<img class="unscoped" src="elefasset://localhost/work/image.png">',
         options: {},
       },
     ],

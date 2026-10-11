@@ -392,7 +392,7 @@ class ArtTest < ApplicationSystemTestCase
   end
 
   test "grouped Art controls stay anchored across Rails and JavaScript renderers" do
-    source = ["# Deck", *%w[left center right].map do |horizontal|
+    source = ["# Work", *%w[left center right].map do |horizontal|
       title = horizontal.titleize
       [
         "## #{title}",

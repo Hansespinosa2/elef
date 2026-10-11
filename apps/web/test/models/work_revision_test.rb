@@ -3,7 +3,7 @@ require "test_helper"
 class WorkRevisionTest < ActiveSupport::TestCase
   setup do
     @workspace = Workspace.default
-    @work = Presentation.create!(workspace: @workspace, title: "Revision Deck", source: "# Original")
+    @work = Presentation.create!(workspace: @workspace, title: "Revision Work", source: "# Original")
   end
 
   test "validates required fields, reasons, and statuses" do

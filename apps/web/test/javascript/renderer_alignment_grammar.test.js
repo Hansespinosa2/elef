@@ -90,7 +90,7 @@ test("grouped Art controls remain inside their aligned block wrappers", () => {
     ].join("\n\n")
   ].join("")
   const source = [
-    "# Deck",
+    "# Work",
     "## Left\n\n" + leftRegion,
     "## Right\n\nRight column text.",
     "## Third\n\nThird column text."

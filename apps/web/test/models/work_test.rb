@@ -5,7 +5,7 @@ class WorkTest < ActiveSupport::TestCase
     assert_equal "presentation", Presentation.new.work_type
     assert_equal "document", Document.new.work_type
     assert_equal "Notes", Document.create!(source: "# Notes").title
-    assert Presentation.new(title: "Deck", source: "# Deck").valid?
+    assert Presentation.new(title: "Work", source: "# Work").valid?
     refute Presentation.new(title: "Wrong", source: "# Wrong", work_type: "document").valid?
     refute Document.new(title: "Wrong", source: "# Wrong", work_type: "presentation").valid?
   end
@@ -28,7 +28,7 @@ class WorkTest < ActiveSupport::TestCase
     source = "# Notes\n\nFirst\n\n---\n\nSecond"
 
     document = Document.new(title: "Notes", source: source)
-    presentation = Presentation.new(title: "Deck", source: source)
+    presentation = Presentation.new(title: "Work", source: source)
 
     assert_equal 1, document.slides.length
     assert_includes document.preview_html, "<hr"

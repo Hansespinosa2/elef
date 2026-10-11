@@ -6,7 +6,7 @@ module Presentations
       {
         id: "lineage-root",
         title: "Quarterly Review May",
-        purpose: "Root deck: establish a baseline with margins, evidence, a footer, and a centered decision.",
+        purpose: "Root work: establish a baseline with margins, evidence, a footer, and a centered decision.",
         source: <<~MARKDOWN
           ---
           theme: light
@@ -45,7 +45,7 @@ module Presentations
           ---
           # Close the baseline
 
-          The next deck should preserve the evidence, make the trade-offs
+          The next work should preserve the evidence, make the trade-offs
           explicit, and show whether the improvement survives a larger audience.
         MARKDOWN
       },
@@ -54,7 +54,7 @@ module Presentations
         title: "Quarterly Review June",
         parent: "lineage-root",
         fork_type: "continuation",
-        purpose: "Continuation deck: preserve the review arc while updating evidence and the next decision.",
+        purpose: "Continuation work: preserve the review arc while updating evidence and the next decision.",
         source: <<~MARKDOWN
           ---
           theme: light
@@ -100,7 +100,7 @@ module Presentations
         title: "Workshop Ideas",
         parent: "lineage-root",
         fork_type: "inspiration",
-        purpose: "Inspiration deck: deliberately reframe the review as a workshop rather than a continuation.",
+        purpose: "Inspiration work: deliberately reframe the review as a workshop rather than a continuation.",
         source: <<~MARKDOWN
           ---
           theme: dark
@@ -141,7 +141,7 @@ module Presentations
           # Workshop output
 
           Capture the language, evidence, and unresolved questions that a
-          continuation deck can turn into a concrete operating decision.
+          continuation work can turn into a concrete operating decision.
         MARKDOWN
       },
       {
@@ -182,7 +182,7 @@ module Presentations
           # July decision
 
           The next continuation owns the operating cost. The lineage records
-          why this deck follows June instead of presenting a disconnected copy.
+          why this work follows June instead of presenting a disconnected copy.
         MARKDOWN
       },
       {
@@ -227,7 +227,7 @@ module Presentations
       {
         id: "lineage-product-root",
         title: "Product Launch Plan",
-        purpose: "Root deck: establish a launch narrative with a table, evidence, and a clear audience promise.",
+        purpose: "Root work: establish a launch narrative with a table, evidence, and a clear audience promise.",
         source: <<~MARKDOWN
           ---
           theme: light
@@ -268,7 +268,7 @@ module Presentations
         title: "Launch Narrative",
         parent: "lineage-product-root",
         fork_type: "continuation",
-        purpose: "Continuation deck: turn the launch plan into a sequence that can be presented to the next audience.",
+        purpose: "Continuation work: turn the launch plan into a sequence that can be presented to the next audience.",
         source: <<~MARKDOWN
           ---
           theme: match
@@ -307,7 +307,7 @@ module Presentations
         title: "Customer Story",
         parent: "lineage-product-root",
         fork_type: "inspiration",
-        purpose: "Inspiration deck: reinterpret the launch plan through one customer story and a centered outcome.",
+        purpose: "Inspiration work: reinterpret the launch plan through one customer story and a centered outcome.",
         source: <<~MARKDOWN
           ---
           theme: dark
@@ -425,7 +425,7 @@ module Presentations
       {
         id: "lineage-research-root",
         title: "Research Questions",
-        purpose: "Root deck: frame a research program with questions, hypotheses, and a bounded next step.",
+        purpose: "Root work: frame a research program with questions, hypotheses, and a bounded next step.",
         source: <<~MARKDOWN
           ---
           theme: light
@@ -465,7 +465,7 @@ module Presentations
         title: "Research Findings",
         parent: "lineage-research-root",
         fork_type: "continuation",
-        purpose: "Continuation deck: turn research questions into evidence, a small model, and a decision.",
+        purpose: "Continuation work: turn research questions into evidence, a small model, and a decision.",
         source: <<~MARKDOWN
           ---
           theme: match
@@ -508,7 +508,7 @@ module Presentations
         title: "Workshop Prompts",
         parent: "lineage-research-root",
         fork_type: "inspiration",
-        purpose: "Inspiration deck: turn research questions into prompts for a workshop rather than findings.",
+        purpose: "Inspiration work: turn research questions into prompts for a workshop rather than findings.",
         source: <<~MARKDOWN
           ---
           theme: dark

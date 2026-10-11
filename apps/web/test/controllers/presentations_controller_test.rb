@@ -12,7 +12,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_equal 12, response.parsed_body["revision"]
     assert_includes response.parsed_body["html"], "Draft"
-    assert_equal "Demo Deck", presentation.reload.title
+    assert_equal "Demo Work", presentation.reload.title
     assert_equal "# One\n\nBody\n---\n# Two", presentation.source
   end
 
@@ -301,7 +301,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal "private, no-store", response.headers["Cache-Control"]
     payload = response.parsed_body
     assert_equal "draft", payload["version"]
-    assert_equal "Demo Deck.pptx", payload["filename"]
+    assert_equal "Demo Work.pptx", payload["filename"]
     assert_equal 1280, payload.dig("presentation", "width")
     assert_equal 720, payload.dig("presentation", "height")
     assert_equal "book", payload.dig("presentation", "typography")
@@ -315,7 +315,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     post pptx_presentations_path(version: "draft"), params: {
       presentation: {
-        title: "Unsaved new deck",
+        title: "Unsaved new work",
         source: "# Unsaved new slide\n\nDraft body.",
         theme: "dark",
         typography: "technical"
@@ -324,7 +324,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     payload = response.parsed_body
-    assert_equal "Unsaved new deck.pptx", payload["filename"]
+    assert_equal "Unsaved new work.pptx", payload["filename"]
     assert_equal "dark", payload.dig("presentation", "theme")
     assert_equal "technical", payload.dig("presentation", "typography")
     assert_includes payload.dig("slides", 0, "blocks", 1, "html"), "Draft body."
@@ -455,7 +455,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "previews an unsaved presentation without creating a record" do
     assert_no_difference("Presentation.count") do
       post preview_presentations_path, params: {
-        presentation: { title: "Draft deck", source: "# Draft deck\n---\n# Next" }, revision: "new-2"
+        presentation: { title: "Draft work", source: "# Draft work\n---\n# Next" }, revision: "new-2"
       }, as: :json
     end
 
@@ -467,7 +467,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "editor preview returns editable projections without changing saved output routes" do
-    presentation = Presentation.create!(title: "Editable deck", source: "# First\n\nBody")
+    presentation = Presentation.create!(title: "Editable work", source: "# First\n\nBody")
 
     post preview_presentation_path(presentation), params: {
       presentation: { source: "# Draft\n\nBody\n\n![Diagram](/diagram.svg)" }, projection: "editor", revision: "editor-1"
@@ -506,7 +506,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "loads sample presentations idempotently and preserves unrelated records" do
-    unrelated = Presentation.create!(title: "Personal deck", source: "# Keep me")
+    unrelated = Presentation.create!(title: "Personal work", source: "# Keep me")
 
     get presentations_path
     assert_select "form[action='#{load_samples_presentations_path}'] button", text: "Load sample presentations"
@@ -548,7 +548,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
   test "creates a presentation from markdown source" do
     assert_difference("Presentation.count", 1) do
-      post presentations_path, params: { presentation: { title: "Request Deck", source: "# One\n---\n# Two" } }
+      post presentations_path, params: { presentation: { title: "Request Work", source: "# One\n---\n# Two" } }
     end
 
     presentation = Presentation.order(:created_at).last
@@ -568,22 +568,22 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "exports a presentation as a downloadable Elef archive" do
-    presentation = Presentation.create!(title: "Exported deck", source: "# Exported deck\n\nArchive content")
+    presentation = Presentation.create!(title: "Exported work", source: "# Exported work\n\nArchive content")
 
     get export_presentation_path(presentation)
 
     assert_response :success
     assert_equal "application/zip", response.media_type
-    assert_match(/attachment; filename=\"exported-deck-elef-work\.zip\"/, response.headers.fetch("Content-Disposition"))
+    assert_match(/attachment; filename=\"exported-work-elef-work\.zip\"/, response.headers.fetch("Content-Disposition"))
     Zip::File.open_buffer(response.body) do |zip|
       manifest = JSON.parse(zip.read("manifest.json"))
       assert_equal "presentation", manifest.dig("work", "kind")
-      assert_includes zip.read("presentation.md"), "# Exported deck"
+      assert_includes zip.read("presentation.md"), "# Exported work"
     end
   end
 
   test "imports an uploaded Elef archive through the presentation endpoint" do
-    source = Presentation.create!(title: "Imported deck", source: "# Imported deck\n\nArchive content")
+    source = Presentation.create!(title: "Imported Work", source: "# Imported Work\n\nArchive content")
     package = WorkPackage::Exporter.call(source)
 
     Tempfile.create(["presentation-package", ".elef"]) do |file|
@@ -599,7 +599,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     imported = Presentation.order(:id).last
     assert_redirected_to edit_presentation_path(imported)
-    assert_equal "# Imported deck\n\nArchive content", imported.source
+    assert_equal "# Imported Work\n\nArchive content", imported.source
     assert_equal "Presentation imported.", flash[:notice]
   end
 
@@ -625,7 +625,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "updates typography inside valid front matter" do
-    presentation = Presentation.create!(title: "Front matter deck", source: "---\ntheme: dark\ntypography: modern\n---\n# Title")
+    presentation = Presentation.create!(title: "Front matter work", source: "---\ntheme: dark\ntypography: modern\n---\n# Title")
 
     patch presentation_path(presentation), params: {
       presentation: { title: presentation.title, source: presentation.source, typography: "book" }
@@ -688,7 +688,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "renders margin metadata and slide count in both views" do
-    presentation = Presentation.create!(title: "Margin deck", source: <<~MARKDOWN)
+    presentation = Presentation.create!(title: "Margin work", source: <<~MARKDOWN)
       ---
       show-in-margin:
         section: true
@@ -833,7 +833,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "create responds to JSON format with edit and upload urls" do
-    post presentations_path, params: { presentation: { title: "JSON Deck", source: "# New Deck" } }, headers: { "Accept" => "application/json" }
+    post presentations_path, params: { presentation: { title: "JSON Work", source: "# New Work" } }, headers: { "Accept" => "application/json" }
 
     assert_response :created
     json = response.parsed_body
@@ -865,7 +865,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "history lists revisions newest first with their payload fields" do
-    presentation = Presentation.create!(title: "History deck", source: "# First")
+    presentation = Presentation.create!(title: "History work", source: "# First")
     later = presentation.work_revisions.create!(
       workspace: presentation.workspace,
       source: "# Second",
@@ -888,7 +888,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "restore reinstates a chosen revision and reports the restored draft" do
-    presentation = Presentation.create!(title: "Restore deck", source: "# First")
+    presentation = Presentation.create!(title: "Restore work", source: "# First")
     presentation.update!(source: "# Second")
     original = presentation.work_revisions.order(:id).first
 
@@ -909,7 +909,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test "media_asset serves assets by filename and relative path as well as digest" do
-    presentation = Presentation.create!(title: "Asset routing deck", source: "# Asset Deck")
+    presentation = Presentation.create!(title: "Asset routing work", source: "# Asset Work")
     bytes = "image bytes".b
     presentation.assets.attach(io: StringIO.new(bytes), filename: "diagram.png", content_type: "image/png")
     digest = Digest::SHA256.hexdigest(bytes)

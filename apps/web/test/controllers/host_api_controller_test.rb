@@ -111,11 +111,11 @@ class HostApiControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_equal "light", response.parsed_body["theme"]
 
-    Document.create!(source: "# Searchable deck\n")
-    get "/search", params: { q: "Searchable deck" }, as: :json
+    Document.create!(source: "# Searchable work\n")
+    get "/search", params: { q: "Searchable work" }, as: :json
     assert_response :ok
-    assert_equal "Searchable deck", response.parsed_body["query"]
-    assert_includes response.parsed_body["results"].map { |hit| hit["title"] }, "Searchable deck"
+    assert_equal "Searchable work", response.parsed_body["query"]
+    assert_includes response.parsed_body["results"].map { |hit| hit["title"] }, "Searchable work"
   end
 
   test "transfer exports and reimports a work package" do

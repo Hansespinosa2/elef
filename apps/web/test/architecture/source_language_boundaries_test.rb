@@ -23,7 +23,7 @@ class SourceLanguageBoundariesTest < ActiveSupport::TestCase
     /\b(?:ActiveRecord|ActiveStorage|::Document|::Presentation|::Workspace|::Work|belongs_to|has_many|has_one|validates)\b/
 
   # Nothing that only knows how to read a document may reach for presentation
-  # delivery: a deck's slide chrome, lineage, releases, and PPTX export.
+  # delivery: a work's slide chrome, lineage, releases, and PPTX export.
   DOCUMENT_SIDE_FILES = %w[
     app/models/document.rb
     app/models/work.rb

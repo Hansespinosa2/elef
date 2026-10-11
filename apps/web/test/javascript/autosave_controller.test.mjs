@@ -56,7 +56,7 @@ test("the Rails transport saves the live editor source without requesting a sour
   globalThis.CustomEvent = class { constructor(type) { this.type = type } }
 
   try {
-    const result = await controller.saveToRails("deck-1", "$x.b$")
+    const result = await controller.saveToRails("work-1", "$x.b$")
     assert.equal(result.source, "$x.b$")
     assert.equal(result.snapshot, "$x.b$")
   } finally {
@@ -204,7 +204,7 @@ test("Rails autosave uses the shared state machine for source and metadata snaps
   Object.assign(controller, {
     delayValue: 1000,
     fieldTargets: [sourceField, titleField],
-    flowDeckId: "presentation-1",
+    flowWorkId: "presentation-1",
     currentSource: () => sourceField.value,
     currentRevisionBaseline: () => "revision-1",
     snapshot: () => [sourceField.value, titleField.value].join("\u001f"),
@@ -253,7 +253,7 @@ test("CRLF responses settle against the browser's normalized source snapshot", a
     updateRevisionTokens() {},
     setStatus() {},
     materializeEditorEdits() {},
-    flowDeckId: "presentation-1",
+    flowWorkId: "presentation-1",
     currentSource: () => sourceWithCrLf,
     currentRevisionBaseline: () => "revision-1",
     snapshot: () => [sourceField.value, titleField.value].join("\u001f"),
@@ -334,7 +334,7 @@ test("Rails revision conflicts resolve through the shared flow without requiring
     },
     materializeEditorEdits() {}
   })
-  controller.flowDeckId = "document-1"
+  controller.flowWorkId = "document-1"
   controller.currentRevisionBaseline = () => "opaque-revision-1"
   controller.flow = controller.createSession()
   sourceField.value = "local"
@@ -389,7 +389,7 @@ test("merged Rails text saves local metadata against the disk metadata baseline"
     },
     materializeEditorEdits() {}
   })
-  controller.flowDeckId = "presentation-1"
+  controller.flowWorkId = "presentation-1"
   controller.currentRevisionBaseline = () => "opaque-revision-1"
   controller.flow = controller.createSession()
   sourceField.value = "local"
@@ -409,7 +409,7 @@ test("merged Rails text saves local metadata against the disk metadata baseline"
 test("a style-only Rails conflict still saves local appearance overrides after merging unchanged text", async () => {
   const fields = [
     { name: "presentation[source]", value: "same source" },
-    { name: "presentation[title]", value: "Deck" },
+    { name: "presentation[title]", value: "Work" },
     { name: "presentation[theme]", value: "" },
     { name: "presentation[typography]", value: "" }
   ]
@@ -429,7 +429,7 @@ test("a style-only Rails conflict still saves local appearance overrides after m
           code: "conflict",
           details: {
             message: "The work changed.",
-            current: { source: "same source", title: "Deck", theme: "dark", typography: "technical", revision_token: "opaque-revision-2" }
+            current: { source: "same source", title: "Work", theme: "dark", typography: "technical", revision_token: "opaque-revision-2" }
           }
         })
       }
@@ -439,7 +439,7 @@ test("a style-only Rails conflict still saves local appearance overrides after m
     applyExternalSource: async (source, { preserveMetadata = false } = {}) => {
       fields[0].value = source
       if (!preserveMetadata) {
-        fields[1].value = "Deck"
+        fields[1].value = "Work"
         fields[2].value = "dark"
         fields[3].value = "technical"
       }
@@ -451,7 +451,7 @@ test("a style-only Rails conflict still saves local appearance overrides after m
     },
     materializeEditorEdits() {}
   })
-  controller.flowDeckId = "presentation-1"
+  controller.flowWorkId = "presentation-1"
   controller.currentRevisionBaseline = () => "opaque-revision-1"
   controller.flow = controller.createSession()
   fields[2].value = "light"
@@ -461,8 +461,8 @@ test("a style-only Rails conflict still saves local appearance overrides after m
   assert.equal(await controller.flow.saveMergedVersion("same source"), true)
   assert.ok(["saved", "clean"].includes((await controller.flow.flush({ force: true })).kind))
   assert.deepEqual(calls, [
-    { source: "same source", snapshot: "same source\u001fDeck\u001flight\u001f" },
-    { source: "same source", snapshot: "same source\u001fDeck\u001flight\u001f" }
+    { source: "same source", snapshot: "same source\u001fWork\u001flight\u001f" },
+    { source: "same source", snapshot: "same source\u001fWork\u001flight\u001f" }
   ])
   assert.equal(controller.flow.dirty, false)
 })

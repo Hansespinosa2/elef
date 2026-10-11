@@ -11,7 +11,7 @@ const renderMarkdownBlock = (source, options) => renderBlockCore(source, { ...op
 
 test("composed presentation preview carries theme, slide frames and block hooks", () => {
   const source = "---\ntheme: dark\n---\n# One\n\nText 😀\n\n```md\n---\n```\n---\n# Two"
-  const preview = renderPreview({ source, title: "Deck" })
+  const preview = renderPreview({ source, title: "Work" })
 
   assert.match(preview.html, /slides-theme-dark/)
   assert.equal((preview.html.match(/class="slide slide-body"/g) || []).length, 2)
@@ -57,7 +57,7 @@ test("composed presentation projection exposes client mount hooks without Stimul
 test("composed wiki math keeps edit-roundtrip source attributes", () => {
   const preview = renderPreview({
     kind: "document",
-    deckId: "source",
+    workId: "source",
     source: "# Source\n\n[[Target|open target]] and $x^2$.",
     documentNodes: [{ id: "target-id", title: "Target" }]
   })
@@ -71,7 +71,7 @@ test("composed projections preserve safe relative image paths and editable capti
       source: "![Diagram](/diagram.svg)",
       kind,
       title: "Diagram",
-      deckId: "deck-id",
+      workId: "work-id",
       allowRemoteMedia: true
     })
 
@@ -109,7 +109,7 @@ test("editable web projections preserve safe relative image paths and editable c
       source: "![Diagram](/diagram.svg)",
       kind,
       title: "Diagram",
-      deckId: "deck-id",
+      workId: "work-id",
       allowRemoteMedia: true
     })
 
@@ -121,7 +121,7 @@ test("editable web projections preserve safe relative image paths and editable c
     source: "![Remote diagram](/diagram.svg)",
     kind: "document",
     title: "Diagram",
-    deckId: "deck-id"
+    workId: "work-id"
   })
   assert.doesNotMatch(desktop.html, /src="\/diagram\.svg"/)
 })

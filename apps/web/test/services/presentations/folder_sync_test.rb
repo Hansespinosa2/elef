@@ -3,7 +3,7 @@ require "fileutils"
 
 class FolderSyncTest < ActiveSupport::TestCase
   test "syncs presentation and attached assets to disk storage folder and removes on destroy" do
-    presentation = Presentation.create!(title: "Folder Sync Deck", source: "# Welcome\n\nIntro text.")
+    presentation = Presentation.create!(title: "Folder Sync Work", source: "# Welcome\n\nIntro text.")
     storage_dir = presentation.storage_dir
 
     assert File.exist?(storage_dir.join("presentation.md"))

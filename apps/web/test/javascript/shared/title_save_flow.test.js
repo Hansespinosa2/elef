@@ -3,21 +3,21 @@ import test from "node:test"
 
 import { createTitleSaveFlow } from "@elef/client"
 
-function harness({ renameDeck = async (id, name) => ({ id, name }) } = {}) {
-  let deck = { id: "deck-1", name: "First title" }
-  let input = deck.name
+function harness({ renameWork = async (id, name) => ({ id, name }) } = {}) {
+  let work = { id: "work-1", name: "First title" }
+  let input = work.name
   let timer = null
   const calls = []
   const states = []
   const errors = []
   const flow = createTitleSaveFlow({
-    getDeck: () => deck,
+    getWork: () => work,
     getTitle: () => input,
-    renameDeck: async (...args) => {
+    renameWork: async (...args) => {
       calls.push(args.map((value, index) => index === 0 ? value.id : value))
-      return renameDeck(...args)
+      return renameWork(...args)
     },
-    onRenamed: renamed => { deck = { ...deck, ...renamed } },
+    onRenamed: renamed => { work = { ...work, ...renamed } },
     onState: (state, detail) => states.push([state, detail]),
     onError: error => errors.push(error),
     setTimer: callback => { timer = callback; return callback },
@@ -28,7 +28,7 @@ function harness({ renameDeck = async (id, name) => ({ id, name }) } = {}) {
     calls,
     states,
     errors,
-    get deck() { return deck },
+    get work() { return work },
     set input(value) { input = value },
     runTimer() { const callback = timer; timer = null; callback?.() }
   }
@@ -45,8 +45,8 @@ test("title autosave debounces edits and persists the latest folder name", async
   state.runTimer()
   await state.flow.flush()
 
-  assert.deepEqual(state.calls, [["deck-1", "Final title"]])
-  assert.equal(state.deck.name, "Final title")
+  assert.deepEqual(state.calls, [["work-1", "Final title"]])
+  assert.equal(state.work.name, "Final title")
   assert.equal(state.flow.isDirty(), false)
   assert.equal(state.errors.length, 0)
 })
@@ -55,8 +55,8 @@ test("title flush serializes edits made while a folder rename is in flight", asy
   let resolveFirst
   let resolveSecond
   const state = harness({
-    renameDeck: (deck, name) => {
-      const id = deck.id
+    renameWork: (work, name) => {
+      const id = work.id
       return new Promise(resolve => {
         if (name === "First rename") resolveFirst = () => resolve({ id, name })
         else resolveSecond = () => resolve({ id, name })
@@ -74,13 +74,13 @@ test("title flush serializes edits made while a folder rename is in flight", asy
   resolveSecond()
   assert.equal(await flushing, true)
 
-  assert.deepEqual(state.calls, [["deck-1", "First rename"], ["deck-1", "Latest rename"]])
-  assert.equal(state.deck.name, "Latest rename")
+  assert.deepEqual(state.calls, [["work-1", "First rename"], ["work-1", "Latest rename"]])
+  assert.equal(state.work.name, "Latest rename")
   assert.equal(state.flow.isDirty(), false)
 })
 
 test("failed and empty title saves stay dirty until an explicit correction or retry", async () => {
-  const state = harness({ renameDeck: async () => { throw Object.assign(new Error("rename failed"), { code: "io_error", retryable: false }) } })
+  const state = harness({ renameWork: async () => { throw Object.assign(new Error("rename failed"), { code: "io_error", retryable: false }) } })
   state.input = "Unavailable title"
   state.flow.noteChange()
   assert.equal(await state.flow.flush(), false)

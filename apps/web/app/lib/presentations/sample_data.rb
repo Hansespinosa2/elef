@@ -99,7 +99,7 @@ module Presentations
           ---
           # Takeaway
 
-          A good Markdown deck is a readable document first and a visual
+          A good Markdown work is a readable document first and a visual
           presentation second.
 
           When structure, emphasis, examples, and pacing are clear in the
@@ -119,7 +119,7 @@ module Presentations
           # Designing a visual system
 
           :::align {center}
-          This deck exercises automatic layouts while telling a complete story
+          This work exercises automatic layouts while telling a complete story
           about consistent presentation design.
           ---
           # Why consistency matters
@@ -172,7 +172,7 @@ module Presentations
           ---
           # Theme and content stay separate
 
-          A deck can move from dark to light without changing its Markdown.
+          A work can move from dark to light without changing its Markdown.
           That separation lets the author focus on meaning while the renderer
           handles presentation details.
           ---
@@ -203,7 +203,7 @@ module Presentations
           # Design system takeaway
 
           Themes provide atmosphere, layouts provide intent, and Markdown
-          provides the content. Keeping those responsibilities separate makes the deck easier to edit and easier for Elef to render.
+          provides the content. Keeping those responsibilities separate makes the work easier to edit and easier for Elef to render.
           ---
           # Two columns with independent positions
 
@@ -392,7 +392,7 @@ module Presentations
           # Technical takeaway
 
           Code shows what the system does. Math explains why the behavior
-          changes. A strong technical deck uses both to make a decision
+          changes. A strong technical work uses both to make a decision
           reviewable.
         MARKDOWN
       },
@@ -406,7 +406,7 @@ module Presentations
           ---
           # Communicating a product decision
 
-          A decision deck combines narrative, comparison, evidence, and a
+          A decision work combines narrative, comparison, evidence, and a
           memorable conclusion. This one exercises tables, links, and images.
           ---
           # The decision in one sentence
@@ -443,7 +443,7 @@ module Presentations
 
           The [Elef project documentation](https://example.com/elef) should
           answer implementation questions without forcing the reader to infer
-          which choice the deck recommends.
+          which choice the work recommends.
           ---
           # Use images as evidence
 
@@ -493,7 +493,7 @@ module Presentations
           # Stress testing the document boundary
 
           Real documents contain punctuation, fences, long lines, metadata, and
-          empty-looking content. This deck makes those cases visible while
+          empty-looking content. This work makes those cases visible while
           keeping every slide useful.
           ---
           # A separator belongs to the document
@@ -529,7 +529,7 @@ module Presentations
           ---
           # Metadata comes before the story
 
-          Front matter configures the deck:
+          Front matter configures the work:
 
           - `theme: light`
           - `elefSampleId: slide-edge-cases`
@@ -585,7 +585,7 @@ module Presentations
           # From source to stage
 
           A complete Elef workflow turns a Markdown document into a reviewable,
-          presentable deck without losing the source that created it.
+          presentable work without losing the source that created it.
           ---
           # 1. Start with intent
 
@@ -632,7 +632,7 @@ module Presentations
 
           The browser flow should answer:
 
-          1. Can a person create a deck?
+          1. Can a person create a work?
           2. Can they save and reopen it?
           3. Does presentation mode navigate correctly?
           4. Does a failed save preserve their source?
@@ -640,12 +640,12 @@ module Presentations
           # 7. Present the decision
 
           Presentation mode removes editor chrome and keeps attention on the
-          rendered deck. Keyboard navigation makes the common path fast.
+          rendered presentation. Keyboard navigation makes the common path fast.
           ---
           # 8. Learn from the result
 
           A seed library makes these checks repeatable. When a renderer changes,
-          representative decks reveal whether the change improves or regresses
+          representative works reveal whether the change improves or regresses
           real content.
           ---
           # The workflow is a loop
@@ -670,7 +670,7 @@ module Presentations
           ---
           # Renderer stress test
 
-          This deliberate kitchen-sink deck combines the Markdown, layout, code,
+          This deliberate kitchen-sink work combines the Markdown, layout, code,
           math, table, link, image, and boundary patterns most likely to expose
           regressions.
           ---

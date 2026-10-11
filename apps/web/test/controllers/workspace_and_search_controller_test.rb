@@ -29,7 +29,7 @@ class WorkspaceAndSearchControllerTest < ActionDispatch::IntegrationTest
     renamed.update!(title: "Current planning notes")
     heading = Document.create!(title: "Field notebook", source: "# Remote yearbook\n\nDetails from the trip")
     document = Document.create!(title: "Field archive", source: "# Field archive\n\nA distinctive\nbody phrase")
-    presentation = Presentation.create!(title: "Search deck", source: "# Search deck\n\nA distinctive\nbody phrase")
+    presentation = Presentation.create!(title: "Search work", source: "# Search work\n\nA distinctive\nbody phrase")
 
     get search_path, params: { q: "Historical" }, as: :json
     assert_response :success

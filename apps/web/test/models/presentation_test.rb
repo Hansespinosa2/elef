@@ -87,8 +87,8 @@ class PresentationTest < ActiveSupport::TestCase
     # Quotes and trailing "# ..." comments are stripped before matching.
     assert_equal "dark", theme.call('"dark"')
     assert_equal "light", theme.call("'light'")
-    assert_equal "dark", theme.call("dark # deck theme")
-    assert_equal 'dark', theme.call('"dark" # deck theme')
+    assert_equal "dark", theme.call("dark # work theme")
+    assert_equal 'dark', theme.call('"dark" # work theme')
     assert_equal "modern", typography.call("'modern'")
     assert_equal "modern", typography.call("modern # body text")
 
@@ -321,7 +321,7 @@ class PresentationTest < ActiveSupport::TestCase
   test "builds an ephemeral editor map with UTF-16 ranges and known directives" do
     source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::align{middle center}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
 
-    map = Source::Document.editor_map(source, source_name: "Deck", mode: :presentation)
+    map = Source::Document.editor_map(source, source_name: "Work", mode: :presentation)
 
     assert_equal 1, map[:version]
     assert_equal "presentation", map[:mode]
@@ -639,7 +639,7 @@ class PresentationTest < ActiveSupport::TestCase
   end
 
   test "resolves media blobs and converts markdown to portable asset paths" do
-    presentation = Presentation.create!(title: "Portable Deck", source: "# Start")
+    presentation = Presentation.create!(title: "Portable Work", source: "# Start")
     bytes = "image data".b
     presentation.assets.attach(io: StringIO.new(bytes), filename: "photo.png", content_type: "image/png")
     blob = presentation.assets.blobs.last

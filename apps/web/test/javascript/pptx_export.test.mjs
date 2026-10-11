@@ -38,9 +38,9 @@ function slide(overrides = {}) {
 
 function model(overrides = {}) {
   return {
-    filename: "deck.pptx",
+    filename: "work.pptx",
     version: 3,
-    presentation: { title: "Deck", theme: "dark", typography: "editorial", fonts: { body: "Body, serif", editorial: "Editorial, serif", technical: "Technical, serif" } },
+    presentation: { title: "Work", theme: "dark", typography: "editorial", fonts: { body: "Body, serif", editorial: "Editorial, serif", technical: "Technical, serif" } },
     margin_settings: {},
     slides: [],
     ...overrides
@@ -70,13 +70,13 @@ test("createPresentation configures layout, metadata, and theme fonts", () => {
   built.author = "Elef"
 
   assert.deepEqual(calls, [["defineLayout", { name: "ELEF_16_9", width: 40 / 3, height: 7.5 }]])
-  assert.equal(built.subject, "Deck · 3")
-  assert.equal(built.title, "Deck")
+  assert.equal(built.subject, "Work · 3")
+  assert.equal(built.title, "Work")
   assert.equal(built.company, "Elef")
   assert.deepEqual(built.theme, { headFontFace: "Editorial", bodyFontFace: "Body", lang: "en-US" })
 
   const technical = createPresentation(model({
-    presentation: { title: "Deck", theme: "dark", typography: "technical", fonts: { body: "Body, serif", editorial: "Editorial, serif", technical: "Technical, serif" } }
+    presentation: { title: "Work", theme: "dark", typography: "technical", fonts: { body: "Body, serif", editorial: "Editorial, serif", technical: "Technical, serif" } }
   }))
   assert.equal(technical.theme.headFontFace, "Technical")
 })

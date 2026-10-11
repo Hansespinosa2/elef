@@ -125,7 +125,7 @@ class DocumentLinksTest < ActiveSupport::TestCase
   test "document titles are unique without constraining presentation titles" do
     Document.create!(title: "Shared title", source: "# Notes")
     duplicate = Document.new(title: "Shared title", source: "# Other")
-    presentation = Presentation.new(title: "Shared title", source: "# Deck")
+    presentation = Presentation.new(title: "Shared title", source: "# Work")
 
     refute duplicate.valid?
     assert_includes duplicate.errors[:title], "has already been taken"

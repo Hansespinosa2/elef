@@ -82,7 +82,7 @@ class WorkSearchTest < ActiveSupport::TestCase
 
   test "filters by work type using singular or plural names" do
     doc = Document.create!(workspace: @workspace, title: "Shared Topic Doc", source: "# Source\n\nContent")
-    pres = Presentation.create!(workspace: @workspace, title: "Shared Topic Deck", source: "# Source\n\nContent")
+    pres = Presentation.create!(workspace: @workspace, title: "Shared Topic Work", source: "# Source\n\nContent")
 
     assert_equal 2, WorkSearch.call("Shared Topic", workspace: @workspace).length
     assert_equal [doc.id], WorkSearch.call("Shared Topic", workspace: @workspace, type: "document").map { |r| r[:id] }

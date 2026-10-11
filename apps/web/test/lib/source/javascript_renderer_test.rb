@@ -38,7 +38,7 @@ class SourceJavascriptRendererTest < ActiveSupport::TestCase
       )
       actual = Source::JavascriptRenderer.editor_preview(
         input.fetch("source"), kind: input.fetch("kind"), title: input.fetch("title"),
-        deck_id: input.fetch("deckId", ""),
+        work_id: input.fetch("workId", ""),
         media_resolver: resolver,
         document_nodes: input.fetch("documentNodes", []),
         style: input.fetch("style", {}), margin_settings: input.fetch("marginSettings", {}),

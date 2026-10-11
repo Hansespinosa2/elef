@@ -236,7 +236,7 @@ class PresentationsTest < ApplicationSystemTestCase
     wait_for_fresh_projection
 
     assert_selector ".slide-statement .slide-block.position-center.position-middle", text: "Designing a visual system"
-    assert_selector ".slide-statement .slide-block.position-center.position-top", text: /This deck exercises automatic layouts/
+    assert_selector ".slide-statement .slide-block.position-center.position-top", text: /This work exercises automatic layouts/
 
     find("select[data-presentation-editor-align][data-slide-index='2'][data-block-index='0']").select("Right")
     assert_field "Markdown source", with: /:::align\{right\}\n\n# Establish a visual contract/, wait: 5
@@ -256,7 +256,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     source = find_field("Markdown source").value
     assert_includes source, ":::align{bottom right}\n# Designing a visual system"
-    assert_includes source, ":::align {center}\nThis deck exercises automatic layouts"
+    assert_includes source, ":::align {center}\nThis work exercises automatic layouts"
     refute_includes source, "New block"
   end
 
@@ -288,7 +288,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "library previews preserve geometry and open document and presentation surfaces" do
     document = Document.create!(title: "Card document", source: "# Card document\n\nFirst page body.\n\n## Later heading")
-    presentation = Presentation.create!(title: "Card deck", source: "# Card deck\n\n---\n\n## Later slide")
+    presentation = Presentation.create!(title: "Card work", source: "# Card work\n\n---\n\n## Later slide")
 
     visit root_path
 
@@ -332,12 +332,12 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_current_path root_path
     within("#presentation_#{presentation.id}") { find(".library-card-preview-button").click }
     assert_current_path presentation_path(presentation)
-    assert_selector ".presentation-surface .slide", text: "Card deck"
+    assert_selector ".presentation-surface .slide", text: "Card work"
   end
 
   test "library menus open for document and presentation cards" do
     document = Document.create!(title: "Menu document", source: "# Menu document")
-    presentation = Presentation.create!(title: "Menu deck", source: "# Menu deck")
+    presentation = Presentation.create!(title: "Menu work", source: "# Menu work")
 
     visit root_path
     [document, presentation].each do |work|
@@ -354,7 +354,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "library card open buttons and titles open their edit screens" do
     document = Document.create!(title: "Open document", source: "# Open document")
-    presentation = Presentation.create!(title: "Open deck", source: "# Open deck")
+    presentation = Presentation.create!(title: "Open work", source: "# Open work")
 
     visit root_path
     find("#document_#{document.id} .library-card-open").click
@@ -504,7 +504,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "keeps the presentation editor usable at desktop and narrow widths" do
-    presentation = Presentation.create!(title: "Responsive deck", source: "# Responsive deck\n\nBody")
+    presentation = Presentation.create!(title: "Responsive work", source: "# Responsive work\n\nBody")
 
     visit edit_presentation_path(presentation)
 
@@ -566,7 +566,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "visual presentation editing updates source and known slide operations" do
-    presentation = Presentation.create!(title: "Visual deck", source: "# First\n\nBody\n---\n# Second\n\nOther")
+    presentation = Presentation.create!(title: "Visual work", source: "# First\n\nBody\n---\n# Second\n\nOther")
 
     visit edit_presentation_path(presentation)
 
@@ -1044,7 +1044,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "visual presentation edits preserve formatted headings and LaTeX" do
     presentation = Presentation.create!(
       title: "Preserved syntax",
-      source: "# **Styled** deck\n\nBefore $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after."
+      source: "# **Styled** work\n\nBefore $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after."
     )
 
     visit edit_presentation_path(presentation)
@@ -1056,7 +1056,7 @@ class PresentationsTest < ApplicationSystemTestCase
       else heading.textContent = heading.textContent.replace('Styled', 'Visual');
       heading.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Visual' }));
     JAVASCRIPT
-    assert_field "Markdown source", with: "# **Visual** deck\n\nBefore $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
+    assert_field "Markdown source", with: "# **Visual** work\n\nBefore $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
     page.execute_script("document.activeElement.blur()")
     wait_for_fresh_projection
 
@@ -1069,12 +1069,12 @@ class PresentationsTest < ApplicationSystemTestCase
       node.textContent = node.textContent.replace('Before ', 'After ');
       block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'After' }));
     JAVASCRIPT
-    assert_field "Markdown source", with: "# **Visual** deck\n\nAfter $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
+    assert_field "Markdown source", with: "# **Visual** work\n\nAfter $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
   end
 
   test "latex visual mode enter and exit flow in presentation block" do
     presentation = Presentation.create!(
-      title: "Math deck",
+      title: "Math work",
       source: "# Slide\n\nInitial text"
     )
 
@@ -1295,7 +1295,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "visual presentation editing keeps tables and media as Markdown structures" do
     presentation = Presentation.create!(
-      title: "Rich deck",
+      title: "Rich work",
       source: "# Rich\n\nA **message**.\n\n| Name | Value |\n| --- | --- |\n| One | Two |\n\n![Old alt](/icon.svg)"
     )
 
@@ -1353,7 +1353,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "visual presentation controls reorder blocks and slides without losing source text" do
     presentation = Presentation.create!(
-      title: "Structural deck",
+      title: "Structural work",
       source: "# First\n\nFirst block\n\nSecond block\n---\n# Second\n\nOther block"
     )
 
@@ -1429,7 +1429,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "keeps the last good presentation projection when preview is unavailable and offers retry" do
-    presentation = Presentation.create!(title: "Stable deck", source: "# Stable\n\nLast good slide")
+    presentation = Presentation.create!(title: "Stable work", source: "# Stable\n\nLast good slide")
     visit edit_presentation_path(presentation)
     assert_selector ".presentation-editor-projection .slide", text: "Last good slide"
 
@@ -1461,7 +1461,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "overview edits source ranges safely and slide operations undo as one edit" do
-    original = "---\r\ntitle: Deck\r\n---\r\n# Café 😀\r\n\r\n```md\r\n---\r\n```\r\n---\r\n# Second\r\n---\r\n# Third"
+    original = "---\r\ntitle: Work\r\n---\r\n# Café 😀\r\n\r\n```md\r\n---\r\n```\r\n---\r\n# Second\r\n---\r\n# Third"
     presentation = Presentation.create!(title: "Overview operations", source: original)
 
     visit edit_presentation_path(presentation)
@@ -1476,7 +1476,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".slide-overview-actions button:not([disabled])", minimum: 1, wait: 8
 
     source = page.evaluate_script("document.querySelector('.source-field').editorController.value")
-    assert source.start_with?("---\ntitle: Deck\n---\n")
+    assert source.start_with?("---\ntitle: Work\n---\n")
     assert_includes source, "```md\n---\n```"
     assert_operator source.index("# Third"), :<, source.rindex("# Second"), source
 
@@ -1492,7 +1492,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal before_add, page.evaluate_script("document.querySelector('.source-field').editorController.value")
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 8
     assert_equal before_add, presentation.reload.source.gsub(/\r\n|\r/, "\n")
-    assert presentation.source.start_with?("---\r\ntitle: Deck\r\n---\r\n")
+    assert presentation.source.start_with?("---\r\ntitle: Work\r\n---\r\n")
   end
 
   test "overflow warnings update after editing and media picker insertion uses canonical asset references" do
@@ -1763,7 +1763,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "failed autosave can be retried and validation errors preserve saved source" do
-    presentation = Presentation.create!(title: "Retry deck", source: "# Original")
+    presentation = Presentation.create!(title: "Retry work", source: "# Original")
     visit edit_presentation_path(presentation)
     page.execute_script(<<~JAVASCRIPT)
       const originalFetch = window.fetch.bind(window);
@@ -1783,7 +1783,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     fill_in "Title", with: "x" * 121
     assert_selector '[data-autosave-target="status"]', text: "Save failed"
-    assert_equal "Retry deck", presentation.reload.title
+    assert_equal "Retry work", presentation.reload.title
     fill_in "Title", with: "Valid title"
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved"
     assert_equal "Valid title", presentation.reload.title
@@ -2068,7 +2068,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "preserves a 16:9 slide surface across views" do
-    parent = Presentation.create!(title: "Ratio deck", source: "# First slide\n\nContent\n---\n# Second slide")
+    parent = Presentation.create!(title: "Ratio work", source: "# First slide\n\nContent\n---\n# Second slide")
     child = parent.fork_as("continuation")
     child.save!
 
@@ -2121,7 +2121,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "presentation list styling applies inside the presentation surface" do
-    presentation = Presentation.create!(title: "Scoped Deck", source: "# Scoped\n\n- One\n- Two")
+    presentation = Presentation.create!(title: "Scoped Work", source: "# Scoped\n\n- One\n- Two")
 
     visit presentation_path(presentation)
     assert_selector ".presentation-surface"
@@ -2157,7 +2157,7 @@ class PresentationsTest < ApplicationSystemTestCase
       click_on "Presentation"
     end
 
-    fill_in "Title", with: "System Deck"
+    fill_in "Title", with: "System Work"
     source = "# First\n\nBody\n---\n# Second"
     find("summary.editor-reveal-metadata", text: "Appearance").click
     select "Book", from: "Typography"
@@ -2171,7 +2171,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".editor-projection .slide", count: 2
 
     click_on "Library"
-    click_on "System Deck"
+    click_on "System Work"
     assert_field "Markdown source", with: normalized_source
   end
 
@@ -2193,7 +2193,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "dirty source warns before navigation and cancel preserves edits" do
-    presentation = Presentation.create!(title: "Dirty Deck", source: "# Saved")
+    presentation = Presentation.create!(title: "Dirty Work", source: "# Saved")
 
     visit edit_presentation_path(presentation)
     hold_autosaves
@@ -2389,7 +2389,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "inserts a fuzzy snippet and moves through its placeholder" do
     Snippet.create!(name: "Block equation", trigger: "beq", description: "A block LaTeX equation", category: "LaTeX", body: "$$\n${1:equation}\n$$")
-    presentation = Presentation.create!(title: "Snippet deck", source: "# Math\n\n/")
+    presentation = Presentation.create!(title: "Snippet work", source: "# Math\n\n/")
 
     visit edit_presentation_path(presentation)
     click_on "Source"

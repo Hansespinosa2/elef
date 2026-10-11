@@ -6,7 +6,7 @@ import { buildPreviewRequestBody } from "@elef/editor-runtime/test-internals"
 test("preview requests include only Rails preview attributes, not the full editor form", () => {
   const { document } = parseHTML(`<form>
     <textarea name="presentation[source]"></textarea>
-    <input name="presentation[title]" value="Deck title">
+    <input name="presentation[title]" value="Work title">
     <select name="presentation[theme]"><option value="dark" selected>Dark</option></select>
     <select name="presentation[typography]"><option value="book" selected>Book</option></select>
     <input name="presentation[lock_version]" value="19">
@@ -20,7 +20,7 @@ test("preview requests include only Rails preview attributes, not the full edito
 
   assert.deepEqual([...body.entries()], [
     ["presentation[source]", "# Current source"],
-    ["presentation[title]", "Deck title"],
+    ["presentation[title]", "Work title"],
     ["presentation[theme]", "dark"],
     ["presentation[typography]", "book"]
   ])

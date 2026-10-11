@@ -149,7 +149,7 @@ test("shared editor view configures document-only links and media controls", () 
   assert.equal(root.querySelector("[data-editor-target='sourceButton']").getAttribute("aria-pressed"), "true")
 })
 
-test("shared view writes deck text as text and disables document links in presentations", () => {
+test("shared view writes work text as text and disables document links in presentations", () => {
   const { root } = mount({
     kind: "presentation",
     mode: "source",
@@ -164,7 +164,7 @@ test("shared view writes deck text as text and disables document links in presen
   assert.equal(root.querySelector("[data-editor-view-target='mediaInput']").getAttribute("accept"), "image/*,video/mp4")
 })
 
-test("switching deck kinds updates the shared editor controls and controller targets", () => {
+test("switching work kinds updates the shared editor controls and controller targets", () => {
   const { document, root } = mount({ kind: "presentation", mode: "source" })
   const form = document.querySelector("form")
 
@@ -217,7 +217,7 @@ test("a successful preview enables visual mode even when the original refresh ca
   assert.equal(button.disabled, true)
   assert.equal(enableVisualModeAfterPreview(root, { response: { ok: true }, payload: { html: "" } }), true)
   assert.equal(button.disabled, false)
-  assert.equal(button.title, "Edit the rendered deck visually")
+  assert.equal(button.title, "Edit the rendered Work visually")
 })
 
 test("failed or incomplete previews leave visual mode disabled", () => {

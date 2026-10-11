@@ -23,7 +23,7 @@ const AutofocusController = await loadController("autofocus")
 const PrintViewController = await loadController("print_view")
 
 test("dirty state keeps newer edits dirty when an older save completes", () => {
-  const fields = [{ value: "Deck" }, { value: "# Original" }]
+  const fields = [{ value: "Work" }, { value: "# Original" }]
   const statusTarget = { textContent: "" }
   const saveButtonTarget = { disabled: true }
   const windowListeners = new Map()
@@ -59,7 +59,7 @@ test("dirty state keeps newer edits dirty when an older save completes", () => {
     fields[1].value = "# Newer edit"
     controller.markDirty()
 
-    controller.markSaved({ detail: { snapshot: "Deck\u001f# First edit" } })
+    controller.markSaved({ detail: { snapshot: "Work\u001f# First edit" } })
     assert.equal(controller.dirty, true)
     assert.equal(statusTarget.textContent, "Unsaved changes")
 

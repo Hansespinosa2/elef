@@ -388,7 +388,7 @@ class VimEditorTest < ApplicationSystemTestCase
   end
 
   test "Vim edits update a presentation preview and autosave" do
-    presentation = Presentation.create!(title: "Vim deck", source: "# Original")
+    presentation = Presentation.create!(title: "Vim work", source: "# Original")
     visit settings_path
     find("#vim-enabled").check
 

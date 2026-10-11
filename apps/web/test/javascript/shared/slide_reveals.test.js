@@ -49,7 +49,7 @@ for (const fixture of fixtures) {
   })
 }
 
-test("a no-step nested-colon deck keeps blocks bound and applies position defaults", () => {
+test("a no-step nested-colon work keeps blocks bound and applies position defaults", () => {
   const rendered = renderPreview({ source: nestedColonBaseline.source })
   const { document } = parseHTML(`<html><body>${rendered.html}</body></html>`)
   const blocks = [...document.querySelectorAll(".slide-block")]

@@ -32,9 +32,9 @@ class SourceDocumentTest < ActiveSupport::TestCase
   end
 
   test "theme_from_source strips a trailing comment introduced by whitespace" do
-    assert_equal "dark", Source::Document.theme_from_source("---\ntheme: dark # deck theme\n---\n# Title")
-    assert_equal "dark", Source::Document.theme_from_source("---\ntheme: \"dark\" # deck theme\n---\n# Title")
-    assert_equal "dark", Source::Document.theme_from_source("---\ntheme:   dark   \t# deck theme\n---\n# Title")
+    assert_equal "dark", Source::Document.theme_from_source("---\ntheme: dark # work theme\n---\n# Title")
+    assert_equal "dark", Source::Document.theme_from_source("---\ntheme: \"dark\" # work theme\n---\n# Title")
+    assert_equal "dark", Source::Document.theme_from_source("---\ntheme:   dark   \t# work theme\n---\n# Title")
   end
 
   test "typography_from_source strips a trailing comment introduced by whitespace" do

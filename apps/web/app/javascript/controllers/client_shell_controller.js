@@ -121,7 +121,7 @@ export default class extends Controller {
   }
 
   // The document graph renders through the shared client module from the
-  // server-computed graph payload. No onOpenDeck hook: node anchors keep
+  // server-computed graph payload. No onOpenWork hook: node anchors keep
   // their server URLs and navigate natively (Turbo intercepts them),
   // exactly like the retired Stimulus controller's links.
   mountGraph() {

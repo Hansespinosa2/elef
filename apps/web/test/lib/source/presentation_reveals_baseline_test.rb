@@ -3,7 +3,7 @@ require "test_helper"
 class PresentationRevealsBaselineTest < ActiveSupport::TestCase
   BASELINE_PATH = Rails.root.join("test/javascript/fixtures/slide-reveals-no-step-baseline.json")
 
-  test "an unchanged reveal deck gets explicit position defaults and retains its editor map" do
+  test "an unchanged reveal work gets explicit position defaults and retains its editor map" do
     baseline = JSON.parse(File.read(BASELINE_PATH), symbolize_names: true)
     document = Source::Document.parse(baseline.fetch(:source), source_name: "Reveal baseline", mode: :presentation)
     presentation = Struct.new(:id, :slides).new(nil, document.slides)
@@ -90,7 +90,7 @@ class PresentationRevealsBaselineTest < ActiveSupport::TestCase
     assert block.at_css(".elef-art-list")
   end
 
-  test "Rails Present keeps nested literal colons visible on a no-step deck" do
+  test "Rails Present keeps nested literal colons visible on a no-step work" do
     baseline = JSON.parse(File.read(Rails.root.join("test/javascript/fixtures/slide-reveals-nested-colon-baseline.json")))
     assert_equal baseline.fetch("editor_map"), Source::Document.editor_map(
       baseline.fetch("source"),

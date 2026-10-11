@@ -3,7 +3,7 @@ require "test_helper"
 class LibraryControllerTest < ActionDispatch::IntegrationTest
   test "root mounts the client shell with presentation actions" do
     Document.create!(title: "Root notes", source: "# Root notes")
-    Presentation.create!(title: "Root deck", source: "# Root deck")
+    Presentation.create!(title: "Root work", source: "# Root work")
 
     get root_path
 
@@ -51,13 +51,13 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     assert_select "template[data-client-slot='lineage'] .lineage-panel", 1
     assert_select "template[data-client-slot='graph'] .document-graph-panel", count: 0
     notes = JSON.parse(css_select("#client-shell-mount").first["data-client-shell-card-notes-value"])
-    assert_equal "Forked from Demo Deck · continuation", notes.fetch(fork.id.to_s)
+    assert_equal "Forked from Demo Work · continuation", notes.fetch(fork.id.to_s)
     assert_select "article.library-card", count: 0
   end
 
   test "search endpoint returns JSON results with type filtering and fallback" do
     doc = Document.create!(title: "Research Alpha", source: "# Alpha notes\n\nContent")
-    pres = Presentation.create!(title: "Deck Alpha", source: "# Alpha deck\n\nContent")
+    pres = Presentation.create!(title: "Work Alpha", source: "# Alpha work\n\nContent")
 
     get search_path, params: { q: "Alpha" }
     assert_response :success
