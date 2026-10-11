@@ -1,0 +1,12 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "macos-updater-capability",
+  "description": "Signed update checks and safe-quit activation on Stable macOS only. Linux never receives these permissions: the package manager owns installation there, so the updater boundary is enforcement-by-capability (plus cfg-gated native commands), not compile-time removal.",
+  "windows": ["main"],
+  "platforms": ["macOS"],
+  "permissions": [
+    "allow-install-update",
+    "updater:allow-check",
+    "process:allow-restart"
+  ]
+}

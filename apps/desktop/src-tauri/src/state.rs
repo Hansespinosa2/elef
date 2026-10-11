@@ -14,6 +14,10 @@ pub(crate) struct DesktopState {
     pub(crate) root: RwLock<Option<PathBuf>>,
     pub(crate) pending_import: std::sync::Mutex<Option<PendingImport>>,
     pub(crate) open_files: std::sync::Mutex<VecDeque<PathBuf>>,
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     pub(crate) update_installing: std::sync::atomic::AtomicBool,
     pub(crate) app_ready: std::sync::atomic::AtomicBool,
 }

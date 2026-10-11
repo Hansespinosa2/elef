@@ -3,18 +3,21 @@
   "app": {
     "withGlobalTauri": true,
     "security": {
-      "capabilities": ["main-capability", "e2e-stable-webdriver"]
+      "capabilities": ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"]
     }
   },
   "build": {
     "frontendDist": "../frontend/dist-e2e-stable"
   },
   "bundle": {
-    "targets": ["app", "dmg"]
+    "targets": ["app", "dmg"],
+    "macOS": {
+      "signingIdentity": "-"
+    }
   },
   "plugins": {
     "updater": {
-      "endpoints": ["http://127.0.0.1:9/stable-manifest"],
+      "endpoints": ["http://127.0.0.1:8888/manifest"],
       "requireSignedVersion": true,
       "dangerousInsecureTransportProtocol": true
     }

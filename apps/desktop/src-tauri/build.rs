@@ -30,7 +30,6 @@ fn main() {
                 "import_opened_elef",
                 "pending_open_elef_count",
                 "resolve_import_conflict",
-                "install_update",
                 "confirm_app_ready",
                 "confirm_discard_unsaved_changes",
                 "export_diagnostics",
@@ -44,14 +43,29 @@ fn main() {
     // document graph never ships without the desktop-dev feature. The
     // architecture checker asserts this split: the macro base matches the
     // production capability, document_graph matches only the Dev capability,
-    // and the fixture matches only the E2E capabilities.
+    // install_update matches only the macOS updater capability plus the Dev
+    // WebDriver harness, and the fixture matches only the E2E capabilities.
     let desktop_dev = std::env::var_os("CARGO_FEATURE_DESKTOP_DEV").is_some();
     let webdriver = std::env::var_os("CARGO_FEATURE_WEBDRIVER").is_some();
-    let app_commands: &'static [&'static str] = match (desktop_dev, webdriver) {
-        (true, true) => command_list!("document_graph", "export_diagnostics_fixture"),
-        (true, false) => command_list!("document_graph"),
-        (false, true) => command_list!("export_diagnostics_fixture"),
-        (false, false) => command_list!(),
+    let target_os = std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
+    let has_update_command = target_os == "macos" || (desktop_dev && webdriver);
+    let app_commands: &'static [&'static str] = match (desktop_dev, has_update_command, webdriver) {
+        (true, true, true) => {
+            command_list!(
+                "document_graph",
+                "install_update",
+                "export_diagnostics_fixture"
+            )
+        }
+        (true, true, false) => command_list!("document_graph", "install_update"),
+        (true, false, true) => command_list!("document_graph", "export_diagnostics_fixture"),
+        (true, false, false) => command_list!("document_graph"),
+        (false, true, true) => {
+            command_list!("install_update", "export_diagnostics_fixture")
+        }
+        (false, true, false) => command_list!("install_update"),
+        (false, false, true) => command_list!("export_diagnostics_fixture"),
+        (false, false, false) => command_list!(),
     };
     let attributes = tauri_build::Attributes::new()
         .app_manifest(tauri_build::AppManifest::new().commands(app_commands));

@@ -1,15 +1,40 @@
 #[cfg(target_os = "macos")]
 use std::path::Path;
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 use std::path::PathBuf;
 
 use local_store::diagnostics::{EventCode, EventResult};
-#[cfg(target_os = "linux")]
+#[cfg(all(target_os = "linux", feature = "desktop-dev", feature = "webdriver"))]
 use tauri::Manager;
 use tauri::{AppHandle, State};
+// The install path compiles only where the updater boundary allows it:
+// macOS, or the Dev WebDriver harness that exercises the loopback fixture.
+// Linux Stable never compiles install code; its capability denies the
+// command as well (enforcement-by-capability plus cfg, not either alone).
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 use tauri_plugin_dialog::MessageDialogKind;
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 use tauri_plugin_updater::UpdaterExt;
 
-use crate::diagnostics::{record_bool_command_result, record_diagnostic};
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+use crate::diagnostics::record_bool_command_result;
+use crate::diagnostics::record_diagnostic;
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 use crate::dialogs::confirm_native_action;
 use crate::error::CommandError;
 use crate::state::DesktopState;
@@ -53,6 +78,12 @@ pub(crate) async fn confirm_app_ready(
     {
         return Ok(0);
     }
+    // The readiness ack itself is unconditional (boot depends on it), but
+    // previous-installation cleanup exists only where installs can happen.
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     let removed = if let Ok((live, _)) = installed_application(&app) {
         // Readiness is acknowledged only after successful frontend/editor boot.
         // Failure leaves the previous complete installation available.
@@ -67,18 +98,35 @@ pub(crate) async fn confirm_app_ready(
     } else {
         0
     };
+    #[cfg(not(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    )))]
+    let removed = 0;
     record_diagnostic(&app, EventCode::Startup, EventResult::Success, None);
     Ok(removed)
 }
 
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 struct UpdateLease<'a>(&'a std::sync::atomic::AtomicBool);
 
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 impl Drop for UpdateLease<'_> {
     fn drop(&mut self) {
         self.0.store(false, std::sync::atomic::Ordering::Release);
     }
 }
 
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn validate_update_version(version: &str) -> Result<(), CommandError> {
     if version.len() <= 64
         && !version.is_empty()
@@ -96,6 +144,10 @@ fn validate_update_version(version: &str) -> Result<(), CommandError> {
     }
 }
 
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn acquire_update_lease(
     update_installing: &std::sync::atomic::AtomicBool,
 ) -> Result<UpdateLease<'_>, CommandError> {
@@ -117,9 +169,17 @@ fn acquire_update_lease(
     Ok(UpdateLease(update_installing))
 }
 
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn requested_update_matches(requested: &str, offered: &str) -> bool {
     requested == offered
 }
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 fn installed_application(app: &AppHandle) -> Result<(PathBuf, PathBuf), CommandError> {
     #[cfg(target_os = "linux")]
     if let Some(path) = app.env().appimage {
@@ -156,6 +216,10 @@ fn update_install_error() -> CommandError {
         true,
     )
 }
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 #[tauri::command]
 pub(crate) async fn install_update(
     app: AppHandle,
@@ -168,6 +232,10 @@ pub(crate) async fn install_update(
     result
 }
 
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
 async fn install_update_inner(
     app: AppHandle,
     state: State<'_, DesktopState>,
@@ -179,8 +247,10 @@ async fn install_update_inner(
     let (live, relative_executable) = installed_application(&app)?;
     let confirmed = confirm_native_action(
         &app,
-        format!("Install Elef {version}? Elef will restart after installation."),
-        "Install Elef update",
+        format!(
+            "Install Elef {version}? Your work is saved. Elef will restart after installation."
+        ),
+        "Install Elef update on quit",
         MessageDialogKind::Info,
     )
     .await?;
@@ -239,8 +309,16 @@ async fn install_update_inner(
 
 #[cfg(test)]
 mod tests {
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     use super::*;
 
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     #[test]
     fn update_version_validation_accepts_safe_versions_and_rejects_invalid_input() {
         assert!(validate_update_version("0.2.0").is_ok());
@@ -255,6 +333,10 @@ mod tests {
         assert!(validate_update_version(&"a".repeat(65)).is_err());
     }
 
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     #[test]
     fn update_install_lease_rejects_concurrent_work_and_releases_after_drop() {
         let installing = std::sync::atomic::AtomicBool::new(false);
@@ -267,6 +349,10 @@ mod tests {
         assert!(acquire_update_lease(&installing).is_ok());
     }
 
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     #[test]
     fn update_install_requires_the_checked_release_version_to_match_exactly() {
         assert!(requested_update_matches("0.2.0", "0.2.0"));

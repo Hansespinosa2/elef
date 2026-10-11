@@ -120,6 +120,10 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let minimize = PredefinedMenuItem::minimize(app, None)?;
     let close = PredefinedMenuItem::close_window(app, None)?;
     let window = Submenu::with_items(app, "Window", true, &[&minimize, &close])?;
+    // The update check lives only on Stable macOS: repository Dev and Linux
+    // builds have no updater affordance (Linux upgrades through its package
+    // manager), so a visible menu entry there would be a dead control.
+    #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
     let check_updates = MenuItem::with_id(
         app,
         "check-for-updates",
@@ -135,21 +139,20 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         None::<&str>,
     )?;
     let help_separator = PredefinedMenuItem::separator(app)?;
-    let help = if cfg!(target_os = "macos") {
-        Submenu::with_items(
-            app,
-            "Help",
-            true,
-            &[&check_updates, &help_separator, &export_diagnostics],
-        )?
-    } else {
-        Submenu::with_items(
-            app,
-            "Help",
-            true,
-            &[&about, &settings, &help_separator, &export_diagnostics],
-        )?
-    };
+    #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
+    let help = Submenu::with_items(
+        app,
+        "Help",
+        true,
+        &[&check_updates, &help_separator, &export_diagnostics],
+    )?;
+    #[cfg(not(all(target_os = "macos", not(feature = "desktop-dev"))))]
+    let help = Submenu::with_items(
+        app,
+        "Help",
+        true,
+        &[&about, &settings, &help_separator, &export_diagnostics],
+    )?;
 
     let menu = if cfg!(target_os = "macos") {
         Menu::with_items(

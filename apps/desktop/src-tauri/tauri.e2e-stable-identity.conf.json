@@ -4,7 +4,7 @@
   "app": {
     "withGlobalTauri": true,
     "security": {
-      "capabilities": ["main-capability", "e2e-stable-webdriver"]
+      "capabilities": ["main-capability", "macos-updater-capability", "e2e-stable-webdriver"]
     }
   },
   "build": {

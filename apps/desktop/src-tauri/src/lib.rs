@@ -27,7 +27,12 @@ use crate::library::{
 };
 use crate::menus::build_menu;
 use crate::state::DesktopState;
-use crate::updates::{confirm_app_ready, install_update};
+use crate::updates::confirm_app_ready;
+#[cfg(any(
+    target_os = "macos",
+    all(feature = "desktop-dev", feature = "webdriver")
+))]
+use crate::updates::install_update;
 #[cfg(feature = "desktop-dev")]
 use crate::work_folders::document_graph;
 use crate::work_folders::{
@@ -68,7 +73,6 @@ macro_rules! app_commands {
             import_opened_elef,
             pending_open_elef_count,
             resolve_import_conflict,
-            install_update,
             confirm_app_ready,
             confirm_discard_unsaved_changes,
             export_diagnostics,
@@ -80,15 +84,25 @@ macro_rules! app_commands {
 }
 
 pub fn run(context: tauri::Context<tauri::Wry>) {
+    // Updater and restart plugins exist only where the updater boundary
+    // allows installs: macOS, or the Dev WebDriver harness. Linux Stable
+    // keeps no updater plugin, no install command, and no updater
+    // permissions; its package manager owns upgrades.
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
     let updater = tauri_plugin_updater::Builder::new();
-    #[cfg(feature = "webdriver")]
+    #[cfg(all(
+        feature = "webdriver",
+        any(target_os = "macos", feature = "desktop-dev")
+    ))]
     let updater = match std::env::var("ELEF_E2E_UPDATER_PUBLIC_KEY") {
         Ok(public_key) => updater.pubkey(public_key),
         Err(_) => updater,
     };
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
@@ -98,7 +112,14 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
             if added > 0 {
                 let _ = app.emit("desktop-open-elef", ());
             }
-        }))
+        }));
+
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
+    let builder = builder
+        .plugin(tauri_plugin_process::init())
         .plugin(updater.build());
 
     #[cfg(feature = "webdriver")]
@@ -107,12 +128,46 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
     let builder = builder.plugin(tauri_plugin_wdio::init());
 
     #[cfg(all(feature = "desktop-dev", feature = "webdriver"))]
-    let builder = builder.invoke_handler(app_commands!(document_graph, export_diagnostics_fixture));
-    #[cfg(all(feature = "desktop-dev", not(feature = "webdriver")))]
+    let builder = builder.invoke_handler(app_commands!(
+        document_graph,
+        install_update,
+        export_diagnostics_fixture
+    ));
+    #[cfg(all(
+        feature = "desktop-dev",
+        not(feature = "webdriver"),
+        target_os = "macos"
+    ))]
+    let builder = builder.invoke_handler(app_commands!(document_graph, install_update));
+    #[cfg(all(
+        feature = "desktop-dev",
+        not(feature = "webdriver"),
+        not(target_os = "macos")
+    ))]
     let builder = builder.invoke_handler(app_commands!(document_graph));
-    #[cfg(all(not(feature = "desktop-dev"), feature = "webdriver"))]
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        target_os = "macos",
+        feature = "webdriver"
+    ))]
+    let builder = builder.invoke_handler(app_commands!(install_update, export_diagnostics_fixture));
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        target_os = "macos",
+        not(feature = "webdriver")
+    ))]
+    let builder = builder.invoke_handler(app_commands!(install_update));
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        not(target_os = "macos"),
+        feature = "webdriver"
+    ))]
     let builder = builder.invoke_handler(app_commands!(export_diagnostics_fixture));
-    #[cfg(all(not(feature = "desktop-dev"), not(feature = "webdriver")))]
+    #[cfg(all(
+        not(feature = "desktop-dev"),
+        not(target_os = "macos"),
+        not(feature = "webdriver")
+    ))]
     let builder = builder.invoke_handler(app_commands!());
 
     let app = builder
@@ -147,7 +202,11 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
             let id = event.id().as_ref();
             match id {
                 "open-work" | "refresh-library" | "save" | "export-elef" | "import-elef"
-                | "print" | "settings" | "check-for-updates" | "export-diagnostics" => {
+                | "print" | "settings" | "export-diagnostics" => {
+                    let _ = app.emit("desktop-menu-action", id);
+                }
+                #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
+                "check-for-updates" => {
                     let _ = app.emit("desktop-menu-action", id);
                 }
                 "quit" => {
