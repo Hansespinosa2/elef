@@ -146,7 +146,7 @@ test("ART-EDIT-001: position directive ownership starts before Art", () => {
     art: { source_range: { start: source.indexOf(":::art"), end: source.indexOf("- Alpha") } },
     position_directive_id: "position-1"
   }
-  const slide = { directives: [{ id: "position-1", range: { start: 0 } }] }
+  const slide = { directives: [{ id: "position-1", range: { start: 0, end: ":::position{middle}".length } }] }
 
   assert.equal(blockOperationStart(slide, block), 0)
 })

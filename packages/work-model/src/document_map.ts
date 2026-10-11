@@ -1035,10 +1035,10 @@ function parseBlocks(
   const rawBlocks = markdownBlocks(markdown, artResolution, sourceBoundaryMap)
   if (reveals?.directive_lines.length) return parseBlocksWithReveals(rawBlocks, artResolution, reveals)
 
-  return parseBlocksLegacy(rawBlocks, artResolution)
+  return parseBlocksPlain(rawBlocks, artResolution)
 }
 
-function parseBlocksLegacy(
+function parseBlocksPlain(
   rawBlocks: Array<RawMarkdownBlock>,
   artResolution: ArtBindings
 ): { blocks: ParsedBlock[]; warnings: string[]; reveal_event_count: number } {
