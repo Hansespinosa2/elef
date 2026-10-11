@@ -254,10 +254,9 @@ function startFileLibraryApplication(platform) {
   });
   const bootstrapStages = [];
   const openStageMeasurements = [];
-  function measureBootstrapStage(name, action) {
+  function measureStage(start, action) {
     if (!(typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__)) return action();
-    const startedAt = performance.now();
-    const record = () => bootstrapStages.push({ name, milliseconds: performance.now() - startedAt });
+    const record = start();
     try {
       const result = action();
       if (result && typeof result.then === "function") {
@@ -276,27 +275,17 @@ function startFileLibraryApplication(platform) {
       throw error;
     }
   }
+  function measureBootstrapStage(name, action) {
+    return measureStage(() => {
+      const startedAt = performance.now();
+      return () => bootstrapStages.push({ name, milliseconds: performance.now() - startedAt });
+    }, action);
+  }
   function measureOpenStage(name, action) {
-    if (!(typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__)) return action();
-    const startedAt = performance.now();
-    const record = () => recordOpenStage(name, startedAt);
-    try {
-      const result = action();
-      if (result && typeof result.then === "function") {
-        return result.then((value) => {
-          record();
-          return value;
-        }, (error) => {
-          record();
-          throw error;
-        });
-      }
-      record();
-      return result;
-    } catch (error) {
-      record();
-      throw error;
-    }
+    return measureStage(() => {
+      const startedAt = performance.now();
+      return () => recordOpenStage(name, startedAt);
+    }, action);
   }
   function recordOpenStage(name, startedAt) {
     openStageMeasurements.push({ name, milliseconds: performance.now() - startedAt });

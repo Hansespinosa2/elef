@@ -326,11 +326,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   const bootstrapStages: StageMeasurement[] = []
   const openStageMeasurements: StageMeasurement[] = []
 
-  function measureBootstrapStage(name: string, action: () => any): any {
+  function measureStage(start: () => () => void, action: () => any): any {
     if (!(typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__)) return action()
 
-    const startedAt = performance.now()
-    const record = () => bootstrapStages.push({ name, milliseconds: performance.now() - startedAt })
+    const record = start()
     try {
       const result = action()
       if (result && typeof result.then === "function") {
@@ -344,22 +343,18 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
   }
 
-  function measureOpenStage(name: string, action: () => any): any {
-    if (!(typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__)) return action()
+  function measureBootstrapStage(name: string, action: () => any): any {
+    return measureStage(() => {
+      const startedAt = performance.now()
+      return () => bootstrapStages.push({ name, milliseconds: performance.now() - startedAt })
+    }, action)
+  }
 
-    const startedAt = performance.now()
-    const record = () => recordOpenStage(name, startedAt)
-    try {
-      const result = action()
-      if (result && typeof result.then === "function") {
-        return result.then((value: any) => { record(); return value }, (error: any) => { record(); throw error })
-      }
-      record()
-      return result
-    } catch (error) {
-      record()
-      throw error
-    }
+  function measureOpenStage(name: string, action: () => any): any {
+    return measureStage(() => {
+      const startedAt = performance.now()
+      return () => recordOpenStage(name, startedAt)
+    }, action)
   }
 
   function recordOpenStage(name: string, startedAt: number): void {
