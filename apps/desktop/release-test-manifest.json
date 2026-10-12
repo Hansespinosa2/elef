@@ -1,0 +1,271 @@
+{
+  "schema_version": 1,
+  "status": "IN_PROGRESS",
+  "purpose": "Canonical fixture paths, acceptance commands, expected exit codes, observed results, and invariants for the desktop v0.x release gates.",
+  "validation": {
+    "command": "npm run check:release-fixtures",
+    "expected_exit_code": 0,
+    "observed_exit_code": null
+  },
+  "checks": [
+    {
+      "id": "manifest_integrity",
+      "command": "npm run check:release-fixtures",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "platform": "Linux x86-64",
+      "status": "IN_PROGRESS"
+    },
+    {
+      "id": "source_storage_fixture_round_trip",
+      "command": "cargo test --manifest-path Cargo.toml -p local-store --locked",
+      "test_name": "release_compatibility_fixtures_open_save_and_archive_round_trip_source_bytes",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "platform": "Linux x86-64",
+      "covers": [
+        "basic_document",
+        "basic_presentation",
+        "rich_rendering_media",
+        "historical_file_format",
+        "unknown_directives"
+      ],
+      "status": "IN_PROGRESS"
+    },
+    {
+      "id": "full_web_desktop_parity",
+      "command": "npm test --prefix apps/desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "status": "IN_PROGRESS",
+      "note": "Use the isolated CI harness; this can start Rails on port 3000 and must not run against the user's occupied development endpoint. A failed run records observed_exit_code=1 but remains unverified until all shared scenarios pass."
+    },
+    {
+      "id": "profile_identity_isolation",
+      "command": "npm test --prefix apps/desktop/e2e",
+      "test_name": "Stable and Dev identity probes run concurrently and restore separate persisted library-root.json selections",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "status": "IN_PROGRESS",
+      "platforms": [
+        "Hosted macOS ARM64",
+        "Hosted Linux x86-64"
+      ],
+      "covers": [
+        "pre_release_app_state"
+      ],
+      "note": "The CI harness builds WebDriver-only probes with production Stable and repository Dev identifiers, seeds distinct library selections under the disposable CI home, and launches both apps at once to verify app-data and single-instance isolation."
+    },
+    {
+      "id": "packaged_n_minus_1_to_n_update",
+      "command": "ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix apps/desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "status": "IN_PROGRESS",
+      "note": "On macOS, the harness installs the Dev N-1 bundle, exercises the native install confirmation (cancel then accept) into the installed N, then relaunches and verifies version N with work preservation and receipt-matched backup cleanup; then it mounts and verifies a test-only Stable-profile N-1 DMG using the production com.elef.desktop identifier, installs the app under a disposable test directory, installs the signed stable-package N, and verifies the relaunched N preserves the pre-release library selection bytes and cleans its backup. The loopback feed uses an ephemeral key and is not a public release test. Updates install only during safe ordinary quit; the quit-time activation matrix is pinned by the close-flow unit suite. Linux runs download verification only and has no self-installer."
+    },
+    {
+      "id": "arch_native_package_install_upgrade",
+      "command": "set -o pipefail\nmkdir -p target\ndocker run --rm --pull=always \\\n  --platform linux/amd64 \\\n  --volume \"$GITHUB_WORKSPACE:/workspace\" \\\n  --workdir /workspace \\\n  --env ELEF_BUILD_SHA \\\n  ghcr.io/archlinux/archlinux@sha256:c556b483a8e653aa6389bb66263e1d96cd6e17c67ca5968c87495d313c4a2e93 \\\n  bash apps/desktop/scripts/arch_package_ci.sh 2>&1 | tee target/arch-package-gate.log",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "status": "IN_PROGRESS",
+      "platform": "Arch Linux x86-64 container",
+      "note": "The gate builds separate N-1 and N Tauri executables and versioned tar.zst assets from the same tested source, serves both to unprivileged makepkg, tests both approved package names and package-specific license paths, checks ELF dependencies/ownership, then installs and launches N-1, upgrades to N, rechecks managed-file hashes, and uninstalls. The pinned image digest was verified current on 2026-10-11 (ghcr.io/archlinux/archlinux:latest, linux/amd64). Actual Omarchy acceptance remains separate."
+    },
+    {
+      "id": "diagnostics_privacy",
+      "command": "cargo test --manifest-path Cargo.toml -p local-store diagnostics::tests --locked && ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix apps/desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "platform": "Linux and macOS hosted; packaged Stable ZIP inspection on macOS",
+      "status": "IN_PROGRESS",
+      "supporting_commands": [
+        "npm test --prefix apps/desktop/frontend",
+        "npm run test:unit --prefix apps/desktop/e2e"
+      ],
+      "note": "Core tests cover all eight checked-in sentinels, category sanitization, hostile fields during ZIP export, and bounded rotation. The WebDriver-only fixture sends a hostile typed CommandError containing exception, source, title, filename, path, token, secret, and IPC-payload sentinels through the production allowlisted event writer before ZIP export. Frontend tests verify preview/bootstrap callbacks pass only fixed command names and never forward exceptions. Native WebDriver runs exercise no-payload render/startup failure commands, then verify every event code and absence of every sentinel. Import failures are logged for menu, OS-open and conflict-resolution commands and a sanitized import failure is included in the archive fixture. Hosted verification of the hostile writer path, import event, and packaged Stable archive remains pending."
+    }
+  ],
+  "package_pair_generator": {
+    "command": "node apps/desktop/e2e/build-update-fixtures.mjs",
+    "expected_exit_code": 0,
+    "generated_paths": [
+      "target/e2e-packages/n-1",
+      "target/e2e-packages/n",
+      "target/e2e-packages/update.tar.gz",
+      "target/e2e-packages/stable-n-1/Elef-0.1.0.dmg",
+      "target/e2e-packages/stable-update.tar.gz"
+    ],
+    "status": "IN_PROGRESS",
+    "observed_exit_code": null,
+    "limitation": "On macOS the generator also creates a Stable-profile test DMG and updater archive; those use the production Stable identifier but an ephemeral updater key and loopback feed. They do not establish that production signing secrets, public publication or a physical Mac rehearsal are available. Linux builds no install fixtures and runs download verification only against the fixture server's in-memory signed bytes; the Arch package lifecycle is exercised separately by arch_native_package_install_upgrade."
+  },
+  "fixtures": [
+    {
+      "id": "basic_document",
+      "paths": [
+        "apps/web/test/fixtures/desktop/release/basic-document.md"
+      ],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "npm test --prefix apps/desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": [
+        "Create, edit, save, close, and reopen without source loss.",
+        "Source round-trips byte-for-byte, including front matter and [[...]] syntax."
+      ]
+    },
+    {
+      "id": "basic_presentation",
+      "paths": [
+        "apps/web/test/fixtures/desktop/release/basic-presentation.md"
+      ],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "npm test --prefix apps/desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": [
+        "Create, edit, save, close, reopen, and present.",
+        "Source round-trips byte-for-byte, including ordinary Markdown and literal document-link syntax."
+      ]
+    },
+    {
+      "id": "rich_rendering_media",
+      "paths": [
+        "apps/web/test/fixtures/desktop/release/rich-rendering-media.md",
+        "apps/web/test/fixtures/desktop/release/images/release-pixel.png"
+      ],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "npm test --prefix apps/desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": [
+        "Preview and presentation retain theme, typography, math, Mermaid, Art, and local media.",
+        "The complete intended edit is present in persisted source; the post-save source bytes remain identical across close/reopen.",
+        "Export/import preserves source and media bytes."
+      ],
+      "note": "The web, native desktop, and Stable offline smoke load this exact source and image and inspect preview/presentation rendering. The rich edit asserts persisted content matches the intended edit; the resulting raw persisted bytes are then compared exactly after close/reopen. Fixture cleanup compares source content after the editor applies its current line separator. The Rust archive fixture test separately verifies original source and image bytes through .elef export/import. Hosted runtime validation remains pending."
+    },
+    {
+      "id": "historical_file_format",
+      "paths": [
+        "apps/web/test/fixtures/desktop/release/historical-no-manifest/Legacy presentation/talk.md"
+      ],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "cargo test --manifest-path Cargo.toml -p local-store --locked",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": [
+        "A pre-manifest work folder with a noncanonical top-level Markdown filename opens.",
+        "Compatible open/save/export/import preserves the exact Markdown bytes."
+      ]
+    },
+    {
+      "id": "unknown_directives",
+      "paths": [
+        "apps/web/test/fixtures/desktop/release/unknown-directives.md"
+      ],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "npm test --prefix apps/desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": [
+        "Stable does not activate excluded document linking for [[...]].",
+        "Unsupported directive text survives compatible save and .elef round-trip byte-for-byte."
+      ],
+      "note": "Stable runtime loads this exact fixture, verifies literal [[...]] and ordinary Markdown links, edits/saves/reopens it, exports .elef, and compares the archive source bytes. The Rust archive fixture test verifies import/export of the original unknown-directive source. Hosted Stable execution remains pending."
+    },
+    {
+      "id": "pre_release_app_state",
+      "paths": [
+        "apps/web/test/fixtures/desktop/release/pre-release-app-state/library-root.json.template",
+        "apps/web/test/fixtures/desktop/release/pre-release-app-state/Selected library/Legacy presentation/presentation.md",
+        "apps/web/test/fixtures/desktop/release/pre-release-app-state/Selected library/Legacy presentation/elef.json"
+      ],
+      "path_substitutions": {
+        "${ELEF_RELEASE_FIXTURE_LIBRARY_ROOT}": "a disposable absolute test-library directory"
+      },
+      "status": "IN_PROGRESS",
+      "acceptance_command": "cargo test --manifest-path Cargo.toml -p elef-desktop --lib --locked pre_release_app_state_fixture_restores_existing_library_without_resetting_selection",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": [
+        "The prior Stable app-data/library-root.json format points at the fixture library.",
+        "The existing path, work identity, and source remain unchanged when the selected library is restored.",
+        "Packaged upgrade/relaunch preservation remains a separate acceptance check."
+      ]
+    },
+    {
+      "id": "dirty_save_conflict",
+      "paths": [
+        "apps/web/test/fixtures/desktop/release/dirty-save-conflict.json"
+      ],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "npm test --prefix apps/desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": [
+        "The shared web/desktop conflict scenario seeds from this fixture.",
+        "Stale save does not overwrite external bytes.",
+        "Local unsaved text remains available while conflict resolution is pending.",
+        "Unsafe close/update leaves the app open."
+      ],
+      "note": "The shared conflict scenario and its adapters now import work name, source filename, baseline, dirty source, and external source from this fixture. The validator checks those values are wired into the runtime test. Hosted conflict acceptance on this wiring remains pending."
+    },
+    {
+      "id": "n_minus_1_n_package_pair",
+      "generated_by": "package_pair_generator",
+      "paths": [
+        "target/e2e-packages/n-1",
+        "target/e2e-packages/n",
+        "target/e2e-packages/stable-n-1/Elef-0.1.0.dmg"
+      ],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix apps/desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": [
+        "On macOS, mount and verify the arm64 Stable-profile N-1 DMG with identifier com.elef.desktop, open the pre-release library-root.json selection, install signed N, then verify version N preserves the selection bytes and removes its receipt-matched previous-installation backup.",
+        "A dirty-save conflict keeps the old app open and defers the armed update; only a saved flush (or a clean quit) with an armed update installs and relaunches N. The close-flow unit suite pins the saved/failed/conflict/cancelled-install matrix.",
+        "The packaged N-1/N smoke asserts the successful N relaunch removes exactly its receipt-matched previous-installation backup; later launches may report zero because cleanup already succeeded.",
+        "Invalid signature and version mismatch are rejected by the native install command."
+      ],
+      "arch_linux_acceptance": {
+        "command": "bash apps/desktop/scripts/arch_package_ci.sh",
+        "expected_exit_code": 0,
+        "observed_exit_code": null,
+        "status": "IN_PROGRESS",
+        "platform": "Hosted Arch Linux x86-64 container",
+        "paths": [
+          "target/arch-release/elef-<n-1>-x86_64.tar.zst",
+          "target/arch-release/elef-<n>-x86_64.tar.zst"
+        ],
+        "invariants": [
+          "Build actual N-1 and N Tauri binaries from the same tested source SHA using distinct versioned release configs and archive metadata.",
+          "The local served N-1 and N archive URLs and SHA-256 values are both consumed by unprivileged makepkg; pacman installs N-1, launches it, upgrades to N, launches it, and uninstalls it.",
+          "Run the package-manager lifecycle for both elef-bin and elef-desktop-bin; each owns its own /usr/share/licenses/<pkgname>/LICENSE path without collision."
+        ]
+      }
+    },
+    {
+      "id": "redaction_sentinels",
+      "paths": [
+        "apps/web/test/fixtures/desktop/release/redaction-sentinels.json"
+      ],
+      "status": "IN_PROGRESS",
+      "acceptance_command": "cargo test --manifest-path Cargo.toml -p local-store diagnostics::tests --locked && ELEF_E2E_PACKAGED_UPDATES=1 npm test --prefix apps/desktop/e2e",
+      "expected_exit_code": 0,
+      "observed_exit_code": null,
+      "invariants": [
+        "No sentinel value appears in structured logs or exported diagnostics ZIP, including failure-category inputs and tampered exception, source, title, filename, path, token, secret, and IPC fields.",
+        "Preview/bootstrap failures produce sanitized render/startup event codes without storing exception text.",
+        "The packaged Stable N app exports and inspects the diagnostics ZIP after N-1 to N update; native menu cancellation is exercised separately."
+      ]
+    }
+  ],
+  "environment_notes": [
+    "The full E2E command uses disposable fixtures, but can start a Rails test server on port 3000; do not run it while the user's development server occupies that port.",
+    "An expected exit code is not a result. Null observed exit codes and TODO statuses mean the acceptance scenario has not yet been run and passed."
+  ]
+}

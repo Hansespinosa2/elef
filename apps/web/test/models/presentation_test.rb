@@ -1,0 +1,662 @@
+require "test_helper"
+
+class PresentationTest < ActiveSupport::TestCase
+  test "stores raw source and derives ordered slides" do
+    presentation = Presentation.create!(title: "Demo", source: "# One\n---\n# Two")
+
+    assert_equal "# One\n---\n# Two", presentation.reload.source
+    assert_equal ["# One", "# Two"], presentation.slides.map(&:markdown)
+  end
+
+  test "new presentations use source directives to position the starter title and body" do
+    expected_source = <<~MARKDOWN.chomp
+      :::align{middle center}
+      # Untitled Document
+
+      :::align {center}
+      Start writing Markdown here.
+    MARKDOWN
+
+    assert_equal expected_source, Presentation::DEFAULT_SOURCE
+
+    slide = Source::Document.parse(expected_source).slides.first
+    assert_equal ["center", "middle"], [slide.blocks.first.position.horizontal, slide.blocks.first.position.vertical]
+    assert_equal ["center", "top"], [slide.blocks.second.position.horizontal, slide.blocks.second.position.vertical]
+
+    editor_slide = Source::Document.editor_map(expected_source).dig(:slides, 0)
+    assert_equal ["center", "middle"], editor_slide[:blocks].first[:position].values_at(:horizontal, :vertical)
+    assert_equal ["center", "top"], editor_slide[:blocks].second[:position].values_at(:horizontal, :vertical)
+    assert_empty slide.warnings
+  end
+
+  test "preserves empty slides and ignores front matter and fenced separators" do
+    source = "---\ntitle: Demo\ntheme: dark\n---\n```yaml\n---\n```\n---\n---"
+    document = Source::Document.parse(source, source_name: "Demo")
+
+    assert_equal "dark", document.theme
+    assert_equal ["```yaml\n---\n```", "", ""], document.slides.map(&:markdown)
+  end
+
+  test "keeps slide ranges aligned when separators appear inside display math" do
+    [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
+      source = "# Math\n\n#{opening}\n---\n#{closing}\n\n---\n# Next"
+      map = Source::Document.editor_map(source, mode: :presentation)
+
+      assert_equal 2, map[:slides].length
+      assert_equal "#{opening}\n---\n#{closing}", map[:slides].first[:blocks].last[:markdown]
+      assert_equal "# Next", map[:slides].last[:blocks].first[:markdown]
+    end
+  end
+
+  test "maps source ranges around front matter, fenced separators, CRLF, and unicode" do
+    source = "---\r\ntitle: Café 😀\r\n---\r\n# One 😀\r\n```md\r\n---\r\n```\r\n---\r\n---"
+    ranges = Source::Document.slide_source_ranges(source)
+
+    assert_equal 3, ranges.length
+    assert_equal source.index("# One"), ranges.first[:start]
+    assert_equal source.index("---\r\n", source.index("```\r\n") + 4), ranges.first[:end]
+    assert_equal "# One 😀\r\n```md\r\n---\r\n```\r\n", source[ranges.first[:start]...ranges.first[:end]]
+    assert_equal "", source[ranges.second[:start]...ranges.second[:end]]
+    assert_equal "", source[ranges.last[:start]...ranges.last[:end]]
+  end
+
+  test "keeps language-like and mixed fences inside a slide" do
+    source = "# Code\n\n```\n```ruby\n---\n~~~\n---\n```\n\n---\n# Next"
+    document = Source::Document.parse(source)
+
+    assert_equal ["# Code\n\n```\n```ruby\n---\n~~~\n---\n```", "# Next"],
+      document.slides.map(&:markdown)
+  end
+
+  test "malformed front matter remains ordinary Markdown" do
+    document = Source::Document.parse("---\ntheme: dark")
+
+    assert_equal "match", document.theme
+    assert_equal ["", "theme: dark"], document.slides.map(&:markdown)
+  end
+
+  test "defaults typography to book" do
+    assert_equal "book", Source::Document.parse("# Title").typography
+    assert_equal "book", Source::Document.parse("---\ntypography: unknown\n---\n# Title").typography
+  end
+
+  test "normalizes quoted, commented, and invalid front matter style values" do
+    theme = ->(value) { Source::Document.parse("---\ntheme: #{value}\n---\n# Title").theme }
+    typography = ->(value) { Source::Document.parse("---\ntypography: #{value}\n---\n# Title").typography }
+
+    # Quotes and trailing "# ..." comments are stripped before matching.
+    assert_equal "dark", theme.call('"dark"')
+    assert_equal "light", theme.call("'light'")
+    assert_equal "dark", theme.call("dark # work theme")
+    assert_equal 'dark', theme.call('"dark" # work theme')
+    assert_equal "modern", typography.call("'modern'")
+    assert_equal "modern", typography.call("modern # body text")
+
+    # A "#" only counts as a comment when whitespace precedes it.
+    assert_equal "match", theme.call("light#x")
+
+    # Values outside each key's own vocabulary fall back to that key's default,
+    # so the two keys do not accept each other's values.
+    assert_equal "match", theme.call("book")
+    assert_equal "book", typography.call("light")
+    assert_equal "match", theme.call("unknown")
+    assert_equal "book", typography.call("unknown")
+  end
+
+  test "keeps the earliest style key when front matter repeats it" do
+    assert_equal "dark", Source::Document.parse("---\ntheme: dark\ntheme: light\n---\n# Title").theme
+    assert_equal "book", Source::Document.parse("---\ntypography: book\ntypography: modern\n---\n# Title").typography
+  end
+
+  test "parses margin settings and slide context directives" do
+    source = <<~MARKDOWN
+      ---
+      show-in-margin:
+        section: true
+        subsection: false
+        footnote: true
+        slideCount: false
+      ---
+      # Intro
+      ---
+      :::section{Product strategy}
+      :::subsection{The opportunity}
+      # Opportunity
+      :::footnote{Source: [research](https://example.com)}
+      ---
+      :::subsection{The shift}
+      # Shift
+    MARKDOWN
+
+    document = Source::Document.parse(source)
+
+    assert_equal [true, false, true, false], [
+      document.margin_settings.section,
+      document.margin_settings.subsection,
+      document.margin_settings.footnote,
+      document.margin_settings.slide_count
+    ]
+    assert_nil document.slides[0].section
+    assert_equal "Product strategy", document.slides[1].section
+    assert_equal "The opportunity", document.slides[1].subsection
+    assert_equal "The shift", document.slides[2].subsection
+    assert_nil document.slides[2].footnote
+    refute_includes document.slides[1].markdown, ":::"
+    assert_empty document.warnings
+  end
+
+  test "enables all margin regions by default" do
+    settings = Source::Document.parse("# Slide").margin_settings
+
+    assert_equal [true, true, true, true], [settings.section, settings.subsection, settings.footnote, settings.slide_count]
+  end
+
+  test "parses nested and escaped footnote braces at the end of a slide" do
+    document = Source::Document.parse(<<~MARKDOWN)
+      # Explain the configuration
+
+      The note belongs to this slide.
+
+      ```yaml
+      :::footnote{This remains code}
+      ```
+
+      :::footnote{Use {production: true} and \{literal braces\}.}
+    MARKDOWN
+
+    assert_equal "Use {production: true} and {literal braces}.", document.slides.first.footnote
+    assert_includes document.slides.first.markdown, ":::footnote{This remains code}"
+    assert_empty document.warnings
+  end
+
+  test "warns and removes section directives that are not at the beginning" do
+    document = Source::Document.parse(<<~MARKDOWN)
+      # Intro
+
+      :::footnote{Too early}
+
+      Content first.
+
+      :::section{Late context}
+      :::subsection{Also late}
+      ---
+      :::section{Valid context}
+      # Next
+    MARKDOWN
+
+    assert_nil document.slides.first.section
+    assert_equal "Valid context", document.slides.second.section
+    refute_includes document.slides.first.markdown, "Late context"
+    assert_equal 3, document.warnings.length
+    assert_equal 2, document.warnings.count { |warning| warning.include?("beginning of a slide") }
+    assert_includes document.warnings, "Footnote margin directive must appear at the end of a slide."
+  end
+
+  test "reads and updates generic typography without losing front matter" do
+    source = "---\ntitle: Demo\ntheme: dark\ntypography: modern\n---\n# Title\n---\n# Second"
+    presentation = Presentation.create!(title: "Demo", source: source)
+
+    assert_equal "modern", presentation.typography
+    presentation.typography = "technical"
+
+    assert_equal "technical", presentation.typography
+    assert_includes presentation.source, "title: Demo\n"
+    assert_includes presentation.source, "theme: dark\n"
+    assert_includes presentation.source, "typography: technical\n"
+    assert_includes presentation.source, "# Title\n---\n# Second"
+  end
+
+  test "automatic layouts do not require a layout directive" do
+    slide = Source::Document.parse("# Welcome\n\nA clear opening.").slides.first
+
+    assert_equal "statement", slide.layout
+    assert_equal "# Welcome\n\nA clear opening.", slide.markdown
+  end
+
+  test "infers column layouts from repeated sibling headings" do
+    two_column = Source::Document.parse(<<~MARKDOWN).slides.first
+      # Compare approaches
+
+      ## Fast
+
+      Write quickly.
+
+      ## Safe
+
+      Validate carefully.
+    MARKDOWN
+    three_column = Source::Document.parse(<<~MARKDOWN).slides.first
+      # Three priorities
+
+      ## Speed
+
+      Short feedback loops.
+
+      ## Quality
+
+      Reliable output.
+
+      ## Trust
+
+      Source remains canonical.
+    MARKDOWN
+
+    assert_equal "two-column", two_column.layout
+    assert_equal ["## Fast", "## Safe"], two_column.regions.map { |region| region.blocks.first.markdown }
+    assert_equal "three-column", three_column.layout
+    assert_equal 3, three_column.regions.length
+  end
+
+  test "infers focused content layouts and keeps mixed content as body" do
+    assert_equal "statement", Source::Document.parse("# Takeaway\n\nMake it clear.").slides.first.layout
+    assert_equal "image", Source::Document.parse("# Visual\n\n![Alt](image.png)").slides.first.layout
+    assert_equal "table", Source::Document.parse("# Data\n\n| A | B |\n| --- | --- |\n| 1 | 2 |").slides.first.layout
+    assert_equal "code", Source::Document.parse("# Example\n\n```ruby\nputs 1\n```").slides.first.layout
+    assert_equal "body", Source::Document.parse("# Mixed\n\nA paragraph.\n\n- One\n- Two").slides.first.layout
+  end
+
+  test "recognizes fenced code with a longer closing fence" do
+    slide = Source::Document.parse("# Example\n\n```ruby\nputs 1\n````").slides.first
+
+    assert_equal "code", slide.layout
+  end
+
+  test "parses block positioning and removes extension directives" do
+    document = Source::Document.parse(<<~MARKDOWN)
+      # Positioned
+
+      :::align{middle center}
+
+      A centered message.
+
+      :::align{bottom right}
+      - One
+      - Two
+    MARKDOWN
+    slide = document.slides.first
+
+    assert_equal "body", slide.layout
+    assert_equal [nil, ["center", "middle"], ["right", "bottom"]],
+      slide.blocks.map { |block| block.position&.then { |position| [position.horizontal, position.vertical] } }
+    refute_includes slide.markdown, ":::"
+    assert_empty document.warnings
+  end
+
+  test "align directives use vertical then horizontal order and retain position compatibility" do
+    document = Source::Document.parse(<<~MARKDOWN)
+      :::align{middle left}
+
+      Centered vertically and aligned left.
+
+      :::align{left}
+
+      Left aligned.
+
+      :::position{right bottom}
+
+      Existing source still works.
+    MARKDOWN
+
+    positions = document.slides.first.blocks.map(&:position)
+
+    assert_equal [["left", "middle"], ["left", "top"], ["right", "bottom"]],
+      positions.map { |position| [position.horizontal, position.vertical] }
+    assert_equal [true, false, true], positions.map(&:vertical_explicit)
+  end
+
+  test "records whether a vertical position was explicitly requested" do
+    document = Source::Document.parse(<<~MARKDOWN)
+      :::align{center}
+
+      Horizontal only.
+
+      :::align{middle center}
+
+      Horizontal and vertical.
+    MARKDOWN
+
+    assert_equal [false, true], document.slides.first.blocks.map { |block| block.position&.vertical_explicit }
+  end
+
+  test "builds an ephemeral editor map with UTF-16 ranges and known directives" do
+    source = "---\npresentationTheme: dark\n---\n# 🚀 Intro\n\n:::align{middle center}\n\nA **message**.\n\n:::\n---\n:::unknown\n\n# Next"
+
+    map = Source::Document.editor_map(source, source_name: "Work", mode: :presentation)
+
+    assert_equal 1, map[:version]
+    assert_equal "presentation", map[:mode]
+    assert_equal source.encode("UTF-16LE").bytesize / 2, map[:source_length]
+    assert_equal 2, map[:slides].length
+    assert_equal "# 🚀 Intro", map[:slides].first[:blocks].first[:markdown]
+    assert_equal "heading", map[:slides].first[:blocks].first[:kind]
+    assert_equal "center middle", map[:slides].first[:blocks].second[:position].values_at(:horizontal, :vertical).join(" ")
+    assert_equal "position", map[:slides].first[:directives].first[:type]
+    assert_equal "unknown", map[:slides].second[:directives].first[:type]
+    assert_operator map[:slides].first[:editable_regions].first[:content_range][:start], :>,
+      map[:slides].first[:editable_regions].first[:range][:start]
+    assert_equal 34, map[:slides].first[:editable_regions].first[:content_range][:start]
+  end
+
+  test "maps a single-block position directive without leaking it to the next block" do
+    source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond"
+
+    blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
+
+    assert_equal [nil, "center", nil], blocks.map { |block| block[:position]&.fetch(:horizontal) }
+  end
+
+  test "position directive followed later by a bare ::: binds only to the single next block and bare ::: warns" do
+    source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
+
+    blocks = Source::Document.editor_map(source, mode: :presentation)[:slides].first[:blocks]
+    assert_equal [nil, "center", nil, nil], blocks.map { |block| block[:position]&.fetch(:horizontal) }
+
+    parsed = Source::Document.parse(source)
+    assert_equal [nil, "center", nil, nil], parsed.slides.first.blocks.map { |b| b.position&.horizontal }
+    assert_includes parsed.warnings, "Unknown or malformed presentation directive was removed."
+  end
+
+  test "bare ::: alone warns as unknown directive and does not affect positioning" do
+    source = "# Slide\n\n:::\n\nFirst"
+
+    parsed = Source::Document.parse(source)
+    assert_equal [nil, nil], parsed.slides.first.blocks.map { |b| b.position&.horizontal }
+    assert_equal ["Unknown or malformed presentation directive was removed."], parsed.warnings
+
+    map = Source::Document.editor_map(source, mode: :presentation)
+    assert_equal "unknown", map[:slides].first[:directives].first[:type]
+  end
+
+  test "keeps blank lines inside display math fences in one editable block" do
+    [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
+      source = "# Math\n\n#{opening}\n\n#{closing}"
+      map = Source::Document.editor_map(source, mode: :document)
+      blocks = map[:slides].first[:blocks]
+      math_block = blocks.last
+      region = map[:slides].first[:editable_regions].find { |candidate| candidate[:block_id] == math_block[:id] }
+
+      assert_equal "#{opening}\n\n#{closing}", math_block[:markdown]
+      assert_equal true, region[:editable]
+
+      opener_map = Source::Document.editor_map("# Math\n\n#{opening}", mode: :document)
+      opener_region = opener_map[:slides].first[:editable_regions].last
+      assert_equal true, opener_region[:editable]
+    end
+  end
+
+  test "keeps a document editor map as one source surface across horizontal rules" do
+    source = "# First\n\n---\n\nSecond"
+
+    map = Source::Document.editor_map(source, mode: :document)
+
+    assert_equal 1, map[:slides].length
+    assert_equal source.length, map[:slides].first[:range][:end]
+    assert_equal ["# First", "---", "Second"], map[:slides].first[:blocks].map { |block| block[:markdown] }
+  end
+
+  test "maps blank document blocks after emoji to UTF-16 offsets" do
+    source = "# A😀\n\n\n\nBody"
+    map = Source::Document.editor_map(source, mode: :document)
+    blocks = map[:slides].first[:blocks]
+
+    assert_equal source.encode("UTF-16LE").bytesize / 2, map[:source_length]
+    assert_equal source[0...source.index("Body")].encode("UTF-16LE").bytesize / 2,
+      blocks.last[:range][:start]
+    assert blocks.any? { |block| block[:empty_placeholder] }
+  end
+
+  test "marks Markdown that the visual serializer cannot round-trip as read-only" do
+    sources = [
+      "```ruby\nputs 1",
+      "[Guide][guide]",
+      "[guide]: /guide",
+      "<https://example.test>",
+      "---",
+      "Title\n===",
+      "    indented code",
+      "foo*bar*baz and value_name_value",
+      "> outer\n> > nested quote",
+      "Inline ![video](elef-asset:#{'a' * 64})",
+      "| A |\n| --- |",
+      "| A | B |\n| --- |\n| 1 | 2 | 3 |"
+    ]
+    maps = sources.map { |source| Source::Document.editor_map(source, mode: :document) }
+
+    assert_equal "code", maps.first[:slides].first[:blocks].first[:kind]
+    assert_equal [false] * sources.length, maps.map { |map| map[:slides].first[:editable_regions].first[:editable] }
+  end
+
+  test "warns and removes unknown presentation directives" do
+    document = Source::Document.parse("# Slide\n\n:::unknown\n\nContent")
+
+    refute_includes document.slides.first.markdown, ":::unknown"
+    assert_equal 1, document.warnings.length
+    assert_match "directive", document.warnings.first
+  end
+
+  test "detects keys inside front matter" do
+    source = "---\ntheme: dark\ntypography: modern\n---\n# Title"
+
+    assert Source::Document.front_matter_has_key?(source, "typography")
+    refute Source::Document.front_matter_has_key?(source, "missing")
+  end
+
+  test "blank source is a valid one-slide presentation" do
+    presentation = Presentation.create!(title: "Blank", source: "")
+
+    assert_equal [""], presentation.slides.map(&:markdown)
+  end
+
+  test "derives a safe title from the first heading" do
+    presentation = Presentation.create!(source: "# Quarterly / Review?\n\nBody")
+
+    assert_equal "Quarterly Review", presentation.title
+  end
+
+  test "renders supported markdown, code, images, links, tables, strikethrough, and math" do
+    html = Source::Renderer.render(<<~MARKDOWN)
+      # Heading
+
+      - item
+
+      ~~gone~~
+
+      [Elef](https://example.com)
+
+      ![Alt](image.png)
+
+      | A | B |
+      | --- | --- |
+      | 1 | 2 |
+
+      ```ruby
+      puts "$not_math$"
+      ```
+
+      $x^2$
+    MARKDOWN
+
+    assert_includes html, "<h1>Heading</h1>"
+    assert_includes html, "<li>item</li>"
+    assert_includes html, "<del>gone</del>"
+    assert_includes html, "href=\"https://example.com\""
+    assert_includes html, "src=\"image.png\""
+    assert_includes html, "<table>"
+    assert_includes html, "puts"
+    assert_includes html, "$not_math$"
+    assert_includes html, "katex"
+  end
+
+  test "does not render math inside inline code or escaped delimiters" do
+    html = Source::Renderer.render("`$x^2$` and $x^2$ and \\$x$")
+
+    assert_equal 1, html.scan('class="katex"').length
+    assert_includes html, "<code>$x^2$</code>"
+    assert_includes html, "\\$x$"
+  end
+
+  test "renders ampersands in matrix math after markdown escaping" do
+    html = Source::Renderer.render("$$\\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}$$")
+    fragment = Nokogiri::HTML.fragment(html)
+
+    assert_equal 1, fragment.css(".katex-display .katex").length
+    assert_empty fragment.css(".math-error")
+  end
+
+  test "renders inline accents and multiline display math before Markdown transforms TeX" do
+    html = Source::Renderer.render(<<~MARKDOWN)
+      Inline accent: $\\bar{x}$.
+
+      $$
+      \\begin{aligned}
+      x &= y \\\\
+      y &= z
+      \\end{aligned}
+      $$
+    MARKDOWN
+    fragment = Nokogiri::HTML.fragment(html)
+
+    assert_equal 2, fragment.css(".katex").length
+    assert_equal 1, fragment.css(".katex-display").length
+    assert_empty fragment.css(".math-error")
+  end
+
+  test "renders a stress fixture with inline, display, matrix, and aligned math" do
+    source = Rails.root.join("test/fixtures/files/latex_stress.md").read
+    fragment = Nokogiri::HTML.fragment(Source::Renderer.render(source))
+
+    assert_equal 11, fragment.css(".katex").length
+    assert_equal 3, fragment.css(".katex-display").length
+    assert_empty fragment.css(".math-error")
+    assert_equal 3, fragment.css("code").length
+    assert_equal ["$x^2$", "$x^2$", "$x^2$"], fragment.css("code").map { |code| code.text.strip }
+  end
+
+  test "does not render math-looking link destinations or leak math placeholders" do
+    html = Source::Renderer.render("[Formula link](/docs/$formula$)")
+    fragment = Nokogiri::HTML.fragment(html)
+
+    assert_equal "/docs/$formula$", fragment.at_css("a")["href"]
+    assert_empty fragment.css(".katex")
+    refute_includes html, "ELEFMATH"
+  end
+
+  test "rejects dangerous link and image protocols" do
+    html = Source::Renderer.render("[unsafe](javascript:alert(1)) ![image](javascript:alert(1))")
+
+    refute_includes html, "javascript:"
+    refute_includes html, "<a"
+    refute_includes html, "<img"
+  end
+
+  test "lineage seed creates three five-presentation trees" do
+    records = Presentations::LineageSampleData.load!
+
+    assert_equal 15, records.length
+    assert Presentations::LineageSampleData::SAMPLES.all? { |sample| sample[:purpose].present? }
+    assert records.all? { |record| record.slides.length >= 4 }
+    assert_equal 6, records.count(&:continuation?)
+    assert_equal 6, records.count(&:inspiration?)
+    assert_equal %w[lineage-product-root lineage-research-root lineage-root],
+      records.select { |record| record.parent.nil? }.map(&:sample_id).sort
+    assert_equal records.find { |record| record.sample_id == "lineage-root" }.source,
+      records.find { |record| record.sample_id == "lineage-continuation-june" }.fork_source
+
+    root = records.find { |record| record.sample_id == "lineage-root" }
+    assert_equal 4, root.slides.length
+    assert_equal "Quarterly review", root.slides.first.section
+    assert_equal "Baseline", root.slides.first.subsection
+    assert_equal "Source: May operating review", root.slides.first.footnote
+    assert root.document.margin_settings.section
+    assert root.document.margin_settings.footnote
+
+    workshop = records.find { |record| record.sample_id == "lineage-inspiration-workshop" }
+    assert_includes workshop.slides.map(&:layout), "three-column"
+    assert workshop.slides.any? do |slide|
+      slide.blocks.any? { |block| block.position&.horizontal == "center" && block.position.vertical == "middle" }
+    end
+
+    findings = records.find { |record| record.sample_id == "lineage-research-continuation" }
+    assert_includes findings.source, "~~~ruby"
+  end
+
+  test "presentation creation always has a timestamp" do
+    presentation = Presentation.new(title: "Timestamped", source: "# Timestamped", created_at: nil)
+
+    presentation.save!
+
+    assert_not_nil presentation.created_at
+  end
+
+  test "forks a maximum length title while preserving the original snapshot" do
+    parent = Presentation.create!(title: "x" * 120, source: "# Original")
+    Presentation::FORK_TYPES.each do |type|
+      child = parent.fork_as(type)
+      assert child.save, child.errors.full_messages.to_sentence
+      assert_operator child.title.length, :<=, 120
+      assert child.title.end_with?(" (#{type.capitalize})")
+      assert_equal parent.title, child.fork_parent_title
+      assert_equal parent.source, child.fork_source
+    end
+  end
+
+  test "forking a dirty parent checkpoints the exact source used for the fork" do
+    parent = Presentation.create!(title: "Dirty parent", source: "# Checkpointed source")
+    previous_checkpoint_id = parent.latest_checkpoint.id
+    result = Drafts::Save.call(
+      parent,
+      source: "# New unsnapshotted draft",
+      lock_version: parent.lock_version,
+      base_revision: parent.revision_token,
+      checkpoint: false
+    )
+    assert_predicate result, :success?
+    assert_equal previous_checkpoint_id, parent.reload.latest_checkpoint.id
+
+    child = parent.fork_as("inspiration")
+    origin_revision = child.pending_lineage_origin_revision
+
+    assert_equal "# New unsnapshotted draft", origin_revision.source
+    assert_not_equal previous_checkpoint_id, origin_revision.id
+    assert child.save, child.errors.full_messages.to_sentence
+    assert_equal origin_revision.id, child.lineage_edge.origin_revision_id
+    assert_equal "# New unsnapshotted draft", child.reload.source
+  end
+
+  test "rejects a pending lineage parent that is the presentation itself" do
+    presentation = Presentation.new(title: "Self fork", source: "# Self")
+    presentation.parent = presentation
+
+    refute presentation.valid?
+    assert_includes presentation.errors[:parent], "cannot be itself"
+  end
+
+  test "infers image layout for a slide containing only an image without headings" do
+    slide = Source::Document.parse("![Dummy](dummy.png)").slides.first
+
+    assert_equal "image", slide.layout
+    assert_equal "![Dummy](dummy.png)", slide.markdown
+  end
+
+  test "resolves media blobs and converts markdown to portable asset paths" do
+    presentation = Presentation.create!(title: "Portable Work", source: "# Start")
+    bytes = "image data".b
+    presentation.assets.attach(io: StringIO.new(bytes), filename: "photo.png", content_type: "image/png")
+    blob = presentation.assets.blobs.last
+    digest = Digest::SHA256.hexdigest(bytes)
+    blob.update!(metadata: blob.metadata.merge("elef_sha256" => digest))
+
+    resolved_by_digest = WorkAssets.resolve_blob(presentation, digest)
+    assert_equal blob, resolved_by_digest
+
+    resolved_by_filename = WorkAssets.resolve_blob(presentation, "photo.png")
+    assert_equal blob, resolved_by_filename
+
+    resolved_by_path = WorkAssets.resolve_blob(presentation, "assets/photo.png")
+    assert_equal blob, resolved_by_path
+
+    raw_source = "# Title\n\n![My Photo](elef-asset:#{digest} \"fit:contain\")"
+    portable = WorkAssets.portable_markdown(raw_source, presentation)
+    assert_equal "# Title\n\n![My Photo](assets/photo.png \"fit:contain\")", portable
+  end
+end

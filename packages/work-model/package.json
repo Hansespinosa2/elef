@@ -1,0 +1,46 @@
+{
+  "name": "@elef/work-model",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pure semantics of an Elef Work (document | presentation): parsing, front matter, directives, structural ranges, links, pure source transforms. No DOM, React, filesystem, network, Rails or Tauri.",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/elef-work-model.js"
+    },
+    "./document-map": {
+      "types": "./src/document_map.ts",
+      "default": "./dist/document-map.js"
+    },
+    "./document-links": {
+      "types": "./src/document_links.ts",
+      "default": "./dist/document-links.js"
+    },
+    "./document-transforms": {
+      "types": "./src/document_transforms.ts",
+      "default": "./dist/document-transforms.js"
+    },
+    "./art-source": {
+      "types": "./src/art_source.ts",
+      "default": "./dist/art-source.js"
+    },
+    "./slide-position-layout": {
+      "types": "./src/slide_position_layout.ts",
+      "default": "./dist/slide-position-layout.js"
+    }
+  },
+  "dependencies": {
+    "markdown-it": "14.3.2"
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node run-tests.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

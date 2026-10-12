@@ -1,5 +1,7 @@
 # Mac mini single-user deployment
 
+Reach for when: deploying or diagnosing the Mac mini dev/prod instances.
+
 Elef runs as two independent Compose instances on the Mac mini. Tailscale is
 the only network boundary. This is a private, single-user deployment.
 
@@ -13,7 +15,10 @@ the only network boundary. This is a private, single-user deployment.
 ```
 
 The `ops/` directory belongs to this Mac mini workspace; it is not part of the
-`dev` or `main` checkout. Production uses PostgreSQL and uploaded files in
+`dev` or `main` checkout. Do not confuse it with the checkout's own `ops/`
+directory (Compose files and `*-instance` helpers inside `dev/` and `prod/`);
+in this runbook a bare `ops/...` path always means the workspace directory,
+while checkout paths are written with their `dev/` or `prod/` prefix. Production uses PostgreSQL and uploaded files in
 separate persistent volumes. Development has its own PostgreSQL database and
 storage volumes, isolated from production.
 
@@ -26,7 +31,7 @@ Keep the branch contract simple:
 
 ## Automatic deployment
 
-Pull requests run the seven required CI checks. After merge, a lightweight
+Pull requests run the eleven required CI checks. After merge, a lightweight
 workflow verifies that those checks succeeded in the PR's test run and that
 the merged source tree is exactly the tree tested by CI. It then advances one
 of these refs to the approved commit without rerunning the suite:
@@ -105,7 +110,7 @@ Create the production secret and development environment file:
 
 ```sh
 ops/setup-production-env
-cp dev/.env.development.example dev/.env.development
+cp dev/ops/.env.development.example dev/.env.development
 ```
 
 Add the Mac mini's Tailscale MagicDNS hostname to `dev/.env.development` so
@@ -124,14 +129,14 @@ that file in either Git checkout.
 ops/elef-production up
 ops/elef-production check
 
-dev/scripts/development-instance up
-dev/scripts/development-instance check
+dev/ops/development-instance up
+dev/ops/development-instance check
 ops/check-all
 ```
 
 Production listens on `127.0.0.1:3000`; development listens on
 `127.0.0.1:3001`. Both Compose services restart when Colima's Docker VM starts.
-Use `ops/elef-production down` or `dev/scripts/development-instance down` to
+Use `ops/elef-production down` or `dev/ops/development-instance down` to
 stop a service without deleting its data volumes.
 
 ## Tailscale boundary

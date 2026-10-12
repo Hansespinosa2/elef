@@ -21,10 +21,13 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          working-directory: apps/web
           bundler-cache: true
       - name: Build Tailwind CSS
+        working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Run the full non-system Ruby suite on SQLite
+        working-directory: apps/web
         env:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"

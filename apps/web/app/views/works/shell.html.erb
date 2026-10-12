@@ -1,0 +1,37 @@
+<% work = @document || @presentation %>
+<% new_record = work.new_record? %>
+<% heading = new_record ? "New #{work.presentation? ? "presentation" : "document"}" : "Edit #{work.title}" %>
+<% content_for :title, heading %>
+<div id="work-shell" data-work-shell data-work-kind="<%= work.presentation? ? "presentation" : "document" %>" data-work-id="<%= work.id %>" data-work-view="<%= new_record ? "new" : "edit" %>">
+  <div class="page-title mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
+    <div>
+      <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]"><%= new_record ? (work.document? ? "Visual document editor" : "Source-first editor") : "Visual editor" %></p>
+      <h1 class="mb-0 text-4xl font-bold"><%= heading %></h1>
+    </div>
+    <div class="flex flex-wrap items-center gap-3">
+      <% if work.document? %>
+        <%= link_to "Print / Save PDF", print_document_path(work), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" unless new_record %>
+      <% else %>
+        <% unless new_record %>
+          <%= link_to "Print draft / save PDF", print_presentation_path(work), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
+        <% end %>
+        <div data-controller="pptx-export-host" data-pptx-export-host-url-value="<%= new_record ? pptx_presentations_path(version: "draft") : pptx_presentation_path(work, version: "draft") %>" data-pptx-export-host-library-url-value="<%= pptx_library_path %>" data-pptx-export-host-current-draft-value="true">
+          <button type="button" data-action="pptx-export-host#download" class="button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]">Download PPTX draft</button>
+          <span class="ml-2 text-sm" role="status" aria-live="polite" data-pptx-export-host-target="status"></span>
+        </div>
+        <% if !new_record && work.published_release %>
+          <%= link_to "Print published release", print_presentation_path(work, version: "published"), class: "button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]" %>
+          <div data-controller="pptx-export-host" data-pptx-export-host-url-value="<%= pptx_presentation_path(work, version: "published") %>" data-pptx-export-host-library-url-value="<%= pptx_library_path %>">
+            <button type="button" data-action="pptx-export-host#download" class="button inline-flex min-h-10 items-center rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-4 py-2 font-bold no-underline hover:bg-[#f7efe2]">Download published PPTX</button>
+            <span class="ml-2 text-sm" role="status" aria-live="polite" data-pptx-export-host-target="status"></span>
+          </div>
+        <% end %>
+        <%= button_to "Present", publish_presentation_path(work), method: :post,
+              class: "button primary inline-flex min-h-10 items-center rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95",
+              data: { dirty_navigation: true },
+              form: { data: { turbo: false } } unless new_record %>
+      <% end %>
+    </div>
+  </div>
+  <%= render "works/form", work: work %>
+</div>
