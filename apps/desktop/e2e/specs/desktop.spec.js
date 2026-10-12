@@ -127,7 +127,35 @@ async function sendPresentationKey(key) {
     await browser.keys(webDriverKey)
     return
   }
-  sendNativeKey(key)
+  // An xdotool keystroke under xvfb occasionally never reaches the WebView:
+  // the window can lose the focus race after the native fullscreen
+  // transition. A lost Escape wedges the shared app in presentation mode and
+  // cascades into every later navigation, so resend once when the key
+  // demonstrably did not land. enterPresentationMode records each delivered
+  // keydown; a key that lands but fails to act still fails loudly below, so
+  // the retry never masks a product regression.
+  const captureInstalled = await browser.execute(() => Array.isArray(globalThis.__elefPresentationKeyEvents))
+  if (!captureInstalled) {
+    sendNativeKey(key)
+    return
+  }
+  const receivedCount = () => browser.execute(name =>
+    (globalThis.__elefPresentationKeyEvents || []).filter(event => event.key === name).length, key)
+  const before = await receivedCount()
+  const landed = async () => (await receivedCount()) > before
+  for (let attempt = 0; attempt < 2; attempt++) {
+    sendNativeKey(key)
+    try {
+      await browser.waitUntil(landed, {
+        timeout: attempt === 0 ? 2_000 : 5_000,
+        interval: 100,
+        timeoutMsg: `The ${key} keypress never reached the desktop presentation`
+      })
+      return
+    } catch (error) {
+      if (attempt === 1) throw error
+    }
+  }
 }
 
 async function desktopWindowIsFullscreen() {
