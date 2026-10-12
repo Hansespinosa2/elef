@@ -106,6 +106,36 @@ function sendNativeKey(key, { activate = true } = {}) {
   throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
 }
 
+async function logDesktopAppState(label) {
+  try {
+    const state = await browser.execute(() => ({
+      bodyClass: document.body.className,
+      libraryHidden: document.querySelector("#library-view")?.hidden ?? null,
+      libraryDisplay: (() => {
+        const view = document.querySelector("#library-view")
+        return view ? getComputedStyle(view).display : null
+      })(),
+      workHidden: document.querySelector("#work-view")?.hidden ?? null,
+      editorMode: document.querySelector("#desktop-editor-form")?.dataset.editorMode ?? null,
+      loadedWorkId: document.querySelector("#desktop-editor-form")?.dataset.loadedWorkId ?? null,
+      workId: document.querySelector("#work-id")?.textContent ?? null,
+      presentationExitHidden: document.querySelector("#exit-presentation")?.hidden ?? null,
+      openDialogs: [...document.querySelectorAll("dialog")].filter(dialog => dialog.open).map(dialog => dialog.id),
+      saveStatus: (() => {
+        try {
+          return window.__elefSaveTestHooks?.saveStatus?.() ?? null
+        } catch (_error) {
+          return "hook-error"
+        }
+      })(),
+      presentationKeys: globalThis.__elefPresentationKeyEvents ?? null
+    }))
+    console.log(`ELEF-APP-STATE ${label}: ${JSON.stringify(state)}`)
+  } catch (error) {
+    console.log(`ELEF-APP-STATE ${label}: unavailable (${error.message})`)
+  }
+}
+
 async function sendPresentationKey(key) {
   await browser.execute(() => window.focus())
   if (process.platform === "darwin") {
@@ -2346,16 +2376,33 @@ describe("desktop binary workflows and native boundaries", () => {
     }
     await setupRichRenderingWork(root)
     await $("#refresh-library").click()
+    let workflowError = null
     try {
       await richRenderingMediaWorkflow(new DesktopEditorUi())
-    } finally {
-      if (!(await $("#library-view").isDisplayed())) {
-        await $("#back-to-library").click()
-        await $("#library-view").waitForDisplayed()
-      }
-      await teardownRichRenderingWork(root)
-      await $("#refresh-library").click()
+    } catch (error) {
+      workflowError = error
     }
+    // A throwing cleanup would swallow the workflow failure that explains a
+    // cascade, so the state dump and teardown run here and never mask it.
+    await logDesktopAppState("rich-fixture")
+    try {
+      try {
+        if (!(await $("#library-view").isDisplayed())) {
+          await $("#back-to-library").click()
+          await $("#library-view").waitForDisplayed()
+        }
+      } finally {
+        await teardownRichRenderingWork(root)
+      }
+      if (await $("#library-view").isDisplayed()) await $("#refresh-library").click()
+    } catch (cleanupError) {
+      if (workflowError) {
+        console.log(`ELEF-APP-STATE rich-fixture cleanup failed after the workflow error: ${cleanupError.message}`)
+      } else {
+        throw cleanupError
+      }
+    }
+    if (workflowError) throw workflowError
   })
 
   it("runs the shared external-edit conflict flow in the desktop binary", async () => {

@@ -40,8 +40,15 @@ module ApplicationHelper
   end
 
   def pptx_library_path
+    "#{client_base_path}/vendor/pptxgen.bundle.js"
+  end
+
+  # Deployment prefix for the client shell ("" at the domain root). The web
+  # host serves nothing else the JS builds itself: path helpers already carry
+  # the script name, so only the Stimulus data value needs this.
+  def client_base_path
     script_name = request.script_name.presence || Rails.application.config.relative_url_root
-    "#{script_name.to_s.chomp("/")}/vendor/pptxgen.bundle.js"
+    script_name.to_s.chomp("/")
   end
 
   def work_dom_id(work)
