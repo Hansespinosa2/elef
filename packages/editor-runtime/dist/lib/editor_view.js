@@ -1,4 +1,5 @@
 import { sanitizePreview as installSanitizedPreview } from "@elef/client/sanitize";
+import { markProjectionBlocksReadOnly } from "./projection_editability.js";
 const EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">
     <header class="editor-shell-header">
@@ -120,6 +121,7 @@ const TARGET = "[data-editor-view-target]";
 function installPreviewHtml(container, html) {
   const mediaBaseUrl = container.closest("form")?.dataset.mediaAssetBaseUrlValue || "";
   installSanitizedPreview(container, html, { mediaBaseUrl });
+  if (!container.hasAttribute("data-visual-editor-target")) markProjectionBlocksReadOnly(container);
 }
 function mountEditorHosts(root = globalThis.document) {
   if (!root) return;
@@ -317,6 +319,7 @@ function configureEditorKind(root, kind, {
     root.querySelector(".editor-mode-switch")?.removeAttribute("aria-label");
     root.querySelector("[data-editor-view-target='editingMode']").textContent = "Source";
     root.querySelector("[data-visual-editor-target='projection']")?.removeAttribute("data-visual-editor-target");
+    markProjectionBlocksReadOnly(root.querySelector("[data-preview-target='container']"));
   }
   if (!presentationEditingEnabled) presentationTools?.remove();
   if (!slideOverviewEnabled) slideOverview?.remove();

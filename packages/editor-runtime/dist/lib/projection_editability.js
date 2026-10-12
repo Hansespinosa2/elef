@@ -1,3 +1,9 @@
+function markProjectionBlocksReadOnly(projection) {
+  if (!projection?.querySelectorAll) return;
+  projection.querySelectorAll("[data-editor-block-id]").forEach((block) => {
+    setProjectionBlockEditable(block, false, "");
+  });
+}
 function setProjectionBlockEditable(block, editable, ariaLabel) {
   setAttribute(block, "contenteditable", String(editable));
   if (editable) {
@@ -21,5 +27,6 @@ function removeAttribute(element, name) {
   if (element.hasAttribute(name)) element.removeAttribute(name);
 }
 export {
+  markProjectionBlocksReadOnly,
   setProjectionBlockEditable
 };
