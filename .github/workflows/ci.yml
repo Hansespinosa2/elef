@@ -225,7 +225,9 @@ jobs:
 
   desktop:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The Stable and identity smokes added full binary builds to this job;
+    # 60 matches the arch-package job's budget for the longer suite.
+    timeout-minutes: 60
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -253,9 +255,12 @@ jobs:
         with:
           workspaces: . -> target
       - name: Install Linux desktop build dependencies
+        # Fail fast on a sick package mirror: a wedged apt must not burn the
+        # whole job budget silently (each runner is ephemeral, so a killed apt
+        # leaves nothing behind for the retry).
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes build-essential curl dbus-daemon file iptables libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf unzip webkit2gtk-driver wget xdotool xvfb zip
+          timeout 600 sudo apt-get update
+          timeout 900 sudo apt-get install --yes build-essential curl dbus-daemon file iproute2 iptables libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf unzip webkit2gtk-driver wget xdotool xvfb zip
       - name: Install frontend dependencies
         run: npm ci --prefix apps/desktop/frontend
       - name: Install Rails-owned frontend dependencies
@@ -337,23 +342,33 @@ jobs:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
         # Tauri's Linux single-instance plugin uses a user D-Bus name.
+        # The offline block lives in a network namespace around ONLY the test
+        # process tree: a runner-wide iptables REJECT also blinds the Actions
+        # runner agent's own control plane, and GitHub reaps jobs whose runner
+        # goes dark. The agent stays connected; the suite stays provably
+        # offline behind the same curl proof, with loopback up for the
+        # in-namespace WebDriver traffic. Privileges drop back to the job user
+        # before the suite runs so every file stays job-user-owned
+        # (supplementary groups are cleared; the suite uses none).
         run: |
-          restore_firewall() {
-            sudo iptables -D OUTPUT -o lo -j ACCEPT 2>/dev/null || true
-            sudo iptables -D OUTPUT ! -o lo -j REJECT 2>/dev/null || true
-            sudo ip6tables -D OUTPUT -o lo -j ACCEPT 2>/dev/null || true
-            sudo ip6tables -D OUTPUT ! -o lo -j REJECT 2>/dev/null || true
-          }
-          trap restore_firewall EXIT
-          sudo iptables -I OUTPUT 1 -o lo -j ACCEPT
-          sudo iptables -I OUTPUT 2 ! -o lo -j REJECT
-          sudo ip6tables -I OUTPUT 1 -o lo -j ACCEPT
-          sudo ip6tables -I OUTPUT 2 ! -o lo -j REJECT
-          if curl --noproxy '*' --silent --fail --max-time 3 https://example.com >/dev/null; then
-            echo "External network remained reachable during the offline desktop scenario run"
-            exit 1
-          fi
-          dbus-run-session -- xvfb-run --auto-servernum bash -c 'set -o pipefail; openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix apps/desktop/e2e 2>&1 | tee apps/desktop/e2e/native-scenarios.log'
+          export E2E_UID E2E_GID
+          E2E_UID=$(id -u)
+          E2E_GID=$(id -g)
+          env -0 > /tmp/elef-e2e-step-env
+          sudo unshare --net bash -c '
+            ip link set lo up || exit 1
+            while IFS= read -r -d "" entry; do export "$entry"; done < /tmp/elef-e2e-step-env
+            if curl --noproxy "*" --silent --fail --max-time 3 https://example.com >/dev/null; then
+              echo "External network remained reachable during the offline desktop scenario run"
+              exit 1
+            fi
+            if ! python3 -c "import socket; listener = socket.socket(); listener.bind((\"127.0.0.1\", 0)); listener.listen(1); socket.create_connection(listener.getsockname(), timeout=3)"; then
+              echo "Loopback is unavailable inside the offline network namespace"
+              exit 1
+            fi
+            exec setpriv --reuid "$E2E_UID" --regid "$E2E_GID" --clear-groups \
+              dbus-run-session -- xvfb-run --auto-servernum bash -c "set -o pipefail; openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix apps/desktop/e2e 2>&1 | tee apps/desktop/e2e/native-scenarios.log"
+          '
       - name: Summarize failed Linux desktop scenarios
         if: failure()
         shell: bash
