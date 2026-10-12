@@ -325,3 +325,12 @@ test("Rails and desktop resolve the same Art source semantics", async () => {
   assert.ok(build.includes("workspaceMatch"), "desktop build resolves workspace @elef subpaths")
   assert.ok(build.includes("manifest.exports?.[subpath]"), "desktop build follows package export maps")
 })
+
+test("opening a work restores the visual toggle after the awaited refresh", () => {
+  assert.match(application, /import \{[^}]*enableVisualModeFromInstalledPreview[^}]*\} from "\.\/editor_view\.js"/)
+  const refresh = application.indexOf('measureOpenStage("previewRefresh"')
+  const restore = application.indexOf("enableVisualModeFromInstalledPreview(elements.editorForm)")
+  assert.ok(refresh > 0 && restore > refresh, "the restore runs after the awaited preview refresh")
+  assert.ok(restore < application.indexOf("return true", refresh), "the restore runs before the open resolves")
+  assert.match(editorView, /projectionFresh !== true \|\| !projection\?\.childElementCount/, "the restore keeps the fresh-projection guard")
+})

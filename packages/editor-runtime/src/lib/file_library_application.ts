@@ -8,7 +8,7 @@ import { createCodeMirrorBinding } from "./editor_binding.js"
 import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
-import { configureEditorKind, renderEditorView } from "./editor_view.js"
+import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
 import { CREATE_WORK_EVENT, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client"
 import type { GraphController } from "@elef/client"
 
@@ -775,6 +775,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       setStatus("Work opened")
       if (viewSetupStartedAt !== null) recordOpenStage("workViewSetup", viewSetupStartedAt)
       await measureOpenStage("previewRefresh", () => elements.editorForm.previewController?.refresh())
+      // The refresh skips its enable event while projection editing is
+      // active, and the deferred install waits on a focusout that may never
+      // come. Restore the toggle from the installed preview so the awaited
+      // render cannot leave Visual permanently disabled.
+      if (visualButton && desktopFeatures.visualEditing) enableVisualModeFromInstalledPreview(elements.editorForm)
       return true
     } catch (error) {
       showError(error)
