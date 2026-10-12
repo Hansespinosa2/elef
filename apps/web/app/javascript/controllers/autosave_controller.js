@@ -41,7 +41,6 @@ export default class extends Controller {
       this.conflictTarget.addEventListener("click", this.resolveConflictClick)
     }
     const workKind = this.hasWorkKindValue ? this.workKindValue : "work"
-    this.freshNewWorkNavigation = !this.hasWorkIdValue && window.performance?.getEntriesByType?.("navigation")?.[0]?.type === "navigate"
     this.localDraftKey = this.hasWorkIdValue
       ? `${workKind}:${this.workIdValue}:${this.hasWorkIdentityValue ? this.workIdentityValue : "legacy"}`
       : `${workKind}:new:${window.location.pathname}`
@@ -471,10 +470,11 @@ export default class extends Controller {
 
   async restoreLocalDraft() {
     if (!this.localDraftKey) return
-    if (this.freshNewWorkNavigation) {
-      this.clearLocalDraft()
-      return
-    }
+    // New-work forms restore unsent drafts exactly like persisted works.
+    // A navigation-type heuristic cannot detect a "fresh" Turbo Drive visit
+    // (Turbo creates no navigation entries), and silently discarding the
+    // draft destroys unsent work and defeats crash recovery. Freshness after
+    // a successful create is handled by submit(), which clears the draft.
     const initialSnapshot = this.snapshot()
     const record = await this.readDraft(this.localDraftKey)
     if (!this.active || !record || typeof record.snapshot !== "string" || !Array.isArray(record.values) || record.snapshot === this.snapshot()) return

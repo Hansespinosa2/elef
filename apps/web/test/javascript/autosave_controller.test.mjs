@@ -487,7 +487,6 @@ function draftRecoveryFixture() {
   Object.assign(controller, {
     active: true,
     localDraftKey: "presentation:1:identity",
-    freshNewWorkNavigation: false,
     fieldTargets: [sourceField],
     element: { querySelector: selector => selector === ".source-field" ? editorHost : null },
     readDraft: async () => ({
@@ -606,6 +605,63 @@ test("autosave conflict review presents both byte versions and starts the merge 
   assert.equal(nodes.get("#conflict-disk").textContent, "disk <edit>")
   assert.equal(nodes.get("#conflict-merge").value, "local <draft>")
   assert.equal(nodes.get("#conflict-message").textContent, "A newer version is active.")
+})
+
+test("a Turbo revisit to a new-work form restores the unsent draft instead of discarding it", async () => {
+  const sourceField = {
+    name: "document[source]",
+    value: "",
+    dispatched: [],
+    dispatchEvent(event) { this.dispatched.push(event.type) }
+  }
+  const editorHost = { editorController: {}, dataset: {} }
+  const deletedKeys = []
+  const status = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: { querySelector: () => editorHost },
+    fieldTargets: [sourceField],
+    hasWorkKindValue: true,
+    workKindValue: "document",
+    hasWorkIdValue: false,
+    delayValue: 900,
+    openDatabase: () => null,
+    createSession: () => ({ dispose() {} }),
+    attachSessionToEditor() {},
+    readDraft: async key => {
+      assert.equal(key, "document:new:/documents/new")
+      return {
+        key,
+        snapshot: "# Unsent new draft",
+        values: ["# Unsent new draft"],
+        updatedAt: 1
+      }
+    },
+    deleteDraft: async key => { deletedKeys.push(key); return true },
+    scheduleSave() {},
+    setStatus: text => status.push(text)
+  })
+
+  const originalWindow = globalThis.window
+  globalThis.window = {
+    location: { pathname: "/documents/new" },
+    // Turbo Drive visits create no navigation entries, so this entry is the
+    // stale one from the initial full page load — exactly what used to wipe
+    // the draft on every Turbo revisit.
+    performance: { getEntriesByType: () => [{ type: "navigate" }] }
+  }
+
+  try {
+    controller.connect()
+    for (let i = 0; i < 50 && sourceField.value === ""; i++) await Promise.resolve()
+
+    assert.deepEqual(deletedKeys, [])
+    assert.equal(sourceField.value, "# Unsent new draft")
+    assert.deepEqual(sourceField.dispatched, ["input"])
+    assert.deepEqual(status, ["Recovered unsent changes"])
+  } finally {
+    globalThis.window = originalWindow
+  }
 })
 
 test("autosave delegates merged conflict text to the shared save flow", () => {
