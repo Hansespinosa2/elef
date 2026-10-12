@@ -15,6 +15,7 @@
 <div id="client-shell-mount"
      data-controller="client-shell"
      data-client-shell-initial-url-value="<%= request.path %>"
+     data-client-shell-base-path-value="<%= client_base_path %>"
      data-client-shell-card-notes-value="<%= ERB::Util.html_escape((@card_notes || {}).to_json) %>">
   <template data-client-slot="actions"><%= actions %></template>
   <template data-client-slot="graph"><%= render "presentations/document_graph", graph: @document_graph if current_filter == "documents" && @document_graph %></template>

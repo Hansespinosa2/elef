@@ -81,6 +81,27 @@ class ApplicationHelperTest < ActionView::TestCase
     assert_equal "/vendor/pptxgen.bundle.js", pptx_library_path
   end
 
+  test "exposes the request script name as the client base path" do
+    request.script_name = "/apps/elef/dev"
+
+    assert_equal "/apps/elef/dev", client_base_path
+  end
+
+  test "falls back to the relative url root for the client base path" do
+    request.script_name = ""
+    Rails.application.config.relative_url_root = "/mounted/elef"
+
+    assert_equal "/mounted/elef", client_base_path
+  ensure
+    Rails.application.config.relative_url_root = nil
+  end
+
+  test "exposes an empty client base path at the domain root" do
+    request.script_name = ""
+
+    assert_equal "", client_base_path
+  end
+
   test "lists only linkable document titles for the document link palette" do
     workspace = Workspace.create!(name: "Palette workspace", slug: "palette-workspace")
     Document.create!(title: "Linkable target", source: "# Linkable target", workspace: workspace)

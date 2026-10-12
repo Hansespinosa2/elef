@@ -7,6 +7,7 @@
 <div id="client-shell-mount"
      data-controller="client-shell"
      data-client-shell-initial-url-value="<%= request.path %>"
+     data-client-shell-base-path-value="<%= client_base_path %>"
      data-client-shell-snippets-url-value="<%= snippets_path(format: :json) %>"
      data-client-shell-math-shortcuts-url-value="<%= math_shortcuts_path(format: :json) %>"
      data-client-shell-close-url-value="<%= settings_path %>">
