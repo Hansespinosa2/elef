@@ -44,12 +44,16 @@ function buildIdentityBinary({ config, features, frontend }) {
     stdio: "inherit",
     env: { ...process.env, ELEF_E2E_BUILD: "1", ELEF_DESKTOP_PROFILE: frontend }
   })
+  // --debug targets target/debug, where the probes launch from: without it
+  // the builds land in target/release and the probes silently reuse whatever
+  // stale debug binary the previous smoke left behind.
   const build = spawnSync("npm", [
     "run",
     "tauri:build",
     "--prefix",
     "apps/desktop/frontend",
     "--",
+    "--debug",
     "--config",
     `src-tauri/${config}`,
     "--features",
