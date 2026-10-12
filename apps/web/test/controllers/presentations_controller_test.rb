@@ -145,6 +145,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "editor markup configures autosave and keeps new presentations client-only" do
     get edit_presentation_path(presentations(:one))
     assert_select "form.visual-editor-form"
+    assert_select "form.visual-editor-form[data-bug-report-ignore]", count: 1
     assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
     assert_select 'form.visual-editor-form form', count: 0
     assert_select '[data-editor-view-config]'
