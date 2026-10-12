@@ -326,6 +326,26 @@ test("Rails and desktop resolve the same Art source semantics", async () => {
   assert.ok(build.includes("manifest.exports?.[subpath]"), "desktop build follows package export maps")
 })
 
+test("desktop image paste and file drop reach the shared media controller", async () => {
+  const workForm = await read("apps/web/app/views/works/_form.html.erb")
+  assert.match(workForm, /paste->media#paste:capture/)
+  const desktopForm = document.querySelector("#desktop-editor-form")
+  assert.match(desktopForm.getAttribute("data-action"), /paste->media#paste:capture/)
+  // Tauri's native drag-drop handler consumes OS file drops into
+  // tauri://drag-drop window events, so the DOM drop handlers in the shared
+  // editor never see them. The window opts out, restoring the DOM path both
+  // hosts share.
+  const tauriConfig = JSON.parse(await read("apps/desktop/src-tauri/tauri.conf.json"))
+  const mainWindow = tauriConfig.app.windows.find(candidate => candidate.label === "main")
+  assert.equal(mainWindow.dragDropEnabled, false)
+  // With HTML5 drops enabled, an unhandled file drop would navigate the
+  // chromeless webview to a file:// URL; the host guard swallows drops
+  // outside the shared editor surfaces instead.
+  assert.match(bootstrap, /installDesktopDropGuard\(\)/)
+  const dropGuard = await read("apps/desktop/frontend/src/desktop-drop-guard.js")
+  assert.match(dropGuard, /\.editor-surface, \.editor-projection/)
+})
+
 test("opening a work restores the visual toggle after the awaited refresh", () => {
   assert.match(application, /import \{[^}]*enableVisualModeFromInstalledPreview[^}]*\} from "\.\/editor_view\.js"/)
   const refresh = application.indexOf('measureOpenStage("previewRefresh"')

@@ -4,6 +4,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window"
 import { completeBootstrap } from "./bootstrap-flow.js"
 import { createCloseFlow } from "./close-flow.js"
 import { createDiagnosticFailures } from "./diagnostic-failures.js"
+import { installDesktopDropGuard } from "./desktop-drop-guard.js"
 import { createTransportAdapter } from "./transport-adapter.js"
 import { createMediaFetch, mediaUrlsForWorkFolder } from "./media-transport.js"
 import { createPreviewFetch } from "./preview-transport.js"
@@ -25,6 +26,7 @@ const fileLibrary = createFileLibraryTransport({ invoke })
 const updateRuntime = createDesktopUpdateRuntime({ invoke })
 const diagnosticFailures = createDiagnosticFailures(invoke)
 const nativeFetch = globalThis.fetch.bind(globalThis)
+installDesktopDropGuard()
 
 startFileLibraryApplication({
   fileLibrary,
