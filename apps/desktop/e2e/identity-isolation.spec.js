@@ -28,7 +28,11 @@ describe("Stable and Dev app identity isolation", () => {
     if (process.platform !== "linux") return
     const expectedBusName = process.env.ELEF_E2E_IDENTITY_EXPECTED_BUS_NAME
     assert.ok(expectedBusName, "the identity probe must receive its expected D-Bus name")
-    const busNames = execFileSync("busctl", ["--user", "list", "--no-legend"], { encoding: "utf8" })
+    // The app registers on the session bus, which dbus-run-session keeps
+    // private per run: busctl must query that same address, not --user.
+    const sessionBus = process.env.DBUS_SESSION_BUS_ADDRESS
+    assert.ok(sessionBus, "the identity probe must run under the suite's private D-Bus session")
+    const busNames = execFileSync("busctl", ["--address", sessionBus, "list", "--no-legend"], { encoding: "utf8", timeout: 15_000 })
     const owner = busNames
       .split("\n")
       .map(line => line.trim().split(/\s+/)[0])

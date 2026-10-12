@@ -2294,7 +2294,11 @@ describe("desktop binary workflows and native boundaries", () => {
     await libraryCreateDeleteWorkflow(new DesktopLibraryUi())
   })
 
-  it("runs the shared library deep links flow", async () => {
+  it("runs the shared library deep links flow", async function () {
+    // Three full-boot deep-link reloads cost ~20s each on macOS CI runners
+    // (WebKit boot behind the postMessage IPC fallback); the per-step waits
+    // still bound every stage, this only extends the total budget.
+    this.timeout(180_000)
     await libraryDeepLinksWorkflow(new DesktopLibraryUi())
   })
 
