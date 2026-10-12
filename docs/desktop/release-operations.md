@@ -9,8 +9,8 @@ The v0.x release is tag-driven: a `desktop-v*` tag opens a draft GitHub Release,
 Tag the release commit after the `dev` → `main` promotion as `desktop-vX.Y.Z` and push the tag:
 
 ~~~sh
-git tag desktop-0.1.0
-git push origin desktop-0.1.0
+git tag desktop-v0.1.0
+git push origin desktop-v0.1.0
 ~~~
 
 The release workflow triggers on `desktop-v*` tags only (enforced by `check_release_ci.mjs`). Pushing the tag starts the `macos` job, which builds the Apple Silicon app plus DMG, signs the updater artifacts, and opens the release as a **draft** with `latest.json` attached. Nothing is offered to users until the draft is published.
@@ -42,13 +42,13 @@ Block a bad release in this order:
 
 1. Warn. Prepend a `BLOCKED` banner to the release notes naming the affected version and the fixed version (or that none exists yet):
    ~~~sh
-   gh release view desktop-0.1.0 --json body --jq .body > /tmp/elef-release-notes.md
+   gh release view desktop-v0.1.0 --json body --jq .body > /tmp/elef-release-notes.md
    # Prepend the BLOCKED banner, then:
-   gh release edit desktop-0.1.0 --notes-file /tmp/elef-release-notes.md
+   gh release edit desktop-v0.1.0 --notes-file /tmp/elef-release-notes.md
    ~~~
 2. Remove the macOS offer. Flip the release to prerelease so `/latest` no longer serves its `latest.json`, then verify the feed moved past it:
    ~~~sh
-   gh release edit desktop-0.1.0 --prerelease
+   gh release edit desktop-v0.1.0 --prerelease
    curl -fsSL https://github.com/Hansespinosa2/elef/releases/latest/download/latest.json | head -c 300
    ~~~
    Keep the published assets in place: deleting the release would break AUR upstream URLs and the audit trail. The DMG stays downloadable but is marked blocked.
