@@ -238,6 +238,38 @@ async function applyEditorSource(source, {
 
 // src/lib/editor_view.ts
 import { sanitizePreview as installSanitizedPreview } from "@elef/client/sanitize";
+
+// src/lib/projection_editability.ts
+function markProjectionBlocksReadOnly(projection) {
+  if (!projection?.querySelectorAll) return;
+  projection.querySelectorAll("[data-editor-block-id]").forEach((block) => {
+    setProjectionBlockEditable(block, false, "");
+  });
+}
+function setProjectionBlockEditable(block, editable, ariaLabel) {
+  setAttribute(block, "contenteditable", String(editable));
+  if (editable) {
+    setAttribute(block, "role", "textbox");
+    setAttribute(block, "aria-label", ariaLabel);
+    setAttribute(block, "aria-multiline", "true");
+    setAttribute(block, "spellcheck", "true");
+    removeAttribute(block, "aria-readonly");
+  } else {
+    removeAttribute(block, "role");
+    removeAttribute(block, "aria-label");
+    removeAttribute(block, "aria-multiline");
+    removeAttribute(block, "spellcheck");
+    setAttribute(block, "aria-readonly", "true");
+  }
+}
+function setAttribute(element, name, value) {
+  if (element.getAttribute(name) !== value) element.setAttribute(name, value);
+}
+function removeAttribute(element, name) {
+  if (element.hasAttribute(name)) element.removeAttribute(name);
+}
+
+// src/lib/editor_view.ts
 var EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">
     <header class="editor-shell-header">
@@ -359,6 +391,7 @@ var TARGET = "[data-editor-view-target]";
 function installPreviewHtml(container, html) {
   const mediaBaseUrl = container.closest("form")?.dataset.mediaAssetBaseUrlValue || "";
   installSanitizedPreview(container, html, { mediaBaseUrl });
+  if (!container.hasAttribute("data-visual-editor-target")) markProjectionBlocksReadOnly(container);
 }
 function mountEditorHosts(root = globalThis.document) {
   if (!root) return;
@@ -556,6 +589,7 @@ function configureEditorKind(root, kind, {
     root.querySelector(".editor-mode-switch")?.removeAttribute("aria-label");
     root.querySelector("[data-editor-view-target='editingMode']").textContent = "Source";
     root.querySelector("[data-visual-editor-target='projection']")?.removeAttribute("data-visual-editor-target");
+    markProjectionBlocksReadOnly(root.querySelector("[data-preview-target='container']"));
   }
   if (!presentationEditingEnabled) presentationTools?.remove();
   if (!slideOverviewEnabled) slideOverview?.remove();
@@ -807,30 +841,6 @@ function buildPreviewRequestBody(fields) {
     body.set(field.name, field.value);
   }
   return body;
-}
-
-// src/lib/projection_editability.ts
-function setProjectionBlockEditable(block, editable, ariaLabel) {
-  setAttribute(block, "contenteditable", String(editable));
-  if (editable) {
-    setAttribute(block, "role", "textbox");
-    setAttribute(block, "aria-label", ariaLabel);
-    setAttribute(block, "aria-multiline", "true");
-    setAttribute(block, "spellcheck", "true");
-    removeAttribute(block, "aria-readonly");
-  } else {
-    removeAttribute(block, "role");
-    removeAttribute(block, "aria-label");
-    removeAttribute(block, "aria-multiline");
-    removeAttribute(block, "spellcheck");
-    setAttribute(block, "aria-readonly", "true");
-  }
-}
-function setAttribute(element, name, value) {
-  if (element.getAttribute(name) !== value) element.setAttribute(name, value);
-}
-function removeAttribute(element, name) {
-  if (element.hasAttribute(name)) element.removeAttribute(name);
 }
 
 // src/lib/renderer_worker_client.ts

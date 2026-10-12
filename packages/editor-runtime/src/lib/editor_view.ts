@@ -1,4 +1,5 @@
 import { sanitizePreview as installSanitizedPreview } from "@elef/client/sanitize"
+import { markProjectionBlocksReadOnly } from "./projection_editability.js"
 
 const EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">
@@ -168,6 +169,10 @@ export interface DesktopFeatures {
 export function installPreviewHtml(container: Element, html: string): void {
   const mediaBaseUrl = container.closest("form")?.dataset.mediaAssetBaseUrlValue || ""
   installSanitizedPreview(container, html, { mediaBaseUrl })
+  // Managed projections re-sync editability on elef:preview-updated; an
+  // unmanaged projection (no visual-editor target) would otherwise keep the
+  // installed contenteditable shells live with nothing to propagate edits.
+  if (!container.hasAttribute("data-visual-editor-target")) markProjectionBlocksReadOnly(container)
 }
 
 export function mountEditorHosts(root: Document | null | undefined = globalThis.document): void {
@@ -390,6 +395,7 @@ export function configureEditorKind(root: Element | null, kind: string, {
     root.querySelector(".editor-mode-switch")?.removeAttribute("aria-label")
     ;(root.querySelector("[data-editor-view-target='editingMode']") as Element).textContent = "Source"
     root.querySelector("[data-visual-editor-target='projection']")?.removeAttribute("data-visual-editor-target")
+    markProjectionBlocksReadOnly(root.querySelector("[data-preview-target='container']"))
   }
   if (!presentationEditingEnabled) presentationTools?.remove()
   if (!slideOverviewEnabled) slideOverview?.remove()

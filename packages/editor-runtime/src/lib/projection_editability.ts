@@ -1,3 +1,15 @@
+// A projection with no live visual editor (the source-only Stable profile
+// registers neither visual-editor nor the presentation editor) must never
+// expose editable blocks: installed HTML always carries contenteditable
+// shells, and without a manager no edit could propagate back to source.
+// Mirrors the source-mode end state of syncProjectionEditability.
+export function markProjectionBlocksReadOnly(projection: Element | null | undefined): void {
+  if (!projection?.querySelectorAll) return
+  projection.querySelectorAll("[data-editor-block-id]").forEach((block) => {
+    setProjectionBlockEditable(block, false, "")
+  })
+}
+
 export function setProjectionBlockEditable(block: Element, editable: boolean, ariaLabel: string): void {
   setAttribute(block, "contenteditable", String(editable))
 
