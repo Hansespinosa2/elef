@@ -104,6 +104,12 @@ jobs:
 
   aur-publish:
     needs: publish
+    # AUR pushing stays off until the maintainer has an AUR account: without
+    # the account variable the job skips instead of failing at the
+    # desktop-aur-publishing environment gate (its branch policy only allows
+    # main, so tag runs can never enter it). When enabling, also add the
+    # desktop-v* tag pattern to that environment's branch policy.
+    if: vars.AUR_ACCOUNT_NAME != ''
     runs-on: ubuntu-22.04
     environment: desktop-aur-publishing
     steps:
