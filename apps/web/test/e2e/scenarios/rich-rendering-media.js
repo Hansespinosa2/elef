@@ -24,11 +24,18 @@ export async function richRenderingMediaWorkflow(ui) {
   await ui.refreshPreview()
   await ui.assertRichRenderingMedia()
 
-  await ui.enterPresentationMode()
-  await ui.assertPresentationSlide(0, "Rich rendering and media sample")
-  await ui.movePresentation("ArrowRight")
-  await ui.assertPresentationSlide(1, "Art sample")
-  await ui.exitPresentationMode()
+  try {
+    await ui.enterPresentationMode()
+    await ui.assertPresentationSlide(0, "Rich rendering and media sample")
+    await ui.movePresentation("ArrowRight")
+    await ui.assertPresentationSlide(1, "Art sample")
+    await ui.exitPresentationMode()
+  } finally {
+    // A missed native Escape must never wedge the shared app in presentation
+    // mode and cascade into unrelated scenarios; always leave through the
+    // product's native exit control, mirroring presentationModeWorkflow.
+    await ui.returnToEditor()
+  }
 
   const lineSeparator = originalStoredSource.match(/\r\n|\r|\n/)?.[0] || "\n"
   const editedSource = `${originalStoredSource}Saved by the rich fixture round-trip.${lineSeparator}`

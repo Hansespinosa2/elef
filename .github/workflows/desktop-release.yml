@@ -41,7 +41,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/desktop
-          tauriScript: npm --prefix frontend run tauri --
+          # Absolute CLI path: tauri-action prepends `run` to npm bins, which
+          # breaks npm script resolution for compound tauriScript values.
+          tauriScript: ${{ github.workspace }}/apps/desktop/frontend/node_modules/.bin/tauri
           args: --config src-tauri/tauri.release.generated.conf.json --bundles app,dmg
           tagName: ${{ github.ref_name }}
           releaseName: Elef Desktop ${{ github.ref_name }}
