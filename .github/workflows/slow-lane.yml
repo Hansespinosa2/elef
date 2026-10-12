@@ -1,0 +1,131 @@
+name: slow-lane
+
+# The dev slow lane: the full release envelope (bin/check all, including the
+# desktop suites, parity, and the native benchmark) on every dev push. PR CI
+# already runs the evidence jobs; the slow lane re-proves the merged result
+# and keeps a visible record of what failed where on dev. A newer dev push
+# supersedes older slow runs (this workflow is not consumed by deployment
+# authorization, so cancelling is safe).
+on:
+  push:
+    branches: [ dev ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: slow-lane-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  slow-lane-full:
+    runs-on: ubuntu-latest
+    # bin/check all carries its own 45-minute ceiling; the extra budget is
+    # toolchain, dependency, and browser setup on a cold runner.
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: elef_test
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U postgres -d elef_test" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/desktop/frontend/package-lock.json
+            apps/desktop/e2e/package-lock.json
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          working-directory: apps/web
+          bundler-cache: true
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+      - name: Install Linux desktop build dependencies
+        run: |
+          timeout 600 sudo apt-get update
+          timeout 900 sudo apt-get install --yes build-essential curl dbus-daemon file iproute2 iptables libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf unzip webkit2gtk-driver wget xdotool xvfb zip
+      - name: Install frontend dependencies
+        run: |
+          npm ci
+          npm ci --prefix apps/desktop/frontend
+          npm ci --prefix apps/desktop/e2e
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/desktop/e2e/package-lock.json') }}
+      - name: Install browser operating-system dependencies
+        run: npx --prefix apps/desktop/e2e playwright install-deps chromium
+      - name: Install headless browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx --prefix apps/desktop/e2e playwright install chromium
+      - name: Build test-only N-1 and N desktop updater packages
+        run: node apps/desktop/e2e/build-update-fixtures.mjs
+      - name: Run the full release envelope with its time ceiling
+        env:
+          RAILS_ENV: test
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGTESTDATABASE: elef_test
+        run: |
+          set -o pipefail
+          bin/check all 2>&1 | tee /tmp/elef-slow-lane.log
+      - name: Summarize the slow-lane failure
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo "### Slow-lane failure (last 80 lines)"
+            echo '```text'
+            tail -n 80 /tmp/elef-slow-lane.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve the slow-lane log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: slow-lane-log-${{ github.run_id }}-attempt${{ github.run_attempt }}
+          path: /tmp/elef-slow-lane.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  slow-lane-status:
+    name: Slow-lane status (informational)
+    needs: [ slow-lane-full ]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Publish what failed where
+        run: |
+          {
+            echo "## Slow-lane status"
+            echo ""
+            echo "- Branch: \`${{ github.ref_name }}\` @ \`${{ github.sha }}\`"
+            echo "- Full envelope: ${{ needs.slow-lane-full.result }}"
+            echo "- Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo ""
+            echo "A red slow lane blocks nothing by itself; it tells the shepherd"
+            echo "exactly which envelope step failed on the merged dev tip."
+          } >> "$GITHUB_STEP_SUMMARY"
