@@ -169,7 +169,9 @@ export function createPresentation(model: PptxModel, PptxGenJS: PptxConstructor 
   pptx.title = model.presentation.title
   pptx.company = "Elef"
   const fonts = model.presentation.fonts
-  const headingFace = primaryFont(model.presentation.typography === "technical" ? fonts.technical : fonts[model.presentation.typography])
+  const canonical = presentationTheme(model.presentation.theme, model.presentation.typography)
+  const headingStack = canonical === "modern-dark" ? fonts.modern : canonical === "technical-light" ? fonts.technical : fonts.book
+  const headingFace = primaryFont(headingStack)
   pptx.theme = {
     headFontFace: headingFace,
     bodyFontFace: primaryFont(fonts.body),
@@ -308,7 +310,7 @@ export async function renderSlides(pptx: any, stage: HTMLElement, model: PptxMod
     const pptxSlide = pptx.addSlide()
     const root = frame.querySelector(".slide")
     if (!root) continue
-    pptxSlide.addImage({ data: gradientBackground(model.presentation.theme), x: 0, y: 0, w: 40 / 3, h: 7.5 })
+    pptxSlide.addImage({ data: gradientBackground(presentationTheme(model.presentation.theme, model.presentation.typography)), x: 0, y: 0, w: 40 / 3, h: 7.5 })
     if (slide.title_html) await addBlockElements(pptxSlide, root.querySelector(".slide-title"), root, assets, pptx.ShapeType)
 
     for (const block of root.querySelectorAll(".slide-block")) await addBlockElements(pptxSlide, block, root, assets, pptx.ShapeType)
@@ -710,14 +712,18 @@ export function safeHyperlink(url: string): boolean {
   return /^(https?:|mailto:|tel:)/i.test(url)
 }
 
-export function gradientBackground(theme: string): string {
-  const themes: Record<string, [string, string, string]> = {
-    dark: ["#202c32", "#11161a", "#304047"],
-    light: ["#fffdf8", "#f5f0e7", "#d8d0c2"],
-    match: ["#fcfaf5", "#f5f0e7", "#d8d0c2"]
+// Exported slide background, derived from the same canonical presentation
+// theme the slide surface renders (book-light carries the match tones,
+// modern-dark the dark tones, technical-light the light tones), so the
+// file matches the screen for all 9 legacy pairs.
+export function gradientBackground(canonicalTheme: string): string {
+  const palettes: Record<string, [string, string, string]> = {
+    "book-light": ["#fcfaf5", "#f5f0e7", "#d8d0c2"],
+    "modern-dark": ["#202c32", "#11161a", "#304047"],
+    "technical-light": ["#fffdf8", "#f5f0e7", "#d8d0c2"]
   }
   const fallback: [string, string, string] = ["#fcfaf5", "#f5f0e7", "#d8d0c2"]
-  const [start, end, border] = themes[theme] || fallback
+  const [start, end, border] = palettes[canonicalTheme] || fallback
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720"><defs><linearGradient id="g" x1="0" y1="1" x2="1" y2="0"><stop offset="0" stop-color="${start}"/><stop offset="1" stop-color="${end}"/></linearGradient></defs><rect x="0.5" y="0.5" width="1279" height="719" rx="10" fill="url(#g)" stroke="${border}"/></svg>`
   return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`
 }

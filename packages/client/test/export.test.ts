@@ -35,7 +35,7 @@ function testModel() {
       title: "Work",
       theme: "dark",
       typography: "technical",
-      fonts: { technical: "Arial, sans-serif", body: "Georgia, serif" },
+      fonts: { technical: "Courier, monospace", modern: "Arial, sans-serif", body: "Georgia, serif" },
     },
     margin_settings: { section: "S", subsection: "Sub", footnote: true, slide_count: true },
     slides: [
@@ -115,8 +115,12 @@ test("pptx engine renders slide markup and transfer blobs", async () => {
   assert.equal(blob.type, "text/plain");
   assert.equal(await blob.text(), "hi");
 
-  const svg = gradientBackground("dark");
+  const svg = gradientBackground("modern-dark");
   assert.ok(svg.startsWith("data:image/svg+xml;base64,"));
+  const decoded = (uri: string): string => Buffer.from(uri.split(",", 2)[1] ?? "", "base64").toString("utf8");
+  assert.ok(decoded(gradientBackground("book-light")).includes("#fcfaf5"));
+  assert.ok(decoded(gradientBackground("technical-light")).includes("#fffdf8"));
+  assert.ok(decoded(gradientBackground("modern-dark")).includes("#202c32"));
 });
 
 test("PPTX stage groups middle stacks, lanes, docking, and default positions", () => {
@@ -234,6 +238,11 @@ test("pptx presentation creation honors model style", () => {
   assert.equal(pptx.author, "Elef");
   assert.equal(pptx.title, "Work");
   assert.equal((pptx.theme as Record<string, unknown>).headFontFace, "Arial");
+
+  const lightTechnical = testModel();
+  lightTechnical.presentation.theme = "light";
+  const lightPptx = createPresentation(lightTechnical, FakePptx) as unknown as FakePptx;
+  assert.equal((lightPptx.theme as Record<string, unknown>).headFontFace, "Courier");
 });
 
 test("pptx render stage escapes slide layouts", () => {

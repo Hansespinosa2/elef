@@ -673,4 +673,15 @@ class PresentationTest < ActiveSupport::TestCase
     assert_equal "modern-dark", themed.call("theme: 'dark' # evening")
     assert_equal "technical-light", themed.call("typography: \"technical\"")
   end
+
+  test "presentation_theme normalizes messy resolved values through the shared parser" do
+    presentation = Presentation.new(title: "Messy", source: "# Hi")
+    presentation.define_singleton_method(:theme) { "  'dark' # evening " }
+    presentation.define_singleton_method(:typography) { "book" }
+    assert_equal "modern-dark", presentation.presentation_theme
+
+    presentation.define_singleton_method(:theme) { "neon" }
+    presentation.define_singleton_method(:typography) { '"technical"' }
+    assert_equal "technical-light", presentation.presentation_theme
+  end
 end

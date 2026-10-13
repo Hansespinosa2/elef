@@ -48,10 +48,12 @@
 
 /* Canonical presentation themes: one color mode + one font per theme,
    derived at render time from the legacy theme/typography pair (see
-   presentationTheme() in @elef/work-model). Values are copied verbatim from
-   the legacy work-theme-* rules above so every legacy pair keeps its exact
-   colors; the doubled class outranks .work-theme-* so the two axes can never
-   fight. Book Light is the default and is pixel-identical to work-theme-match. */
+   presentationTheme() in @elef/work-model). Each theme copies one legacy
+   palette verbatim (book-light the match tones, modern-dark the dark tones,
+   technical-light the light tones); the 3 pairs whose theme axis differs
+   from their theme's palette change tone. The doubled class outranks
+   .work-theme-* so the two axes can never fight. Book Light is the default
+   and is pixel-identical to work-theme-match. */
 .presentation-surface.slides-presentation-book-light {
   --work-surface-background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper));
   --work-surface-border: var(--oradia-paper-line);

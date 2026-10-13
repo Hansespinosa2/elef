@@ -48,7 +48,9 @@
 
 /* Canonical presentation-theme headings. The doubled class outranks the
    legacy .slides-typography-* rules so the derived theme always wins on
-   slide surfaces; legacy classes stay emitted as aliases. */
+   slide surfaces; legacy classes stay emitted as aliases. Body copy has no
+   reset by design: hybrid pairs keep their legacy body metrics (see
+   presentationTheme() in @elef/work-model). */
 .presentation-surface.slides-presentation-book-light :is(h1, h2, h3, h4, h5, h6) { font-family: var(--oradia-serif); }
 
 .presentation-surface.slides-presentation-modern-dark :is(h1, h2, h3, h4, h5, h6) { font-family: Baskerville, "Iowan Old Style", Georgia, serif; font-weight: 600; }

@@ -187,7 +187,9 @@ const TYPOGRAPHIES = new Set(["book", "modern", "technical"])
 // (the preserved Book Light default), (dark, modern), and
 // (light, technical); the other 6 shift font, tone, or both (light's
 // #fffdf8 and match's #fcfaf5 gradient starts differ, and dark now always
-// pairs with the modern face). Mirrored by Work#presentation_theme.
+// pairs with the modern face). Body copy keeps legacy metrics by design:
+// hybrid pairs such as (dark, technical) render modern-dark headings over
+// technical-density (0.96em) body. Mirrored by Work#presentation_theme.
 export const PRESENTATION_THEMES = ["book-light", "modern-dark", "technical-light"] as const
 export type PresentationTheme = (typeof PRESENTATION_THEMES)[number]
 
