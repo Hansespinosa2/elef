@@ -168,6 +168,15 @@ export default class extends Controller<HTMLElement> {
       }
     })
     this.view.dom.addEventListener("keydown", this.handleVimKeydown = () => queueMicrotask(() => this.updateMode()))
+    // CodeMirror arms a 2-second Tab-exit window on every Escape; a Tab
+    // inside that window skips all key bindings and moves focus out. The
+    // source editor never surrenders Tab, so this bubble listener (which
+    // runs after CodeMirror's own content handlers armed the window) clears
+    // the temporary window while leaving a deliberate Ctrl-M permanent
+    // mode untouched. Keyboard users can still exit via Ctrl-M.
+    this.view.dom.addEventListener("keydown", this.handleEscapeTabFocus = (event: KeyboardEvent) => {
+      if (event.key === "Escape") this.suppressEscapeTabFocusWindow()
+    })
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event: KeyboardEvent) => this.forwardProxyKeydown(event))
     this.form = this.element.closest("form")
     this.form?.addEventListener("submit", this.handleSubmit = () => {
@@ -213,6 +222,7 @@ export default class extends Controller<HTMLElement> {
     this.view?.dom.removeEventListener("focusin", this.handleFocusIn)
     this.view?.dom.removeEventListener("focusout", this.handleFocusOut)
     this.view?.dom.removeEventListener("keydown", this.handleVimKeydown)
+    this.view?.dom.removeEventListener("keydown", this.handleEscapeTabFocus)
     this.unbindVimEvents()
     this.view?.destroy()
     if (this.element.editorController === this) delete this.element.editorController
@@ -633,6 +643,15 @@ export default class extends Controller<HTMLElement> {
   focusFromSurface(event: MouseEvent): void {
     if (event.target instanceof Element && event.target.closest("button, input, select, summary, .snippet-palette")) return
     this.focus()
+  }
+
+  suppressEscapeTabFocusWindow(): void {
+    // tabFocusMode is untyped on EditorView (read narrowly): -1 disabled,
+    // 0 deliberate permanent mode, positive timestamp temporary window.
+    const inputState = (this.view as unknown as { inputState?: { tabFocusMode?: unknown } }).inputState
+    if (typeof inputState?.tabFocusMode === "number" && inputState.tabFocusMode > 0) {
+      this.view.setTabFocusMode(false)
+    }
   }
 
   forwardProxyKeydown(event: KeyboardEvent): void {

@@ -141,6 +141,9 @@ class editor_controller_default extends Controller {
       }
     });
     this.view.dom.addEventListener("keydown", this.handleVimKeydown = () => queueMicrotask(() => this.updateMode()));
+    this.view.dom.addEventListener("keydown", this.handleEscapeTabFocus = (event) => {
+      if (event.key === "Escape") this.suppressEscapeTabFocusWindow();
+    });
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event) => this.forwardProxyKeydown(event));
     this.form = this.element.closest("form");
     this.form?.addEventListener("submit", this.handleSubmit = () => {
@@ -184,6 +187,7 @@ class editor_controller_default extends Controller {
     this.view?.dom.removeEventListener("focusin", this.handleFocusIn);
     this.view?.dom.removeEventListener("focusout", this.handleFocusOut);
     this.view?.dom.removeEventListener("keydown", this.handleVimKeydown);
+    this.view?.dom.removeEventListener("keydown", this.handleEscapeTabFocus);
     this.unbindVimEvents();
     this.view?.destroy();
     if (this.element.editorController === this) delete this.element.editorController;
@@ -534,6 +538,12 @@ class editor_controller_default extends Controller {
   focusFromSurface(event) {
     if (event.target instanceof Element && event.target.closest("button, input, select, summary, .snippet-palette")) return;
     this.focus();
+  }
+  suppressEscapeTabFocusWindow() {
+    const inputState = this.view.inputState;
+    if (typeof inputState?.tabFocusMode === "number" && inputState.tabFocusMode > 0) {
+      this.view.setTabFocusMode(false);
+    }
   }
   forwardProxyKeydown(event) {
     if (["Shift", "Control", "Alt", "Meta", "CapsLock"].includes(event.key)) return;
