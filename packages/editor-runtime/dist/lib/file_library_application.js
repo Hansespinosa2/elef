@@ -125,7 +125,8 @@ function startFileLibraryApplication(platform) {
     updateVersion: document.querySelector("#update-version"),
     updateNotes: document.querySelector("#update-notes"),
     updateProgress: document.querySelector("#update-progress"),
-    presentationExit: document.querySelector("#exit-presentation")
+    presentationExit: document.querySelector("#exit-presentation"),
+    presentationStart: document.querySelector("#start-presentation")
   };
   let library = null;
   let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} };
@@ -647,6 +648,7 @@ function startFileLibraryApplication(platform) {
       notice.hidden = work.notices.length === 0;
       elements.library.hidden = true;
       elements.workView.hidden = false;
+      elements.presentationStart.hidden = isDocument;
       document.body.dataset.desktopView = "editor";
       shellElement("#breadcrumb-current").textContent = work.name;
       setStatus("Work opened");
@@ -922,6 +924,7 @@ function startFileLibraryApplication(platform) {
     }
     document.body.classList.add("presenting-work");
     elements.presentationExit.hidden = false;
+    elements.presentationStart.hidden = true;
     document.addEventListener("keydown", presentationKeydown, true);
     try {
       await getCurrentWindow().setFullscreen(true);
@@ -941,6 +944,7 @@ function startFileLibraryApplication(platform) {
     if (!document.body.classList.contains("presenting-work")) return;
     document.body.classList.remove("presenting-work");
     elements.presentationExit.hidden = true;
+    elements.presentationStart.hidden = !activeWorkFolder || activeWorkFolder.source_file === "document.md";
     document.removeEventListener("keydown", presentationKeydown, true);
     presentationMount?.destroy();
     presentationMount = null;
@@ -1031,6 +1035,7 @@ function startFileLibraryApplication(platform) {
   if (updateEnabled) shellElement("#check-for-updates").addEventListener("click", () => void checkForUpdates(true));
   shellElement("#install-update").addEventListener("click", () => void armUpdateForQuit());
   elements.presentationExit.addEventListener("click", () => void exitPresentation());
+  elements.presentationStart.addEventListener("click", () => void startPresentation());
   shellElement("#update-later").addEventListener("click", () => elements.updateDialog.close());
   elements.updateDialog.addEventListener("close", () => {
     const update = pendingUpdate;
