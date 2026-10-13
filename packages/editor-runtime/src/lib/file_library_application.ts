@@ -748,8 +748,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       elements.workTitle.textContent = work.name
       elements.workTitle.hidden = !isDocument
       elements.titleInput.value = work.name
-      shellElement<HTMLElement>("#work-kind").textContent = work.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
-      shellElement<HTMLElement>("#work-source-name").textContent = work.source_file
+      syncSourceLabel()
       elements.editorField.dataset.editorInitialSourceValue = JSON.stringify(work.source)
       const mediaUrls = mediaUrlsForWorkFolder(work)
       elements.editorForm.dataset.previewUrlValue = mediaUrls.previewUrl
@@ -957,6 +956,35 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
   }
 
+  async function exportPptxCurrentWork(): Promise<void> {
+    if (!activeWorkFolder) {
+      showNotice("Open a Work before exporting it.")
+      return
+    }
+    if (activeWorkFolder.source_file === "document.md") {
+      showNotice("PowerPoint export is available for presentations.", "error")
+      return
+    }
+    if (hasUnsavedChanges() && !(await flushSave({ force: true }))) return
+    const status = shellElement<HTMLElement>("#export-pptx-status")
+    try {
+      status.textContent = "Preparing PowerPoint…"
+      const saved = await fileLibrary.exportPptx(activeWorkFolder.id, {
+        title: elements.titleInput.value.trim() || activeWorkFolder.name,
+        source: currentSource()
+      })
+      if (saved) {
+        status.textContent = "PowerPoint exported."
+        setStatus("PowerPoint exported")
+      } else {
+        status.textContent = ""
+      }
+    } catch (error) {
+      status.textContent = (error as { message?: unknown } | null)?.message as string || "The PowerPoint export failed."
+      showError(error)
+    }
+  }
+
   async function importWork(): Promise<void> {
     if (!library) {
       showNotice("Choose a library before importing a Work.")
@@ -1151,6 +1179,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     if (!activeWorkFolder) return
     shellElement<HTMLElement>("#work-source-name").textContent = activeWorkFolder.source_file
     shellElement<HTMLElement>("#work-kind").textContent = activeWorkFolder.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
+    // PowerPoint export is presentation-only (export registry); documents
+    // keep no trigger, and the handler gates the menu path as well.
+    shellElement<HTMLElement>("#export-pptx").hidden = activeWorkFolder.source_file === "document.md"
   }
 
   async function handleMenuAction(action: string): Promise<any> {
@@ -1168,6 +1199,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     if (action === "new-document") return showCreateDialog("document")
     if (action === "save") return flushSave({ force: true })
     if (action === "export-elef") return exportCurrentWork()
+    if (action === "export-pptx") return exportPptxCurrentWork()
     if (action === "import-elef") return importWork()
     if (action === "settings") return showSettings()
     if (action === "check-for-updates") return checkForUpdates(true)
@@ -1189,6 +1221,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   })
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
+  shellElement<HTMLElement>("#export-pptx").addEventListener("click", () => void exportPptxCurrentWork())
   shellElement<HTMLElement>("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then(saved => {
