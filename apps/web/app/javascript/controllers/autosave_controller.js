@@ -8,6 +8,11 @@ import { presentConflictDialog } from "@elef/editor-runtime"
 const DATABASE_NAME = "elef-drafts"
 const DATABASE_VERSION = 1
 const STORE_NAME = "drafts"
+// Unsent new-work drafts older than this are discarded instead of restored:
+// crash recovery needs hours-to-days, while an ancient draft resurfacing
+// months later invites submitting stale content as new work.
+const NEW_WORK_DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000
+const NEW_WORK_DRAFT_TOKEN_KEY = "elef.newWorkDraftToken"
 
 export default class extends Controller {
   static targets = ["field", "status", "retry", "conflict", "conflictMessage", "localSource", "serverSource", "mergeSource"]
@@ -41,9 +46,15 @@ export default class extends Controller {
       this.conflictTarget.addEventListener("click", this.resolveConflictClick)
     }
     const workKind = this.hasWorkKindValue ? this.workKindValue : "work"
+    this.isNewWork = !this.hasWorkIdValue
+    // New-work drafts are keyed per browser tab: a single global key would let
+    // two tabs' unsent drafts overwrite each other, resurrecting the wrong
+    // tab's content on revisit. Falls back to a shared key when session
+    // storage is unavailable.
     this.localDraftKey = this.hasWorkIdValue
       ? `${workKind}:${this.workIdValue}:${this.hasWorkIdentityValue ? this.workIdentityValue : "legacy"}`
-      : `${workKind}:new:${window.location.pathname}`
+      : `${workKind}:new:${window.location.pathname}:${this.newWorkDraftToken()}`
+    this.legacyLocalDraftKey = this.hasWorkIdValue ? null : `${workKind}:new:${window.location.pathname}`
     this.database = this.openDatabase()
     this.flowWorkId = this.hasWorkIdValue ? String(this.workIdValue) : this.localDraftKey
     // The web editor persists through the shared session (constructed
@@ -71,7 +82,7 @@ export default class extends Controller {
   // an older autosave cannot overwrite the manually saved version.
   submit(event) {
     if (!this.saveEnabledValue) {
-      this.clearLocalDraft()
+      this.clearDraftAfterSuccessfulSubmit()
       return
     }
     this.flow?.pause()
@@ -468,15 +479,66 @@ export default class extends Controller {
     this.deleteDraft(this.localDraftKey)
   }
 
+  newWorkDraftToken() {
+    try {
+      const storage = window.sessionStorage
+      const existing = storage?.getItem?.(NEW_WORK_DRAFT_TOKEN_KEY)
+      if (existing) return existing
+      const token = window.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`
+      storage?.setItem?.(NEW_WORK_DRAFT_TOKEN_KEY, token)
+      return token
+    } catch {
+      return "shared"
+    }
+  }
+
+  // New-work forms have no PATCH lifecycle, so the draft survives until the
+  // create itself succeeds: Turbo fires turbo:submit-end on the form for both
+  // outcomes, and only a success may discard the draft. Clearing on attempt
+  // would strand the work when a 422 re-render is followed by a crash before
+  // the next keystroke.
+  clearDraftAfterSuccessfulSubmit() {
+    const form = this.element
+    if (typeof window.Turbo === "undefined" || !form?.addEventListener) {
+      this.clearLocalDraft()
+      return
+    }
+    form.addEventListener("turbo:submit-end", (submitEnd) => {
+      if (submitEnd?.detail?.success) this.clearLocalDraft()
+    }, { once: true })
+  }
+
+  // One-time migration from the pre-tab-scoping global new-work key. Returns
+  // the adopted record (or null); restore proceeds from it regardless of
+  // whether the re-key write succeeds.
+  async adoptLegacyDraft() {
+    if (!this.legacyLocalDraftKey) return null
+    const legacy = await this.readDraft(this.legacyLocalDraftKey)
+    if (!legacy) return null
+    try {
+      await this.writeDraft({ ...legacy, key: this.localDraftKey })
+      await this.deleteDraft(this.legacyLocalDraftKey)
+    } catch {
+      // Fall through: the legacy record below still restores this visit.
+    }
+    return legacy
+  }
+
   async restoreLocalDraft() {
     if (!this.localDraftKey) return
     // New-work forms restore unsent drafts exactly like persisted works.
     // A navigation-type heuristic cannot detect a "fresh" Turbo Drive visit
     // (Turbo creates no navigation entries), and silently discarding the
     // draft destroys unsent work and defeats crash recovery. Freshness after
-    // a successful create is handled by submit(), which clears the draft.
+    // a successful create is handled by submit(), which clears the draft on
+    // success, and abandonment is bounded by the new-work TTL below.
     const initialSnapshot = this.snapshot()
-    const record = await this.readDraft(this.localDraftKey)
+    let record = await this.readDraft(this.localDraftKey)
+    if (!record && this.isNewWork) record = await this.adoptLegacyDraft()
+    if (this.isNewWork && record && typeof record.updatedAt === "number" && Date.now() - record.updatedAt > NEW_WORK_DRAFT_TTL_MS) {
+      this.clearLocalDraft()
+      return
+    }
     if (!this.active || !record || typeof record.snapshot !== "string" || !Array.isArray(record.values) || record.snapshot === this.snapshot()) return
 
     const editorHost = this.element.querySelector(".source-field")
