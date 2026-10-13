@@ -43,6 +43,7 @@ interface SourceChange extends MediaInsertRange {
   insert: string;
 }
 import { snippetStopsField } from "./snippet_stops.js"
+import { editorTabKeymap } from "../lib/editor_tab_keymap.js"
 import { formatLineNumber } from "../lib/vim_line_numbers.js"
 import {
   caretAfterInsert,
@@ -133,6 +134,7 @@ export default class extends Controller<HTMLElement> {
       this.vimCompartment.of(this.vimEnabled ? vim() : []),
       this.lineNumbersCompartment.of(this.createLineNumbersExtension()),
       ...basicSetup.slice(1),
+      editorTabKeymap,
       markdown({ extensions: elefMetadata }),
       livePreviewField,
       snippetStopsField,
