@@ -51,6 +51,16 @@ for (const job of ["desktop", "desktop-macos"]) {
 // The fast tier re-verifies the Gate A wiring on every pull request.
 assert.ok(jobBlock(ci, "ci.yml", "desktop-fast").includes("npm run check:release-ci"), "desktop-fast must run this checker")
 
+// The shadow plan and result matrix stay informational: they compute and
+// report, but never gate anything.
+const plan = jobBlock(ci, "ci.yml", "plan")
+assert.ok(plan.includes("tooling/ci_affected.py"), "the plan job must compute the affected-job plan")
+assert.ok(plan.includes("shadow"), "the plan job must stay in shadow mode")
+assert.ok(plan.includes('ELEF_CI_PLAN_ENFORCE: "0"'), "the plan job must not enforce skips")
+const matrix = jobBlock(ci, "ci.yml", "ci-gate")
+assert.ok(matrix.includes("always()"), "ci-gate must always publish its matrix")
+assert.ok(matrix.includes("plan"), "ci-gate must aggregate the shadow plan")
+
 // Gate A aggregates every evidence job, records the exact SHA, and re-verifies itself.
 const gate = jobBlock(ci, "ci.yml", "release-gate")
 assert.deepEqual(needsList(gate, "ci.yml", "release-gate").sort(), [
@@ -68,6 +78,9 @@ assert.deepEqual(needsList(gate, "ci.yml", "release-gate").sort(), [
   "production-smoke",
   "development-smoke"
 ].sort(), "release-gate must wait for every evidence job exactly once")
+assert.ok(!needsList(gate, "ci.yml", "release-gate").some(job => job === "plan" || job === "ci-gate"), "release-gate must never wait for the plan or matrix jobs")
+const attestation = jobBlock(ci, "ci.yml", "record-ci-attestation")
+assert.ok(!needsList(attestation, "ci.yml", "record-ci-attestation").some(job => job === "plan" || job === "ci-gate"), "record-ci-attestation must never wait for the plan or matrix jobs")
 assert.ok(!gate.includes("ref_name =="), "release-gate follows the CI triggers; it must not add a push-only branch condition")
 assert.ok(gate.includes("SOURCE_SHA: ${{ github.sha }}"), "release-gate must record the exact gated SHA")
 assert.ok(gate.includes("ref: ${{ github.sha }}"), "release-gate must check out the exact gated SHA")

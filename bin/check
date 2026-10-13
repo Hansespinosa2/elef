@@ -212,6 +212,8 @@ QUICK_COMMANDS_1 = (
     "python3 tooling/check_boundaries.py",
     "python3 tooling/check_boundaries.py --self-test",
     "python3 tooling/check_spec.py",
+    "python3 tooling/ci_affected.py --self-test",
+    "python3 tooling/ci_report.py --self-test",
     "cargo test --manifest-path Cargo.toml -p local-store --locked",
 )
 

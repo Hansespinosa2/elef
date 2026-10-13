@@ -1,0 +1,40 @@
+{
+  "steps": [
+    {
+      "workflow": "CI",
+      "job": "desktop",
+      "step": "Run shared scenarios with external network blocked",
+      "runs": 2,
+      "failures": 1,
+      "avg_s": 595.0,
+      "max_s": 600.0
+    },
+    {
+      "workflow": "CI",
+      "job": "desktop",
+      "step": "Install Linux desktop build dependencies",
+      "runs": 2,
+      "failures": 0,
+      "avg_s": 290.0,
+      "max_s": 300.0
+    },
+    {
+      "workflow": "CI",
+      "job": "desktop-fast",
+      "step": "Run the fast desktop unit tier",
+      "runs": 2,
+      "failures": 0,
+      "avg_s": 110.0,
+      "max_s": 120.0
+    },
+    {
+      "workflow": "CI",
+      "job": "desktop-fast",
+      "step": "Set up Node",
+      "runs": 2,
+      "failures": 0,
+      "avg_s": 27.5,
+      "max_s": 30.0
+    }
+  ]
+}

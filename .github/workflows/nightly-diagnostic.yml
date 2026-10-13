@@ -1,0 +1,42 @@
+name: nightly-diagnostic
+
+# Nightly read-only diagnostic: the longest-first timing ledger that will
+# size future sharding work, plus the standing dev/main health that shows
+# what failed where. This workflow diagnoses; it never gates, merges,
+# deploys, or writes to the repository.
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Publish the timing ledger and branch health
+        run: |
+          python3 tooling/ci_report.py timing --repo "$GITHUB_REPOSITORY" --window-hours 24 --out timing-ledger.json >> "$GITHUB_STEP_SUMMARY"
+          python3 tooling/ci_report.py status --repo "$GITHUB_REPOSITORY" --branches dev,main --out branch-health.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve the diagnostic ledger
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nightly-diagnostic-${{ github.run_id }}
+          path: |
+            timing-ledger.json
+            branch-health.json
+          if-no-files-found: warn
+          retention-days: 90
