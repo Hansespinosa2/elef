@@ -34,7 +34,7 @@ const paletteSource = (await readFile(new URL("../../../../packages/editor-runti
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
   .replace('import { application } from "./application.js"', "const application = { getControllerForElementAndIdentifier: () => null }")
-  .replace('import { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js"', "const { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } = globalThis.__mathTestHelpers")
+  .replace('import { editorInsideMath, expandMathShorthand, innermostMathChainWindow, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js"', "const { editorInsideMath, expandMathShorthand, innermostMathChainWindow, mathShorthandAtEditor, parseMathShorthand } = globalThis.__mathTestHelpers")
   .replace('import { authoringRegistryFor } from "./authoring_registry.js"', "const authoringRegistryFor = () => []")
   .replace('import { snippetStopsEffect } from "./snippet_stops.js"', "const snippetStopsEffect = { of: (value) => value }")
 const mathPalette = await import(`data:text/javascript;base64,${Buffer.from(paletteSource).toString("base64")}`)
@@ -497,6 +497,49 @@ test("finds a complete active chain at a cursor inside its source", () => {
   assert.equal(math.mathShorthandAtEditor(expandedEditor, expanded.length - 1), null)
 })
 
+test("finds inner chains inside frac, subscript, and paren groups", () => {
+  const cases = [
+    ["$\\frac{x.bar}{}$", 12, { start: 7, end: 12, source: "x.bar", expansion: "\\bar{x}" }],
+    ["$\\frac{x}{y.bar}$", 15, { start: 10, end: 15, source: "y.bar", expansion: "\\bar{y}" }],
+    ["$\\sum_{R.cal}$", 12, { start: 7, end: 12, source: "R.cal", expansion: "\\mathcal{R}" }],
+    ["$(x.bar)$", 7, { start: 2, end: 7, source: "x.bar", expansion: "\\bar{x}" }],
+    ["$f(x.bar)$", 8, { start: 3, end: 8, source: "x.bar", expansion: "\\bar{x}" }],
+    ["$\\frac{\\bar{x}.hat}{y}$", 18, { start: 7, end: 18, source: "\\bar{x}.hat", expansion: "\\hat{\\bar{x}}" }],
+    ["$\\frac{(x.bar)}{}$", 13, { start: 8, end: 13, source: "x.bar", expansion: "\\bar{x}" }]
+  ]
+
+  for (const [text, caret, expected] of cases) {
+    assert.deepEqual(
+      (({ start, end, source, expansion }) => ({ start, end, source, expansion }))(math.mathShorthandAt(text, caret)),
+      expected,
+      `${text} at ${caret}`
+    )
+  }
+
+  assert.equal(math.mathShorthandAt("$f(x).b$", 6), null)
+  assert.equal(math.mathShorthandAt("$\\frac{x.bar}{}$", 15), null)
+
+  const text = "$\\frac{x.bar}{}$"
+  const doc = {
+    length: text.length,
+    lineAt: () => ({ from: 0, to: text.length, text }),
+    sliceString: (from, to, separator = "\n") => text.slice(from, to).replaceAll("\n", separator)
+  }
+  const editor = { view: { state: { doc, tree: { resolveInner: () => ({ name: "Text", parent: { name: "Paragraph", from: 0, parent: null } }) } } } }
+  const chain = math.mathShorthandAtEditor(editor, 12)
+  assert.equal(chain.source, "x.bar")
+  assert.equal(chain.start, 7)
+  assert.equal(chain.end, 12)
+  assert.equal(chain.expansion, "\\bar{x}")
+})
+
+test("innermostMathChainWindow bounds the enclosing group or stays null", () => {
+  assert.deepEqual(math.innermostMathChainWindow("$\\frac{x.bar}{}$", 12), { start: 7, end: 12, opener: 6 })
+  assert.equal(math.innermostMathChainWindow("$f(x).b$", 6), null)
+  assert.equal(math.innermostMathChainWindow("$x.b$", 4), null)
+  assert.equal(math.innermostMathChainWindow("$\\{x.bar$", 8), null)
+})
+
 test("commits canonical atom chains on an explicit whole-editor commit", () => {
   const editor = {
     value: "$\\mathbf{x}.t$ and $\\vec{y}.inv$",
@@ -560,6 +603,25 @@ test("commits live chains at the curated token boundaries", () => {
   assert.equal(subscript.editor.value, "$\\mathbf{x}_2$")
 })
 
+test("commits inner group chains on Tab, Enter, Space, and dollar", () => {
+  const cases = [
+    ["$\\frac{x.bar}{}$", 12, "Tab", "$\\frac{\\bar{x}}{}$"],
+    ["$\\frac{x.bar}{}$", 12, "Enter", "$\\frac{\\bar{x}\n}{}$"],
+    ["$\\frac{x}{y.bar}$", 15, "Tab", "$\\frac{x}{\\bar{y}}$"],
+    ["$\\sum_{R.cal}$", 12, "Tab", "$\\sum_{\\mathcal{R}}$"],
+    ["$(x.bar)$", 7, "Tab", "$(\\bar{x})$"],
+    ["$f(x.bar)$", 8, " ", "$f(\\bar{x} )$"],
+    ["$\\frac{\\bar{x}.hat}{y}$", 18, "Tab", "$\\frac{\\hat{\\bar{x}}}{y}$"],
+    ["$\\frac{x.bar", 12, "$", "$\\frac{\\bar{x}$"]
+  ]
+
+  for (const [source, caret, key, expected] of cases) {
+    const context = createMathEditor(source, caret)
+    pressMathKey(context, key, { code: key === " " ? "Space" : undefined })
+    assert.equal(context.editor.value, expected, source + " + " + key)
+  }
+})
+
 test("commits on every decided chain-breaking key, including minus", () => {
   for (const key of ["_", "^", "[", "(", "\\", "!", "+", "-"]) {
     const context = createMathEditor("$x.b$", 4)
@@ -600,6 +662,50 @@ test("keeps the modifier suggestion query available after invalid modifier attem
   }
 })
 
+test("palette offers modifiers for bases inside frac, subscript, and paren groups", () => {
+  const cases = [
+    ["$\\frac{x.bar", { prefix: ".", text: "bar", start: 7, base: "x", baseStart: 7 }],
+    ["$(x.ba", { prefix: ".", text: "ba", start: 2, base: "x", baseStart: 2 }],
+    ["$f(R.ca", { prefix: ".", text: "ca", start: 3, base: "R", baseStart: 3 }],
+    ["$\\sum_{R.ca", { prefix: ".", text: "ca", start: 7, base: "R", baseStart: 7 }]
+  ]
+
+  for (const [text, expected] of cases) {
+    const caret = text.length
+    const doc = {
+      length: text.length,
+      lineAt: () => ({ from: 0, to: text.length, text }),
+      sliceString: (from, to, separator = "\n") => text.slice(from, to).replaceAll("\n", separator)
+    }
+    const editor = {
+      editingMode: "source",
+      selectionStart: caret,
+      selectionEnd: caret,
+      view: { state: { doc, tree: { resolveInner: () => ({ name: "Text", parent: { name: "Paragraph", from: 0, parent: null } }) } } }
+    }
+    const palette = new mathPalette.default()
+    palette.editorController = editor
+    assert.deepEqual(palette.queryAtCaret(), expected, text)
+  }
+
+  const fracText = "$\\frac{x.bar"
+  const fracDoc = {
+    length: fracText.length,
+    lineAt: () => ({ from: 0, to: fracText.length, text: fracText }),
+    sliceString: (from, to, separator = "\n") => fracText.slice(from, to).replaceAll("\n", separator)
+  }
+  const fracEditor = {
+    editingMode: "source",
+    selectionStart: fracText.length,
+    selectionEnd: fracText.length,
+    view: { state: { doc: fracDoc, tree: { resolveInner: () => ({ name: "Text", parent: { name: "Paragraph", from: 0, parent: null } }) } } }
+  }
+  const fracPalette = new mathPalette.default()
+  fracPalette.editorController = fracEditor
+  const fracQuery = fracPalette.queryAtCaret()
+  assert.equal(fracPalette.previewExpansion({ prefix: ".", aliases: ["bar"], expansion: "\\bar{${1:x}}" }, fracQuery), "\\bar{x}")
+})
+
 test("Escape cancels the pending chain and the focusout sweep leaves it literal", () => {
   const context = createMathEditor("$x.b$", 4)
   pressMathKey(context, "Escape")
@@ -624,6 +730,29 @@ test("commits every live math chain during the document-wide focusout sweep", ()
     context.listeners.get("focusout")({})
     assert.equal(context.editor.value, expected, source)
   }
+})
+
+test("commits inner group chains during the document-wide focusout sweep", () => {
+  const cases = [
+    ["$\\frac{x.bar}{}$", "$\\frac{\\bar{x}}{}$"],
+    ["$(x.bar)$ and $f(y.t)$", "$(\\bar{x})$ and $f(y^\\top)$"],
+    ["$\\sum_{R.cal}$", "$\\sum_{\\mathcal{R}}$"],
+    ["$f(x).b$", "$f(x).b$"],
+    ["$\\frac{x}{y}$", "$\\frac{x}{y}$"]
+  ]
+  for (const [source, expected] of cases) {
+    const context = createMathEditor(source, 0)
+    context.listeners.get("focusout")({})
+    assert.equal(context.editor.value, expected, source)
+  }
+})
+
+test("Escape cancels a pending inner group chain and the sweep leaves it literal", () => {
+  const context = createMathEditor("$\\frac{x.bar}{}$", 12)
+  pressMathKey(context, "Escape")
+  assert.equal(context.editor.value, "$\\frac{x.bar}{}$")
+  context.listeners.get("focusout")({})
+  assert.equal(context.editor.value, "$\\frac{x.bar}{}$")
 })
 
 test("keeps commitAll responsive on a 100 KB math document", () => {

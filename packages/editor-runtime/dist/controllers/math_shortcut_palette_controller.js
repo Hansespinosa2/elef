@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import { editorFor } from "../lib/editor_controller_lookup.js";
 import { application } from "./application.js";
-import { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js";
+import { editorInsideMath, expandMathShorthand, innermostMathChainWindow, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js";
 import { authoringRegistryFor } from "./authoring_registry.js";
 import { snippetStopsEffect } from "./snippet_stops.js";
 const MAX_PREVIEW_LENGTH = 48;
@@ -178,6 +178,10 @@ class math_shortcut_palette_controller_default extends Controller {
     let baseStart = separatorStart;
     const tokenCharacter = /[A-Za-z0-9.@\\{}()^-]/;
     while (baseStart > 0 && tokenCharacter.test(before[baseStart - 1] ?? "")) baseStart -= 1;
+    if (prefix === ".") {
+      const window2 = innermostMathChainWindow(before, separatorStart, 0, separatorStart);
+      if (window2 && window2.start > baseStart) baseStart = window2.start;
+    }
     const candidateBase = before.slice(baseStart, separatorStart);
     if (prefix === "." && !this.validModifierBase(candidateBase)) return null;
     return {
