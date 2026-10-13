@@ -21,7 +21,7 @@ Each fact has exactly one home; link to it instead of copying it.
 ## Safety
 
 - Never touch the owner's `https://127.0.0.1:3000/` server (diagnose read-only only), and never point tests at personal, live, or production data.
-- Never merge into `dev`, publish a release, alter signing keys, or invent/commit credentials.
+- Never merge into `dev` or publish a release unless the owner explicitly orders it in that session — then merge only green, adversarial-reviewed PRs in a proven order, and tag a release only on a fully green tip. Never alter signing keys or invent/commit credentials.
 - Never weaken tests, checks, baselines, or fixtures to obtain green, and never silently change a frozen contract.
 
 ## Changes
