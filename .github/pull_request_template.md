@@ -13,11 +13,13 @@
 ## Screenshots
 
 <!-- REQUIRED for any visual change: EMBED before/after image pairs CROPPED to the
-specific changed parts (not only full pages), one pair per part — hosted
-images (e.g. a scratch assets branch), never local file paths. Name what to
-look at in each pair. No visual change: write "None — <reason>" (e.g. CI-only,
-behavior covered by unit tests). Desktop-shell-only changes that cannot render
-in a browser: say so and list the on-device checks instead. -->
+specific changed parts (not only full pages), one pair per part — never local
+file paths. In the web UI just paste/drag screenshots into this box (GitHub
+hosts them). From CLI/API, where upload is unavailable, commit them to a
+scratch assets branch and embed the hosted URLs. Name what to look at in each
+pair. No visual change: write "None — <reason>" (e.g. CI-only, behavior
+covered by unit tests). Desktop-shell-only changes that cannot render in a
+browser: say so and list the on-device checks instead. -->
 
 ## Validation
 
