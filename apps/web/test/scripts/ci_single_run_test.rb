@@ -163,4 +163,9 @@ abort "the verifier must validate the benchmark policy and required-job manifest
     verifier.include?(".plan.enforced == false") &&
     verifier.include?('.plan.planner == "tooling/ci_affected.py"')
 
+desktop_fast_run = run_steps.select { |job_name, _| job_name == "desktop-fast" }.map(&:last).join("\n")
+abort "a failed lane must print its failing lines, not only the log tail" unless
+  desktop_fast_run.include?("failing lines (TAP not-ok, cargo failures, error lines)") &&
+    desktop_fast_run.include?('grep -a -E "^not ok ')
+
 puts "CI keeps all required checks, runs pure unit suites once, and verifies the attested tree before publishing"
