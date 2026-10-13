@@ -124,9 +124,10 @@ Capability keys come from the `HostCapabilities` interface
   zip containing a slide plus the embedded deck image).
 - Desktop trigger: the work-view Download PPTX button plus the File →
   Export PowerPoint… menu item call the desktop export seam
-  (`exportPptx` on the file-library transport); documents keep no trigger
-  (the export registry scopes PPTX to presentations). PDF on both hosts
-  goes through the shared print path.
+  (`exportPptx` on the file-library transport); documents keep no PPTX
+  trigger (the export registry scopes PPTX to presentations). PDF on both
+  hosts goes through the shared print path: the work-view Print / Save PDF
+  button (both kinds) reuses the File → Print… seam (`printCurrentWork`).
 - Media resolution differs by necessity, bytes match by policy: the webview
   cannot fetch media (desktop CSP restricts `connect-src` to IPC), so the
   desktop `prepareMedia` seam resolves local `elefasset://` bytes through

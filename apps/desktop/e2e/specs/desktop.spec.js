@@ -2240,6 +2240,42 @@ describe("desktop binary workflows and native boundaries", () => {
     await exportWorkflow(new DesktopEditorUi())
   })
 
+  it("shows the print trigger for both work kinds and scopes PPTX to presentations", async () => {
+    const ui = new DesktopEditorUi()
+    await ui.openWork("E2E seed")
+    await $("#print-work").waitForDisplayed()
+    await $("#export-pptx").waitForDisplayed()
+
+    // The print button must reach the platform pipeline; stub window.print
+    // so the real binary proves the full caller chain without opening a
+    // native dialog the driver cannot dismiss.
+    await browser.execute(() => {
+      window.__elefPrintCalled = false
+      window.__elefRealPrint = window.print
+      window.print = () => { window.__elefPrintCalled = true }
+    })
+    try {
+      await $("#print-work").click()
+      await browser.waitUntil(async () => browser.execute(() => window.__elefPrintCalled === true), {
+        timeout: 10_000,
+        timeoutMsg: "The Print / Save PDF button did not reach window.print"
+      })
+    } finally {
+      await browser.execute(() => {
+        if (window.__elefRealPrint) window.print = window.__elefRealPrint
+        delete window.__elefRealPrint
+        delete window.__elefPrintCalled
+        document.body.classList.remove("printing-work")
+      })
+    }
+
+    await ui.openWork("E2E document")
+    await $("#print-work").waitForDisplayed()
+    if (await $("#export-pptx").isDisplayed()) {
+      throw new Error("The PPTX trigger stayed visible for a document work")
+    }
+  })
+
   it("keeps slide position stacks and lanes aligned in the desktop preview", async () => {
     await slidePositionGrammarWorkflow(new DesktopEditorUi())
   })

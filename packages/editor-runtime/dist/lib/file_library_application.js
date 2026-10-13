@@ -1045,6 +1045,7 @@ function startFileLibraryApplication(platform) {
   shellElement("#refresh-library").addEventListener("click", () => void refreshLibrary());
   shellElement("#import-elef").addEventListener("click", () => void importWork());
   shellElement("#export-pptx").addEventListener("click", () => void exportPptxCurrentWork());
+  shellElement("#print-work").addEventListener("click", () => void printCurrentWork());
   shellElement("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then((saved) => {

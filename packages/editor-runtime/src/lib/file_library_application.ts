@@ -1222,6 +1222,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
   shellElement<HTMLElement>("#export-pptx").addEventListener("click", () => void exportPptxCurrentWork())
+  // The Print / Save PDF button reuses the File → Print… seam for both
+  // kinds; PDF bytes come from the platform print pipeline on both hosts.
+  shellElement<HTMLElement>("#print-work").addEventListener("click", () => void printCurrentWork())
   shellElement<HTMLElement>("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then(saved => {
