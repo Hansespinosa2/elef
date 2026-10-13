@@ -40,7 +40,8 @@ module Snippets
       { id: "default-art", name: "Art list", trigger: "art", description: "Render a Markdown list as semantic Art", category: "Elef DSL", body: ":::art", built_in: true },
       { id: "default-sse", name: "Section directive", trigger: "sse", description: "Create a section", category: "Elef DSL", body: ":::section{${1:section name}}", built_in: true },
       { id: "default-sss", name: "Subsection directive", trigger: "sss", description: "Create a subsection", category: "Elef DSL", body: ":::subsection{${1:subsection name}}", built_in: true },
-      { id: "default-foot", name: "Footnote directive", trigger: "foot", description: "Add a footnote", category: "Elef DSL", body: ":::footnote{${1:footnote text}}", built_in: true }
+      { id: "default-foot", name: "Footnote directive", trigger: "foot", description: "Add a footnote", category: "Elef DSL", body: ":::footnote{${1:footnote text}}", built_in: true },
+      { id: "default-step", name: "Step", trigger: "step", description: "Reveal content progressively in presentations", category: "Elef DSL", body: ":::step{${1:1}}", built_in: true }
     ].freeze
     PLACEHOLDER = /\$\{(\d+)(?::([^}]*))?\}/.freeze
 

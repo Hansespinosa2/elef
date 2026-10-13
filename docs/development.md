@@ -109,4 +109,18 @@ git diff -- apps/web/app/assets/builds/tailwind.css packages/renderer/dist/ pack
 
 The package order matters: the editor-runtime Stable entry bundles the Stable client and work-model dists, so those two must be built first on a fresh checkout.
 
+## PR evidence rule
+
+Every pull request must let a reviewer verify the change in one pass: what
+changed and why, before/after screenshots cropped to the specific changed
+parts (or an explicit reason there are none), exact validation commands with
+results, the full adversarial-review trace until acceptance, parity across
+web/desktop/macOS, and known gaps. The form is
+`.github/pull_request_template.md`; `tooling/check_pr_description.rb` (PR
+hygiene) enforces the required sections. Report only checks that actually
+ran — an unrun check is never written as passing. Branch names use a
+Conventional Commits type prefix (`feat/`, `fix/`, `build/`, `chore/`,
+`ci/`, `docs/`, `style/`, `refactor/`, `perf/`, `test/`, `revert/`) plus a
+description; PR hygiene derives the PR title from the branch name.
+
 CI checks that these generated files match their sources, checks the one-way frontend ownership and Tauri capability/CSP contracts, runs Rails tests with PostgreSQL and SQLite, runs Rails system tests, and builds/tests desktop on Linux and macOS. The lane design (quick, shadow plan, slow, nightly), the dev shepherd loop, and the manual promotion path live in [CI operations](ci-operations.md). Re-run the smallest relevant check after the final edit; report the exact tier and platform actually exercised.

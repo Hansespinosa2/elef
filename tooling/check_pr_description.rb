@@ -5,8 +5,13 @@ module PullRequestDescription
   REQUIRED_SECTIONS = [
     "## Summary",
     "## Why",
-    "## Database / migration impact",
-    "## Validation"
+    "## What changed",
+    "## Screenshots",
+    "## Validation",
+    "## Adversarial reviews",
+    "## Parity",
+    "## Gaps",
+    "## Database / migration impact"
   ].freeze
 
   def self.errors(body)

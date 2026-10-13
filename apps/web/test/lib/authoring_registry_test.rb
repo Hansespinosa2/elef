@@ -17,6 +17,7 @@ class AuthoringRegistryTest < ActiveSupport::TestCase
     footnote = registry.find { |entry| entry[:namespace] == ":" && entry[:trigger] == "footnote" }
     align = registry.find { |entry| entry[:namespace] == ":" && entry[:trigger] == "align" }
     art = registry.find { |entry| entry[:namespace] == ":" && entry[:trigger] == "art" }
+    step = registry.find { |entry| entry[:namespace] == ":" && entry[:trigger] == "step" }
     diagram = registry.find { |entry| entry[:namespace] == "/" && entry[:trigger] == "diagram" }
 
     assert_equal ["sse"], section[:aliases]
@@ -27,6 +28,9 @@ class AuthoringRegistryTest < ActiveSupport::TestCase
     assert_equal ["top", "middle", "bottom"], align.dig(:argument_schema, :values, 1)
     assert_equal ":::art", art.dig(:behavior, :template)
     assert_equal 0, art.dig(:argument_schema, :argument_count)
+    assert_equal ":::step{${1:1}}", step.dig(:behavior, :template)
+    assert_equal ["reveal_label?"], step.dig(:argument_schema, :grammar)
+    assert_equal({ minimum: 0, maximum: 1 }, step.dig(:argument_schema, :argument_count))
     assert_equal "mermaid_assist", diagram.dig(:behavior, :type)
   end
 

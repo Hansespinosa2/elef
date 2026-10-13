@@ -22,6 +22,9 @@ test("default authoring entries with the same ID in different namespaces both su
   const art = find(":", "art")
   assert.equal(art?.behavior.template, ":::art")
   assert.deepEqual(art?.argument_schema, { grammar: [], argument_count: 0, values: [] })
+  const step = find(":", "step")
+  assert.equal(step?.behavior.template, ":::step{${1:1}}")
+  assert.deepEqual(step?.argument_schema, { grammar: ["reveal_label?"], argument_count: { minimum: 0, maximum: 1 }, values: [] })
 })
 
 test("custom entries replace only a matching namespace and identity", () => {
@@ -69,6 +72,22 @@ test("custom Elef directives retain the web registry argument schema", () => {
     ["top", "middle", "bottom"]
   ])
   assert.deepEqual(align.argument_schema.argument_count, { minimum: 1, maximum: 2 })
+})
+
+test("custom step directives keep the optional reveal-label schema", () => {
+  const registry = mergeAuthoringRegistryEntries(builtIns, [{
+    id: "personal-step",
+    name: "Step",
+    description: "Reveal content progressively",
+    trigger: "step",
+    category: "Elef DSL",
+    body: ":::step{${1:1}}",
+    built_in: false
+  }])
+  const step = registry.find(entry => entry.id === "personal-step")
+
+  assert.equal(step.namespace, ":")
+  assert.deepEqual(step.argument_schema, { grammar: ["reveal_label?"], argument_count: { minimum: 0, maximum: 1 }, values: [] })
 })
 
 test("custom Rails-shaped math rows are enriched for the math palette", () => {

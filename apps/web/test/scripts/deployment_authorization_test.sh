@@ -98,6 +98,8 @@ build_fixtures() {
   local tested_tree="${2:-$tree_sha}"
   local run_conclusion="${3:-success}"
   local include_artifact="${4:-true}"
+  local run_attempt="${5:-1}"
+  local artifact_attempt="${6:-1}"
   local required_jobs='["desktop-fast","scan_ruby","scan_js","test","sqlite-test","system-test","desktop","desktop-macos","renderer-macos","production-smoke","development-smoke"]'
 
   GH_COMMIT_PRS_JSON="$(jq -n --arg sha "$commit_sha" '[{number: 52, merged_at: "2026-09-25T12:00:00Z", merge_commit_sha: $sha, base: {ref: "dev"}}]')"
@@ -116,11 +118,11 @@ build_fixtures() {
         })
     )}
   ')"
-  GH_RUN_STATUS_JSON="$(jq -n --arg sha "$commit_sha" --arg conclusion "$run_conclusion" '{id: 900, run_attempt: 1, event: "pull_request", status: "completed", conclusion: $conclusion, head_sha: $sha, head_branch: "feature/ci", path: ".github/workflows/ci.yml", pull_requests: []}')"
+  GH_RUN_STATUS_JSON="$(jq -n --arg sha "$commit_sha" --arg conclusion "$run_conclusion" --argjson run_attempt "$run_attempt" '{id: 900, run_attempt: $run_attempt, event: "pull_request", status: "completed", conclusion: $conclusion, head_sha: $sha, head_branch: "feature/ci", path: ".github/workflows/ci.yml", pull_requests: []}')"
   GH_JOBS_JSON="$(jq -n --arg failed "$failed_job" '{jobs: (["desktop-fast", "scan_ruby", "scan_js", "test", "sqlite-test", "system-test", "desktop", "desktop-macos", "renderer-macos", "production-smoke", "development-smoke", "record-ci-attestation"] | map({name: ., conclusion: (if . == $failed then "failure" else "success" end)}))}')"
 
   if [[ "$include_artifact" == true ]]; then
-    GH_ARTIFACTS_JSON="$(jq -n '{artifacts: [{id: 123, name: "ci-attestation-pr52-run900-attempt1", expired: false}]}')"
+    GH_ARTIFACTS_JSON="$(jq -n --argjson attempt "$artifact_attempt" '{artifacts: [{id: 123, name: ("ci-attestation-pr52-run900-attempt" + ($attempt | tostring)), expired: false}]}')"
   else
     GH_ARTIFACTS_JSON='{"artifacts":[]}'
   fi
@@ -129,7 +131,7 @@ build_fixtures() {
     --argjson schema_version 3 \
     --argjson pr_number 52 \
     --argjson workflow_run_id 900 \
-    --argjson run_attempt 1 \
+    --argjson run_attempt "$artifact_attempt" \
     --argjson required_jobs "$required_jobs" \
     --argjson non_gating_measurements '["native-performance"]' \
     --argjson plan '{"mode":"shadow","enforced":false,"planner":"tooling/ci_affected.py"}' \
@@ -198,5 +200,18 @@ build_fixtures
 jq '.schema_version = 2 | del(.plan)' "$GH_ATTESTATION_FIXTURE" > "$temporary_directory/invalid-attestation.json"
 mv "$temporary_directory/invalid-attestation.json" "$GH_ATTESTATION_FIXTURE"
 assert_rejected "a pre-plan schema attestation"
+
+build_fixtures "" "$tree_sha" success true 2 1
+(cd "$repository" && "$AUTHORIZER")
+echo "Accepted a partial rerun whose attestation lives on an earlier attempt"
+
+build_fixtures "" "$tree_sha" success true 2 2
+GH_ARTIFACTS_JSON="$(jq '.artifacts += [{id: 124, name: "ci-attestation-pr52-run900-attempt1", expired: false}]' <<<"$GH_ARTIFACTS_JSON")"
+export GH_ARTIFACTS_JSON
+(cd "$repository" && "$AUTHORIZER")
+echo "Accepted a full rerun preferring the latest attestation"
+
+build_fixtures "" "$tree_sha" success false 2 2
+assert_rejected "a rerun with no attestation on any attempt"
 
 echo "Deployment authorization accepted only the successful PR-tested tree with a shadow plan"
