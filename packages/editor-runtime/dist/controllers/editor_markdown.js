@@ -219,7 +219,8 @@ function markdownForTable(source, element) {
     }
     outputRows[sourceRowIndex] = updatedRow;
   });
-  return changed ? outputRows.join("\n") : source;
+  const lineEnding = source.includes("\r\n") ? "\r\n" : "\n";
+  return changed ? outputRows.join(lineEnding) : source;
 }
 function tableCells(line) {
   const ranges = [];
@@ -269,17 +270,19 @@ function preserveInlineMarkdown(source, value, protectedElements, formatBudget, 
   return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements));
 }
 function preserveProjectedMarkdown(source, value, projection, { preserveLineBreaks = false } = {}) {
+  const normalizedValue = value.replace(/\r\n?/g, "\n");
   const leading = preserveLineBreaks ? 0 : projection.text.match(/^\s*/)?.[0]?.length || 0;
   const trailing = preserveLineBreaks ? 0 : projection.text.match(/\s*$/)?.[0]?.length || 0;
   const end = projection.text.length - trailing;
   const previous = projection.text.slice(leading, end);
   const boundaries = projection.boundaries.slice(leading, end + 1);
-  if (previous === value) return source;
-  const { prefix, suffix } = commonEditBounds(previous, value);
+  if (previous === normalizedValue) return source;
+  const { prefix, suffix } = commonEditBounds(previous, normalizedValue);
   const from = boundaries[prefix];
   const to = boundaries[previous.length - suffix];
   if (from === void 0 || to === void 0 || from > to) return null;
-  const insertion = value.slice(prefix, value.length - suffix);
+  const lineEnding = source.includes("\r\n") ? "\r\n" : "\n";
+  const insertion = normalizedValue.slice(prefix, normalizedValue.length - suffix).replace(/\n/g, lineEnding);
   const result = `${source.slice(0, from)}${insertion}${source.slice(to)}`;
   return result;
 }
@@ -390,11 +393,12 @@ function structuredBlockProjection(source, kind, protectedElements, formatBudget
   let protectedIndex = 0;
   let mathIndex = 0;
   lines.forEach((line, lineIndex) => {
-    const prefix = kind === "quote" ? line.match(/^[ \t]*>[ \t]?/) : line.match(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/);
+    const content = line.endsWith("\r") ? line.slice(0, -1) : line;
+    const prefix = kind === "quote" ? content.match(/^[ \t]*>[ \t]?/) : content.match(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/);
     const prefixLength = (prefix?.[0] ?? "").length || 0;
     hasSyntax ||= prefixLength > 0;
     const projection = inlineProjection(
-      line.slice(prefixLength),
+      content.slice(prefixLength),
       sourceOffset + prefixLength,
       protectedElements.slice(protectedIndex),
       protectedIndex,
@@ -417,7 +421,7 @@ function structuredBlockProjection(source, kind, protectedElements, formatBudget
       boundaries[text.length] = sourceOffset + prefixLength;
     }
     if (lineIndex < lines.length - 1) {
-      if (boundaries.length === 0) boundaries[0] = sourceOffset + line.length;
+      if (boundaries.length === 0) boundaries[0] = sourceOffset + content.length;
       text += "\n";
       boundaries[text.length] = sourceOffset + line.length + 1;
     }

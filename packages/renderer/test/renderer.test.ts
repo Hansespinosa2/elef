@@ -1,6 +1,7 @@
 import test from "node:test"
 import assert from "node:assert/strict"
 import { collectMediaReferences, renderMarkdownBlock, renderPreviewCore } from "../src/index.js"
+import type { RendererChrome } from "../src/index.js"
 import { buildEditorMap, buildEditorStructure } from "@elef/work-model"
 
 test("presentation preview builds editable source ranges and ignores slide delimiters in code fences", () => {
@@ -223,6 +224,44 @@ test("shared Markdown rendering preserves styled transpose and inverse atoms", (
     assert.match(html, /class="katex"/, `${expression} should render as math`)
     assert.doesNotMatch(html, /class="math-error"/, `${expression} should not produce a math error`)
   }
+})
+
+test("CRLF sources keep multi-line blocks editable in visual mode", () => {
+  const seen: boolean[] = []
+  const chrome: RendererChrome = {
+    imageAttributes: () => "",
+    mathAttributes: () => "",
+    mediaFigure: ({ rendered }) => rendered,
+    documentBlockAttributes: ({ valid }) => {
+      seen.push(valid)
+      return `data-valid="${valid}"`
+    },
+    documentBlockShell: ({ attributes, rendered }) => `<div ${attributes}>${rendered}</div>`,
+    emptyDocumentBlock: () => "",
+    positionControl: () => "",
+    documentRoot: ({ inner }) => `<div>${inner}</div>`,
+    presentationBlockAttributes: ({ valid }) => {
+      seen.push(valid)
+      return `data-valid="${valid}"`
+    },
+    presentationBlockControls: () => "",
+    slideBlock: ({ attributes, content }) => `<div ${attributes}>${content}</div>`,
+    emptySlide: () => "",
+    slideToolbar: () => "",
+    slideFrame: ({ content }) => `<section>${content}</section>`,
+    presentationRoot: ({ inner }) => `<div>${inner}</div>`
+  }
+  // Single-line heading plus multi-line paragraph and list: the editor map
+  // slices the raw CRLF source while the parsed blocks are LF-normalized,
+  // so a strict markdown comparison would mark only the heading editable.
+  const source = "# Title\r\n\r\nFirst line\r\nsecond line\r\n\r\n- one\r\n- two\r\n"
+
+  renderPreviewCore({ kind: "document", source, title: "CRLF" }, { chrome })
+  assert.deepEqual(seen, [true, true, true])
+
+  seen.length = 0
+  renderPreviewCore({ source, title: "CRLF" }, { chrome })
+  assert.deepEqual(seen, [true, true, true])
 })
 
 test("ART-SRC-INVALID-PARITY: invalid Art is consumed with only its stable Art diagnostic", () => {

@@ -471,7 +471,7 @@ function renderDocument(source: string, slide: RenderSlide | undefined, style: E
       empty = emptyBlocks[emptyIndex]
     }
     const region = mapped ? regions.get(mapped.id) : undefined
-    const sourceMatches = mapped?.art ? equivalentMarkdown(mapped.markdown, block.markdown) : mapped?.markdown === block.markdown
+    const sourceMatches = mapped !== undefined && equivalentMarkdown(mapped.markdown, block.markdown)
     const valid = mapped !== undefined && region !== undefined && region.editable && sourceMatches && mapped.editable_region_id === region.id && region.block_id === mapped.id
     const positionClass = positionClasses(block.position)
     const attributes = chrome.documentBlockAttributes({ valid, mapped, region, positionClass })
@@ -552,7 +552,7 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
     ): string => {
       const mapped = mappedBlocks[blockIndex]
       const region = mapped ? regions.get(mapped.id) : undefined
-      const sourceMatches = mapped?.art ? equivalentMarkdown(mapped.markdown, block.markdown) : mapped?.markdown === block.markdown
+      const sourceMatches = mapped !== undefined && equivalentMarkdown(mapped.markdown, block.markdown)
       const valid = mapped !== undefined && region !== undefined && sourceMatches && mapped.editable_region_id === region.id && region.block_id === mapped.id
       const className = [title ? "slide-title" : "", "slide-block", slidePositionClasses(block.position, vertical)].filter(Boolean).join(" ")
       const label = title ? "Editable slide title" : "Editable slide block"
