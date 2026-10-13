@@ -27,6 +27,8 @@ fn main() {
                 "import_elef_bytes",
                 "export_elef",
                 "save_pptx_bytes",
+                "read_pptx_asset",
+                "fetch_remote_image",
                 "import_elef",
                 "import_opened_elef",
                 "pending_open_elef_count",

@@ -1,7 +1,7 @@
 use local_store::CoreError;
 use serde::Serialize;
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, PartialEq, Eq)]
 pub(crate) struct CommandError {
     pub(crate) code: &'static str,
     message: String,
