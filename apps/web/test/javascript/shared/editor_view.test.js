@@ -152,6 +152,51 @@ test("Rails and desktop install previews through the same sanitized DOM sink", (
   assert.equal(preview.querySelector(".document-surface").getAttribute("data-document-pages-target"), "surface")
 })
 
+test("preview installs without a visual editor land read-only instead of disconnected-editable", () => {
+  const { document } = parseHTML("<div id='managed' data-visual-editor-target='projection'></div><div id='unmanaged'></div>")
+  const html = `
+    <div class="document-editor-block" data-editor-region-id="r1" data-editor-block-id="b1" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true"><p>Text</p></div>
+    <div class="slide-block" data-editor-block-id="b2" data-editor-region-id="r2" data-editor-source-editable="true" contenteditable="true" role="textbox" aria-label="Editable slide block" aria-multiline="true" spellcheck="true"><p>Slide</p></div>`
+
+  installPreviewHtml(document.querySelector("#managed"), html)
+  for (const block of document.querySelector("#managed").querySelectorAll("[data-editor-block-id]")) {
+    assert.equal(block.getAttribute("contenteditable"), "true")
+  }
+
+  installPreviewHtml(document.querySelector("#unmanaged"), html)
+  const blocks = document.querySelector("#unmanaged").querySelectorAll("[data-editor-block-id]")
+  assert.equal(blocks.length, 2)
+  for (const block of blocks) {
+    assert.equal(block.getAttribute("contenteditable"), "false")
+    assert.equal(block.getAttribute("aria-readonly"), "true")
+    assert.equal(block.hasAttribute("role"), false)
+    assert.equal(block.hasAttribute("aria-label"), false)
+    assert.equal(block.hasAttribute("aria-multiline"), false)
+    assert.equal(block.hasAttribute("spellcheck"), false)
+  }
+})
+
+test("Stable source-only mounts render installed preview blocks read-only", () => {
+  const { root } = mount({
+    kind: "document",
+    mode: "source",
+    source: "# Notes",
+    previewHtml: `<div class="document-editor-block" data-editor-region-id="r1" data-editor-block-id="b1" contenteditable="true" role="textbox" aria-label="Editable Markdown block" aria-multiline="true" spellcheck="true"><p>Text</p></div>`,
+    desktopFeatures: {
+      visualEditing: false,
+      presentationEditing: false,
+      slideOverview: false,
+      documentLinks: false
+    }
+  })
+
+  const block = root.querySelector("[data-preview-target='container'] [data-editor-block-id]")
+  assert.equal(block.getAttribute("contenteditable"), "false")
+  assert.equal(block.getAttribute("aria-readonly"), "true")
+  assert.equal(block.hasAttribute("role"), false)
+  assert.equal(block.textContent, "Text")
+})
+
 test("shared editor view owns one conflict dialog with disk, local, and merge choices", () => {
   const { root } = mount({ kind: "presentation", mode: "source", persisted: true })
   const dialog = root.querySelector("#conflict-dialog")

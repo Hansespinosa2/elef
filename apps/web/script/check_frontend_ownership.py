@@ -659,6 +659,7 @@ desktop_source_reasons = {
     "bootstrap-flow.js": "orders native app startup and its readiness handshake",
     "close-flow.js": "coordinates native window close with the save transport",
     "desktop-profile.js": "derives the Stable/Dev feature and flag inputs from the build-defined profile",
+    "desktop-drop-guard.js": "swallows file drops outside the shared editor so the chromeless webview never navigates to file:// URLs",
     "diagnostic-failures.js": "reports preview and startup failures to fixed native diagnostics commands",
     "document-graph-runtime-dev.js": "assembles the shared graph pieces for the Dev profile",
     "document-graph-runtime-stable.js": "withholds the graph runtime from the Stable profile",

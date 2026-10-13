@@ -41,7 +41,9 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: apps/desktop
-          tauriScript: npm --prefix frontend run tauri --
+          # Absolute CLI path: tauri-action prepends `run` to npm bins, which
+          # breaks npm script resolution for compound tauriScript values.
+          tauriScript: ${{ github.workspace }}/apps/desktop/frontend/node_modules/.bin/tauri
           args: --config src-tauri/tauri.release.generated.conf.json --bundles app,dmg
           tagName: ${{ github.ref_name }}
           releaseName: Elef Desktop ${{ github.ref_name }}
@@ -102,6 +104,12 @@ jobs:
 
   aur-publish:
     needs: publish
+    # AUR pushing stays off until the maintainer has an AUR account: without
+    # the account variable the job skips instead of failing at the
+    # desktop-aur-publishing environment gate (its branch policy only allows
+    # main, so tag runs can never enter it). When enabling, also add the
+    # desktop-v* tag pattern to that environment's branch policy.
+    if: vars.AUR_ACCOUNT_NAME != ''
     runs-on: ubuntu-22.04
     environment: desktop-aur-publishing
     steps:

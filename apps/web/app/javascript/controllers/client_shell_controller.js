@@ -9,7 +9,7 @@ import { createRailsAuthoringSettingsTransport } from "host/rails-authoring-sett
 // lifecycle: mount on visit, unmount on leave. All web-only library extras
 // (fork, present, load-samples are server templates; fork/publish actions,
 // card notes, flash-equivalent notices) ride the documented mount options.
-const LIBRARY_URLS = { all: "/", documents: "/documents", presentations: "/presentations" }
+const LIBRARY_PATHS = { all: "/", documents: "/documents", presentations: "/presentations" }
 
 function workSegment(work) {
   return work.kind === "presentation" ? "presentations" : "documents"
@@ -44,10 +44,30 @@ function submitPostForm(url, fields = {}) {
 }
 
 export default class extends Controller {
-  static values = { initialUrl: String, cardNotes: Object, snippetsUrl: String, mathShortcutsUrl: String, closeUrl: String }
+  static values = { initialUrl: String, basePath: String, cardNotes: Object, snippetsUrl: String, mathShortcutsUrl: String, closeUrl: String }
+
+  // Deployment prefix from the server mount ("" at the domain root).
+  basePrefix() {
+    return (this.basePathValue || "").replace(/\/$/, "")
+  }
+
+  withBase(path) {
+    return `${this.basePrefix()}${path}`
+  }
+
+  // The shared router matches root-relative paths, so a prefixed mount URL
+  // is stripped back to one before parsing. Boundary-safe: only the exact
+  // prefix segment is removed.
+  stripBase(url) {
+    const base = this.basePrefix()
+    if (base === "") return url
+    if (url === base) return "/"
+    if (url.startsWith(`${base}/`)) return url.slice(base.length)
+    return url
+  }
 
   async connect() {
-    const host = await createRailsHost({ baseUrl: "", csrfToken: csrfToken() })
+    const host = await createRailsHost({ baseUrl: this.basePrefix(), csrfToken: csrfToken() })
     // The settings routes (/settings, /snippets/*, /math_shortcuts/*) carry
     // registry endpoints plus a close target; every other shell page leaves
     // them empty and mounts without the authoring seam.
@@ -67,7 +87,7 @@ export default class extends Controller {
         }
       : undefined
     this.shell = await mountElef(this.element, host, {
-      initialUrl: this.initialUrlValue,
+      initialUrl: this.stripBase(this.initialUrlValue),
       ...(authoringSeam === undefined ? {} : { authoring: authoringSeam }),
       navigate: target => {
         if (target.url !== undefined) {
@@ -78,16 +98,16 @@ export default class extends Controller {
           else window.location.assign(url)
         }
       },
-      resolveWorkUrl: work => `/${workSegment(work)}/${work.id}/edit`,
-      resolveLibraryUrl: filter => LIBRARY_URLS[filter] ?? "/",
-      resolvePreviewUrl: work => `/${workSegment(work)}/${work.id}`,
-      resolveMediaBaseUrl: work => `/${workSegment(work)}/${work.id}/assets`,
+      resolveWorkUrl: work => this.withBase(`/${workSegment(work)}/${work.id}/edit`),
+      resolveLibraryUrl: filter => this.withBase(LIBRARY_PATHS[filter] ?? "/"),
+      resolvePreviewUrl: work => this.withBase(`/${workSegment(work)}/${work.id}`),
+      resolveMediaBaseUrl: work => this.withBase(`/${workSegment(work)}/${work.id}/assets`),
       confirmDelete: work => window.confirm(`Delete ${work.title}?`),
-      presentWork: work => submitPostForm(`/${workSegment(work)}/${work.id}/publish`),
+      presentWork: work => submitPostForm(this.withBase(`/${workSegment(work)}/${work.id}/publish`)),
       cardNote: work => this.cardNotesValue[work.id] ?? null,
       extraCardActions: work => {
         if (work.kind !== "presentation") return []
-        const fork = forkType => submitPostForm(`/presentations/${work.id}/fork`, { fork_type: forkType })
+        const fork = forkType => submitPostForm(this.withBase(`/presentations/${work.id}/fork`), { fork_type: forkType })
         return [
           {
             label: "Fork",
@@ -143,6 +163,6 @@ export default class extends Controller {
   }
 
   resolveWorkUrl(work) {
-    return `/${workSegment(work)}/${work.id}/edit`
+    return this.withBase(`/${workSegment(work)}/${work.id}/edit`)
   }
 }

@@ -8,7 +8,7 @@ import { createCodeMirrorBinding } from "./editor_binding.js";
 import { presentConflictDialog } from "./conflict_dialog.js";
 import { createRendererClient } from "./renderer_worker_client.js";
 import { applyDesktopFeatureFlags } from "./feature_flags.js";
-import { configureEditorKind, renderEditorView } from "./editor_view.js";
+import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js";
 import { CREATE_WORK_EVENT, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client";
 function ensureWorkFolderHash(workFolder) {
   workFolder.content_hash ??= "";
@@ -652,6 +652,7 @@ function startFileLibraryApplication(platform) {
       setStatus("Work opened");
       if (viewSetupStartedAt !== null) recordOpenStage("workViewSetup", viewSetupStartedAt);
       await measureOpenStage("previewRefresh", () => elements.editorForm.previewController?.refresh());
+      if (visualButton && desktopFeatures.visualEditing) enableVisualModeFromInstalledPreview(elements.editorForm);
       return true;
     } catch (error) {
       showError(error);

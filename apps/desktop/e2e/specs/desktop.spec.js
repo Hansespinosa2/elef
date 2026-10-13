@@ -106,6 +106,36 @@ function sendNativeKey(key, { activate = true } = {}) {
   throw new Error(`Native keyboard input is unsupported on ${process.platform}`)
 }
 
+async function logDesktopAppState(label) {
+  try {
+    const state = await browser.execute(() => ({
+      bodyClass: document.body.className,
+      libraryHidden: document.querySelector("#library-view")?.hidden ?? null,
+      libraryDisplay: (() => {
+        const view = document.querySelector("#library-view")
+        return view ? getComputedStyle(view).display : null
+      })(),
+      workHidden: document.querySelector("#work-view")?.hidden ?? null,
+      editorMode: document.querySelector("#desktop-editor-form")?.dataset.editorMode ?? null,
+      loadedWorkId: document.querySelector("#desktop-editor-form")?.dataset.loadedWorkId ?? null,
+      workId: document.querySelector("#work-id")?.textContent ?? null,
+      presentationExitHidden: document.querySelector("#exit-presentation")?.hidden ?? null,
+      openDialogs: [...document.querySelectorAll("dialog")].filter(dialog => dialog.open).map(dialog => dialog.id),
+      saveStatus: (() => {
+        try {
+          return window.__elefSaveTestHooks?.saveStatus?.() ?? null
+        } catch (_error) {
+          return "hook-error"
+        }
+      })(),
+      presentationKeys: globalThis.__elefPresentationKeyEvents ?? null
+    }))
+    console.log(`ELEF-APP-STATE ${label}: ${JSON.stringify(state)}`)
+  } catch (error) {
+    console.log(`ELEF-APP-STATE ${label}: unavailable (${error.message})`)
+  }
+}
+
 async function sendPresentationKey(key) {
   await browser.execute(() => window.focus())
   if (process.platform === "darwin") {
@@ -127,7 +157,35 @@ async function sendPresentationKey(key) {
     await browser.keys(webDriverKey)
     return
   }
-  sendNativeKey(key)
+  // An xdotool keystroke under xvfb occasionally never reaches the WebView:
+  // the window can lose the focus race after the native fullscreen
+  // transition. A lost Escape wedges the shared app in presentation mode and
+  // cascades into every later navigation, so resend once when the key
+  // demonstrably did not land. enterPresentationMode records each delivered
+  // keydown; a key that lands but fails to act still fails loudly below, so
+  // the retry never masks a product regression.
+  const captureInstalled = await browser.execute(() => Array.isArray(globalThis.__elefPresentationKeyEvents))
+  if (!captureInstalled) {
+    sendNativeKey(key)
+    return
+  }
+  const receivedCount = () => browser.execute(name =>
+    (globalThis.__elefPresentationKeyEvents || []).filter(event => event.key === name).length, key)
+  const before = await receivedCount()
+  const landed = async () => (await receivedCount()) > before
+  for (let attempt = 0; attempt < 2; attempt++) {
+    sendNativeKey(key)
+    try {
+      await browser.waitUntil(landed, {
+        timeout: attempt === 0 ? 2_000 : 5_000,
+        interval: 100,
+        timeoutMsg: `The ${key} keypress never reached the desktop presentation`
+      })
+      return
+    } catch (error) {
+      if (attempt === 1) throw error
+    }
+  }
 }
 
 async function desktopWindowIsFullscreen() {
@@ -2318,16 +2376,33 @@ describe("desktop binary workflows and native boundaries", () => {
     }
     await setupRichRenderingWork(root)
     await $("#refresh-library").click()
+    let workflowError = null
     try {
       await richRenderingMediaWorkflow(new DesktopEditorUi())
-    } finally {
-      if (!(await $("#library-view").isDisplayed())) {
-        await $("#back-to-library").click()
-        await $("#library-view").waitForDisplayed()
-      }
-      await teardownRichRenderingWork(root)
-      await $("#refresh-library").click()
+    } catch (error) {
+      workflowError = error
     }
+    // A throwing cleanup would swallow the workflow failure that explains a
+    // cascade, so the state dump and teardown run here and never mask it.
+    await logDesktopAppState("rich-fixture")
+    try {
+      try {
+        if (!(await $("#library-view").isDisplayed())) {
+          await $("#back-to-library").click()
+          await $("#library-view").waitForDisplayed()
+        }
+      } finally {
+        await teardownRichRenderingWork(root)
+      }
+      if (await $("#library-view").isDisplayed()) await $("#refresh-library").click()
+    } catch (cleanupError) {
+      if (workflowError) {
+        console.log(`ELEF-APP-STATE rich-fixture cleanup failed after the workflow error: ${cleanupError.message}`)
+      } else {
+        throw cleanupError
+      }
+    }
+    if (workflowError) throw workflowError
   })
 
   it("runs the shared external-edit conflict flow in the desktop binary", async () => {
