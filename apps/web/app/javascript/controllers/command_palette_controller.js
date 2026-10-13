@@ -13,6 +13,7 @@ export default class extends Controller {
     this.resultsData = []
     this.visibleCommands = []
     this.searchSequence = 0
+    this.previouslyFocusedElement = null
     const platform = navigator.userAgentData?.platform || navigator.platform || ""
     this.shortcutModifier = /Mac|iPhone|iPad|iPod/i.test(platform) ? "⌘" : "Ctrl+"
     this.handleGlobalKeydown = (event) => this.globalKeydown(event)
@@ -57,6 +58,9 @@ export default class extends Controller {
   }
 
   openMode(mode) {
+    if (!this.isOpen()) {
+      this.previouslyFocusedElement = typeof document !== "undefined" ? document.activeElement : null
+    }
     this.cancelSearch()
     this.searchType = "all"
     this.appearanceCategory = null
@@ -83,6 +87,13 @@ export default class extends Controller {
     this.inputTarget.setAttribute("aria-expanded", "false")
     if (typeof this.dialogTarget.close === "function" && this.dialogTarget.open) this.dialogTarget.close()
     else this.dialogTarget.removeAttribute("open")
+    this.restoreFocus()
+  }
+
+  restoreFocus() {
+    const element = this.previouslyFocusedElement
+    this.previouslyFocusedElement = null
+    if (element && element.isConnected && typeof element.focus === "function") element.focus()
   }
 
   dialogClick(event) {
@@ -92,6 +103,7 @@ export default class extends Controller {
   dialogClosed() {
     this.cancelSearch()
     this.inputTarget.setAttribute("aria-expanded", "false")
+    this.restoreFocus()
   }
 
   closeButtonClick() {
