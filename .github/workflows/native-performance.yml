@@ -63,9 +63,16 @@ jobs:
       - name: Build the shared renderer
         run: npm run renderer:build
       - name: Build the release binary with the measurement hooks
+        # Stable profile + stable e2e config: the only config that resolves
+        # under --features webdriver without desktop-dev (main-dev-capability
+        # needs document_graph, e2e-webdriver needs install_update on Linux).
+        # Same proven combination as stable-profile-smoke.js, and it
+        # benchmarks the shipped Stable profile. ELEF_DESKTOP_PROFILE=stable
+        # makes beforeBuildCommand emit dist-e2e-stable for this config.
         env:
           ELEF_E2E_BUILD: "1"
-        run: npm run tauri:build --prefix apps/desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
+          ELEF_DESKTOP_PROFILE: "stable"
+        run: npm run tauri:build --prefix apps/desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e-stable.conf.json --config src-tauri/tauri.performance.conf.json
       - name: Record native performance over ten fresh processes
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
