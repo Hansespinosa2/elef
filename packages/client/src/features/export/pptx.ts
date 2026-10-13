@@ -4,6 +4,7 @@
 // JSON endpoint, draft form posts) and the download button/status stay
 // host-owned in the web export adapter. PPTX byte output must not drift; see
 // apps/web/test/system/pptx_export_test.rb and the engine unit tests.
+import { presentationTheme } from "@elef/work-model/document-map"
 import { slidePositionClasses, slidePositionLayout } from "@elef/work-model/slide-position-layout"
 
 export type PptxConstructor = new () => any
@@ -189,7 +190,8 @@ export function createRenderStage(model: PptxModel, hostDocument: Document = glo
     `work-theme-${model.presentation.theme}`,
     `work-typography-${model.presentation.typography}`,
     `slides-theme-${model.presentation.theme}`,
-    `slides-typography-${model.presentation.typography}`
+    `slides-typography-${model.presentation.typography}`,
+    `slides-presentation-${presentationTheme(model.presentation.theme, model.presentation.typography)}`
   ].join(" ")
   stage.style.cssText = "position:fixed;left:-20000px;top:0;width:1280px;z-index:-1;opacity:0;pointer-events:none;"
   stage.innerHTML = model.slides.map((slide) => slideMarkup(slide, model)).join("")

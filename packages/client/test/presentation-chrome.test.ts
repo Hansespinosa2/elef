@@ -111,3 +111,13 @@ test("client presentation chrome emits neutral behavior contracts", () => {
   assert.match(root, /data-client-mount="mermaid"/);
   assert.doesNotMatch(root, /data-controller=/);
 });
+
+test("client presentation root derives the canonical presentation theme", () => {
+  const book = presentationRoot({ style: { theme: "match", typography: "book" }, inner: "" });
+  assert.match(book, /slides-presentation-book-light/);
+  assert.match(book, /slides-theme-match/);
+  const dark = presentationRoot({ style: { theme: "dark", typography: "book" }, inner: "" });
+  assert.match(dark, /slides-presentation-modern-dark/);
+  const technical = presentationRoot({ style: { theme: "light", typography: "technical" }, inner: "" });
+  assert.match(technical, /slides-presentation-technical-light/);
+});
