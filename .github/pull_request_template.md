@@ -12,9 +12,10 @@
 
 ## Screenshots
 
-<!-- REQUIRED for any visual change: before/after pairs CROPPED to the specific
-changed parts (not only full pages), one pair per part. Name what to look at
-in each pair. No visual change: write "None — <reason>" (e.g. CI-only,
+<!-- REQUIRED for any visual change: EMBED before/after image pairs CROPPED to the
+specific changed parts (not only full pages), one pair per part — hosted
+images (e.g. a scratch assets branch), never local file paths. Name what to
+look at in each pair. No visual change: write "None — <reason>" (e.g. CI-only,
 behavior covered by unit tests). Desktop-shell-only changes that cannot render
 in a browser: say so and list the on-device checks instead. -->
 
