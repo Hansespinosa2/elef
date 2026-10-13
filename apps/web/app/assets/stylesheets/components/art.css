@@ -183,7 +183,7 @@
   font-size: var(--art-presentation-body-size);
 }
 
-.elef-art a { color: inherit; }
+.elef-art a { color: inherit; text-decoration: underline; text-underline-offset: 0.16em; }
 
 @media (forced-colors: active) {
   .elef-art-list > li { border: 1px solid CanvasText; }

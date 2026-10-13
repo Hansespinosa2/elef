@@ -20,7 +20,8 @@ var DIRECTIVE_SCHEMAS = /* @__PURE__ */ new Map([
   ["art", { grammar: [], argument_count: 0, values: [] }],
   ["section", { grammar: ["text"], argument_count: 1, values: [] }],
   ["subsection", { grammar: ["text"], argument_count: 1, values: [] }],
-  ["footnote", { grammar: ["text"], argument_count: 1, values: [] }]
+  ["footnote", { grammar: ["text"], argument_count: 1, values: [] }],
+  ["step", { grammar: ["reveal_label?"], argument_count: { minimum: 0, maximum: 1 }, values: [] }]
 ]);
 function placeholders(template) {
   return [...String(template || "").matchAll(/\$\{(\d+)(?::([^}]*))?\}/g)].map(([, position, label = ""]) => ({ position: Number(position), label }));

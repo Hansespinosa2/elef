@@ -28,7 +28,7 @@
 .document-surface table { border-collapse: collapse; max-width: 100%; width: 100%; }
 .document-surface th, .document-surface td { border: 1px solid var(--presentation-line); padding: 0.35rem 0.5rem; }
 .document-surface img { max-height: 850px; max-width: 100%; object-fit: contain; }
-.document-surface a { color: inherit; }
+.document-surface a { color: var(--oradia-green-deep); text-decoration: underline; text-decoration-color: #9fc5a988; text-underline-offset: 0.16em; }
 .document-surface .document-link { color: var(--oradia-green-deep); font-weight: 700; text-decoration: underline; text-decoration-color: #9fc5a988; text-underline-offset: 0.16em; }
 .document-surface .document-link.unresolved { color: var(--presentation-danger); font-weight: 700; text-decoration: underline wavy; text-underline-offset: 0.16em; }
 .document-reader { overflow: hidden; }
