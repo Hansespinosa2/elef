@@ -11,7 +11,7 @@ class PptxExportTest < ApplicationSystemTestCase
   EXPECTED_BACKGROUNDS = {
     "book-light" => %w[#fcfaf5 #f5f0e7],
     "modern-dark" => %w[#202c32 #11161a],
-    "technical-light" => %w[#fffdf8 #f5f0e7]
+    "technical-light" => %w[#a7b0b6 #8f989e]
   }.freeze
 
   test "exports presentation fixtures as a styled 16:9 PPTX" do

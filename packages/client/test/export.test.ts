@@ -119,7 +119,7 @@ test("pptx engine renders slide markup and transfer blobs", async () => {
   assert.ok(svg.startsWith("data:image/svg+xml;base64,"));
   const decoded = (uri: string): string => Buffer.from(uri.split(",", 2)[1] ?? "", "base64").toString("utf8");
   assert.ok(decoded(gradientBackground("book-light")).includes("#fcfaf5"));
-  assert.ok(decoded(gradientBackground("technical-light")).includes("#fffdf8"));
+  assert.ok(decoded(gradientBackground("technical-light")).includes("#a7b0b6"));
   assert.ok(decoded(gradientBackground("modern-dark")).includes("#202c32"));
 });
 

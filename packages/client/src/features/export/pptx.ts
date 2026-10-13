@@ -714,13 +714,14 @@ export function safeHyperlink(url: string): boolean {
 
 // Exported slide background, derived from the same canonical presentation
 // theme the slide surface renders (book-light carries the match tones,
-// modern-dark the dark tones, technical-light the light tones), so the
-// file matches the screen for all 9 legacy pairs.
+// modern-dark the dark tones, technical-light the mid-tone steel
+// treatment from themes.css), so the file matches the screen for all 9
+// legacy pairs.
 export function gradientBackground(canonicalTheme: string): string {
   const palettes: Record<string, [string, string, string]> = {
     "book-light": ["#fcfaf5", "#f5f0e7", "#d8d0c2"],
     "modern-dark": ["#202c32", "#11161a", "#304047"],
-    "technical-light": ["#fffdf8", "#f5f0e7", "#d8d0c2"]
+    "technical-light": ["#a7b0b6", "#8f989e", "#5f6b72"]
   }
   const fallback: [string, string, string] = ["#fcfaf5", "#f5f0e7", "#d8d0c2"]
   const [start, end, border] = palettes[canonicalTheme] || fallback
