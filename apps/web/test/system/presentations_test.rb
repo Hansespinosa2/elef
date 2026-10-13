@@ -46,6 +46,16 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
   end
 
+  def indent_source_line(source, offset)
+    line_start = offset.positive? ? (source.rindex("\n", offset - 1)&.+(1) || 0) : 0
+    source.dup.insert(line_start, "  ")
+  end
+
+  def assert_editor_keeps_focus_after_tab
+    assert page.evaluate_script("document.activeElement?.closest('.cm-editor') !== null"),
+      "expected Tab to keep focus inside the source editor"
+  end
+
   def wait_for_fresh_projection
     # The shared preview controller allows requests up to 8 seconds to finish.
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
@@ -2483,7 +2493,7 @@ class PresentationsTest < ApplicationSystemTestCase
       find_field("Markdown source").value
   end
 
-  test "escape clears the snippet tab stop marks and leaves Tab alone" do
+  test "escape clears the snippet tab stop marks and returns Tab to indent" do
     document = Document.create!(title: "Escape tab stops", source: "# Escape tab stops")
 
     visit edit_document_path(document)
@@ -2502,9 +2512,10 @@ class PresentationsTest < ApplicationSystemTestCase
     source = find_field("Markdown source").value
     find(".cm-content").send_keys(:tab)
 
-    assert_equal selection, page.evaluate_script(editor_selection)
-    assert_equal source, find_field("Markdown source").value
+    assert_equal indent_source_line(source, selection.first), find_field("Markdown source").value
+    assert_equal selection.map { |offset| offset + 2 }, page.evaluate_script(editor_selection)
     assert_no_selector ".cm-snippet-stop"
+    assert_editor_keeps_focus_after_tab
   end
 
   test "keeps the remaining snippet tab stop marks aligned while typing" do
@@ -2558,9 +2569,10 @@ class PresentationsTest < ApplicationSystemTestCase
     selection = page.evaluate_script(editor_selection)
     source = find_field("Markdown source").value
     find(".cm-content").send_keys(:tab)
-    assert_equal selection, page.evaluate_script(editor_selection)
-    assert_equal source, find_field("Markdown source").value
+    assert_equal indent_source_line(source, selection.first), find_field("Markdown source").value
+    assert_equal selection.map { |offset| offset + 2 }, page.evaluate_script(editor_selection)
     assert_no_selector ".cm-snippet-stop"
+    assert_editor_keeps_focus_after_tab
   end
 
   test "marks math shortcut tab stops across multiple lines" do
