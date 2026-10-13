@@ -6,13 +6,16 @@
 // (features/export/pptx), so both hosts emit the same PPTX bytes for the
 // same Work. Remote images stay URLs in the model: the shared engine embeds
 // them at prepareMedia time, matching the server, which inlines them before
-// serving. This module ships as the deferred @elef/client/pptx-model entry,
+// serving. Blocks render through @elef/renderer/projection (the same
+// chrome-composed render the server bundle uses), never the bare entry.
+// This module ships as the deferred @elef/client/pptx-model entry,
 // never in the boot barrel: the projection (KaTeX, highlight.js,
 // markdown-it) stays out of the boot entry like preview-core.
 import { buildEditorStructure } from "@elef/work-model/document-map"
 import type { ParsedBlock } from "@elef/work-model/document-map"
-import { collectMediaReferences, renderMarkdownBlock } from "@elef/renderer"
+import { collectMediaReferences } from "@elef/renderer"
 import type { MediaMap } from "@elef/renderer"
+import { renderMarkdownBlock } from "@elef/renderer/projection"
 import type { PptxModel, PptxRegionBlock } from "./pptx.js"
 
 // Presentation font stacks, ported from Presentations::PptxExport::FONTS.

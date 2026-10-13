@@ -20,6 +20,20 @@ await build({
   legalComments: "none"
 })
 
+// Composed ESM entry (export flows): the same bare-projection-plus-chrome
+// composition as the shipped bundle, for TypeScript consumers that need
+// byte-identical output with the server without loading the IIFE global.
+await build({
+  entryPoints: [path.join(packageRoot, "src/projection.ts")],
+  bundle: true,
+  format: "esm",
+  platform: "browser",
+  target: "es2022",
+  outfile: path.join(dist, "projection.js"),
+  minify: true,
+  legalComments: "none"
+})
+
 // Shipped IIFE bundle (MiniRacer, workers, importmap): bare projection
 // composed with editor chrome. Same esbuild surface as the former host-owned
 // renderer build script; only the entry and output moved home.
@@ -42,4 +56,4 @@ const occurrences = bundle.split(rawWhitespace).length - 1
 if (occurrences !== 1) throw new Error(`Expected one Highlight.js whitespace template, found ${occurrences}.`)
 await writeFile(output, bundle.replace(rawWhitespace, "[ \\t\n"))
 
-console.log("packages/renderer: dist/elef-renderer.js + dist/elef-renderer.bundle.js built")
+console.log("packages/renderer: dist/elef-renderer.js + dist/projection.js + dist/elef-renderer.bundle.js built")
