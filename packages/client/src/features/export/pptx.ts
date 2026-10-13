@@ -629,8 +629,12 @@ function cellTextRuns(cell: Element): Array<RichTextRun> {
   return richTextRuns(cell).map(({ text, options }) => ({ text, options }))
 }
 
-function rootThemeColor(element: Element): string {
-  return element.closest(".pptx-render-stage")?.classList.contains("work-theme-dark") ? "202C32" : "FCFAF5"
+export function rootThemeColor(element: Element): string {
+  const stage = element.closest(".pptx-render-stage")
+  if (stage?.classList.contains("slides-presentation-modern-dark")) return "202C32"
+  if (stage?.classList.contains("slides-presentation-technical-light")) return "8F989E"
+  if (stage?.classList.contains("work-theme-dark")) return "202C32"
+  return "FCFAF5"
 }
 
 function addImageElement(slide: any, element: Element, root: Element, data: string, alt: string): void {

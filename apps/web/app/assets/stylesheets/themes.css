@@ -77,4 +77,5 @@
   --work-surface-ink: var(--oradia-paper-ink);
   --work-heading-ink: var(--oradia-paper-ink);
   --work-editor-slide-border: #5f6b72;
+  --presentation-muted: #333937;
 }

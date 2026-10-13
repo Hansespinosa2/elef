@@ -29,7 +29,14 @@ class PptxExportTest < ApplicationSystemTestCase
 
     with_remote_image_fetcher(->(_url) { fake_image }) do
       fixtures.each do |fixture|
-        presentation.update!(source: fixture.fetch(:source))
+        source = fixture.fetch(:source)
+        if fixture.fetch(:id) == "tables-and-media"
+          # Exercise the technical canonical theme so the
+          # EXPECTED_BACKGROUNDS["technical-light"] pin is live (all fixtures
+          # otherwise resolve to book-light and the entry is never fetched).
+          source = source.sub(/\A---\n/, "---\ntypography: technical\n")
+        end
+        presentation.update!(source: source)
         download_button.click
         assert_selector '[role="status"]', text: "PowerPoint downloaded.", wait: 30
 
