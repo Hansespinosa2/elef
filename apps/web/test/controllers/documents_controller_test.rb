@@ -334,6 +334,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     assert_select ".document-surface a.document-link[href='#{document_path(target)}']", text: "Preview target"
     assert_select ".document-surface span.document-link.unresolved", text: "[[Missing target]]"
+    assert_select ".saved-document-preview[data-bug-report-ignore]", count: 1
   end
 
   test "document views expose collapsed outgoing and incoming context" do
@@ -344,6 +345,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     get document_path(target)
 
     assert_select "details.linked-context"
+    assert_select "details.linked-context[data-bug-report-ignore]", count: 1
     assert_select "a[href='#{document_path(source)}']", text: "Context source"
     get document_path(source)
     assert_select "a[href='#{document_path(target)}']", text: "Context target"
@@ -401,6 +403,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".document-print-toolbar button", text: "Print / Save PDF"
     assert_select ".document-surface h1", text: "Page 1"
     assert_select ".document-surface h1", text: "Page 2"
+    assert_select ".document-print-pages[data-bug-report-ignore]", count: 1
   end
 
   private

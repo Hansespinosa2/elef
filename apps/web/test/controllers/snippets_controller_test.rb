@@ -11,6 +11,7 @@ class SnippetsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select '[data-controller="client-shell"]'
+    assert_select '#client-shell-mount[data-bug-report-ignore]', count: 1
     assert_select '[data-client-shell-initial-url-value="/snippets"]'
     assert_select '[data-client-shell-snippets-url-value="/snippets.json"]'
     assert_select '[data-client-shell-math-shortcuts-url-value="/math_shortcuts.json"]'

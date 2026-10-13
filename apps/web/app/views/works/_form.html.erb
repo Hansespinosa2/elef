@@ -15,7 +15,7 @@
 <% actions << "paste->media#paste:capture" %>
 <% actions += ["input->slide-overview#sourceChanged", "change->slide-overview#sourceChanged", "preview:updated->slide-overview#previewUpdated"] if work.presentation? %>
 <% editor_mode = visual_mode ? "visual" : "source" %>
-<% form_data = { action: actions.join(" "), editor_mode: editor_mode, dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?" } %>
+<% form_data = { action: actions.join(" "), editor_mode: editor_mode, dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?", "bug-report-ignore": true } %>
 <% form_data[:preview_url_value] = persisted ? work_preview_path(work) : work_preview_collection_path(work) %>
 <% form_data[:visual_editor_kind_value] = work.kind %>
 <% form_data[:media_work_kind_value] = work.kind %>

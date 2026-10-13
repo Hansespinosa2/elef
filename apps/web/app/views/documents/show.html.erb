@@ -12,10 +12,10 @@
   </div>
 </section>
 <%= render "works/warnings", warnings: @document.preview_warnings %>
-<div class="saved-document-preview mt-6">
+<div class="saved-document-preview mt-6" data-bug-report-ignore>
   <%= render "documents/content", document: @document %>
 </div>
-<details class="linked-context mt-6 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4">
+<details class="linked-context mt-6 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4" data-bug-report-ignore>
   <summary class="cursor-pointer font-bold">Linked context</summary>
   <div class="linked-context-grid mt-4 grid gap-5 md:grid-cols-2">
     <section aria-labelledby="outgoing-links-heading">

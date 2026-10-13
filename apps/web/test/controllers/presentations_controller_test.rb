@@ -145,6 +145,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "editor markup configures autosave and keeps new presentations client-only" do
     get edit_presentation_path(presentations(:one))
     assert_select "form.visual-editor-form"
+    assert_select "form.visual-editor-form[data-bug-report-ignore]", count: 1
     assert_select "form[action='#{publish_presentation_path(presentations(:one))}'] button.button", text: "Present"
     assert_select 'form.visual-editor-form form', count: 0
     assert_select '[data-editor-view-config]'
@@ -273,6 +274,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-print-toolbar", text: /Published release/
     assert_select ".presentation-print .slide h1", text: "Published version"
     assert_select ".presentation-print .slide h1", text: "Latest draft", count: 0
+    assert_select ".presentation-print-slides[data-bug-report-ignore]", count: 1
   end
 
   test "Present receives reveal counts while print keeps every event on one slide" do
@@ -647,10 +649,12 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".slides-typography-book"
     assert_select ".slide", 2
     assert_select "h1", text: "One"
+    assert_select '[data-controller="slide-scaling"][data-bug-report-ignore]', count: 1
 
     get present_presentation_path(presentation)
     assert_response :success
     assert_select "body.presentation-body"
+    assert_select ".presentation-stage[data-bug-report-ignore]", count: 1
     assert_select ".presentation-mode.presentation-surface"
     assert_select ".slides-typography-book"
     assert_select 'link[href*="tailwind"]', count: 0

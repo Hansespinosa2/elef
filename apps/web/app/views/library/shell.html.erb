@@ -14,6 +14,7 @@
 <% end %>
 <div id="client-shell-mount"
      data-controller="client-shell"
+     data-bug-report-ignore
      data-client-shell-initial-url-value="<%= request.path %>"
      data-client-shell-base-path-value="<%= client_base_path %>"
      data-client-shell-card-notes-value="<%= ERB::Util.html_escape((@card_notes || {}).to_json) %>">

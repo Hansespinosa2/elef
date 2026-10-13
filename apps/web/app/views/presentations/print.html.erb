@@ -5,7 +5,7 @@
     <button type="button" class="button primary" data-action="print-view#print">Print / Save PDF</button>
     <span><%= @release ? "Published release" : "Latest draft" %> · <%= @presentation.title %></span>
   </div>
-  <div class="slides presentation-print-slides">
+  <div class="slides presentation-print-slides" data-bug-report-ignore>
     <% @presentation.slides.each do |slide| %>
       <div class="slide-frame">
         <%= render "slide", slide: slide, presentation: @presentation, margin_settings: @presentation.document.margin_settings %>
