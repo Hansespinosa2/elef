@@ -72,12 +72,12 @@ jobs:
         env:
           ELEF_E2E_BUILD: "1"
         run: npm run tauri:build --prefix apps/desktop/frontend -- --features desktop-dev,webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
-      - name: Record native performance over ten fresh processes
+      - name: Record native performance over twenty fresh processes
         run: |
           if [[ "$RUNNER_OS" == "Linux" ]]; then
-            dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-performance-openbox.log 2>&1 & sleep 1; node apps/desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --launch-count 10 --report-runner'
+            dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-performance-openbox.log 2>&1 & sleep 1; node apps/desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --launch-count 20 --report-runner'
           else
-            node apps/desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --launch-count 10 --report-runner
+            node apps/desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --launch-count 20 --report-runner
           fi
       - name: Preserve native performance samples
         if: always()

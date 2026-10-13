@@ -138,7 +138,7 @@ abort "native performance must remain outside PR authorization" unless
   performance_events.dig("push", "branches") == ["dev"] && performance_events.key?("schedule") &&
     performance_events.key?("workflow_dispatch") && !performance_events.key?("pull_request") &&
     performance_workflow.fetch("jobs").values.flat_map { |job| job.fetch("steps", []) }.any? do |step|
-      step.fetch("run", "").include?("--launch-count 10 --report-runner")
+      step.fetch("run", "").include?("--launch-count 20 --report-runner")
     end
 abort "native benchmark must not run in a required CI job" if workflow.to_s.include?("benchmark-native.mjs")
 
