@@ -64,10 +64,10 @@ impl Library {
         source: Option<&str>,
     ) -> Result<SnapshotInfo, CoreError> {
         validate_snapshot_reason(reason)?;
-        let record = self.record(id)?;
-        self.validate_work_folder_path(&record.path)?;
         let lock = self.write_lock(id);
         let _guard = lock.lock().expect("work folder write lock poisoned");
+        let record = self.record(id)?;
+        self.validate_work_folder_path(&record.path)?;
         let bytes: Vec<u8> = match source {
             Some(text) => {
                 if text.len() > MAX_SOURCE_BYTES {
@@ -166,10 +166,10 @@ impl Library {
         snapshot_id: &str,
     ) -> Result<RestoreOutcome, CoreError> {
         validate_snapshot_id(snapshot_id)?;
-        let mut record = self.record(id)?;
-        self.validate_work_folder_path(&record.path)?;
         let lock = self.write_lock(id);
         let _guard = lock.lock().expect("work folder write lock poisoned");
+        let mut record = self.record(id)?;
+        self.validate_work_folder_path(&record.path)?;
         let dir = self.snapshot_dir(&record.id);
         let bytes = fs::read(dir.join(format!("{snapshot_id}.snap"))).map_err(|error| {
             if error.kind() == std::io::ErrorKind::NotFound {

@@ -256,6 +256,52 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_saves_and_relists_never_lose_the_latest_save() {
+        let (temp, library) = library();
+        let work_folder = write_work_folder(temp.path(), "Racy", &[("presentation.md", "v0")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
+
+        // One writer chains its own hashes while listers hammer the atomic
+        // whole-index replace: every completed save must survive in the
+        // index, so the final record always matches the final bytes.
+        const ROUNDS: usize = 50;
+        std::thread::scope(|scope| {
+            let library_ref = &library;
+            let saver_lib = library_ref;
+            let saver_id = opened.id.clone();
+            let saver_hash = opened.content_hash.clone();
+            scope.spawn(move || {
+                let mut hash = saver_hash;
+                for round in 0..ROUNDS {
+                    let bytes = format!("revision {round}\n");
+                    let saved = saver_lib.save_source(&saver_id, &bytes, &hash).unwrap();
+                    hash = saved.content_hash;
+                }
+            });
+            for _ in 0..4 {
+                scope.spawn(move || {
+                    for _ in 0..ROUNDS {
+                        library_ref.list_work_folders().unwrap();
+                    }
+                });
+            }
+        });
+
+        let record = library.record(&opened.id).unwrap();
+        assert_eq!(
+            record.persisted_source.as_deref(),
+            Some("revision 49\n"),
+            "a re-list must never overwrite a completed save"
+        );
+        assert_eq!(
+            fs::read_to_string(work_folder.join("presentation.md")).unwrap(),
+            "revision 49\n"
+        );
+    }
+
+    #[test]
     fn save_crash_worker() {
         let Ok(root) = std::env::var("ELEF_CORE_TEST_SAVE_ROOT") else {
             return;

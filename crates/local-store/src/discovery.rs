@@ -67,28 +67,37 @@ pub(crate) fn path_id(path: &Path) -> String {
 
 impl Library {
     pub fn list_work_folders(&self) -> Result<Vec<WorkFolderSummary>, CoreError> {
+        // Hold the index write lock across discovery + merge + replace so the
+        // re-list is atomic against concurrent refresh/remove: a refresh that
+        // lands mid-scan must strictly win or lose, never be silently
+        // overwritten by a stale snapshot (lost save) or resurrect a delete.
+        // Discovery itself takes no other lock, so the global order (per-id
+        // guard outer, index lock inner) is preserved; scans are read-only
+        // directory walks that complete in milliseconds.
+        let mut index = self
+            .records
+            .write()
+            .expect("work folder index lock poisoned");
         let mut records = self.discover_work_folders()?;
         // Discovery rebuilds records from disk, which would drop the
         // in-memory-only merge ancestry. Carry it over so a re-list between a
         // save and an external change does not silently degrade the next merge
-        // to `Overlap`.
-        let existing = self
-            .records
-            .read()
-            .expect("work folder index lock poisoned");
+        // to `Overlap` — but only when the selected source file is unchanged,
+        // so the ancestor never becomes the base for unrelated bytes.
         for record in records.values_mut() {
-            if let Some(persisted) = existing
-                .get(&record.id)
-                .and_then(|prior| prior.persisted_source.clone())
+            if let Some(prior) = index.get(&record.id)
+                && prior.source_file == record.source_file
+                && prior.source_path == record.source_path
             {
-                record.persisted_source = Some(persisted);
+                record.persisted_source = prior.persisted_source.clone();
             }
         }
-        drop(existing);
-        let mut summaries = records
+        *index = records;
+        let mut summaries = index
             .values()
             .map(|record| self.summary(record))
             .collect::<Vec<_>>();
+        drop(index);
         summaries.sort_by_key(|work_folder| {
             (
                 normalized_name(&work_folder.name),
@@ -96,10 +105,6 @@ impl Library {
                 work_folder.path.clone(),
             )
         });
-        *self
-            .records
-            .write()
-            .expect("work folder index lock poisoned") = records;
         Ok(summaries)
     }
 
@@ -396,5 +401,24 @@ mod tests {
         library.list_work_folders().unwrap();
         let record = library.record(&opened.id).unwrap();
         assert_eq!(record.persisted_source.as_deref(), Some("saved\n"));
+    }
+
+    #[test]
+    fn relisting_drops_the_ancestor_when_the_selected_source_changes() {
+        let (temp, library) = library();
+        let work_folder = write_work_folder(temp.path(), "Switch", &[("talk.md", "old\n")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
+        assert_eq!(opened.source_file, "talk.md");
+
+        // An external writer adds a preferred source file: the old ancestor
+        // must not become the merge base for the new file's bytes.
+        fs::write(work_folder.join("presentation.md"), "preferred\n").unwrap();
+        library.list_work_folders().unwrap();
+
+        let record = library.record(&opened.id).unwrap();
+        assert_eq!(record.source_file, "presentation.md");
+        assert_eq!(record.persisted_source, None);
     }
 }
