@@ -24,7 +24,7 @@ export type { PresentationEditorDeps, PresentationEditorHost, PresentationEditor
 export { DocumentEditor } from "./features/document/document_editor.js";
 export type { DocumentEditorDeps, DocumentEditorSeam } from "./features/document/document_editor.js";
 export { SlideOverview } from "./features/overview/overview.js";
-export { exportPptxModel, downloadBlob } from "./features/export/pptx.js";
+export { exportPptxModel, downloadBlob, dataUriToBlob } from "./features/export/pptx.js";
 export { EXPORT_FORMATS, exportFormatsFor, exportFormatById } from "./features/export/registry.js";
 export {
   presentationBlockAttributes,

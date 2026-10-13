@@ -6,6 +6,7 @@ mod error;
 mod exports;
 mod library;
 mod menus;
+mod remote_images;
 mod state;
 mod updates;
 mod work_folders;
@@ -18,7 +19,9 @@ use crate::archives::{
     export_elef, import_elef, import_elef_bytes, import_opened_elef, pending_open_elef_count,
     resolve_import_conflict,
 };
-use crate::assets::{asset_protocol_response, list_media, remove_media, upload_asset};
+use crate::assets::{
+    asset_protocol_response, list_media, read_pptx_asset, remove_media, upload_asset,
+};
 #[cfg(feature = "webdriver")]
 use crate::diagnostics::export_diagnostics_fixture;
 use crate::diagnostics::{export_diagnostics, record_bootstrap_failure, record_preview_failure};
@@ -28,6 +31,7 @@ use crate::library::{
     restore_library_root, write_authoring_registry, write_library_config,
 };
 use crate::menus::build_menu;
+use crate::remote_images::fetch_remote_image;
 use crate::state::DesktopState;
 use crate::updates::confirm_app_ready;
 #[cfg(any(
@@ -72,6 +76,8 @@ macro_rules! app_commands {
             import_elef_bytes,
             export_elef,
             save_pptx_bytes,
+            read_pptx_asset,
+            fetch_remote_image,
             import_elef,
             import_opened_elef,
             pending_open_elef_count,
@@ -204,8 +210,8 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
         .on_menu_event(|app, event| {
             let id = event.id().as_ref();
             match id {
-                "open-work" | "refresh-library" | "save" | "export-elef" | "import-elef"
-                | "print" | "settings" | "export-diagnostics" => {
+                "open-work" | "refresh-library" | "save" | "export-elef" | "export-pptx"
+                | "import-elef" | "print" | "settings" | "export-diagnostics" => {
                     let _ = app.emit("desktop-menu-action", id);
                 }
                 #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]

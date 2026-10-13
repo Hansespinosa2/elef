@@ -37,6 +37,8 @@
     "allow-import-elef-bytes",
     "allow-export-elef",
     "allow-save-pptx-bytes",
+    "allow-read-pptx-asset",
+    "allow-fetch-remote-image",
     "allow-import-elef",
     "allow-import-opened-elef",
     "allow-pending-open-elef-count",

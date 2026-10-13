@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use base64::Engine as _;
 use local_store::{StoredAsset, UploadedAsset};
 use tauri::http::{Request as ProtocolRequest, Response as ProtocolResponse, StatusCode, header};
 use tauri::ipc::{InvokeBody, Request as IpcRequest};
@@ -184,9 +185,86 @@ pub(crate) fn remove_media(
     Ok(state.current_library()?.remove_asset(&id, &digest)?)
 }
 
+// Reads one content-addressed asset as a data URI for PPTX export. The
+// shared engine embeds media at prepareMedia time, but the webview cannot
+// fetch elefasset:// bytes itself: the desktop CSP restricts connect-src to
+// IPC. The desktop prepareMedia seam resolves local media through this
+// command instead of webview fetch, reusing the protocol's verified read
+// path (digest-verified, symlink-rejecting). A missing asset reports the
+// same message the server raises for an unresolvable Elef reference.
+#[tauri::command]
+pub(crate) fn read_pptx_asset(
+    state: State<'_, DesktopState>,
+    id: String,
+    digest: String,
+) -> Result<String, CommandError> {
+    read_pptx_asset_inner(&state, &id, &digest)
+}
+
+fn read_pptx_asset_inner(
+    state: &DesktopState,
+    id: &str,
+    digest: &str,
+) -> Result<String, CommandError> {
+    let (bytes, content_type) =
+        state
+            .current_library()?
+            .read_asset(id, digest)
+            .map_err(|error| match error {
+                local_store::CoreError::NotFound => CommandError::new(
+                    "invalid_input",
+                    "A referenced Elef image or video is unavailable for PPTX export.",
+                    false,
+                ),
+                other => CommandError::from(other),
+            })?;
+    Ok(format!(
+        "data:{content_type};base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(&bytes)
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pptx_asset_reads_return_verified_bytes_as_data_uris() {
+        let temp = tempfile::TempDir::new().unwrap();
+        let root = temp.path().join("library");
+        std::fs::create_dir(&root).unwrap();
+        let state = DesktopState::default();
+        state.use_library(root).unwrap();
+        let library = state.current_library().unwrap();
+        let work = library
+            .create_work_folder("Export", "presentation")
+            .unwrap();
+        let png = b"\x89PNG\r\n\x1a\npptx export bytes";
+        let uploaded = library
+            .upload_asset(&work.id, "photo.png", "image/png", png, "contain")
+            .unwrap();
+
+        let data_uri = read_pptx_asset_inner(&state, &work.id, &uploaded.digest).unwrap();
+        let encoded = data_uri
+            .strip_prefix("data:image/png;base64,")
+            .expect("pptx asset reads return typed data URIs");
+        assert_eq!(
+            base64::engine::general_purpose::STANDARD
+                .decode(encoded)
+                .unwrap()
+                .as_slice(),
+            &png[..]
+        );
+
+        let missing = "b".repeat(64);
+        let error = read_pptx_asset_inner(&state, &work.id, &missing).unwrap_err();
+        assert_eq!(error.code, "invalid_input");
+        let value = serde_json::to_value(error).unwrap();
+        assert_eq!(
+            value["message"],
+            "A referenced Elef image or video is unavailable for PPTX export."
+        );
+    }
 
     #[test]
     fn asset_protocol_accepts_digest_and_scoped_relative_asset_paths() {
