@@ -90,6 +90,7 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, mount.length
     assert_equal "client-shell", mount.first["data-controller"]
     assert mount.first.has_attribute?("data-bug-report-ignore"), "library mount must ignore bug-report capture (rename/new/search leak titles)"
+    assert_select "dialog.command-palette[data-bug-report-ignore]", count: 1
     assert_equal path, mount.first["data-client-shell-initial-url-value"]
     assert_instance_of Hash, JSON.parse(mount.first["data-client-shell-card-notes-value"])
   end
