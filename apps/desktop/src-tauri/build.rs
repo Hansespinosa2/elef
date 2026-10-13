@@ -26,6 +26,7 @@ fn main() {
                 "remove_media",
                 "import_elef_bytes",
                 "export_elef",
+                "save_pptx_bytes",
                 "import_elef",
                 "import_opened_elef",
                 "pending_open_elef_count",

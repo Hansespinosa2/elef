@@ -90,26 +90,38 @@ Capability keys come from the `HostCapabilities` interface
 - Desktop side: work targets resolve through the existing openWork/file-open
   seam (desktop file-open/graph e2e flows).
 
-## HD-06 export surface (web-only)
+## HD-06 export surface (delivery differs, engine shared)
 
 - Capability: none (product surface, not a port capability).
 - Concrete reason: the web app delivers export bytes over HTTP download routes
   (the `get :export` member routes on presentations and documents in
   `apps/web/config/routes.rb`,
-  `apps/web/app/javascript/controllers/pptx_export_host_controller.js`)
-  over shared client logic (`packages/client/src/features/export/`); the
-  desktop has no export UI and no download transport.
-- Supported side: Rails pptx/pdf export service + system tests
+  `apps/web/app/javascript/controllers/pptx_export_host_controller.js`),
+  while the desktop has no HTTP server to download from, so it saves the same
+  bytes through a native save dialog (`save_pptx_bytes` in
+  `apps/desktop/src-tauri/src/exports.rs`, driven by
+  `apps/desktop/frontend/src/export-transport.js`). Both hosts run the shared
+  client engine (`packages/client/src/features/export/pptx.ts`) over the same
+  model shape: Rails serves it as JSON (`Presentations::PptxExport`), the
+  desktop builds it from local source (`buildPptxModel` in
+  `packages/client/src/features/export/pptx_model.ts`). The generator library
+  ships offline on both hosts (web `public/vendor`, desktop `assets/`).
+- Supported side (web): Rails pptx/pdf export service + system tests
   (`apps/web/test/services/presentations/pptx_export_test.rb`,
   `apps/web/test/system/pptx_export_test.rb`, `apps/web/test/system/media_pdf_export_test.rb`).
-- Disabled side: shared `apps/web/test/e2e/scenarios/export.js` branches on
-  `ui.capabilities.export`; the desktop UI declares `export: false` and
-  `assertExportUnavailable` proves no Download PPTX surface exists
-  (`apps/desktop/e2e/specs/desktop.spec.js`, "asserts the explicit
-  export-disabled path in the desktop binary").
+- Supported side (desktop): shared engine + model unit tests
+  (`packages/client/test/export.test.ts`), desktop transport test
+  (`apps/desktop/frontend/tests/export-transport.test.js`), and the
+  `ELEF_E2E_PPTX_EXPORT_PATH` save-dialog harness bypass (mirroring
+  `ELEF_E2E_EXPORT_PATH`).
 - Supported side (shared definition): the web UI declares `export: true` and
   runs download → status proof (`apps/desktop/e2e/specs/web.spec.js`,
   "shared export flow downloads PPTX in the web app").
+- Desktop trigger follow-up: the shared scenario still asserts no Download
+  PPTX DOM surface on desktop (`assertExportUnavailable` in
+  `apps/desktop/e2e/specs/desktop.spec.js`); the work-view trigger that calls
+  the desktop export seam lands separately. PDF on both hosts goes through
+  the shared print path.
 
 ## HD-07 search implementation (contract-identical, locality differs)
 

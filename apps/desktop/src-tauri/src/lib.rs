@@ -3,6 +3,7 @@ mod assets;
 mod diagnostics;
 mod dialogs;
 mod error;
+mod exports;
 mod library;
 mod menus;
 mod state;
@@ -21,6 +22,7 @@ use crate::assets::{asset_protocol_response, list_media, remove_media, upload_as
 #[cfg(feature = "webdriver")]
 use crate::diagnostics::export_diagnostics_fixture;
 use crate::diagnostics::{export_diagnostics, record_bootstrap_failure, record_preview_failure};
+use crate::exports::save_pptx_bytes;
 use crate::library::{
     choose_library_root, get_library_status, read_authoring_registries, read_library_config,
     restore_library_root, write_authoring_registry, write_library_config,
@@ -69,6 +71,7 @@ macro_rules! app_commands {
             remove_media,
             import_elef_bytes,
             export_elef,
+            save_pptx_bytes,
             import_elef,
             import_opened_elef,
             pending_open_elef_count,

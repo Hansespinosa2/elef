@@ -36,6 +36,7 @@
     "allow-remove-media",
     "allow-import-elef-bytes",
     "allow-export-elef",
+    "allow-save-pptx-bytes",
     "allow-import-elef",
     "allow-import-opened-elef",
     "allow-pending-open-elef-count",

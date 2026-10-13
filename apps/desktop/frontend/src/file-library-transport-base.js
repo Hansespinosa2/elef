@@ -1,4 +1,7 @@
-export function createBaseFileLibraryTransport({ invoke }) {
+import { createExportTransport } from "./export-transport.js"
+
+export function createBaseFileLibraryTransport({ invoke, pptxSeams } = {}) {
+  const pptxExport = createExportTransport({ invoke, ...pptxSeams })
   return {
     getLibraryStatus: () => invoke("get_library_status"),
     listWorkFolders: () => invoke("list_work_folders"),
@@ -12,6 +15,7 @@ export function createBaseFileLibraryTransport({ invoke }) {
     readLibraryConfig: () => invoke("read_library_config"),
     writeLibraryConfig: config => invoke("write_library_config", { config }),
     exportElef: id => invoke("export_elef", { id }),
+    exportPptx: (workId, input) => pptxExport.exportPresentationPptx(workId, input),
     importElef: () => invoke("import_elef"),
     importOpenedElef: () => invoke("import_opened_elef"),
     resolveImportConflict: resolution => invoke("resolve_import_conflict", { resolution }),

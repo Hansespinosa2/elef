@@ -21,10 +21,14 @@ export const EXPORT_FORMATS: Array<ExportFormat> = [
     id: "pptx",
     label: "PowerPoint (.pptx)",
     kinds: ["presentation"],
-    hosts: ["web"],
+    hosts: ["web", "desktop"],
     engine: "pptx",
-    // The web host serves the JSON model (draft or published release) that
-    // the shared engine renders; the generator library loads in the browser.
+    // Both hosts run the shared engine over the same model shape: the web
+    // host serves the JSON model (draft or published release) over HTTP,
+    // while the desktop builds the identical shape client-side from local
+    // source (features/export/pptx_model) because it has no server. Delivery
+    // differs per host (HTTP download vs native save dialog); the engine and
+    // the generator library are shared.
     model: "web-json",
   },
   {
