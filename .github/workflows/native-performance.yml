@@ -34,6 +34,7 @@ jobs:
           cache-dependency-path: |
             package-lock.json
             apps/desktop/frontend/package-lock.json
+            apps/desktop/e2e/package-lock.json
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
@@ -54,6 +55,8 @@ jobs:
         run: npm ci
       - name: Install desktop frontend dependencies
         run: npm ci --prefix apps/desktop/frontend
+      - name: Install shared scenario dependencies
+        run: npm ci --prefix apps/desktop/e2e
       - name: Build Rails Tailwind stylesheet
         working-directory: apps/web
         run: bin/rails tailwindcss:build
