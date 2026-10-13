@@ -231,6 +231,102 @@ test("lineage layout places a continuation in the next column of its parent's la
   assert.equal(controller.width, 624)
 })
 
+test("command palette saves the previously focused element on open and restores it on close", () => {
+  const previouslyFocused = { isConnected: true, focused: 0, focus() { this.focused += 1 } }
+  const restoreDocument = replaceGlobal("document", { activeElement: previouslyFocused })
+  const controller = new CommandPaletteController()
+  Object.assign(controller, {
+    previouslyFocusedElement: null,
+    dialogTarget: {
+      open: false,
+      hasAttribute: () => false,
+      showModal() { this.open = true },
+      close() { this.open = false },
+      removeAttribute() {}
+    },
+    inputTarget: { value: "", focus() {}, setAttribute() {}, removeAttribute() {} },
+    cancelSearch() {},
+    setModeChrome() {},
+    updateFilterSelection() {},
+    renderCurrentMode() {},
+    setStatus() {}
+  })
+
+  try {
+    controller.openMode("commands")
+    assert.equal(controller.previouslyFocusedElement, previouslyFocused)
+    controller.close()
+    assert.equal(previouslyFocused.focused, 1)
+    assert.equal(controller.previouslyFocusedElement, null)
+  } finally {
+    restoreDocument()
+  }
+})
+
+test("command palette does not overwrite the saved element when switching modes while open", () => {
+  const first = { isConnected: true, focus() {} }
+  const inDialog = { isConnected: true, focus() {} }
+  const fakeDocument = { activeElement: first }
+  const restoreDocument = replaceGlobal("document", fakeDocument)
+  const controller = new CommandPaletteController()
+  Object.assign(controller, {
+    previouslyFocusedElement: null,
+    dialogTarget: {
+      open: false,
+      hasAttribute() { return this.open },
+      showModal() { this.open = true }
+    },
+    inputTarget: { value: "", focus() {} },
+    cancelSearch() {},
+    setModeChrome() {},
+    updateFilterSelection() {},
+    renderCurrentMode() {},
+    setStatus() {}
+  })
+
+  try {
+    controller.openMode("commands")
+    fakeDocument.activeElement = inDialog
+    controller.openMode("search")
+    assert.equal(controller.previouslyFocusedElement, first)
+  } finally {
+    restoreDocument()
+  }
+})
+
+test("command palette skips restore when the saved element left the DOM", () => {
+  const controller = new CommandPaletteController()
+  let focusCalls = 0
+  Object.assign(controller, {
+    previouslyFocusedElement: { isConnected: false, focus() { focusCalls += 1 } },
+    dialogTarget: { open: false, removeAttribute() {} },
+    inputTarget: { setAttribute() {} },
+    cancelSearch() {}
+  })
+
+  controller.close()
+
+  assert.equal(focusCalls, 0)
+  assert.equal(controller.previouslyFocusedElement, null)
+})
+
+test("command palette restores focus once across close and native dialog dismiss", () => {
+  const previouslyFocused = { isConnected: true, focused: 0, focus() { this.focused += 1 } }
+  const controller = new CommandPaletteController()
+  Object.assign(controller, {
+    previouslyFocusedElement: previouslyFocused,
+    dialogTarget: { open: true, close() { this.open = false } },
+    inputTarget: { setAttribute() {} },
+    cancelSearch() {}
+  })
+
+  controller.close()
+  controller.dialogClosed()
+
+  assert.equal(previouslyFocused.focused, 1)
+  assert.equal(controller.previouslyFocusedElement, null)
+})
+
 test("Mermaid mutation render requests coalesce into one animation frame", () => {
   const callbacks = new Map()
   const renders = []
