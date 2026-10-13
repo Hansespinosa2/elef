@@ -157,13 +157,26 @@ for job_name in "${required_jobs[@]}"; do
   fi
 done
 
-artifact_name="ci-attestation-pr${pull_number}-run${run_id}-attempt${run_attempt}"
 artifacts="$(gh api "repos/$repository/actions/runs/$run_id/artifacts?per_page=100")"
-artifact_count="$(jq --arg name "$artifact_name" '[.artifacts[]? | select(.name == $name and .expired == false)] | length' <<<"$artifacts")"
-if [[ "$artifact_count" != 1 ]]; then
-  echo "Cannot authorize deployment of $sha: expected one unexpired CI attestation artifact '$artifact_name'" >&2
+# Partial reruns (--failed) only re-run failed jobs, so record-ci-attestation
+# often ran solely on an earlier attempt. Every attempt of a run tests the
+# same head sha (reruns never change it), and required jobs are already
+# evaluated per-job-latest above, so the latest attempt WITH an attestation
+# carries the same tested tree. Fail closed when no attempt has one.
+attested_attempt=""
+for ((candidate = run_attempt; candidate >= 1; candidate--)); do
+  candidate_name="ci-attestation-pr${pull_number}-run${run_id}-attempt${candidate}"
+  candidate_count="$(jq --arg name "$candidate_name" '[.artifacts[]? | select(.name == $name and .expired == false)] | length' <<<"$artifacts")"
+  if [[ "$candidate_count" == 1 ]]; then
+    attested_attempt="$candidate"
+    break
+  fi
+done
+if [[ -z "$attested_attempt" ]]; then
+  echo "Cannot authorize deployment of $sha: expected one unexpired CI attestation artifact for run $run_id" >&2
   exit 1
 fi
+artifact_name="ci-attestation-pr${pull_number}-run${run_id}-attempt${attested_attempt}"
 
 temporary_directory="$(mktemp -d)"
 trap 'rm -rf "$temporary_directory"' EXIT
@@ -177,7 +190,7 @@ fi
 if ! jq -e \
   --argjson pr "$pull_number" \
   --argjson run "$run_id" \
-  --argjson attempt "$run_attempt" \
+  --argjson attempt "$attested_attempt" \
   --argjson required_jobs "$required_jobs_json" \
   ' .pr_number == $pr
     and .workflow_run_id == $run
