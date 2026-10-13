@@ -43,7 +43,7 @@ assert 'report.budgetMode = reportOnly ? "runner-report-only" : "enforced"' in p
 assert 'assert.deepEqual(report.misses, [], "Native release application performance exceeded its budgets")' in performance_benchmark, "target-device performance runs must keep hard budget assertions"
 assert "benchmark-native.mjs" not in ci_workflow, "native measurements must not gate a pull-request CI job"
 assert performance_workflow.count("benchmark-native.mjs --binary") == 2, "the scheduled workflow must keep one benchmark invocation per platform"
-assert performance_workflow.count("--launch-count 10 --report-runner") == 2, "scheduled measurements must use an explicit bounded launch count on both platforms"
+assert performance_workflow.count("--launch-count 20 --report-runner") == 2, "scheduled measurements must use an explicit bounded launch count on both platforms"
 assert 'schedule:' in performance_workflow and 'push:\n    branches:\n      - dev' in performance_workflow and "pull_request:" not in performance_workflow, "native measurements must run on dev pushes and outside pull-request authorization"
 assert 'DEFAULT_LAUNCH_COUNT = 20' in (REPO_ROOT / "apps" / "desktop" / "e2e" / "native-benchmark-config.js").read_text(), "local/target measurement default remains twenty launches"
 feature_flags_source = (REPO_ROOT / "packages" / "editor-runtime" / "src" / "lib" / "feature_flags.ts").read_text()
