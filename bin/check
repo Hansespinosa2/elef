@@ -168,7 +168,7 @@ def run_native_benchmark() -> float:
     build_elapsed = run_build_step(
         "native benchmark release build",
         ["npm", "run", "tauri:build", "--prefix", "apps/desktop/frontend", "--",
-         "--features", "webdriver", "--no-bundle",
+         "--features", "desktop-dev,webdriver", "--no-bundle",
          "--config", "src-tauri/tauri.e2e.conf.json",
          "--config", "src-tauri/tauri.performance.conf.json"],
         extra_env={"ELEF_E2E_BUILD": "1"},
@@ -212,6 +212,8 @@ QUICK_COMMANDS_1 = (
     "python3 tooling/check_boundaries.py",
     "python3 tooling/check_boundaries.py --self-test",
     "python3 tooling/check_spec.py",
+    "python3 tooling/ci_affected.py --self-test",
+    "python3 tooling/ci_report.py --self-test",
     "cargo test --manifest-path Cargo.toml -p local-store --locked",
 )
 

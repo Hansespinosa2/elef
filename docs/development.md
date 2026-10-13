@@ -45,7 +45,7 @@ Tagging and publishing a release (draft → publish, Gate A, emergency block) is
 
 | Tier | Command | Covers |
 |---|---|---|
-| quick | `bin/check quick` | JS/package unit suites, ownership/boundary checkers, local-store tests (~20 s) |
+| quick | `bin/check quick` | JS/package unit suites, ownership/boundary/spec/CI-planner checkers, local-store tests (~20 s) |
 | affected | `bin/check affected` | quick + generated-asset diffs, Rails unit subset, adapter conformance, frontend build, Tauri arch checker, fmt/clippy, Rust workspace tests (~1 min) |
 | all | `bin/check all` | affected + full Rails unit (PostgreSQL + SQLite) + Rails system + desktop e2e + web e2e + native benchmark (~18 min, ceiling 45 min) |
 
@@ -109,4 +109,4 @@ git diff -- apps/web/app/assets/builds/tailwind.css packages/renderer/dist/ pack
 
 The package order matters: the editor-runtime Stable entry bundles the Stable client and work-model dists, so those two must be built first on a fresh checkout.
 
-CI checks that these generated files match their sources, checks the one-way frontend ownership and Tauri capability/CSP contracts, runs Rails tests with PostgreSQL and SQLite, runs Rails system tests, and builds/tests desktop on Linux and macOS. Re-run the smallest relevant check after the final edit; report the exact tier and platform actually exercised.
+CI checks that these generated files match their sources, checks the one-way frontend ownership and Tauri capability/CSP contracts, runs Rails tests with PostgreSQL and SQLite, runs Rails system tests, and builds/tests desktop on Linux and macOS. The lane design (quick, shadow plan, slow, nightly), the dev shepherd loop, and the manual promotion path live in [CI operations](ci-operations.md). Re-run the smallest relevant check after the final edit; report the exact tier and platform actually exercised.
