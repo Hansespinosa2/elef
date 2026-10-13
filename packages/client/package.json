@@ -40,6 +40,10 @@
     "./pptx-test-internals": {
       "types": "./src/pptx-test-internals.ts",
       "default": "./dist/pptx-test-internals.js"
+    },
+    "./pptx-model": {
+      "types": "./src/features/export/pptx_model.ts",
+      "default": "./dist/pptx-model.js"
     }
   },
   "files": [

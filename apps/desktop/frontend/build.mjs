@@ -223,3 +223,7 @@ await copyFile(path.join(repoRoot, "apps/web/app/assets/builds/tailwind.css"), p
 await copyFile(path.join(frontendRoot, "node_modules/katex/dist/katex.min.css"), path.join(assets, "katex.min.css"))
 await cp(path.join(frontendRoot, "node_modules/katex/dist/fonts"), path.join(assets, "fonts"), { recursive: true })
 await copyFile(path.join(repoRoot, "apps/web/vendor/javascript/mermaid.min.js"), path.join(assets, "mermaid.min.js"))
+// The PowerPoint generator ships with the app like the other vendor bundles:
+// PPTX export must work fully offline, so the export transport loads this
+// file instead of a CDN copy.
+await copyFile(path.join(repoRoot, "apps/web/public/vendor/pptxgen.bundle.js"), path.join(assets, "pptxgen.bundle.js"))

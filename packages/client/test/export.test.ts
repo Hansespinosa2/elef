@@ -24,6 +24,10 @@ import {
   exportFormatById,
   exportFormatsFor,
 } from "../src/features/export/registry.js";
+import {
+  buildPptxModel,
+  normalizeExportFilename,
+} from "../src/features/export/pptx_model.js";
 
 void downloadBlob;
 
@@ -65,7 +69,7 @@ test("export registry is the only format-rule source", () => {
   assert.ok(webPresentation.includes("pdf"));
 
   const desktopPresentation = exportFormatsFor({ kind: "presentation", host: "desktop" }).map((format) => format.id);
-  assert.ok(!desktopPresentation.includes("pptx"));
+  assert.ok(desktopPresentation.includes("pptx"));
   assert.ok(desktopPresentation.includes("print"));
   assert.ok(desktopPresentation.includes("elef"));
 
@@ -242,4 +246,69 @@ test("pptx render stage escapes slide layouts", () => {
   (model.slides[0] as Record<string, unknown>).layout = 'x" onmouseover="alert(1)';
   const stage = createRenderStage(model, document as unknown as Document);
   assert.ok(!stage.innerHTML.includes("onmouseover=\"alert(1)\""));
+});
+
+test("pptx model builder ports the server slide payload onto work-model and renderer", () => {
+  const model = buildPptxModel({ source: "# Hello\n\nWorld.\n\n---\n\n# Second\n\nMore.", title: "Talk" });
+
+  assert.equal(model.filename, "Talk.pptx");
+  assert.equal(model.version, "draft");
+  assert.equal(model.presentation.title, "Talk");
+  assert.ok(["light", "dark", "match"].includes(model.presentation.theme));
+  assert.ok(["book", "modern", "technical"].includes(model.presentation.typography));
+  assert.ok(model.presentation.fonts.body.includes("system-ui"));
+  assert.equal(model.slides.length, 2);
+
+  const first = model.slides[0];
+  const second = model.slides[1];
+  assert.ok(first);
+  assert.ok(second);
+  assert.equal(first.index, 0);
+  assert.equal(second.index, 1);
+  for (const slide of model.slides) {
+    assert.ok(["body", "two-column", "three-column", "image", "table", "code", "statement"].includes(slide.layout));
+    assert.ok(slide.blocks.every((block) => typeof block.html === "string"));
+    assert.ok(slide.regions.every((region) => region.every((block) => typeof block.html === "string")));
+  }
+  assert.equal(first.title_html, null);
+  assert.equal(first.title_position, null);
+  assert.ok(first.blocks.some((block) => block.html.includes("Hello")));
+  assert.ok(first.blocks.some((block) => block.html.includes("World.")));
+  assert.deepEqual(Object.keys(model.margin_settings).sort(), ["footnote", "section", "slide_count", "subsection"]);
+});
+
+test("pptx model builder sanitizes filenames like the server", () => {
+  assert.equal(normalizeExportFilename("  Quarterly / Forecast?  "), "Quarterly Forecast");
+  assert.equal(normalizeExportFilename(""), "Presentation");
+  assert.equal(normalizeExportFilename(".."), "Presentation");
+  assert.equal(
+    buildPptxModel({ source: "# Forecast", title: "  Quarterly / Forecast?  " }).filename,
+    "Quarterly Forecast.pptx",
+  );
+});
+
+test("pptx model builder preserves positioned titles and resolves Elef assets like the server", () => {
+  const positioned = buildPptxModel({
+    source: ":::align{top right}\n# Compare\n\n## Left\n\nOne side.\n\n## Right\n\nThe other side.\n",
+    title: "Positioned title",
+  });
+  const slide = positioned.slides[0];
+  assert.ok(slide);
+  assert.equal(slide.layout, "two-column");
+  assert.ok(slide.title_html?.includes("Compare"));
+  assert.deepEqual(slide.title_position, { horizontal: "right", vertical: "top", vertical_explicit: true });
+
+  const digest = "0".repeat(64);
+  assert.throws(
+    () => buildPptxModel({ source: `# Missing\n\n![Missing](elef-asset:${digest})`, title: "Missing asset" }),
+    /referenced Elef image or video is unavailable for PPTX export/,
+  );
+  const mapped = buildPptxModel({
+    source: `# Found\n\n![Found](elef-asset:${digest})`,
+    title: "Found asset",
+    mediaMap: { [`elef-asset:${digest}`]: { src: "elefasset://localhost/work/abc", contentType: "image/png" } },
+  });
+  const mappedSlide = mapped.slides[0];
+  assert.ok(mappedSlide);
+  assert.ok(mappedSlide.blocks.some((block) => block.html.includes("elefasset://localhost/work/abc")));
 });
