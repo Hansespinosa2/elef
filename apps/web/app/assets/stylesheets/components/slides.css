@@ -29,6 +29,8 @@
 
 .presentation-surface a {
   color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
 }
 
 .slides {
