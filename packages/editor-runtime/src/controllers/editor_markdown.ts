@@ -551,7 +551,9 @@ function structuredBlockProjection(source: string, kind: string, protectedElemen
     }
 
     if (lineIndex < lines.length - 1) {
-      if (boundaries.length === 0) boundaries[0] = sourceOffset + line.length
+      // The stripped length: position 0 must map before the carriage return,
+      // not between it and the newline (which would strand a lone \r).
+      if (boundaries.length === 0) boundaries[0] = sourceOffset + content.length
       text += "\n"
       boundaries[text.length] = sourceOffset + line.length + 1
     }

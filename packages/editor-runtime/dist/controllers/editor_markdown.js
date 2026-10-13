@@ -421,7 +421,7 @@ function structuredBlockProjection(source, kind, protectedElements, formatBudget
       boundaries[text.length] = sourceOffset + prefixLength;
     }
     if (lineIndex < lines.length - 1) {
-      if (boundaries.length === 0) boundaries[0] = sourceOffset + line.length;
+      if (boundaries.length === 0) boundaries[0] = sourceOffset + content.length;
       text += "\n";
       boundaries[text.length] = sourceOffset + line.length + 1;
     }

@@ -40,6 +40,21 @@ test("CRLF list edits keep markers and line endings in slide mode", () => {
   )
 })
 
+test("CRLF blocks with a leading empty line strand no carriage return", () => {
+  assert.equal(
+    editorMarkdown.markdownForVisibleText("\r\n- two\r\n", "Z\ntwo\n", "list", null, DOCUMENT),
+    "Z\r\n- two\r\n"
+  )
+  assert.equal(
+    editorMarkdown.markdownForVisibleText("\r\n- two\r\n", "\ntwo\n", "list", null, DOCUMENT),
+    "\r\n- two\r\n"
+  )
+  assert.equal(
+    editorMarkdown.markdownForVisibleText("- \r\n- two\r\n", "\ntwo\n", "list", null, DOCUMENT),
+    "- \r\n- two\r\n"
+  )
+})
+
 test("CRLF paragraph edits keep line endings", () => {
   assert.equal(
     editorMarkdown.markdownForVisibleText("First line\r\nsecond line\r\n", "First line\nsecond LINE\n", "paragraph", null, DOCUMENT),
