@@ -42,6 +42,25 @@ abort "the attestation must depend on every required check" unless
 abort "the attestation must only be recorded for pull requests" unless
   attestation["if"] == "github.event_name == 'pull_request'"
 
+evidence_jobs = required_checks + ["arch-package"]
+gate = jobs.fetch("release-gate")
+abort "release-gate must wait for exactly the thirteen evidence jobs, never the plan or matrix jobs" unless
+  gate.fetch("needs").sort == evidence_jobs.sort
+
+plan = jobs.fetch("plan")
+abort "the plan job must run for pull requests and dispatch, but not branch pushes" unless
+  plan["if"] == "github.event_name != 'push'"
+plan_run = plan.fetch("steps").flat_map { |step| [step["name"], step["run"]] }.join("\n")
+abort "the plan job must compute the shadow plan with the affected-job planner" unless
+  plan_run.include?("tooling/ci_affected.py") && plan_run.include?("shadow")
+abort "the plan job must stay in shadow mode (ELEF_CI_PLAN_ENFORCE=0)" unless
+  plan.fetch("steps").any? { |step| step["env"].is_a?(Hash) && step["env"]["ELEF_CI_PLAN_ENFORCE"] == "0" }
+
+matrix = jobs.fetch("ci-gate")
+abort "the result matrix must always run after the plan and every evidence job" unless
+  matrix["if"] == "always()" &&
+    matrix.fetch("needs").sort == (["plan"] + evidence_jobs).sort
+
 publisher = jobs.fetch("publish-deployment-ref")
 abort "deployment publishing must be a lightweight post-merge push job" unless
   publisher["if"] == "github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'main')" &&
@@ -130,10 +149,18 @@ abort "the attestation must name the required CI jobs and non-gating measurement
     attestation_run.include?("required_jobs: $required_jobs") &&
     attestation_run.include?("non_gating_measurements: $non_gating_measurements") &&
     attestation_run.include?('["native-performance"]')
+abort "the attestation must record the schema-3 shadow plan block" unless
+  attestation_run.include?("--argjson schema_version 3") &&
+    attestation_run.include?("plan: $plan") &&
+    attestation_run.include?('"mode":"shadow"') &&
+    attestation_run.include?("tooling/ci_affected.py")
 verifier = File.read(File.expand_path("../../../../tooling/release/verify-deployment-authorization", __dir__))
 abort "the verifier must validate the benchmark policy and required-job manifest" unless
-  verifier.include?(".schema_version == 2") &&
+  verifier.include?(".schema_version == 3") &&
     verifier.include?(".required_jobs == $required_jobs") &&
-    verifier.include?('.non_gating_measurements == ["native-performance"]')
+    verifier.include?('.non_gating_measurements == ["native-performance"]') &&
+    verifier.include?('.plan.mode == "shadow"') &&
+    verifier.include?(".plan.enforced == false") &&
+    verifier.include?('.plan.planner == "tooling/ci_affected.py"')
 
 puts "CI keeps all required checks, runs pure unit suites once, and verifies the attested tree before publishing"

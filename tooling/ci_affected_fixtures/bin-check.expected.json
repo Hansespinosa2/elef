@@ -1,0 +1,19 @@
+{
+  "affected": [
+    "affected"
+  ],
+  "suggested_skips": [
+    "desktop-fast",
+    "scan_ruby",
+    "scan_js",
+    "test",
+    "sqlite-test",
+    "system-test",
+    "desktop",
+    "arch-package",
+    "desktop-macos",
+    "renderer-macos",
+    "production-smoke",
+    "development-smoke"
+  ]
+}
