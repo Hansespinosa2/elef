@@ -51,9 +51,6 @@
 
 .elef-art-list > li > :is(p, ul, ol) { margin-block: 0; }
 .elef-art-list > li > :is(p, ul, ol) + :is(p, ul, ol) { margin-block-start: 0.5em; }
-.elef-art:not([data-art-layout="plain-list"]) > .elef-art-list > li > :is(p, ul, ol):first-child {
-  font-weight: 600;
-}
 /* Lead stays full-strength; supporting lines step back. Color only: weights
    change glyph advances, which the fit oracle measures. */
 .elef-art:not([data-art-layout="plain-list"]) > .elef-art-list > li > :is(p, ul, ol):not(:first-child) {
@@ -129,7 +126,6 @@
 
 .elef-art[data-art-mode="sequence"] > .elef-art-list > li::marker {
   color: var(--art-accent);
-  font-weight: 700;
 }
 
 .elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"] > .elef-art-list > li,
