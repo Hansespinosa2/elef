@@ -6,6 +6,7 @@
     "strict": true,
     "exactOptionalPropertyTypes": true,
     "noUncheckedIndexedAccess": true,
+    "resolveJsonModule": true,
     "skipLibCheck": true
   }
 }
