@@ -45,3 +45,37 @@
   --document-heading-ink: var(--oradia-paper-ink);
   --document-blockquote-ink: var(--oradia-paper-muted);
 }
+
+/* Canonical presentation themes: one color mode + one font per theme,
+   derived at render time from the legacy theme/typography pair (see
+   presentationTheme() in @elef/work-model). Book-light copies the match
+   tones verbatim and modern-dark the dark tones; technical-light is a
+   distinct mid-tone steel treatment between the two, keeping the technical
+   face and 0.96em body density (see typography.css). Exactly 2 of the 9
+   legacy pairs render pixel-identical — (match, book) (the preserved Book
+   Light default) and (dark, modern). The doubled class outranks
+   .work-theme-* so the two axes can never fight. */
+.presentation-surface.slides-presentation-book-light {
+  --work-surface-background: linear-gradient(135deg, var(--oradia-paper-bright), var(--oradia-paper));
+  --work-surface-border: var(--oradia-paper-line);
+  --work-surface-ink: var(--oradia-paper-ink);
+  --work-heading-ink: var(--oradia-paper-ink);
+  --work-editor-slide-border: #cfc4b2;
+}
+
+.presentation-surface.slides-presentation-modern-dark {
+  --work-surface-background: linear-gradient(135deg, var(--oradia-slate-800), var(--oradia-slate-950));
+  --work-surface-border: var(--oradia-slate-700);
+  --work-surface-ink: var(--oradia-ink);
+  --work-heading-ink: var(--oradia-ink);
+  --work-editor-slide-border: var(--oradia-slate-700);
+}
+
+.presentation-surface.slides-presentation-technical-light {
+  --work-surface-background: linear-gradient(135deg, #a7b0b6, #8f989e);
+  --work-surface-border: #5f6b72;
+  --work-surface-ink: var(--oradia-paper-ink);
+  --work-heading-ink: var(--oradia-paper-ink);
+  --work-editor-slide-border: #5f6b72;
+  --presentation-muted: #333937;
+}

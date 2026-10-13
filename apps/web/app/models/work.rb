@@ -115,6 +115,17 @@ class Work < ApplicationRecord
     style_overrides[:typography]
   end
 
+  # Canonical presentation theme (color + font pair) derived from the
+  # resolved legacy theme/typography values. Mirrors presentationTheme() in
+  # packages/work-model/src/document_map.ts exactly, including normalization
+  # (quoted/padded/legacy values); stored values are untouched.
+  def presentation_theme
+    return "modern-dark" if Source::Document.normalize_theme_value(theme) == "dark"
+    return "technical-light" if Source::Document.normalize_typography_value(typography) == "technical"
+
+    "book-light"
+  end
+
   def theme=(value)
     self.source = Source::Document.with_front_matter_value(
       source.to_s,

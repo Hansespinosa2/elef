@@ -4,10 +4,14 @@ require "zip"
 
 class PptxExportTest < ApplicationSystemTestCase
   PIXEL_PNG = Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII=").freeze
+  # Keyed by canonical presentation theme: the exporter derives the slide
+  # background from presentationTheme(theme, typography), the same value the
+  # slide surface renders (slides-presentation-*), so export matches screen
+  # for all 9 legacy pairs. Hex values stay literal pins of each palette.
   EXPECTED_BACKGROUNDS = {
-    "dark" => %w[#202c32 #11161a],
-    "light" => %w[#fffdf8 #f5f0e7],
-    "match" => %w[#fcfaf5 #f5f0e7]
+    "book-light" => %w[#fcfaf5 #f5f0e7],
+    "modern-dark" => %w[#202c32 #11161a],
+    "technical-light" => %w[#a7b0b6 #8f989e]
   }.freeze
 
   test "exports presentation fixtures as a styled 16:9 PPTX" do
@@ -25,7 +29,14 @@ class PptxExportTest < ApplicationSystemTestCase
 
     with_remote_image_fetcher(->(_url) { fake_image }) do
       fixtures.each do |fixture|
-        presentation.update!(source: fixture.fetch(:source))
+        source = fixture.fetch(:source)
+        if fixture.fetch(:id) == "tables-and-media"
+          # Exercise the technical canonical theme so the
+          # EXPECTED_BACKGROUNDS["technical-light"] pin is live (all fixtures
+          # otherwise resolve to book-light and the entry is never fetched).
+          source = source.sub(/\A---\n/, "---\ntypography: technical\n")
+        end
+        presentation.update!(source: source)
         download_button.click
         assert_selector '[role="status"]', text: "PowerPoint downloaded.", wait: 30
 
@@ -178,7 +189,7 @@ class PptxExportTest < ApplicationSystemTestCase
   def assert_pptx_visual_contract(bytes, presentation, fixture_id, expected_heading_geometries)
     slide_models = presentation.slides
     title = Source::Document.extract_first_h1(presentation.source)
-    expected_background = EXPECTED_BACKGROUNDS.fetch(presentation.theme)
+    expected_background = EXPECTED_BACKGROUNDS.fetch(presentation.presentation_theme)
 
     Zip::File.open_buffer(StringIO.new(bytes)) do |archive|
       entries = archive.entries.map(&:name)

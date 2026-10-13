@@ -178,6 +178,27 @@ interface FenceState {
 const THEMES = new Set(["light", "dark", "match"])
 const TYPOGRAPHIES = new Set(["book", "modern", "technical"])
 
+// Canonical presentation themes: each pairs one color mode with one font, so
+// slides render three genuinely distinct looks. Legacy front-matter/workspace
+// theme/typography values keep parsing unchanged (no migration, no rejects);
+// the slide surface derives one of these at render time. Explicit dark always
+// stays dark; otherwise typography selects the theme. Exactly 2 of the 9
+// legacy (theme, typography) pairs render pixel-identical — (match, book)
+// (the preserved Book Light default) and (dark, modern). The technical
+// pairs render the mid-tone treatment (neither legacy light nor match), and
+// dark now always pairs with the modern face. Body copy keeps legacy metrics
+// by design: hybrid pairs such as (dark, technical) render modern-dark
+// headings over technical-density (0.96em) body. Mirrored by
+// Work#presentation_theme.
+export const PRESENTATION_THEMES = ["book-light", "modern-dark", "technical-light"] as const
+export type PresentationTheme = (typeof PRESENTATION_THEMES)[number]
+
+export function presentationTheme(theme: unknown, typography: unknown): PresentationTheme {
+  if (normalizeThemeValue(theme) === "dark") return "modern-dark"
+  if (normalizeTypographyValue(typography) === "technical") return "technical-light"
+  return "book-light"
+}
+
 export function buildEditorMap(
   source: unknown,
   { sourceName = "Untitled presentation", mode = "presentation" }: { sourceName?: string; mode?: string } = {}

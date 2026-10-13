@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readStyle, withAppearanceValue } from "../src/index.js"
+import { presentationTheme, PRESENTATION_THEMES, readStyle, withAppearanceValue } from "../src/index.js"
 
 test("appearance writes preserve unrelated metadata, body bytes, Unicode, and line endings", () => {
   for (const eol of ["\n", "\r\n", "\r"]) {
@@ -24,4 +24,19 @@ test("workspace defaults remove only the chosen override", () => {
   assert.equal(withAppearanceValue(both, "theme", ""), "---\ntypography: technical\n---\n" + body)
   assert.throws(() => withAppearanceValue(body, "author", "somebody"), TypeError)
   assert.throws(() => withAppearanceValue(body, "theme", "dark\nextra: value"), TypeError)
+})
+
+test("legacy style pairs map onto three presentation themes", () => {
+  assert.deepEqual([...PRESENTATION_THEMES], ["book-light", "modern-dark", "technical-light"])
+  assert.equal(presentationTheme("match", "book"), "book-light")
+  assert.equal(presentationTheme("light", "book"), "book-light")
+  for (const typography of ["book", "modern", "technical"]) {
+    assert.equal(presentationTheme("dark", typography), "modern-dark")
+  }
+  assert.equal(presentationTheme("light", "technical"), "technical-light")
+  assert.equal(presentationTheme("match", "technical"), "technical-light")
+  assert.equal(presentationTheme("light", "modern"), "book-light")
+  assert.equal(presentationTheme("match", "modern"), "book-light")
+  assert.equal(presentationTheme("nope", "nope"), "book-light")
+  assert.equal(presentationTheme(undefined, undefined), "book-light")
 })

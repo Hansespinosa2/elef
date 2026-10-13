@@ -40,7 +40,7 @@ function model(overrides = {}) {
   return {
     filename: "work.pptx",
     version: 3,
-    presentation: { title: "Work", theme: "dark", typography: "editorial", fonts: { body: "Body, serif", editorial: "Editorial, serif", technical: "Technical, serif" } },
+    presentation: { title: "Work", theme: "dark", typography: "modern", fonts: { body: "Body, serif", book: "Book, serif", modern: "Modern, serif", technical: "Technical, serif" } },
     margin_settings: {},
     slides: [],
     ...overrides
@@ -52,9 +52,23 @@ test("createRenderStage mirrors the work theme and typography classes onto a hid
 
   const stage = createRenderStage(model({ slides: [slide({ index: 0 }), slide({ index: 1 })] }))
 
-  assert.equal(stage.className, "pptx-render-stage presentation-surface work-theme-dark work-typography-editorial slides-theme-dark slides-typography-editorial")
+  assert.equal(stage.className, "pptx-render-stage presentation-surface work-theme-dark work-typography-modern slides-theme-dark slides-typography-modern slides-presentation-modern-dark")
   assert.match(stage.style.cssText, /position:fixed/)
   assert.equal(stage.innerHTML.match(/<div class="slide-frame"/g).length, 2)
+})
+
+test("createRenderStage derives the canonical presentation theme class", () => {
+  installDom()
+
+  const book = createRenderStage(model({
+    presentation: { title: "Work", theme: "match", typography: "book", fonts: { body: "Body, serif", book: "Book, serif", modern: "Modern, serif", technical: "Technical, serif" } }
+  }))
+  assert.equal(book.className, "pptx-render-stage presentation-surface work-theme-match work-typography-book slides-theme-match slides-typography-book slides-presentation-book-light")
+
+  const technical = createRenderStage(model({
+    presentation: { title: "Work", theme: "light", typography: "technical", fonts: { body: "Body, serif", book: "Book, serif", modern: "Modern, serif", technical: "Technical, serif" } }
+  }))
+  assert.equal(technical.className, "pptx-render-stage presentation-surface work-theme-light work-typography-technical slides-theme-light slides-typography-technical slides-presentation-technical-light")
 })
 
 test("createPresentation configures layout, metadata, and theme fonts", () => {
@@ -73,12 +87,17 @@ test("createPresentation configures layout, metadata, and theme fonts", () => {
   assert.equal(built.subject, "Work · 3")
   assert.equal(built.title, "Work")
   assert.equal(built.company, "Elef")
-  assert.deepEqual(built.theme, { headFontFace: "Editorial", bodyFontFace: "Body", lang: "en-US" })
+  assert.deepEqual(built.theme, { headFontFace: "Modern", bodyFontFace: "Body", lang: "en-US" })
 
-  const technical = createPresentation(model({
-    presentation: { title: "Work", theme: "dark", typography: "technical", fonts: { body: "Body, serif", editorial: "Editorial, serif", technical: "Technical, serif" } }
+  const darkTechnical = createPresentation(model({
+    presentation: { title: "Work", theme: "dark", typography: "technical", fonts: { body: "Body, serif", book: "Book, serif", modern: "Modern, serif", technical: "Technical, serif" } }
   }))
-  assert.equal(technical.theme.headFontFace, "Technical")
+  assert.equal(darkTechnical.theme.headFontFace, "Modern")
+
+  const lightTechnical = createPresentation(model({
+    presentation: { title: "Work", theme: "light", typography: "technical", fonts: { body: "Body, serif", book: "Book, serif", modern: "Modern, serif", technical: "Technical, serif" } }
+  }))
+  assert.equal(lightTechnical.theme.headFontFace, "Technical")
 })
 
 test("exportPptxModel orchestrates library, stage, render, and blob through seams", async () => {

@@ -659,4 +659,29 @@ class PresentationTest < ActiveSupport::TestCase
     portable = WorkAssets.portable_markdown(raw_source, presentation)
     assert_equal "# Title\n\n![My Photo](assets/photo.png \"fit:contain\")", portable
   end
+
+  test "presentation_theme derives the canonical theme through shared normalization" do
+    themed = ->(front_matter) do
+      Presentation.new(title: "Themed", source: "---\n#{front_matter}\n---\n# Hi").presentation_theme
+    end
+
+    assert_equal "modern-dark", themed.call("theme: dark")
+    assert_equal "modern-dark", themed.call("theme: dark\ntypography: technical")
+    assert_equal "technical-light", themed.call("theme: light\ntypography: technical")
+    assert_equal "book-light", themed.call("theme: match\ntypography: book")
+    assert_equal "book-light", themed.call("theme: neon\ntypography: papyrus")
+    assert_equal "modern-dark", themed.call("theme: 'dark' # evening")
+    assert_equal "technical-light", themed.call("typography: \"technical\"")
+  end
+
+  test "presentation_theme normalizes messy resolved values through the shared parser" do
+    presentation = Presentation.new(title: "Messy", source: "# Hi")
+    presentation.define_singleton_method(:theme) { "  'dark' # evening " }
+    presentation.define_singleton_method(:typography) { "book" }
+    assert_equal "modern-dark", presentation.presentation_theme
+
+    presentation.define_singleton_method(:theme) { "neon" }
+    presentation.define_singleton_method(:typography) { '"technical"' }
+    assert_equal "technical-light", presentation.presentation_theme
+  end
 end

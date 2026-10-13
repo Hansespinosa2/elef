@@ -1,6 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { FormEvent, JSX, MouseEvent, RefObject } from "react";
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
+import { presentationTheme } from "@elef/work-model/document-map";
 // The preview renderer (KaTeX, highlight.js, markdown-it) stays out of the
 // boot bundle: CardPreview loads "@elef/client/preview-core" beside the work
 // snapshot, so hosts serve it as a separate deferred file.
@@ -459,7 +460,7 @@ function CardPreview({
   const typography = state.typography ?? "book";
   const stageClass =
     work.kind === "presentation"
-      ? `library-preview-stage presentation-surface work-surface slides slides-theme-${theme} slides-typography-${typography} work-theme-${theme} work-typography-${typography}`
+      ? `library-preview-stage presentation-surface work-surface slides slides-theme-${theme} slides-typography-${typography} slides-presentation-${presentationTheme(theme, typography)} work-theme-${theme} work-typography-${typography}`
       : `library-preview-page document-reader document-theme-${theme} document-typography-${typography} work-theme-${theme} work-typography-${typography}`;
   const kind = work.kind;
   const mediaBaseUrl = options.resolveMediaBaseUrl?.(work) ?? "";

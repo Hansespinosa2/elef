@@ -16,6 +16,7 @@ import {
   gradientBackground,
   pixelRectToInches,
   primaryFont,
+  rootThemeColor,
   safeHyperlink,
   slideMarkup,
 } from "../src/features/export/pptx.js";
@@ -35,7 +36,7 @@ function testModel() {
       title: "Work",
       theme: "dark",
       typography: "technical",
-      fonts: { technical: "Arial, sans-serif", body: "Georgia, serif" },
+      fonts: { technical: "Courier, monospace", modern: "Arial, sans-serif", body: "Georgia, serif" },
     },
     margin_settings: { section: "S", subsection: "Sub", footnote: true, slide_count: true },
     slides: [
@@ -115,8 +116,12 @@ test("pptx engine renders slide markup and transfer blobs", async () => {
   assert.equal(blob.type, "text/plain");
   assert.equal(await blob.text(), "hi");
 
-  const svg = gradientBackground("dark");
+  const svg = gradientBackground("modern-dark");
   assert.ok(svg.startsWith("data:image/svg+xml;base64,"));
+  const decoded = (uri: string): string => Buffer.from(uri.split(",", 2)[1] ?? "", "base64").toString("utf8");
+  assert.ok(decoded(gradientBackground("book-light")).includes("#fcfaf5"));
+  assert.ok(decoded(gradientBackground("technical-light")).includes("#a7b0b6"));
+  assert.ok(decoded(gradientBackground("modern-dark")).includes("#202c32"));
 });
 
 test("PPTX stage groups middle stacks, lanes, docking, and default positions", () => {
@@ -234,6 +239,11 @@ test("pptx presentation creation honors model style", () => {
   assert.equal(pptx.author, "Elef");
   assert.equal(pptx.title, "Work");
   assert.equal((pptx.theme as Record<string, unknown>).headFontFace, "Arial");
+
+  const lightTechnical = testModel();
+  lightTechnical.presentation.theme = "light";
+  const lightPptx = createPresentation(lightTechnical, FakePptx) as unknown as FakePptx;
+  assert.equal((lightPptx.theme as Record<string, unknown>).headFontFace, "Courier");
 });
 
 test("pptx render stage escapes slide layouts", () => {
@@ -242,4 +252,20 @@ test("pptx render stage escapes slide layouts", () => {
   (model.slides[0] as Record<string, unknown>).layout = 'x" onmouseover="alert(1)';
   const stage = createRenderStage(model, document as unknown as Document);
   assert.ok(!stage.innerHTML.includes("onmouseover=\"alert(1)\""));
+});
+
+test("table cell fill keys off canonical presentation theme", () => {
+  for (const [stageClass, expected] of [
+    ["slides-presentation-modern-dark", "202C32"],
+    ["slides-presentation-technical-light", "8F989E"],
+    ["slides-presentation-book-light", "FCFAF5"],
+    ["work-theme-dark", "202C32"],
+  ]) {
+    const { document } = parseHTML("<html><body></body></html>");
+    const stage = document.createElement("div");
+    stage.setAttribute("class", `pptx-render-stage ${stageClass}`);
+    const table = document.createElement("table");
+    stage.appendChild(table);
+    assert.equal(rootThemeColor(table as unknown as Element), expected, stageClass);
+  }
 });

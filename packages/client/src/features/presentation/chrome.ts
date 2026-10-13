@@ -7,6 +7,7 @@
 // the client feature
 // handles block input, focus, and alignment natively, so no Stimulus
 // `data-action` is emitted here.
+import { presentationTheme } from "@elef/work-model/document-map"
 
 function escapeHtml(value: unknown): string {
   return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -58,7 +59,7 @@ export function presentationEmptySlide({ index }: { index: number }): string {
 
 export function presentationRoot({ style, inner, artController }: { style: { theme: string; typography: string }; inner: string; artController?: boolean }): string {
   const mounts = artController ? "mermaid art-layout" : "mermaid"
-  return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-client-mount="${mounts}" data-presentation-editor-target="canvas">${inner}</div>`
+  return `<div class="presentation-surface work-surface slides slides-theme-${style.theme} slides-typography-${style.typography} slides-presentation-${presentationTheme(style.theme, style.typography)} work-theme-${style.theme} work-typography-${style.typography} presentation-editor-projection" data-client-mount="${mounts}" data-presentation-editor-target="canvas">${inner}</div>`
 }
 
 export { escapeHtml as escapePresentationHtml }
