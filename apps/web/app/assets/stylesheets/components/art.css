@@ -22,17 +22,35 @@
 .elef-art-list > li {
   box-sizing: border-box;
   border: 1px solid var(--work-surface-border, var(--oradia-paper-line));
+  border-block-start: 3px solid color-mix(in srgb, currentColor 30%, transparent);
   border-radius: var(--art-radius);
   background: var(--work-surface-background, var(--oradia-paper-bright));
+  box-shadow: 0 1px 2px rgba(37, 42, 39, 0.08), 0 6px 18px rgba(37, 42, 39, 0.07);
   color: var(--work-surface-ink, var(--oradia-paper-ink));
-  line-height: 1.35;
+  line-height: 1.5;
   min-inline-size: 0;
-  padding: var(--art-card-padding);
+  padding: calc(var(--art-card-padding) + 0.7em) calc(var(--art-card-padding) + 1em);
   position: relative;
+  text-wrap: pretty;
+  transition: box-shadow 160ms ease;
+}
+
+.elef-art:not([data-art-layout="plain-list"]) > .elef-art-list > li:hover {
+  box-shadow: 0 2px 4px rgba(37, 42, 39, 0.1), 0 10px 26px rgba(37, 42, 39, 0.1);
 }
 
 .elef-art-list > li > :is(p, ul, ol) { margin-block: 0; }
-.elef-art-list > li > :is(p, ul, ol) + :is(p, ul, ol) { margin-block-start: 0.5em; }
+.elef-art-list > li > :is(p, ul, ol) + :is(p, ul, ol) { margin-block-start: 0.45em; }
+.elef-art:not([data-art-layout="plain-list"]) > .elef-art-list > li > :is(p, ul, ol):first-child {
+  font-weight: 600;
+  letter-spacing: 0.005em;
+  line-height: 1.4;
+  text-wrap: balance;
+}
+.elef-art-list > li > :is(ul, ol) { padding-inline-start: 1.25em; }
+.elef-art-list > li :is(ul, ol) li::marker {
+  color: color-mix(in srgb, currentColor 65%, transparent);
+}
 
 .elef-art[data-art-mode="peers"][data-art-layout="peers-wrap"] > .elef-art-list {
   display: flex;
@@ -85,7 +103,13 @@
   font-size: var(--art-presentation-lead-size);
   min-inline-size: var(--art-sequence-min-inline);
   overflow-wrap: normal;
+  text-align: center;
   word-break: normal;
+}
+
+.elef-art[data-art-mode="sequence"] > .elef-art-list > li::marker {
+  color: color-mix(in srgb, currentColor 72%, transparent);
+  font-weight: 700;
 }
 
 .elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"] > .elef-art-list > li,
@@ -105,17 +129,23 @@
 }
 
 .elef-art[data-art-mode="sequence"][data-art-layout="sequence-horizontal"] > .elef-art-list > li:not(:first-child)::before {
-  block-size: 1px;
+  background: linear-gradient(to right, transparent, currentColor 30%, currentColor 70%, transparent);
+  block-size: 2px;
+  border-radius: 2px;
   inline-size: var(--art-gap);
-  inset-block-start: calc(50% - 0.5px);
+  inset-block-start: calc(50% - 1px);
   inset-inline-start: calc(-1 * var(--art-gap));
+  opacity: 0.55;
 }
 
 .elef-art[data-art-mode="sequence"][data-art-layout="sequence-vertical"] > .elef-art-list > li:not(:first-child)::before {
+  background: linear-gradient(to bottom, transparent, currentColor 30%, currentColor 70%, transparent);
   block-size: var(--art-connector-gap, var(--art-gap));
-  inline-size: 1px;
+  border-radius: 2px;
+  inline-size: 2px;
   inset-block-start: calc(-1 * var(--art-connector-gap, var(--art-gap)));
-  inset-inline-start: calc(50% - 0.5px);
+  inset-inline-start: calc(50% - 1px);
+  opacity: 0.55;
 }
 
 .elef-art[data-art-mode="sequence"][data-art-density="rich"] > .elef-art-list > li {
@@ -131,6 +161,7 @@
   background: transparent;
   border: 0;
   border-radius: 0;
+  box-shadow: none;
   font-size: inherit;
   padding: 0;
 }
@@ -187,5 +218,7 @@
 
 @media (forced-colors: active) {
   .elef-art-list > li { border: 1px solid CanvasText; }
+  .elef-art-list > li { box-shadow: none; }
   .elef-art[data-art-mode="sequence"] > .elef-art-list > li:not(:first-child)::before { background: CanvasText; }
+  .elef-art[data-art-mode="sequence"] > .elef-art-list > li:not(:first-child)::before { opacity: 1; }
 }
