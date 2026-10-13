@@ -271,7 +271,11 @@ export class BugReportEventRecorder {
 
   recordKeyDown(event) {
     const element = elementFor(event?.target)
-    if (!element || this.ignored(element) || event.repeat || this.paused) return
+    // Key steps name only the shortcut ("Pressed Escape") and never carry
+    // target text, so ignored containers suppress typing/paste/click content
+    // but not content-free keys. (Report composition itself stays private via
+    // pause(), not via ignore.)
+    if (!element || event.repeat || this.paused) return
 
     const key = String(event.key || "").slice(0, 32)
     if (!key || ["Shift", "Control", "Alt", "Meta", "OS", "CapsLock", "NumLock", "ScrollLock"].includes(key)) return

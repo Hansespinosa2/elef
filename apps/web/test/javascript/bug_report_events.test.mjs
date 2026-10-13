@@ -280,7 +280,7 @@ test("ignores report UI activity and formatter noise while retaining ordered act
   assert.doesNotMatch(steps, /Report Bug|mousemove|scroll/)
 })
 
-test("ignores typing, paste, and keys inside bug-report-ignored containers", () => {
+test("ignores typing, paste, and clicks but keeps content-free keys inside bug-report-ignored containers", () => {
   const { instance, documentRef } = recorder()
   const editorRoot = new FakeElement("form", { attributes: { "data-bug-report-ignore": "" } })
   const sourceField = new FakeElement("textarea", { attributes: { name: "document[source]" }, parent: editorRoot })
@@ -294,8 +294,10 @@ test("ignores typing, paste, and keys inside bug-report-ignored containers", () 
   documentRef.dispatch("click", { target: sourceField })
 
   assert.equal(JSON.stringify(instance.events).includes("secret novel draft"), false)
-  assert.equal(instance.snapshot().filter((event) => event.type !== "navigate").length, 0)
-  assert.doesNotMatch(formatReproductionSteps(instance.snapshot()), /secret novel draft/)
+  assert.deepEqual(instance.snapshot().filter((event) => event.type !== "navigate").map((event) => event.type), ["key"])
+  const steps = formatReproductionSteps(instance.snapshot())
+  assert.doesNotMatch(steps, /secret novel draft/)
+  assert.match(steps, /Pressed Enter/)
 })
 
 test("captures paste actions without reading clipboard contents and pauses on the reporter", () => {
