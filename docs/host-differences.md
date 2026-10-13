@@ -111,17 +111,30 @@ Capability keys come from the `HostCapabilities` interface
   `apps/web/test/system/pptx_export_test.rb`, `apps/web/test/system/media_pdf_export_test.rb`).
 - Supported side (desktop): shared engine + model unit tests
   (`packages/client/test/export.test.ts`), desktop transport test
-  (`apps/desktop/frontend/tests/export-transport.test.js`), and the
+  (`apps/desktop/frontend/tests/export-transport.test.js`), the
   `ELEF_E2E_PPTX_EXPORT_PATH` save-dialog harness bypass (mirroring
-  `ELEF_E2E_EXPORT_PATH`).
-- Supported side (shared definition): the web UI declares `export: true` and
-  runs download → status proof (`apps/desktop/e2e/specs/web.spec.js`,
-  "shared export flow downloads PPTX in the web app").
-- Desktop trigger follow-up: the shared scenario still asserts no Download
-  PPTX DOM surface on desktop (`assertExportUnavailable` in
-  `apps/desktop/e2e/specs/desktop.spec.js`); the work-view trigger that calls
-  the desktop export seam lands separately. PDF on both hosts goes through
-  the shared print path.
+  `ELEF_E2E_EXPORT_PATH`), and the Rust remote-image policy tests
+  (`cargo test -p elef-desktop remote_images`).
+- Supported side (shared definition): both hosts declare `export: true` and
+  run the download → proof flow (`apps/desktop/e2e/specs/web.spec.js`,
+  "shared export flow downloads PPTX in the web app";
+  `apps/desktop/e2e/specs/desktop.spec.js`, "exports PPTX through the
+  desktop work-view trigger into the harness path", which clicks the
+  work-view Download PPTX trigger and asserts the harness file is a valid
+  zip containing a slide plus the embedded deck image).
+- Desktop trigger: the work-view Download PPTX button plus the File →
+  Export PowerPoint… menu item call the desktop export seam
+  (`exportPptx` on the file-library transport); documents keep no trigger
+  (the export registry scopes PPTX to presentations). PDF on both hosts
+  goes through the shared print path.
+- Media resolution differs by necessity, bytes match by policy: the webview
+  cannot fetch media (desktop CSP restricts `connect-src` to IPC), so the
+  desktop `prepareMedia` seam resolves local `elefasset://` bytes through
+  the `read_pptx_asset` command and remote images through the
+  `fetch_remote_image` command, which ports the server's strict remote
+  policy (HTTPS/443, public-DNS pinning, redirect cap, timeouts, image
+  allowlist, 10 MB per image; the 30 MB per-export total accumulates in
+  the seam). Parity goal: the same Work yields the same PPTX bytes.
 
 ## HD-07 search implementation (contract-identical, locality differs)
 
