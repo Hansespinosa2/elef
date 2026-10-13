@@ -25,6 +25,11 @@ const FONTS = {
   code: '"SFMono-Regular", Consolas, "Liberation Mono", monospace'
 }
 
+// Slide canvas in pixels, ported from Presentations::PptxExport::WIDTH/HEIGHT.
+// The engine renders the off-screen stage at the same size.
+const SLIDE_WIDTH = 1280
+const SLIDE_HEIGHT = 720
+
 const ELEF_ASSET_REFERENCE = /^elef-asset:[a-f0-9]{64}$/i
 
 // Reserved filename characters, ported from the normalize_folder_name
@@ -63,6 +68,8 @@ export function buildPptxModel(input: PptxModelInput): PptxExportModel {
       title,
       theme: structure.style.theme,
       typography: structure.style.typography,
+      width: SLIDE_WIDTH,
+      height: SLIDE_HEIGHT,
       fonts: { ...FONTS }
     },
     margin_settings: { ...structure.marginSettings },

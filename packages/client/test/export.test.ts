@@ -40,6 +40,8 @@ function testModel() {
       title: "Work",
       theme: "dark",
       typography: "technical",
+      width: 1280,
+      height: 720,
       fonts: { technical: "Courier, monospace", modern: "Arial, sans-serif", body: "Georgia, serif" },
     },
     margin_settings: { section: "S", subsection: "Sub", footnote: true, slide_count: true },
@@ -283,6 +285,8 @@ test("pptx model builder ports the server slide payload onto work-model and rend
   assert.ok(["light", "dark", "match"].includes(model.presentation.theme));
   assert.ok(["book", "modern", "technical"].includes(model.presentation.typography));
   assert.ok(model.presentation.fonts.body.includes("system-ui"));
+  assert.equal(model.presentation.width, 1280);
+  assert.equal(model.presentation.height, 720);
   assert.equal(model.slides.length, 2);
 
   const first = model.slides[0];
