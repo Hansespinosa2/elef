@@ -1,0 +1,33 @@
+{
+  "branches": [
+    {
+      "branch": "dev",
+      "latest_run": {
+        "name": "CI",
+        "conclusion": "failure",
+        "url": "https://github.com/example/elef/actions/runs/902"
+      },
+      "failing_jobs": [
+        "desktop-macos",
+        "system-test"
+      ],
+      "deploy_ref": "elef-deploy-dev",
+      "deploy_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "branch_tip": "cccccccccccccccccccccccccccccccccccccccc",
+      "deployed": false
+    },
+    {
+      "branch": "main",
+      "latest_run": {
+        "name": "CI",
+        "conclusion": "success",
+        "url": "https://github.com/example/elef/actions/runs/800"
+      },
+      "failing_jobs": [],
+      "deploy_ref": "elef-deploy-main",
+      "deploy_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "branch_tip": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "deployed": true
+    }
+  ]
+}

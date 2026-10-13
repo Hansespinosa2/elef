@@ -9,8 +9,8 @@ The v0.x release is tag-driven: a `desktop-v*` tag opens a draft GitHub Release,
 Tag the release commit after the `dev` → `main` promotion as `desktop-vX.Y.Z` and push the tag:
 
 ~~~sh
-git tag desktop-0.1.0
-git push origin desktop-0.1.0
+git tag desktop-v0.1.0
+git push origin desktop-v0.1.0
 ~~~
 
 The release workflow triggers on `desktop-v*` tags only (enforced by `check_release_ci.mjs`). Pushing the tag starts the `macos` job, which builds the Apple Silicon app plus DMG, signs the updater artifacts, and opens the release as a **draft** with `latest.json` attached. Nothing is offered to users until the draft is published.
@@ -30,7 +30,7 @@ The macOS updater polls `https://github.com/Hansespinosa2/elef/releases/latest/d
 
 Gate A is the `release-gate` CI job: it waits for all thirteen evidence jobs, checks out the exact gated SHA, re-runs `check_release_ci.mjs`, and records `SOURCE_SHA` in the run summary (all enforced by `check_release_ci.mjs` itself). The evidence jobs are `desktop-fast`, `scan_ruby`, `scan_js`, `test`, `sqlite-test`, `system-test`, `affected`, `desktop`, `arch-package`, `desktop-macos`, `renderer-macos`, `production-smoke`, and `development-smoke`.
 
-The gate follows the normal CI triggers (pull requests, pushes to `dev`/`main`, manual dispatch) and adds no branch condition of its own. On branch pushes the pull-request-only evidence jobs skip, so the gate skips with them; Gate A evidence is a pull-request gate. When it is red, fix the failing evidence job and re-run; never bypass the gate, weaken an assertion, or hand-edit generated evidence to obtain green.
+The gate follows the normal CI triggers (pull requests, pushes to `dev`/`main`, manual dispatch) and adds no branch condition of its own. On branch pushes the pull-request-only evidence jobs skip, so the gate skips with them; Gate A evidence is a pull-request gate. When it is red, fix the failing evidence job and re-run; never bypass the gate, weaken an assertion, or hand-edit generated evidence to obtain green. The surrounding lane design (shadow plan, result matrix, slow lane, nightly diagnostic) lives in [CI operations](../ci-operations.md).
 
 The pinned Arch image digest appears in three workflow spots (the CI `arch-package` job, the release `arch-asset` and `aur-publish` jobs) and must agree everywhere (enforced by `check_release_ci.mjs`). To refresh it, resolve the current `linux/amd64` digest of the official image, update all three references together, and update the currency note in `apps/desktop/release-test-manifest.json`.
 
@@ -42,13 +42,13 @@ Block a bad release in this order:
 
 1. Warn. Prepend a `BLOCKED` banner to the release notes naming the affected version and the fixed version (or that none exists yet):
    ~~~sh
-   gh release view desktop-0.1.0 --json body --jq .body > /tmp/elef-release-notes.md
+   gh release view desktop-v0.1.0 --json body --jq .body > /tmp/elef-release-notes.md
    # Prepend the BLOCKED banner, then:
-   gh release edit desktop-0.1.0 --notes-file /tmp/elef-release-notes.md
+   gh release edit desktop-v0.1.0 --notes-file /tmp/elef-release-notes.md
    ~~~
 2. Remove the macOS offer. Flip the release to prerelease so `/latest` no longer serves its `latest.json`, then verify the feed moved past it:
    ~~~sh
-   gh release edit desktop-0.1.0 --prerelease
+   gh release edit desktop-v0.1.0 --prerelease
    curl -fsSL https://github.com/Hansespinosa2/elef/releases/latest/download/latest.json | head -c 300
    ~~~
    Keep the published assets in place: deleting the release would break AUR upstream URLs and the audit trail. The DMG stays downloadable but is marked blocked.

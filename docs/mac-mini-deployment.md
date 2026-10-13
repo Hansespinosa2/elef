@@ -27,7 +27,7 @@ Keep the branch contract simple:
 - `dev` is the integration line and serves the development instance.
 - `main` is the production line.
 - Feature branches start from `dev`, pass review and CI, and merge into `dev`.
-- Promote tested code to `main` when it is ready for production.
+- Promote tested code to `main` when it is ready for production. Promotion is manual and user-only (see [CI operations](ci-operations.md#manual-promotion-user-only)); the watcher deploys only green-approved refs, and red never deploys.
 
 ## Automatic deployment
 
