@@ -382,6 +382,16 @@ test("empty library invites creation for the active filter", async () => {
       "document",
       "dialog inherits the active filter kind",
     );
+    assert.equal(
+      element.querySelector("#create-dialog-title")?.textContent,
+      "New document",
+      "dialog heading names the inherited kind",
+    );
+    assert.equal(
+      (element.querySelector("#create-submit") as unknown as { className: string }).className,
+      "button primary",
+      "create action uses the shared primary button",
+    );
   } finally {
     shell.unmount();
   }

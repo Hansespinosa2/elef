@@ -19,8 +19,9 @@ body.elef-app {
 .app-header-inner { align-items: center; display: flex; gap: 2rem; margin: 0 auto; max-width: 1440px; }
 .app-header-identity { align-items: center; display: flex; flex-shrink: 0; gap: 0.85rem; }
 .app-nav { align-items: center; display: flex; gap: 0.25rem; margin-right: auto; }
-.app-nav-link { border-radius: 0.55rem; color: var(--oradia-muted); font-size: 0.9rem; font-weight: 700; padding: 0.55rem 0.8rem; text-decoration: none; }
+.app-nav-link { background: transparent; border: 0; border-radius: 0.55rem; color: var(--oradia-muted); cursor: pointer; font: inherit; font-size: 0.9rem; font-weight: 700; padding: 0.55rem 0.8rem; text-decoration: none; }
 .app-nav-link:hover, .app-nav-link.is-active { background: var(--oradia-slate-800); color: var(--oradia-ink); }
+.app-nav-link:focus-visible { outline: 2px solid var(--oradia-green); outline-offset: 2px; }
 .new-work-menu { position: relative; }
 .new-work-trigger { align-items: center; background: transparent; border: 0; color: var(--oradia-muted); cursor: pointer; display: flex; gap: 0.5rem; list-style: none; }
 .new-work-trigger::-webkit-details-marker { display: none; }

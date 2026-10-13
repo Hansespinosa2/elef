@@ -22,6 +22,25 @@
           <button id="back-to-library" class="app-nav-link is-active" type="button">Library</button>
           <button id="open-settings" class="app-nav-link" type="button">Settings</button>
         </nav>
+        <div class="command-palette-root" data-controller="command-palette" data-command-palette-commands-value='[{"id":"search-library","label":"Search library","description":"Filter Works in the library list","event":"elef:command"},{"id":"new-presentation","label":"New presentation","description":"Create slide-based Markdown","event":"elef:command"},{"id":"new-document","label":"New document","description":"Create a continuous Markdown document","event":"elef:command"},{"id":"open-settings","label":"Open settings","description":"Change library appearance","event":"elef:command"},{"id":"open-snippets","label":"Manage snippets","description":"Edit reusable Markdown snippets","event":"elef:command"},{"id":"new-snippet","label":"New snippet","description":"Create a reusable Markdown snippet","event":"elef:command"},{"id":"open-math-shortcuts","label":"Manage math shortcuts","description":"Edit editor math expansions","event":"elef:command"}]'>
+          <div class="command-palette-triggers" aria-label="Open Elef tools">
+            <button type="button" class="command-palette-trigger" data-action="command-palette#openCommands" aria-label="Open command palette">Commands <kbd data-command-palette-shortcut="k">⌘K</kbd></button>
+          </div>
+          <dialog class="command-palette" data-command-palette-target="dialog" data-action="click->command-palette#dialogClick close->command-palette#dialogClosed" aria-labelledby="command-palette-heading">
+            <div class="command-palette-panel">
+              <div class="command-palette-heading"><h2 id="command-palette-heading" data-command-palette-target="heading">Command palette</h2><button type="button" data-command-palette-target="closeButton" data-action="command-palette#closeButtonClick" aria-label="Close command palette">Esc</button></div>
+              <input type="search" autocomplete="off" placeholder="Filter commands…" data-command-palette-target="input" data-action="input->command-palette#inputChanged keydown->command-palette#keydown" aria-controls="command-palette-results" aria-describedby="command-palette-hint" aria-autocomplete="list" role="combobox" aria-expanded="true">
+              <p id="command-palette-hint" class="command-palette-hint" data-command-palette-target="hint">↑/↓ move · Enter choose · Esc close</p>
+              <div class="command-palette-filters" data-command-palette-target="filters" role="group" aria-label="Filter search by work type" hidden>
+                <button type="button" data-type="all" data-action="command-palette#setSearchType" aria-pressed="true">All work</button>
+                <button type="button" data-type="presentations" data-action="command-palette#setSearchType" aria-pressed="false">Presentations</button>
+                <button type="button" data-type="documents" data-action="command-palette#setSearchType" aria-pressed="false">Documents</button>
+              </div>
+              <div id="command-palette-results" class="command-palette-results" data-command-palette-target="results" role="listbox" aria-label="Elef commands"></div>
+              <p class="command-palette-status" data-command-palette-target="status" aria-live="polite"></p>
+            </div>
+          </dialog>
+        </div>
         <div class="desktop-library-location">
           <span id="library-name">No library selected</span>
           <button id="change-library" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" aria-label="Choose library folder" title="Choose library folder">Change</button>

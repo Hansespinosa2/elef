@@ -157,10 +157,10 @@ function startFileLibraryApplication(platform) {
     }
     if (authoringHostDialog.open) authoringHostDialog.close();
   }
-  async function openAuthoringSettings() {
+  async function openAuthoringSettings(registry = "snippets", openNew = false) {
     closeAuthoringSettings();
     authoringShell = await mountElef(authoringMount, libraryHost, {
-      initialUrl: "/snippets",
+      initialUrl: `/${registry}${openNew ? "/new" : ""}`,
       authoring: {
         transport: platform.authoringTransport,
         renderExample: (source) => renderer.renderMarkdownBlock(source),
@@ -1066,10 +1066,18 @@ function startFileLibraryApplication(platform) {
     updateRuntime
   }));
   window.addEventListener("keydown", (event) => {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault();
-      mount.querySelector("#library-search")?.focus();
-    }
+    if ((event.metaKey || event.ctrlKey) && ["k", "p"].includes(event.key.toLowerCase()) && document.body.classList.contains("presenting-work")) event.stopPropagation();
+  }, true);
+  document.addEventListener("elef:command", (event) => {
+    if (document.body.classList.contains("presenting-work")) return;
+    const id = event.detail?.id;
+    if (id === "open-settings") void showSettings();
+    else if (id === "new-document") showCreateDialog("document");
+    else if (id === "new-presentation") showCreateDialog("presentation");
+    else if (id === "open-snippets") void openAuthoringSettings("snippets");
+    else if (id === "new-snippet") void openAuthoringSettings("snippets", true);
+    else if (id === "open-math-shortcuts") void openAuthoringSettings("math_shortcuts");
+    else if (id === "search-library") void handleMenuAction("open-work");
   });
   void listen("desktop-menu-action", (event) => void handleMenuAction(event.payload));
   const openedFileListener = listen("desktop-open-elef", () => void processOpenedFiles());

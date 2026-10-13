@@ -265,12 +265,12 @@ export function AuthoringDialog({
     if (!isSnippet) {
       const math = entry as MathShortcutEntry;
       return (
-        <article key={String(entry.id)} className="math-shortcut-card settings-card authoring-entry-card rounded-2xl border p-4">
+        <article key={String(entry.id)} className="math-shortcut-card settings-card authoring-entry-card rounded-2xl border">
           <div className="math-shortcut-heading flex items-start justify-between gap-3 authoring-entry-card-heading">
             <div className="min-w-0">
               <p className="math-shortcut-alias">{entryLabel(entry, activeRegistry)}</p>
-              <h3 className="mt-1 text-xl font-bold">{entry.name || "Untitled"}</h3>
-              <p className="mt-1 text-sm">{entry.description || ""}</p>
+              <h3 className="authoring-entry-title">{entry.name || "Untitled"}</h3>
+              <p className="authoring-entry-sub">{entry.description || ""}</p>
             </div>
             <span className="snippet-origin-badge authoring-entry-badge">{entry.built_in ? "Built-in" : "Personal"}</span>
           </div>
@@ -284,12 +284,12 @@ export function AuthoringDialog({
     }
     const snippet = entry as SnippetEntry;
     return (
-      <article key={String(entry.id)} className="snippet-card library-card authoring-entry-card rounded-2xl border p-5">
+      <article key={String(entry.id)} className="snippet-card library-card authoring-entry-card rounded-2xl border">
         <div className="flex items-start justify-between gap-4 authoring-entry-card-heading">
           <div className="min-w-0">
             <p className="snippet-category-badge">{snippet.category === "Elef DSL" ? "Elef directives" : snippet.category}</p>
-            <h3 className="mt-1 text-2xl font-bold">{entry.name || "Untitled"}</h3>
-            <p className="mt-1">{`${entryLabel(entry, activeRegistry)} · ${entry.description || ""}`}</p>
+            <h3 className="authoring-entry-title">{entry.name || "Untitled"}</h3>
+            <p className="authoring-entry-sub">{`${entryLabel(entry, activeRegistry)} · ${entry.description || ""}`}</p>
           </div>
           <span className="snippet-origin-badge authoring-entry-badge">{entry.built_in ? "Built-in" : "Personal"}</span>
         </div>

@@ -29,7 +29,10 @@ function replaceGlobal(name, value) {
   }
 }
 
-const CommandPaletteController = await loadController("command_palette")
+// The command palette moved to the shared editor-runtime package so both
+// hosts register the same controller; load it from the shared dist like
+// the other shared controllers.
+const CommandPaletteController = await loadController("command_palette", { base: sharedControllerPath })
 const SnippetPaletteController = await loadController("snippet_palette", {
   base: sharedControllerPath,
   overrides: {
@@ -112,6 +115,73 @@ test("command search discards a response from an older query sequence", async ()
 
   assert.deepEqual(controller.resultsData, [{ title: "Current" }])
   assert.equal(renders, 0)
+})
+
+test("command palette dispatches a host event for event-routed commands", () => {
+  const controller = new CommandPaletteController()
+  const dispatched = []
+  let closed = 0
+  Object.assign(controller, {
+    mode: "commands",
+    selectedIndex: 0,
+    visibleCommands: [{ id: "open-settings", label: "Open settings", event: "elef:command" }],
+    element: {
+      dispatchEvent(event) {
+        dispatched.push(event)
+        return true
+      }
+    },
+    close() { closed += 1 }
+  })
+  const restoreEvent = replaceGlobal("CustomEvent", class FakeCustomEvent {
+    constructor(type, options) {
+      this.type = type
+      this.bubbles = options.bubbles
+      this.detail = options.detail
+    }
+  })
+
+  try {
+    controller.activateSelected()
+  } finally {
+    restoreEvent()
+  }
+
+  assert.equal(dispatched.length, 1)
+  assert.equal(dispatched[0].type, "elef:command")
+  assert.equal(dispatched[0].bubbles, true)
+  assert.deepEqual(dispatched[0].detail, { id: "open-settings" })
+  assert.equal(closed, 1)
+})
+
+test("command palette folds search into commands when the host has no search URL", () => {
+  const controller = new CommandPaletteController()
+  const opened = []
+  Object.assign(controller, {
+    hasSearchUrlValue: false,
+    searchUrlValue: undefined,
+    openMode(mode) { opened.push(mode) }
+  })
+
+  controller.openSearch()
+
+  assert.deepEqual(opened, ["commands"])
+  assert.equal(controller.hasSearch, false)
+})
+
+test("command palette keeps server search when the host provides a search URL", () => {
+  const controller = new CommandPaletteController()
+  const opened = []
+  Object.assign(controller, {
+    hasSearchUrlValue: true,
+    searchUrlValue: "/search",
+    openMode(mode) { opened.push(mode) }
+  })
+
+  controller.openSearch()
+
+  assert.deepEqual(opened, ["search"])
+  assert.equal(controller.hasSearch, true)
 })
 
 test("snippet scoring prefers an exact alias to a partial name match", () => {

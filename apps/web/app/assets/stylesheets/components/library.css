@@ -182,3 +182,11 @@
 .app-dialog label { display: block; margin: 15px 0 7px; color: var(--muted, var(--oradia-muted)); font-size: 11px; }
 .app-dialog input, .app-dialog select { width: 100%; height: 39px; padding: 0 11px; border: 1px solid var(--line, var(--oradia-line)); border-radius: 8px; outline-color: var(--accent, var(--oradia-green)); background: var(--canvas, var(--oradia-slate-950)); color: var(--ink, var(--oradia-ink)); font-size: 12px; }
 .app-dialog textarea { width: 100%; resize: vertical; padding: 10px 11px; border: 1px solid var(--line, var(--oradia-line)); border-radius: 8px; outline-color: var(--accent, var(--oradia-green)); background: var(--canvas, var(--oradia-slate-950)); color: var(--ink, var(--oradia-ink)); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+/* Calm new-work form: quiet eyebrow + heading, then name, format, and one
+   decision row. The dialog keeps its ids, fields, and actions on both hosts. */
+#create-form .create-eyebrow { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em; margin: 0 0 0.3rem; text-transform: uppercase; }
+#create-dialog h2 { margin-bottom: 0.5rem; }
+#create-form label:first-of-type { margin-top: 0.75rem; }
+#create-form .button { border-style: solid; border-width: 1px; border-radius: 0.55rem; cursor: pointer; font: inherit; font-size: 0.85rem; font-weight: 700; min-height: 2.5rem; padding: 0.55rem 1rem; }
+#create-form .button:focus-visible { outline: 2px solid var(--accent, var(--oradia-green)); outline-offset: 2px; }
+.create-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1.5rem; }

@@ -1,6 +1,36 @@
 import { Controller } from "@hotwired/stimulus"
 
-export default class extends Controller {
+// Shared command palette: one controller, both hosts. The web host feeds it
+// server URLs (search, settings PATCH) plus URL-routed commands; the desktop
+// host feeds it event-routed commands (`event` names dispatched as bubbling
+// CustomEvents the host application routes to its own actions) and omits the
+// search URL, which folds ⌘P/search back into the command list instead of
+// offering a dead search mode.
+//
+// Ported 1:1 from the web-only controller (behavior and copy preserved);
+// the only additions are the `event` command seam and the no-search-URL
+// fallback, both inert on the web host.
+
+interface PaletteCommand {
+  id: string
+  label: string
+  description?: string
+  shortcutKey?: string
+  shortcut?: string
+  url?: string
+  event?: string
+  requiresEditor?: boolean
+}
+
+interface SearchResult {
+  title: string
+  url?: string
+  type_label?: string
+  matched_in?: string
+  context?: string
+}
+
+export default class extends Controller<HTMLElement> {
   static targets = ["dialog", "heading", "input", "filters", "results", "status", "hint", "closeButton"]
   static values = { searchUrl: String, settingsUrl: String, commands: Array, theme: String, typography: String }
 
@@ -13,9 +43,9 @@ export default class extends Controller {
     this.resultsData = []
     this.visibleCommands = []
     this.searchSequence = 0
-    const platform = navigator.userAgentData?.platform || navigator.platform || ""
+    const platform = (navigator as any).userAgentData?.platform || navigator.platform || ""
     this.shortcutModifier = /Mac|iPhone|iPad|iPod/i.test(platform) ? "⌘" : "Ctrl+"
-    this.handleGlobalKeydown = (event) => this.globalKeydown(event)
+    this.handleGlobalKeydown = (event: Event) => this.globalKeydown(event as KeyboardEvent)
     window.addEventListener("keydown", this.handleGlobalKeydown)
     this.updateShortcutLabels()
     this.renderCommands()
@@ -26,7 +56,7 @@ export default class extends Controller {
     this.cancelSearch()
   }
 
-  globalKeydown(event) {
+  globalKeydown(event: KeyboardEvent) {
     if (event.altKey || event.isComposing) return
 
     const hasModifier = event.metaKey || event.ctrlKey
@@ -53,10 +83,20 @@ export default class extends Controller {
   }
 
   openSearch() {
+    // Hosts without server search (desktop) fold ⌘P into the command list
+    // rather than opening a search mode that can never return results.
+    if (!this.hasSearch) {
+      this.openMode("commands")
+      return
+    }
     this.openMode("search")
   }
 
-  openMode(mode) {
+  get hasSearch(): boolean {
+    return Boolean(this.hasSearchUrlValue && this.searchUrlValue)
+  }
+
+  openMode(mode: string) {
     this.cancelSearch()
     this.searchType = "all"
     this.appearanceCategory = null
@@ -73,7 +113,9 @@ export default class extends Controller {
     this.inputTarget.value = ""
     this.renderCurrentMode()
     this.setStatus(mode === "commands"
-      ? `Choose an Elef action or press ${this.shortcutLabel("p")} to search your work.`
+      ? (this.hasSearch
+        ? `Choose an Elef action or press ${this.shortcutLabel("p")} to search your work.`
+        : "Choose an Elef action.")
       : "Search all presentations and documents. Put words in quotes to find an exact phrase.")
     this.inputTarget.focus()
   }
@@ -85,7 +127,7 @@ export default class extends Controller {
     else this.dialogTarget.removeAttribute("open")
   }
 
-  dialogClick(event) {
+  dialogClick(event: MouseEvent) {
     if (event.target === this.dialogTarget) this.close()
   }
 
@@ -99,8 +141,8 @@ export default class extends Controller {
     else this.close()
   }
 
-  setSearchType(event) {
-    this.searchType = event.currentTarget.dataset.type || "all"
+  setSearchType(event: Event) {
+    this.searchType = (event.currentTarget as HTMLElement).dataset.type || "all"
     this.updateFilterSelection()
     this.inputChanged()
   }
@@ -141,7 +183,7 @@ export default class extends Controller {
     this.searchTimer = setTimeout(() => this.search(query, sequence), 140)
   }
 
-  async search(query, sequence) {
+  async search(query: string, sequence: number) {
     const controller = new AbortController()
     this.searchController = controller
     try {
@@ -164,14 +206,14 @@ export default class extends Controller {
         ? `${this.resultsData.length} result${this.resultsData.length === 1 ? "" : "s"}`
         : "No matches. Try a title, alias, heading, or phrase from the text.")
     } catch (error) {
-      if (error.name === "AbortError" || sequence !== this.searchSequence) return
+      if ((error as Error).name === "AbortError" || sequence !== this.searchSequence) return
       this.resultsData = []
       this.renderResults()
       this.setStatus("Search is unavailable right now.")
     }
   }
 
-  keydown(event) {
+  keydown(event: KeyboardEvent) {
     const count = this.mode === "search" ? this.resultsData.length : this.visibleCommands.length
     if (event.key === "Backspace" && this.mode === "appearance-values" && !this.inputTarget.value) {
       event.preventDefault()
@@ -202,12 +244,12 @@ export default class extends Controller {
 
   activateSelected() {
     if (this.mode === "search") {
-      const result = this.resultsData[this.selectedIndex]
+      const result = this.resultsData[this.selectedIndex] as SearchResult | undefined
       if (result?.url) window.location.assign(result.url)
       return
     }
 
-    const command = this.visibleCommands[this.selectedIndex]
+    const command = this.visibleCommands[this.selectedIndex] as PaletteCommand | undefined
     if (!command) return
     if (this.mode === "appearance-categories") {
       this.openAppearanceValues(command.id)
@@ -221,29 +263,40 @@ export default class extends Controller {
       window.location.assign(command.url)
       return
     }
+    // Host-action commands: the host names a CustomEvent to receive, with
+    // the command id in the detail, and routes it to its own actions.
+    if (command.event) {
+      this.element.dispatchEvent(new CustomEvent(command.event, {
+        bubbles: true,
+        cancelable: true,
+        detail: { id: command.id }
+      }))
+      this.close()
+      return
+    }
     this.runCommand(command.id)
   }
 
-  runCommand(id) {
+  runCommand(id: string) {
     if (id === "quick-open") {
       this.openSearch()
     } else if (id === "change-appearance") {
       this.openAppearanceCategories()
     } else if (id === "save") {
       const form = document.querySelector("form[data-controller~='autosave']")
-      form?.requestSubmit()
+      ;(form as HTMLFormElement | null)?.requestSubmit()
       this.close()
     } else if (id === "toggle-vim") {
       const toggle = document.querySelector("[data-editor-target='vimToggle']")
       if (toggle) {
-        toggle.click()
+        ;(toggle as HTMLElement).click()
       } else {
-        const editor = document.querySelector(".source-field")?.editorController
+        const editor = document.querySelector(".source-field")?.editorController as any
         editor?.toggleVim()
       }
       this.close()
     } else if (id === "toggle-metadata") {
-      const editor = document.querySelector(".source-field")?.editorController
+      const editor = document.querySelector(".source-field")?.editorController as any
       editor?.toggleMetadataVisibility()
       this.close()
     }
@@ -256,7 +309,7 @@ export default class extends Controller {
   }
 
   renderCommands(query = "") {
-    const commands = this.commandsValue.filter((command) => {
+    const commands = (this.commandsValue as PaletteCommand[]).filter((command) => {
       if (command.requiresEditor && !document.querySelector("form[data-controller~='autosave']")) return false
       return true
     })
@@ -264,9 +317,9 @@ export default class extends Controller {
     this.renderOptions(commands, query, "No matching commands.")
   }
 
-  renderAppearanceOptions(query = this.inputTarget.value) {
-    const themeLabels = { match: "Match workspace", light: "Light", dark: "Dark" }
-    const typographyLabels = { book: "Book", modern: "Modern", technical: "Technical" }
+  renderAppearanceOptions(query: string = this.inputTarget.value) {
+    const themeLabels: Record<string, string> = { match: "Match workspace", light: "Light", dark: "Dark" }
+    const typographyLabels: Record<string, string> = { book: "Book", modern: "Modern", technical: "Technical" }
     const options = this.mode === "appearance-categories"
       ? [
           { id: "theme", label: "Theme", description: `Current: ${themeLabels[this.themeValue] || "Match workspace"}` },
@@ -280,7 +333,7 @@ export default class extends Controller {
     this.renderOptions(options, query, "No matching choices.")
   }
 
-  renderOptions(options, query, emptyMessage) {
+  renderOptions(options: PaletteCommand[], query: string, emptyMessage: string) {
     const terms = this.normalize(query).split(/\s+/).filter(Boolean)
     this.visibleCommands = options.filter((option) => {
       const searchable = this.normalize(`${option.label} ${option.description || ""}`)
@@ -288,7 +341,7 @@ export default class extends Controller {
     })
 
     this.resultsTarget.replaceChildren()
-    this.visibleCommands.forEach((command, index) => {
+    this.visibleCommands.forEach((command: PaletteCommand, index: number) => {
       const shortcut = command.shortcutKey ? this.shortcutLabel(command.shortcutKey) : command.shortcut
       const details = [command.description, shortcut].filter(Boolean).join(" · ")
       const button = this.commandButton(command.label, details, index)
@@ -305,11 +358,11 @@ export default class extends Controller {
 
   renderResults() {
     this.resultsTarget.replaceChildren()
-    this.resultsData.forEach((result, index) => {
+    ;(this.resultsData as SearchResult[]).forEach((result, index) => {
       const section = result.matched_in ? `In ${result.matched_in}` : ""
       const details = [result.type_label, section, result.context].filter(Boolean).join(" · ")
       const button = this.commandButton(result.title, details, index)
-      button.dataset.resultUrl = result.url
+      button.dataset.resultUrl = result.url || ""
       button.addEventListener("click", () => {
         this.selectedIndex = index
         this.activateSelected()
@@ -321,7 +374,7 @@ export default class extends Controller {
     this.updateSelection()
   }
 
-  renderEmptyState(message) {
+  renderEmptyState(message: string) {
     const empty = document.createElement("p")
     empty.className = "command-palette-empty"
     empty.textContent = message
@@ -337,7 +390,7 @@ export default class extends Controller {
     this.setStatus("Choose Theme or Typography. Enter opens its choices; Esc goes back.")
   }
 
-  openAppearanceValues(category) {
+  openAppearanceValues(category: string) {
     this.appearanceCategory = category
     this.inputTarget.value = ""
     this.selectedIndex = 0
@@ -354,10 +407,10 @@ export default class extends Controller {
     }
   }
 
-  setModeChrome(mode) {
+  setModeChrome(mode: string) {
     this.mode = mode
     this.dialogTarget.dataset.mode = mode
-    const modeCopy = {
+    const modeCopy: { heading: string; placeholder: string; label: string; listLabel: string; button: string; buttonLabel: string; hint: string } = ({
       commands: {
         heading: "Command palette",
         placeholder: "Filter commands…",
@@ -394,8 +447,7 @@ export default class extends Controller {
         buttonLabel: "Back to appearance settings",
         hint: "↑/↓ move · Enter apply · Esc back"
       }
-    }[mode]
-
+    } as Record<string, { heading: string; placeholder: string; label: string; listLabel: string; button: string; buttonLabel: string; hint: string }>)[mode] as { heading: string; placeholder: string; label: string; listLabel: string; button: string; buttonLabel: string; hint: string }
     this.headingTarget.textContent = modeCopy.heading
     this.inputTarget.placeholder = modeCopy.placeholder
     this.inputTarget.setAttribute("aria-label", modeCopy.label)
@@ -407,18 +459,18 @@ export default class extends Controller {
     this.hintTarget.textContent = modeCopy.hint
   }
 
-  async saveAppearance(value) {
+  async saveAppearance(value: string) {
     if (this.savingAppearance) return
 
     const category = this.appearanceCategory
     const labels = category === "theme"
-      ? { match: "Match workspace", light: "Light", dark: "Dark" }
-      : { book: "Book", modern: "Modern", technical: "Technical" }
+      ? { match: "Match workspace", light: "Light", dark: "Dark" } as Record<string, string>
+      : { book: "Book", modern: "Modern", technical: "Technical" } as Record<string, string>
     this.savingAppearance = true
     this.setStatus(`Updating workspace ${category}…`)
 
     try {
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content || ""
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || ""
       const response = await fetch(this.settingsUrlValue, {
         method: "PATCH",
         credentials: "same-origin",
@@ -444,19 +496,19 @@ export default class extends Controller {
       this.renderCommands("")
       this.setStatus(successMessage)
     } catch (error) {
-      this.setStatus(`${error.message} Try again or press Esc to go back.`)
+      this.setStatus(`${(error as Error).message} Try again or press Esc to go back.`)
     } finally {
       this.savingAppearance = false
     }
   }
 
-  commandButton(label, description, index) {
+  commandButton(label: string, description: string, index: number) {
     const button = document.createElement("button")
     button.type = "button"
     button.role = "option"
     button.id = `command-palette-option-${index}`
     button.className = "command-palette-option"
-    button.dataset.index = index
+    button.dataset.index = String(index)
     const title = document.createElement("strong")
     title.textContent = label
     const details = document.createElement("span")
@@ -466,13 +518,13 @@ export default class extends Controller {
   }
 
   updateSelection() {
-    let selectedId = null
-    this.resultsTarget.querySelectorAll("[role='option']").forEach((option, index) => {
+    let selectedId: string | null = null
+    this.resultsTarget.querySelectorAll("[role='option']").forEach((option: Element, index: number) => {
       const selected = index === this.selectedIndex
       option.setAttribute("aria-selected", String(selected))
       if (selected) {
         selectedId = option.id
-        option.scrollIntoView({ block: "nearest" })
+        ;(option as HTMLElement).scrollIntoView({ block: "nearest" })
       }
     })
     if (selectedId) this.inputTarget.setAttribute("aria-activedescendant", selectedId)
@@ -480,22 +532,22 @@ export default class extends Controller {
   }
 
   updateFilterSelection() {
-    this.filtersTarget.querySelectorAll("[data-type]").forEach((button) => {
-      button.setAttribute("aria-pressed", String((button.dataset.type || "all") === this.searchType))
+    this.filtersTarget.querySelectorAll("[data-type]").forEach((button: Element) => {
+      button.setAttribute("aria-pressed", String(((button as HTMLElement).dataset.type || "all") === this.searchType))
     })
   }
 
   updateShortcutLabels() {
-    this.element.querySelectorAll("[data-command-palette-shortcut]").forEach((element) => {
-      element.textContent = this.shortcutLabel(element.dataset.commandPaletteShortcut)
+    this.element.querySelectorAll("[data-command-palette-shortcut]").forEach((element: Element) => {
+      element.textContent = this.shortcutLabel((element as HTMLElement).dataset.commandPaletteShortcut || "")
     })
   }
 
-  shortcutLabel(key) {
+  shortcutLabel(key: string) {
     return `${this.shortcutModifier}${key.toUpperCase()}`
   }
 
-  normalize(text) {
+  normalize(text: string) {
     return text.toString().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
   }
 
@@ -507,7 +559,7 @@ export default class extends Controller {
     this.searchSequence = (this.searchSequence || 0) + 1
   }
 
-  setStatus(text) {
+  setStatus(text: string) {
     if (this.hasStatusTarget) this.statusTarget.textContent = text
   }
 

@@ -266,6 +266,37 @@ test("the shared application registers shared editor controllers synchronously f
   assert.match(build, /splitting:\s*true/)
 })
 
+test("the desktop command palette exposes settings, new work, and snippets through the shared controller", async () => {
+  const editorRuntimeStable = await read("packages/editor-runtime/src/lib/editor_runtime_stable.ts")
+  assert.match(editorRuntime, /register\("command-palette", commandPaletteController\)/)
+  assert.match(editorRuntimeStable, /register\("command-palette", commandPaletteController\)/)
+  const palette = document.querySelector('[data-controller="command-palette"]')
+  assert.ok(palette, "the host template mounts the shared command palette")
+  assert.ok(palette.querySelector('[data-action="command-palette#openCommands"]'), "the palette has a visible trigger")
+  for (const target of ["dialog", "heading", "input", "filters", "results", "status", "hint", "closeButton"]) {
+    assert.ok(palette.querySelector(`[data-command-palette-target="${target}"]`), `the palette keeps its ${target} target`)
+  }
+  const commands = JSON.parse(palette.getAttribute("data-command-palette-commands-value"))
+  assert.deepEqual(commands.map(command => command.id), [
+    "search-library",
+    "new-presentation",
+    "new-document",
+    "open-settings",
+    "open-snippets",
+    "new-snippet",
+    "open-math-shortcuts"
+  ])
+  for (const command of commands) assert.equal(command.event, "elef:command")
+  assert.match(application, /document\.addEventListener\("elef:command"/)
+  for (const command of commands) {
+    assert.ok(application.includes(`id === "${command.id}"`), `the application routes ${command.id}`)
+  }
+  assert.match(application, /openAuthoringSettings\("snippets", true\)/)
+  assert.match(application, /openAuthoringSettings\("math_shortcuts"\)/)
+  assert.match(application, /\["k", "p"\]\.includes\(event\.key\.toLowerCase\(\)\)[\s\S]*?presenting-work"\)\) event\.stopPropagation\(\)/)
+  assert.match(application, /addEventListener\("elef:command", event => \{\s+if \(document\.body\.classList\.contains\("presenting-work"\)\) return/)
+})
+
 test("Markdown appearance persistence is shared and absent from desktop orchestration", () => {
   assert.match(appearanceController, /withAppearanceValue/)
   assert.doesNotMatch(application, /withAppearanceValue/)

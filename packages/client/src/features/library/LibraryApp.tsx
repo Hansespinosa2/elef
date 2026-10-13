@@ -285,7 +285,6 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
               setVisibleCount(LIBRARY_RENDER_BATCH_SIZE);
             }}
           />
-          <kbd>⌘ K</kbd>
         </label>
       </header>
 
@@ -381,8 +380,10 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
         </p>
       </section>
 
-      <dialog ref={dialogRef} id="create-dialog" className="app-dialog" onCancel={() => setDialogOpen(false)}>
+      <dialog ref={dialogRef} id="create-dialog" className="app-dialog create-dialog" aria-labelledby="create-dialog-title" onCancel={() => setDialogOpen(false)}>
         <form id="create-form" onSubmit={(event) => void create(event)}>
+          <p className="eyebrow create-eyebrow">New work</p>
+          <h2 id="create-dialog-title">{dialogKind === "document" ? "New document" : "New presentation"}</h2>
           <label htmlFor="new-work-name">Name</label>
           <input
             id="new-work-name"
@@ -404,12 +405,14 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
             <option value="presentation">Presentation</option>
             <option value="document">Document</option>
           </select>
-          <button id="create-submit" type="submit">
-            Create
-          </button>
-          <button type="button" onClick={() => setDialogOpen(false)}>
-            Cancel
-          </button>
+          <div className="create-actions">
+            <button type="button" className="button" onClick={() => setDialogOpen(false)}>
+              Cancel
+            </button>
+            <button id="create-submit" className="button primary" type="submit">
+              Create
+            </button>
+          </div>
         </form>
       </dialog>
     </div>

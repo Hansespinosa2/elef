@@ -235,10 +235,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
     if (authoringHostDialog.open) authoringHostDialog.close()
   }
-  async function openAuthoringSettings(): Promise<void> {
+  async function openAuthoringSettings(registry = "snippets", openNew = false): Promise<void> {
     closeAuthoringSettings()
     authoringShell = await mountElef(authoringMount, libraryHost, {
-      initialUrl: "/snippets",
+      initialUrl: `/${registry}${openNew ? "/new" : ""}`,
       authoring: {
         transport: platform.authoringTransport,
         renderExample: source => renderer.renderMarkdownBlock(source),
@@ -1242,11 +1242,31 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     updateRuntime
   }))
 
+  // Palette routing: the shared command-palette controller owns ⌘K and
+  // dispatches elef:command for its event-routed commands (see the host
+  // template's commands value). Library search stays keyboard-reachable
+  // as the palette's first command instead of a second ⌘K handler that
+  // would steal focus from the open palette.
+  //
+  // Presentation mode is sacred attention time: the palette's global keys
+  // stay dead while slides are up (capture runs before the controller's
+  // bubble listener regardless of registration order), and routed
+  // commands no-op there as a second layer, so a stray keystroke can
+  // neither open chrome over the slides nor switch the view mid-talk.
   window.addEventListener("keydown", event => {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-      event.preventDefault()
-      mount.querySelector<HTMLElement>("#library-search")?.focus()
-    }
+    if ((event.metaKey || event.ctrlKey) && ["k", "p"].includes(event.key.toLowerCase()) &&
+        document.body.classList.contains("presenting-work")) event.stopPropagation()
+  }, true)
+  document.addEventListener("elef:command", event => {
+    if (document.body.classList.contains("presenting-work")) return
+    const id = (event as CustomEvent).detail?.id
+    if (id === "open-settings") void showSettings()
+    else if (id === "new-document") showCreateDialog("document")
+    else if (id === "new-presentation") showCreateDialog("presentation")
+    else if (id === "open-snippets") void openAuthoringSettings("snippets")
+    else if (id === "new-snippet") void openAuthoringSettings("snippets", true)
+    else if (id === "open-math-shortcuts") void openAuthoringSettings("math_shortcuts")
+    else if (id === "search-library") void handleMenuAction("open-work")
   })
 
   void listen("desktop-menu-action", (event: any) => void handleMenuAction(event.payload))
