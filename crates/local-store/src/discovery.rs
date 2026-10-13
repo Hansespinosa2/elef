@@ -67,7 +67,24 @@ pub(crate) fn path_id(path: &Path) -> String {
 
 impl Library {
     pub fn list_work_folders(&self) -> Result<Vec<WorkFolderSummary>, CoreError> {
-        let records = self.discover_work_folders()?;
+        let mut records = self.discover_work_folders()?;
+        // Discovery rebuilds records from disk, which would drop the
+        // in-memory-only merge ancestry. Carry it over so a re-list between a
+        // save and an external change does not silently degrade the next merge
+        // to `Overlap`.
+        let existing = self
+            .records
+            .read()
+            .expect("work folder index lock poisoned");
+        for record in records.values_mut() {
+            if let Some(persisted) = existing
+                .get(&record.id)
+                .and_then(|prior| prior.persisted_source.clone())
+            {
+                record.persisted_source = Some(persisted);
+            }
+        }
+        drop(existing);
         let mut summaries = records
             .values()
             .map(|record| self.summary(record))
@@ -216,7 +233,7 @@ mod tests {
     use uuid::Uuid;
 
     use crate::consts::MANIFEST_FILE;
-    use crate::discovery::choose_source_file;
+    use crate::discovery::{choose_source_file, path_id};
     use crate::io::system_time_ms;
     use crate::manifest::read_manifest;
     use crate::test_support::{library, write_work_folder};
@@ -363,5 +380,21 @@ mod tests {
             read_manifest(&first).unwrap().unwrap().id,
             read_manifest(&second).unwrap().unwrap().id
         );
+    }
+
+    #[test]
+    fn relisting_preserves_the_in_memory_merge_ancestor() {
+        let (temp, library) = library();
+        let work_folder =
+            write_work_folder(temp.path(), "Ancestry", &[("presentation.md", "saved\n")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
+
+        // A re-list between a save and an external change must not silently
+        // degrade the next merge to `Overlap` by dropping the ancestor.
+        library.list_work_folders().unwrap();
+        let record = library.record(&opened.id).unwrap();
+        assert_eq!(record.persisted_source.as_deref(), Some("saved\n"));
     }
 }

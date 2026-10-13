@@ -551,16 +551,14 @@ mod tests {
 
     #[test]
     fn merge_entry_without_ancestor_takes_the_conflict_path() {
-        let (_temp, library) = library();
-        let work_folder = library
-            .create_work_folder("No Ancestor", "document")
-            .unwrap();
+        let (temp, library) = library();
+        let work_folder =
+            write_work_folder(temp.path(), "No Ancestor", &[("document.md", "saved\n")]);
         // Fresh discovery has no in-memory ancestor until the work folder is opened.
         library.list_work_folders().unwrap();
+        let id = path_id(&work_folder.canonicalize().unwrap());
         assert_eq!(
-            library
-                .merge_external_change(&work_folder.id, "local text\n")
-                .unwrap(),
+            library.merge_external_change(&id, "local text\n").unwrap(),
             MergeOutcome::Overlap
         );
     }

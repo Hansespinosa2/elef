@@ -268,6 +268,8 @@ impl Library {
     }
 
     pub fn delete_work_folder(&self, id: &str) -> Result<(), CoreError> {
+        let lock = self.write_lock(id);
+        let _guard = lock.lock().expect("work folder write lock poisoned");
         let record = self.record(id)?;
         self.validate_work_folder_path(&record.path)?;
         move_to_trash(&record.path)
@@ -426,6 +428,58 @@ mod tests {
         assert!(temp.path().join("After Rename").is_dir());
         let reopened = library.open_work_folder(&opened.id).unwrap();
         assert_eq!(reopened.source, "source");
+    }
+
+    #[test]
+    fn delete_waits_for_the_per_work_folder_write_lock() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (temp, library) = library();
+        let work_folder = write_work_folder(
+            temp.path(),
+            "Before Delete",
+            &[("presentation.md", "source")],
+        );
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
+
+        // Hold the same per-work-folder lock save_source holds across its
+        // persist + refresh_record critical section: an unlocked delete could
+        // remove the index entry while a save is mid-flight, and the save's
+        // refresh would then resurrect a record pointing at the trashed path.
+        let lock = library.write_lock(&opened.id);
+        let guard = lock.lock().expect("hold the write lock");
+        std::thread::scope(|scope| {
+            let (sender, receiver) = mpsc::channel();
+            let delete_id = opened.id.clone();
+            let library_ref = &library;
+            scope.spawn(move || {
+                sender
+                    .send(library_ref.delete_work_folder(&delete_id))
+                    .expect("report the delete result");
+            });
+            assert!(
+                receiver.recv_timeout(Duration::from_millis(500)).is_err(),
+                "delete must wait for the per-work-folder write lock"
+            );
+            drop(guard);
+            receiver
+                .recv_timeout(Duration::from_secs(20))
+                .expect("delete completes once the lock is released")
+                .unwrap();
+        });
+
+        assert!(!work_folder.exists());
+        assert!(matches!(
+            library.open_work_folder(&opened.id),
+            Err(CoreError::NotFound)
+        ));
+        assert!(matches!(
+            library.save_source(&opened.id, "resurrected?", &opened.content_hash),
+            Err(CoreError::NotFound)
+        ));
     }
 
     #[test]

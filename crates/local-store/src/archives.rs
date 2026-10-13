@@ -378,6 +378,18 @@ impl Library {
             write_manifest_atomic(staging.path(), &manifest)?;
         }
 
+        // Serialize replacement against saves, renames, and deletes of the
+        // deck being replaced: without the per-deck guard, our index removal
+        // can land after another writer's refresh and vanish the deck (or a
+        // concurrent refresh can resurrect the trashed record afterwards).
+        // The guard is held through the final re-list below.
+        let replace_lock = collision
+            .as_ref()
+            .filter(|_| replaced)
+            .map(|existing| self.write_lock(&existing.id));
+        let _replace_guard = replace_lock
+            .as_ref()
+            .map(|lock| lock.lock().expect("work folder write lock poisoned"));
         if let Some(existing) = collision.filter(|_| replaced) {
             self.validate_work_folder_path(&existing.path)?;
             move_to_trash(&existing.path)
@@ -524,6 +536,70 @@ mod tests {
         assert_ne!(kept.work_folder.id, imported.work_folder.id);
         assert_eq!(kept.work_folder.name, "same");
         assert_eq!(library.list_work_folders().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn archive_import_replace_waits_for_the_per_work_folder_write_lock() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (temp, library) = library();
+        let work_folder =
+            write_work_folder(temp.path(), "Replace Me", &[("presentation.md", "# Old")]);
+        library.list_work_folders().unwrap();
+        let opened = library
+            .open_work_folder(&path_id(&work_folder.canonicalize().unwrap()))
+            .unwrap();
+
+        let options = SimpleFileOptions::default()
+            .compression_method(CompressionMethod::Deflated)
+            .last_modified_time(DateTime::default());
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("presentation.md", options).unwrap();
+        zip.write_all(b"# New").unwrap();
+        zip.start_file(MANIFEST_FILE, options).unwrap();
+        zip.write_all(
+            &serde_json::to_vec(&WorkFolderManifest {
+                id: opened.id.parse().unwrap(),
+                schema_version: MANIFEST_SCHEMA_VERSION,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        let archive_path = temp.path().join("replacement.elef");
+        fs::write(&archive_path, zip.finish().unwrap().into_inner()).unwrap();
+
+        // Replacement removes the replaced deck's index record; without the
+        // per-deck guard that removal can land after another writer's refresh
+        // and vanish the deck until the next re-list.
+        let lock = library.write_lock(&opened.id);
+        let guard = lock.lock().expect("hold the write lock");
+        std::thread::scope(|scope| {
+            let (sender, receiver) = mpsc::channel();
+            let library_ref = &library;
+            let archive = archive_path.clone();
+            scope.spawn(move || {
+                sender
+                    .send(library_ref.import_elef(&archive, Some(ImportResolution::Replace)))
+                    .expect("report the import result");
+            });
+            assert!(
+                receiver.recv_timeout(Duration::from_millis(500)).is_err(),
+                "replace must wait for the per-work-folder write lock"
+            );
+            drop(guard);
+            let imported = receiver
+                .recv_timeout(Duration::from_secs(20))
+                .expect("import completes once the lock is released")
+                .unwrap();
+            assert!(imported.replaced);
+            assert_eq!(imported.work_folder.name, "Replace Me");
+        });
+
+        assert_eq!(
+            fs::read_to_string(temp.path().join("Replace Me").join("presentation.md")).unwrap(),
+            "# New"
+        );
     }
 
     #[test]
