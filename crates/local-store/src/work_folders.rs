@@ -235,6 +235,8 @@ impl Library {
         new_name: &str,
     ) -> Result<WorkFolderSummary, CoreError> {
         validate_work_folder_name(new_name)?;
+        let lock = self.write_lock(id);
+        let _guard = lock.lock().expect("work folder write lock poisoned");
         let record = self.record(id)?;
         self.validate_work_folder_path(&record.path)?;
         if self.name_collision_exists(new_name)?
@@ -379,6 +381,51 @@ mod tests {
         let snapshot = library.read_source_snapshot(&stable_id).unwrap();
         assert_eq!(snapshot.source, "source");
         assert_eq!(snapshot.source_file, "talk.md");
+    }
+
+    #[test]
+    fn rename_waits_for_the_per_work_folder_write_lock() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (temp, library) = library();
+        let work_folder = write_work_folder(
+            temp.path(),
+            "Before Rename",
+            &[("presentation.md", "source")],
+        );
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
+
+        // Hold the same per-work-folder lock save_source holds across its
+        // persist + refresh_record critical section.
+        let lock = library.write_lock(&opened.id);
+        let guard = lock.lock().expect("hold the write lock");
+        std::thread::scope(|scope| {
+            let (sender, receiver) = mpsc::channel();
+            let rename_id = opened.id.clone();
+            let library_ref = &library;
+            scope.spawn(move || {
+                sender
+                    .send(library_ref.rename_work_folder(&rename_id, "After Rename"))
+                    .expect("report the rename result");
+            });
+            assert!(
+                receiver.recv_timeout(Duration::from_millis(500)).is_err(),
+                "rename must wait for the per-work-folder write lock"
+            );
+            drop(guard);
+            let summary = receiver
+                .recv_timeout(Duration::from_secs(20))
+                .expect("rename completes once the lock is released")
+                .unwrap();
+            assert_eq!(summary.name, "After Rename");
+        });
+
+        assert!(temp.path().join("After Rename").is_dir());
+        let reopened = library.open_work_folder(&opened.id).unwrap();
+        assert_eq!(reopened.source, "source");
     }
 
     #[test]
