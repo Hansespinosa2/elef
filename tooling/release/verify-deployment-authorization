@@ -182,9 +182,12 @@ if ! jq -e \
   ' .pr_number == $pr
     and .workflow_run_id == $run
     and .run_attempt == $attempt
-    and .schema_version == 2
+    and .schema_version == 3
     and .required_jobs == $required_jobs
     and .non_gating_measurements == ["native-performance"]
+    and .plan.mode == "shadow"
+    and .plan.enforced == false
+    and .plan.planner == "tooling/ci_affected.py"
     and (.tested_sha | type == "string" and test("^[0-9a-f]{40}([0-9a-f]{24})?$"))
     and (.tested_tree | type == "string" and test("^[0-9a-f]{40}([0-9a-f]{24})?$"))' \
   "$attestation" >/dev/null; then

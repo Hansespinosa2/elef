@@ -126,15 +126,16 @@ build_fixtures() {
   fi
 
   jq -n \
-    --argjson schema_version 2 \
+    --argjson schema_version 3 \
     --argjson pr_number 52 \
     --argjson workflow_run_id 900 \
     --argjson run_attempt 1 \
     --argjson required_jobs "$required_jobs" \
     --argjson non_gating_measurements '["native-performance"]' \
+    --argjson plan '{"mode":"shadow","enforced":false,"planner":"tooling/ci_affected.py"}' \
     --arg tested_sha "$commit_sha" \
     --arg tested_tree "$tested_tree" \
-    '{schema_version: $schema_version, pr_number: $pr_number, workflow_run_id: $workflow_run_id, run_attempt: $run_attempt, required_jobs: $required_jobs, non_gating_measurements: $non_gating_measurements, tested_sha: $tested_sha, tested_tree: $tested_tree}' \
+    '{schema_version: $schema_version, pr_number: $pr_number, workflow_run_id: $workflow_run_id, run_attempt: $run_attempt, required_jobs: $required_jobs, non_gating_measurements: $non_gating_measurements, plan: $plan, tested_sha: $tested_sha, tested_tree: $tested_tree}' \
     > "$GH_ATTESTATION_FIXTURE"
 
   export GH_COMMIT_PRS_JSON GH_PULL_REQUEST_JSON GH_PR_CHECKS_JSON GH_RUN_STATUS_JSON
@@ -178,4 +179,24 @@ assert_rejected "a failed latest PR workflow run"
 build_fixtures "" "$tree_sha" success false
 assert_rejected "a missing CI attestation artifact"
 
-echo "Deployment authorization accepted only the successful PR-tested tree"
+build_fixtures
+jq '.plan.enforced = true' "$GH_ATTESTATION_FIXTURE" > "$temporary_directory/invalid-attestation.json"
+mv "$temporary_directory/invalid-attestation.json" "$GH_ATTESTATION_FIXTURE"
+assert_rejected "an attestation that enforces plan skips before the enforcement flip"
+
+build_fixtures
+jq '.plan.mode = "enforced"' "$GH_ATTESTATION_FIXTURE" > "$temporary_directory/invalid-attestation.json"
+mv "$temporary_directory/invalid-attestation.json" "$GH_ATTESTATION_FIXTURE"
+assert_rejected "an attestation outside shadow mode"
+
+build_fixtures
+jq 'del(.plan)' "$GH_ATTESTATION_FIXTURE" > "$temporary_directory/invalid-attestation.json"
+mv "$temporary_directory/invalid-attestation.json" "$GH_ATTESTATION_FIXTURE"
+assert_rejected "an attestation without the shadow plan block"
+
+build_fixtures
+jq '.schema_version = 2 | del(.plan)' "$GH_ATTESTATION_FIXTURE" > "$temporary_directory/invalid-attestation.json"
+mv "$temporary_directory/invalid-attestation.json" "$GH_ATTESTATION_FIXTURE"
+assert_rejected "a pre-plan schema attestation"
+
+echo "Deployment authorization accepted only the successful PR-tested tree with a shadow plan"
