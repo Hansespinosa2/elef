@@ -22,4 +22,17 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     options.add_argument("--disable-background-timer-throttling")
     options.add_argument("--disable-backgrounding-occluded-windows")
   end
+
+  teardown do
+    # Browser storage survives Capybara's session reset (cookies are cleared,
+    # localStorage is not), and one process reuses its browser across tests.
+    # Without this, a draft typed by one test restores into the next test's
+    # blank form. Every test starts from the blank slate the suite assumes;
+    # within-test restore stays pinned by the refresh-recovers-draft coverage.
+    begin
+      page.execute_script("localStorage.clear(); sessionStorage.clear();")
+    rescue Selenium::WebDriver::Error::WebDriverError
+      # No page was ever visited; nothing to clear.
+    end
+  end
 end
