@@ -487,7 +487,6 @@ function draftRecoveryFixture() {
   Object.assign(controller, {
     active: true,
     localDraftKey: "presentation:1:identity",
-    freshNewWorkNavigation: false,
     fieldTargets: [sourceField],
     element: { querySelector: selector => selector === ".source-field" ? editorHost : null },
     readDraft: async () => ({
@@ -606,6 +605,264 @@ test("autosave conflict review presents both byte versions and starts the merge 
   assert.equal(nodes.get("#conflict-disk").textContent, "disk <edit>")
   assert.equal(nodes.get("#conflict-merge").value, "local <draft>")
   assert.equal(nodes.get("#conflict-message").textContent, "A newer version is active.")
+})
+
+test("a Turbo revisit to a new-work form restores the unsent draft instead of discarding it", async () => {
+  const sourceField = {
+    name: "document[source]",
+    value: "",
+    dispatched: [],
+    dispatchEvent(event) { this.dispatched.push(event.type) }
+  }
+  const editorHost = { editorController: {}, dataset: {} }
+  const deletedKeys = []
+  const status = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: { querySelector: () => editorHost },
+    fieldTargets: [sourceField],
+    hasWorkKindValue: true,
+    workKindValue: "document",
+    hasWorkIdValue: false,
+    delayValue: 900,
+    openDatabase: () => null,
+    createSession: () => ({ dispose() {} }),
+    attachSessionToEditor() {},
+    readDraft: async key => {
+      assert.equal(key, "document:new:/documents/new:tab-1")
+      return {
+        key,
+        snapshot: "# Unsent new draft",
+        values: ["# Unsent new draft"],
+        updatedAt: Date.now()
+      }
+    },
+    deleteDraft: async key => { deletedKeys.push(key); return true },
+    scheduleSave() {},
+    setStatus: text => status.push(text)
+  })
+
+  const originalWindow = globalThis.window
+  globalThis.window = {
+    location: { pathname: "/documents/new" },
+    sessionStorage: { getItem: () => "tab-1", setItem: () => {} },
+    // Turbo Drive visits create no navigation entries, so this entry is the
+    // stale one from the initial full page load — exactly what used to wipe
+    // the draft on every Turbo revisit.
+    performance: { getEntriesByType: () => [{ type: "navigate" }] }
+  }
+
+  try {
+    controller.connect()
+    for (let i = 0; i < 50 && sourceField.value === ""; i++) await Promise.resolve()
+
+    assert.deepEqual(deletedKeys, [])
+    assert.equal(sourceField.value, "# Unsent new draft")
+    assert.deepEqual(sourceField.dispatched, ["input"])
+    assert.deepEqual(status, ["Recovered unsent changes"])
+  } finally {
+    globalThis.window = originalWindow
+  }
+})
+
+test("new-work drafts older than a week are discarded instead of restored", async () => {
+  const sourceField = {
+    name: "document[source]",
+    value: "",
+    dispatched: [],
+    dispatchEvent(event) { this.dispatched.push(event.type) }
+  }
+  const deletedKeys = []
+  const status = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    active: true,
+    isNewWork: true,
+    localDraftKey: "document:new:/documents/new:tab-1",
+    legacyLocalDraftKey: "document:new:/documents/new",
+    fieldTargets: [sourceField],
+    snapshot: () => sourceField.value,
+    readDraft: async () => ({
+      key: "document:new:/documents/new:tab-1",
+      snapshot: "# Ancient draft",
+      values: ["# Ancient draft"],
+      updatedAt: Date.now() - 8 * 24 * 60 * 60 * 1000
+    }),
+    deleteDraft: async key => { deletedKeys.push(key); return true },
+    scheduleSave() {},
+    setStatus: text => status.push(text)
+  })
+
+  await controller.restoreLocalDraft()
+
+  assert.deepEqual(deletedKeys, ["document:new:/documents/new:tab-1"])
+  assert.equal(sourceField.value, "")
+  assert.deepEqual(sourceField.dispatched, [])
+  assert.deepEqual(status, [])
+})
+
+test("new-work restore adopts a legacy global draft once", async () => {
+  const sourceField = {
+    name: "document[source]",
+    value: "",
+    dispatched: [],
+    dispatchEvent(event) { this.dispatched.push(event.type) }
+  }
+  const editorHost = { editorController: {}, dataset: {} }
+  const sessionKey = "document:new:/documents/new:tab-1"
+  const legacyKey = "document:new:/documents/new"
+  const reads = []
+  const written = []
+  const deletedKeys = []
+  const status = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    active: true,
+    isNewWork: true,
+    localDraftKey: sessionKey,
+    legacyLocalDraftKey: legacyKey,
+    element: { querySelector: () => editorHost },
+    fieldTargets: [sourceField],
+    snapshot: () => sourceField.value,
+    readDraft: async key => {
+      reads.push(key)
+      if (key === sessionKey) return null
+      return { key: legacyKey, snapshot: "# Legacy draft", values: ["# Legacy draft"], updatedAt: Date.now() }
+    },
+    writeDraft: async record => { written.push(record); return true },
+    deleteDraft: async key => { deletedKeys.push(key); return true },
+    scheduleSave() {},
+    setStatus: text => status.push(text)
+  })
+
+  await controller.restoreLocalDraft()
+
+  assert.deepEqual(reads, [sessionKey, legacyKey])
+  assert.equal(sourceField.value, "# Legacy draft")
+  assert.deepEqual(status, ["Recovered unsent changes"])
+  assert.deepEqual(written.map(record => record.key), [sessionKey])
+  assert.deepEqual(deletedKeys, [legacyKey])
+})
+
+test("new-work draft keys are scoped per browser tab", () => {
+  const connectWithToken = (token) => {
+    const readKeys = []
+    const controller = new autosave.default()
+    Object.assign(controller, {
+      element: { querySelector: () => null },
+      fieldTargets: [],
+      hasWorkKindValue: true,
+      workKindValue: "document",
+      hasWorkIdValue: false,
+      openDatabase: () => null,
+      createSession: () => ({ dispose() {} }),
+      attachSessionToEditor() {},
+      snapshot: () => "",
+      readDraft: async key => { readKeys.push(key); return null }
+    })
+    globalThis.window = {
+      location: { pathname: "/documents/new" },
+      sessionStorage: { getItem: () => token, setItem: () => {} }
+    }
+    controller.connect()
+    return { controller, readKeys }
+  }
+
+  const originalWindow = globalThis.window
+  try {
+    const first = connectWithToken("tab-1")
+    const second = connectWithToken("tab-2")
+    const again = connectWithToken("tab-1")
+
+    assert.equal(first.controller.localDraftKey, "document:new:/documents/new:tab-1")
+    assert.equal(second.controller.localDraftKey, "document:new:/documents/new:tab-2")
+    assert.equal(again.controller.localDraftKey, "document:new:/documents/new:tab-1")
+    assert.deepEqual(first.readKeys, ["document:new:/documents/new:tab-1"])
+    assert.deepEqual(second.readKeys, ["document:new:/documents/new:tab-2"])
+  } finally {
+    globalThis.window = originalWindow
+  }
+})
+
+test("new-work drafts fall back to a shared key when session storage throws", () => {
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: { querySelector: () => null },
+    fieldTargets: [],
+    hasWorkKindValue: true,
+    workKindValue: "document",
+    hasWorkIdValue: false,
+    openDatabase: () => null,
+    createSession: () => ({ dispose() {} }),
+    attachSessionToEditor() {},
+    snapshot: () => "",
+    readDraft: async () => null
+  })
+
+  const originalWindow = globalThis.window
+  globalThis.window = {
+    location: { pathname: "/documents/new" },
+    sessionStorage: {
+      getItem: () => { throw new Error("denied") },
+      setItem: () => { throw new Error("denied") }
+    }
+  }
+
+  try {
+    controller.connect()
+    assert.equal(controller.localDraftKey, "document:new:/documents/new:shared")
+  } finally {
+    globalThis.window = originalWindow
+  }
+})
+
+function submitFixture() {
+  const listeners = {}
+  const deletedKeys = []
+  const form = { addEventListener: (type, listener) => { listeners[type] = listener } }
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: form,
+    saveEnabledValue: false,
+    localDraftKey: "document:new:/documents/new:tab-1",
+    deleteDraft: async key => { deletedKeys.push(key); return true }
+  })
+  return { controller, listeners, deletedKeys }
+}
+
+test("submit clears the new-work draft only after a successful create", () => {
+  const originalWindow = globalThis.window
+  globalThis.window = { Turbo: {} }
+
+  try {
+    const failed = submitFixture()
+    failed.controller.submit({})
+    assert.deepEqual(failed.deletedKeys, [])
+    assert.equal(typeof failed.listeners["turbo:submit-end"], "function")
+    failed.listeners["turbo:submit-end"]({ detail: { success: false } })
+    assert.deepEqual(failed.deletedKeys, [])
+
+    const succeeded = submitFixture()
+    succeeded.controller.submit({})
+    succeeded.listeners["turbo:submit-end"]({ detail: { success: true } })
+    assert.deepEqual(succeeded.deletedKeys, ["document:new:/documents/new:tab-1"])
+  } finally {
+    globalThis.window = originalWindow
+  }
+})
+
+test("submit without Turbo clears immediately", () => {
+  const originalWindow = globalThis.window
+  globalThis.window = {}
+
+  try {
+    const { controller, listeners, deletedKeys } = submitFixture()
+    controller.submit({})
+    assert.deepEqual(deletedKeys, ["document:new:/documents/new:tab-1"])
+    assert.deepEqual(Object.keys(listeners), [])
+  } finally {
+    globalThis.window = originalWindow
+  }
 })
 
 test("autosave delegates merged conflict text to the shared save flow", () => {
