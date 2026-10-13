@@ -346,6 +346,17 @@ test("desktop image paste and file drop reach the shared media controller", asyn
   assert.match(dropGuard, /\.editor-surface, \.editor-projection/)
 })
 
+test("the desktop editor offers a shared present-mode entry for presentation works", () => {
+  const start = document.querySelector("#work-view #start-presentation")
+  assert.ok(start)
+  assert.equal(start.hidden, true)
+  assert.match(start.className, /button secondary/)
+  assert.match(application, /presentationStart: document\.querySelector\("#start-presentation"\)/)
+  assert.match(application, /elements\.presentationStart\.addEventListener\("click", \(\) => void startPresentation\(\)\)/)
+  assert.match(application, /elements\.presentationStart\.hidden = isDocument/)
+  assert.match(application, /elements\.presentationStart\.hidden = !activeWorkFolder/)
+})
+
 test("opening a work restores the visual toggle after the awaited refresh", () => {
   assert.match(application, /import \{[^}]*enableVisualModeFromInstalledPreview[^}]*\} from "\.\/editor_view\.js"/)
   const refresh = application.indexOf('measureOpenStage("previewRefresh"')

@@ -116,6 +116,8 @@ jobs:
             for lane_log in "$lanes_dir"/*.log; do
               echo "--- $lane_log (last 60 lines)"
               tail -n 60 "$lane_log"
+              echo "--- $lane_log failing lines (TAP not-ok, cargo failures, error lines)"
+              grep -a -E "^[[:space:]]*not ok |^test .* FAILED|^test result: FAILED|^failures:$| FAILED |^Traceback|^.*Error: | error TS|npm error" "$lane_log" | head -n 40 || true
             done
           fi
           test "$lane_failed" -eq 0
