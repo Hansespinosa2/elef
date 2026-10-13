@@ -25,12 +25,15 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
   teardown do
     # Browser storage survives Capybara's session reset (cookies are cleared,
-    # localStorage is not), and one process reuses its browser across tests.
-    # Without this, a draft typed by one test restores into the next test's
-    # blank form. Every test starts from the blank slate the suite assumes;
-    # within-test restore stays pinned by the refresh-recovers-draft coverage.
+    # localStorage/IndexedDB are not), and one process reuses its browser
+    # across tests. Drafts persist primarily in IndexedDB (localStorage is
+    # only the fallback), so without this a draft typed by one test restores
+    # into the next test's blank form. Every test starts from the blank slate
+    # the suite assumes; within-test restore stays pinned by the
+    # refresh-recovers-draft coverage. A pending delete unblocks when the next
+    # test navigates, and the reopened database starts empty.
     begin
-      page.execute_script("localStorage.clear(); sessionStorage.clear();")
+      page.execute_script("localStorage.clear(); sessionStorage.clear(); try { indexedDB.deleteDatabase('elef-drafts'); } catch (_e) {}")
     rescue Selenium::WebDriver::Error::WebDriverError
       # No page was ever visited; nothing to clear.
     end
