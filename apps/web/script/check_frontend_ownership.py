@@ -665,6 +665,7 @@ desktop_source_reasons = {
     "document-graph-runtime-stable.js": "withholds the graph runtime from the Stable profile",
     "editor-runtime-dev.js": "registers the full controller set for the Dev profile",
     "editor-runtime-stable.js": "registers the source-only controller set for the Stable profile",
+    "export-transport.js": "drives the shared PPTX engine over IPC-resolved media into the native save dialog",
     "file-library-transport-base.js": "maps the profile-shared operations to the native file-library command surface",
     "file-library-transport-stable.js": "re-exports the graph-free transport for the Stable profile",
     "file-library-transport.js": "extends the shared transport base with the Dev-only graph reader",

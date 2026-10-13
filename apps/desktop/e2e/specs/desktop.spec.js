@@ -13,7 +13,7 @@ import { externalEditConflictWorkflow, CONFLICT_WORK_NAME, CONFLICT_SOURCE_FILE,
 import { hostileWorkNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-work.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-settings.js"
-import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../../../../apps/web/test/e2e/scenarios/media-fixture.js"
+import { PIXEL_PNG_BYTES, PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../../../../apps/web/test/e2e/scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../../../../apps/web/test/e2e/scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../../apps/web/test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-aspect-ratio.js"
@@ -344,7 +344,7 @@ class DesktopEditorUi {
   constructor() {
     this.externalMediaPolicy = "reject-remote"
     this.activeWorkTitle = null
-    this.capabilities = { export: false }
+    this.capabilities = { export: true }
   }
 
   async pauseAutosave() {
@@ -433,10 +433,44 @@ class DesktopEditorUi {
     this.activeWorkTitle = title
   }
 
-  async assertExportUnavailable() {
+  async downloadPptx() {
     await this.openWork("E2E seed")
-    if (await $("//button[contains(., 'Download PPTX')]").isExisting()) {
-      throw new Error("The desktop editor must not offer a PPTX export surface (HD-06)")
+    const pptxPath = process.env.ELEF_E2E_PPTX_EXPORT_PATH
+    if (!pptxPath) throw new Error("ELEF_E2E_PPTX_EXPORT_PATH is not set for the desktop PPTX export")
+    await rm(pptxPath, { force: true })
+    const trigger = $("#export-pptx")
+    await trigger.waitForDisplayed()
+    await trigger.click()
+  }
+
+  async assertPptxDownloaded() {
+    const pptxPath = process.env.ELEF_E2E_PPTX_EXPORT_PATH
+    if (!pptxPath) throw new Error("ELEF_E2E_PPTX_EXPORT_PATH is not set for the desktop PPTX export")
+    // The work-view trigger drives the real transport + real engine + real
+    // save command; the harness bypass writes the chosen path instead of a
+    // native dialog (mirroring ELEF_E2E_EXPORT_PATH).
+    await browser.waitUntil(async () => (await $("#export-pptx-status").getText()) === "PowerPoint exported.", {
+      timeout: 30_000,
+      timeoutMsg: "The desktop PPTX export did not report success"
+    })
+    const bytes = await readFile(pptxPath)
+    if (bytes.subarray(0, 4).toString("binary") !== "PK\x03\x04") {
+      throw new Error("The exported PPTX is not a valid zip archive")
+    }
+    const listing = execFileSync("unzip", ["-l", pptxPath], { encoding: "utf8" })
+    if (!listing.includes("ppt/slides/slide1.xml")) {
+      throw new Error(`The exported PPTX contains no slide: ${listing}`)
+    }
+    const mediaEntries = [...listing.matchAll(/ppt\/media\/\S+/g)].map((match) => match[0])
+    if (!mediaEntries.length) throw new Error(`The exported PPTX embeds no media: ${listing}`)
+    // The seed deck carries the shared pixel fixture by now (the shared
+    // edit flow inserted it before this scenario runs): its bytes must be
+    // embedded verbatim, proving local IPC media resolution end to end.
+    if ((await this.readSource()).includes("elef-asset:")) {
+      const embedded = mediaEntries.some((entry) =>
+        Buffer.from(execFileSync("unzip", ["-p", pptxPath, entry])).equals(PIXEL_PNG_BYTES)
+      )
+      if (!embedded) throw new Error(`The exported PPTX does not embed the deck image: ${mediaEntries.join(", ")}`)
     }
   }
 
@@ -2202,7 +2236,7 @@ describe("desktop binary workflows and native boundaries", () => {
     await presentationModeWorkflow(new DesktopEditorUi())
   })
 
-  it("asserts the explicit export-disabled path in the desktop binary", async () => {
+  it("exports PPTX through the desktop work-view trigger into the harness path", async () => {
     await exportWorkflow(new DesktopEditorUi())
   })
 
