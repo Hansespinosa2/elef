@@ -308,7 +308,8 @@ function markdownForTable(source: string, element: Element | null): string {
     outputRows[sourceRowIndex] = updatedRow
   })
 
-  return changed ? outputRows.join("\n") : source
+  const lineEnding = source.includes("\r\n") ? "\r\n" : "\n"
+  return changed ? outputRows.join(lineEnding) : source
 }
 
 function tableCells(line: string): Array<{ start: number; end: number }> {
@@ -369,19 +370,27 @@ function preserveInlineMarkdown(source: string, value: string, protectedElements
 }
 
 function preserveProjectedMarkdown(source: string, value: string, projection: InlineProjection, { preserveLineBreaks = false }: { preserveLineBreaks?: boolean } = {}): string | null {
+  // Projections never contain carriage returns (structured lines are stripped
+  // before projection; inline whitespace is collapsed), so normalize the
+  // edited value the same way before diffing — otherwise every CRLF line
+  // break reads as a phantom edit and the splice deletes structure.
+  const normalizedValue = value.replace(/\r\n?/g, "\n")
   const leading = preserveLineBreaks ? 0 : projection.text.match(/^\s*/)?.[0]?.length || 0
   const trailing = preserveLineBreaks ? 0 : projection.text.match(/\s*$/)?.[0]?.length || 0
   const end = projection.text.length - trailing
   const previous = projection.text.slice(leading, end)
   const boundaries = projection.boundaries.slice(leading, end + 1)
-  if (previous === value) return source
+  if (previous === normalizedValue) return source
 
-  const { prefix, suffix } = commonEditBounds(previous, value)
+  const { prefix, suffix } = commonEditBounds(previous, normalizedValue)
   const from = boundaries[prefix]
   const to = boundaries[previous.length - suffix]
   if (from === undefined || to === undefined || from > to) return null
 
-  const insertion = value.slice(prefix, value.length - suffix)
+  // New line breaks introduced by the edit adopt the block's own convention
+  // so a CRLF block is never silently rewritten to mixed endings.
+  const lineEnding = source.includes("\r\n") ? "\r\n" : "\n"
+  const insertion = normalizedValue.slice(prefix, normalizedValue.length - suffix).replace(/\n/g, lineEnding)
   const result = `${source.slice(0, from)}${insertion}${source.slice(to)}`
   return result
 }
@@ -506,13 +515,18 @@ function structuredBlockProjection(source: string, kind: string, protectedElemen
   let mathIndex = 0
 
   lines.forEach((line, lineIndex) => {
+    // Strip a CRLF carriage return for projection: the editable DOM never
+    // contains it, so projecting it would misalign every later boundary and
+    // read each line break as an edit. Offset accounting below deliberately
+    // keeps using the raw line length so source offsets stay exact.
+    const content = line.endsWith("\r") ? line.slice(0, -1) : line
     const prefix = kind === "quote"
-      ? line.match(/^[ \t]*>[ \t]?/)
-      : line.match(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/)
+      ? content.match(/^[ \t]*>[ \t]?/)
+      : content.match(/^[ \t]*(?:[-*+]|\d+[.)])[ \t]+/)
     const prefixLength = (prefix?.[0] ?? "").length || 0
     hasSyntax ||= prefixLength > 0
     const projection = inlineProjection(
-      line.slice(prefixLength),
+      content.slice(prefixLength),
       sourceOffset + prefixLength,
       protectedElements.slice(protectedIndex),
       protectedIndex,
