@@ -110,6 +110,13 @@ impl Library {
         Ok(false)
     }
 
+    /// The per-work-folder write lock. Every read-modify-write of an existing
+    /// folder's index record (refresh, removal) and every filesystem move of
+    /// its folder must hold this guard for the folder's id across the whole
+    /// sequence; lock order is always per-id guard first, index lock second.
+    /// (Fresh creates mint a new id under no guard; nothing else can name it
+    /// yet. Re-lists instead hold the index write lock across discovery so
+    /// the whole-index replace is atomic against refresh/remove.)
     pub(crate) fn write_lock(&self, id: &str) -> Arc<Mutex<()>> {
         let mut locks = self.write_locks.lock().expect("write lock table poisoned");
         locks

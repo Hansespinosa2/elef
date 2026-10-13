@@ -235,6 +235,8 @@ impl Library {
         new_name: &str,
     ) -> Result<WorkFolderSummary, CoreError> {
         validate_work_folder_name(new_name)?;
+        let lock = self.write_lock(id);
+        let _guard = lock.lock().expect("work folder write lock poisoned");
         let record = self.record(id)?;
         self.validate_work_folder_path(&record.path)?;
         if self.name_collision_exists(new_name)?
@@ -266,6 +268,8 @@ impl Library {
     }
 
     pub fn delete_work_folder(&self, id: &str) -> Result<(), CoreError> {
+        let lock = self.write_lock(id);
+        let _guard = lock.lock().expect("work folder write lock poisoned");
         let record = self.record(id)?;
         self.validate_work_folder_path(&record.path)?;
         move_to_trash(&record.path)
@@ -274,7 +278,17 @@ impl Library {
             .write()
             .expect("work folder index lock poisoned")
             .remove(id);
-        Ok(())
+        // Purge snapshot history: deterministic path-ids mean a deck recreated
+        // at the same path would otherwise inherit (and could restore) the
+        // deleted deck's history. Runs after the trash succeeds so a failed
+        // delete keeps its history.
+        match fs::remove_dir_all(self.snapshot_dir(id)) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(CoreError::Io(std::io::Error::other(format!(
+                "snapshot history purge failed: {error}"
+            )))),
+        }
     }
 }
 
@@ -379,6 +393,137 @@ mod tests {
         let snapshot = library.read_source_snapshot(&stable_id).unwrap();
         assert_eq!(snapshot.source, "source");
         assert_eq!(snapshot.source_file, "talk.md");
+    }
+
+    #[test]
+    fn rename_waits_for_the_per_work_folder_write_lock() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (temp, library) = library();
+        let work_folder = write_work_folder(
+            temp.path(),
+            "Before Rename",
+            &[("presentation.md", "source")],
+        );
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
+
+        // Hold the same per-work-folder lock save_source holds across its
+        // persist + refresh_record critical section.
+        let lock = library.write_lock(&opened.id);
+        let guard = lock.lock().expect("hold the write lock");
+        std::thread::scope(|scope| {
+            let (sender, receiver) = mpsc::channel();
+            let (started_tx, started_rx) = mpsc::channel();
+            let rename_id = opened.id.clone();
+            let library_ref = &library;
+            scope.spawn(move || {
+                started_tx.send(()).expect("signal worker start");
+                sender
+                    .send(library_ref.rename_work_folder(&rename_id, "After Rename"))
+                    .expect("report the rename result");
+            });
+            started_rx
+                .recv_timeout(Duration::from_secs(20))
+                .expect("worker attempted the rename");
+            assert!(
+                receiver.recv_timeout(Duration::from_millis(500)).is_err(),
+                "rename must wait for the per-work-folder write lock"
+            );
+            drop(guard);
+            let summary = receiver
+                .recv_timeout(Duration::from_secs(20))
+                .expect("rename completes once the lock is released")
+                .unwrap();
+            assert_eq!(summary.name, "After Rename");
+        });
+
+        assert!(temp.path().join("After Rename").is_dir());
+        let reopened = library.open_work_folder(&opened.id).unwrap();
+        assert_eq!(reopened.source, "source");
+    }
+
+    #[test]
+    fn delete_waits_for_the_per_work_folder_write_lock() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (temp, library) = library();
+        let work_folder = write_work_folder(
+            temp.path(),
+            "Before Delete",
+            &[("presentation.md", "source")],
+        );
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
+
+        // Hold the same per-work-folder lock save_source holds across its
+        // persist + refresh_record critical section: an unlocked delete could
+        // remove the index entry while a save is mid-flight, and the save's
+        // refresh would then resurrect a record pointing at the trashed path.
+        let lock = library.write_lock(&opened.id);
+        let guard = lock.lock().expect("hold the write lock");
+        std::thread::scope(|scope| {
+            let (sender, receiver) = mpsc::channel();
+            let (started_tx, started_rx) = mpsc::channel();
+            let delete_id = opened.id.clone();
+            let library_ref = &library;
+            scope.spawn(move || {
+                started_tx.send(()).expect("signal worker start");
+                sender
+                    .send(library_ref.delete_work_folder(&delete_id))
+                    .expect("report the delete result");
+            });
+            started_rx
+                .recv_timeout(Duration::from_secs(20))
+                .expect("worker attempted the delete");
+            assert!(
+                receiver.recv_timeout(Duration::from_millis(500)).is_err(),
+                "delete must wait for the per-work-folder write lock"
+            );
+            drop(guard);
+            receiver
+                .recv_timeout(Duration::from_secs(20))
+                .expect("delete completes once the lock is released")
+                .unwrap();
+        });
+
+        assert!(!work_folder.exists());
+        assert!(matches!(
+            library.open_work_folder(&opened.id),
+            Err(CoreError::NotFound)
+        ));
+        assert!(matches!(
+            library.save_source(&opened.id, "resurrected?", &opened.content_hash),
+            Err(CoreError::NotFound)
+        ));
+    }
+
+    #[test]
+    fn delete_purges_snapshot_history_so_a_recreated_deck_starts_fresh() {
+        let (temp, library) = library();
+        let work_folder = write_work_folder(temp.path(), "Notes", &[("presentation.md", "v1")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
+        library.take_snapshot(&opened.id, "manual", None).unwrap();
+        assert_eq!(library.list_snapshots(&opened.id).unwrap().len(), 1);
+
+        library.delete_work_folder(&opened.id).unwrap();
+
+        let recreated = write_work_folder(temp.path(), "Notes", &[("presentation.md", "v2")]);
+        let recreated_id = path_id(&recreated.canonicalize().unwrap());
+        assert_eq!(
+            recreated_id, id,
+            "deterministic path-ids are what make orphaned history inheritable"
+        );
+        library.list_work_folders().unwrap();
+        let reopened = library.open_work_folder(&recreated_id).unwrap();
+        assert_eq!(reopened.source, "v2");
+        assert!(library.list_snapshots(&reopened.id).unwrap().is_empty());
     }
 
     #[test]

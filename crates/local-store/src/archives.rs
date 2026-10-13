@@ -22,7 +22,8 @@ use crate::consts::{
 };
 use crate::discovery::choose_source_file;
 use crate::io::{
-    create_new_file, file_name, move_to_trash, open_regular_file, read_regular_file_handle,
+    create_new_file, file_name, move_to_trash, open_regular_file, read_regular_file,
+    read_regular_file_handle,
 };
 use crate::library::Library;
 use crate::manifest::{read_manifest, write_manifest_atomic};
@@ -363,12 +364,6 @@ impl Library {
         }
 
         let replaced = matches!(resolution, Some(ImportResolution::Replace)) && collision.is_some();
-        let destination_name = if replaced {
-            file_name(&collision.as_ref().expect("collision checked").path)
-        } else {
-            self.available_work_folder_name(&incoming_name)?
-        };
-        let destination = self.root.join(&destination_name);
 
         if collision.is_some()
             && matches!(resolution, Some(ImportResolution::KeepBoth))
@@ -378,15 +373,39 @@ impl Library {
             write_manifest_atomic(staging.path(), &manifest)?;
         }
 
-        if let Some(existing) = collision.filter(|_| replaced) {
-            self.validate_work_folder_path(&existing.path)?;
-            move_to_trash(&existing.path)
+        // Serialize replacement against saves, renames, and deletes of the
+        // deck being replaced: without the per-deck guard, our index removal
+        // can land after another writer's refresh and vanish the deck (or a
+        // concurrent refresh can resurrect the trashed record afterwards).
+        // The guard is held through the final re-list below.
+        let replace_id = collision
+            .as_ref()
+            .filter(|_| replaced)
+            .map(|existing| existing.id.clone());
+        let replace_lock = replace_id.as_deref().map(|id| self.write_lock(id));
+        let _replace_guard = replace_lock
+            .as_ref()
+            .map(|lock| lock.lock().expect("work folder write lock poisoned"));
+        // Re-resolve the deck under guard: the collision snapshot above
+        // predates archive extraction, so the deck may have been renamed
+        // (proceed with the fresh path) or deleted (abort — trashing the stale
+        // path now could destroy a successor deck recreated at the same path).
+        // Snapshot history is intentionally kept: replacing stays recoverable
+        // through restore.
+        let destination_name = if let Some(id) = replace_id.as_deref() {
+            let fresh = self.record(id)?;
+            self.validate_work_folder_path(&fresh.path)?;
+            move_to_trash(&fresh.path)
                 .map_err(|_| CoreError::Io(std::io::Error::other("trash failed")))?;
             self.records
                 .write()
                 .expect("work folder index lock poisoned")
-                .remove(&existing.id);
-        }
+                .remove(id);
+            file_name(&fresh.path)
+        } else {
+            self.available_work_folder_name(&incoming_name)?
+        };
+        let destination = self.root.join(&destination_name);
 
         fs::rename(staging.path(), &destination)?;
         let canonical_path = fs::canonicalize(&destination)?;
@@ -406,6 +425,17 @@ impl Library {
             .find(|record| record.path == canonical_path)
             .map(|record| self.summary(record))
             .ok_or(CoreError::InvalidInput)?;
+        if replaced {
+            // The replaced deck's bytes are new: rebase its merge ancestor on
+            // the imported bytes so the pre-replace text never becomes the
+            // base for a future three-way merge.
+            if let Ok(mut record) = self.record(&work_folder.id) {
+                record.persisted_source = read_regular_file(&record.source_path)
+                    .ok()
+                    .and_then(|bytes| String::from_utf8(bytes).ok());
+                self.refresh_record(record);
+            }
+        }
         Ok(ImportResult {
             work_folder,
             replaced,
@@ -524,6 +554,79 @@ mod tests {
         assert_ne!(kept.work_folder.id, imported.work_folder.id);
         assert_eq!(kept.work_folder.name, "same");
         assert_eq!(library.list_work_folders().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn archive_import_replace_waits_for_the_per_work_folder_write_lock() {
+        use std::sync::mpsc;
+        use std::time::Duration;
+
+        let (temp, library) = library();
+        let work_folder =
+            write_work_folder(temp.path(), "Replace Me", &[("presentation.md", "# Old")]);
+        library.list_work_folders().unwrap();
+        let opened = library
+            .open_work_folder(&path_id(&work_folder.canonicalize().unwrap()))
+            .unwrap();
+
+        let options = SimpleFileOptions::default()
+            .compression_method(CompressionMethod::Deflated)
+            .last_modified_time(DateTime::default());
+        let mut zip = ZipWriter::new(Cursor::new(Vec::new()));
+        zip.start_file("presentation.md", options).unwrap();
+        zip.write_all(b"# New").unwrap();
+        zip.start_file(MANIFEST_FILE, options).unwrap();
+        zip.write_all(
+            &serde_json::to_vec(&WorkFolderManifest {
+                id: opened.id.parse().unwrap(),
+                schema_version: MANIFEST_SCHEMA_VERSION,
+            })
+            .unwrap(),
+        )
+        .unwrap();
+        let archive_path = temp.path().join("replacement.elef");
+        fs::write(&archive_path, zip.finish().unwrap().into_inner()).unwrap();
+
+        // Replacement removes the replaced deck's index record; without the
+        // per-deck guard that removal can land after another writer's refresh
+        // and vanish the deck until the next re-list.
+        let lock = library.write_lock(&opened.id);
+        let guard = lock.lock().expect("hold the write lock");
+        std::thread::scope(|scope| {
+            let (sender, receiver) = mpsc::channel();
+            let (started_tx, started_rx) = mpsc::channel();
+            let library_ref = &library;
+            let archive = archive_path.clone();
+            scope.spawn(move || {
+                started_tx.send(()).expect("signal worker start");
+                sender
+                    .send(library_ref.import_elef(&archive, Some(ImportResolution::Replace)))
+                    .expect("report the import result");
+            });
+            started_rx
+                .recv_timeout(Duration::from_secs(20))
+                .expect("worker attempted the import");
+            assert!(
+                receiver.recv_timeout(Duration::from_millis(500)).is_err(),
+                "replace must wait for the per-work-folder write lock"
+            );
+            drop(guard);
+            let imported = receiver
+                .recv_timeout(Duration::from_secs(20))
+                .expect("import completes once the lock is released")
+                .unwrap();
+            assert!(imported.replaced);
+            assert_eq!(imported.work_folder.name, "Replace Me");
+        });
+
+        assert_eq!(
+            fs::read_to_string(temp.path().join("Replace Me").join("presentation.md")).unwrap(),
+            "# New"
+        );
+        // The merge ancestor is rebased on the imported bytes, not carried
+        // over from the replaced deck.
+        let record = library.record(&opened.id).unwrap();
+        assert_eq!(record.persisted_source.as_deref(), Some("# New"));
     }
 
     #[test]
