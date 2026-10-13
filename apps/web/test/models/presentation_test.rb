@@ -659,4 +659,18 @@ class PresentationTest < ActiveSupport::TestCase
     portable = WorkAssets.portable_markdown(raw_source, presentation)
     assert_equal "# Title\n\n![My Photo](assets/photo.png \"fit:contain\")", portable
   end
+
+  test "presentation_theme derives the canonical theme through shared normalization" do
+    themed = ->(front_matter) do
+      Presentation.new(title: "Themed", source: "---\n#{front_matter}\n---\n# Hi").presentation_theme
+    end
+
+    assert_equal "modern-dark", themed.call("theme: dark")
+    assert_equal "modern-dark", themed.call("theme: dark\ntypography: technical")
+    assert_equal "technical-light", themed.call("theme: light\ntypography: technical")
+    assert_equal "book-light", themed.call("theme: match\ntypography: book")
+    assert_equal "book-light", themed.call("theme: neon\ntypography: papyrus")
+    assert_equal "modern-dark", themed.call("theme: 'dark' # evening")
+    assert_equal "technical-light", themed.call("typography: \"technical\"")
+  end
 end

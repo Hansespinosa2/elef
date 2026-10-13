@@ -52,9 +52,23 @@ test("createRenderStage mirrors the work theme and typography classes onto a hid
 
   const stage = createRenderStage(model({ slides: [slide({ index: 0 }), slide({ index: 1 })] }))
 
-  assert.equal(stage.className, "pptx-render-stage presentation-surface work-theme-dark work-typography-editorial slides-theme-dark slides-typography-editorial")
+  assert.equal(stage.className, "pptx-render-stage presentation-surface work-theme-dark work-typography-editorial slides-theme-dark slides-typography-editorial slides-presentation-modern-dark")
   assert.match(stage.style.cssText, /position:fixed/)
   assert.equal(stage.innerHTML.match(/<div class="slide-frame"/g).length, 2)
+})
+
+test("createRenderStage derives the canonical presentation theme class", () => {
+  installDom()
+
+  const book = createRenderStage(model({
+    presentation: { title: "Work", theme: "match", typography: "book", fonts: { body: "Body, serif", editorial: "Editorial, serif", technical: "Technical, serif" } }
+  }))
+  assert.equal(book.className, "pptx-render-stage presentation-surface work-theme-match work-typography-book slides-theme-match slides-typography-book slides-presentation-book-light")
+
+  const technical = createRenderStage(model({
+    presentation: { title: "Work", theme: "light", typography: "technical", fonts: { body: "Body, serif", editorial: "Editorial, serif", technical: "Technical, serif" } }
+  }))
+  assert.equal(technical.className, "pptx-render-stage presentation-surface work-theme-light work-typography-technical slides-theme-light slides-typography-technical slides-presentation-technical-light")
 })
 
 test("createPresentation configures layout, metadata, and theme fonts", () => {

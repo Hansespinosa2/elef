@@ -182,9 +182,12 @@ const TYPOGRAPHIES = new Set(["book", "modern", "technical"])
 // slides render three genuinely distinct looks. Legacy front-matter/workspace
 // theme/typography values keep parsing unchanged (no migration, no rejects);
 // the slide surface derives one of these at render time. Explicit dark always
-// stays dark; otherwise typography selects the theme, so 7 of 9 legacy
-// (theme, typography) pairs render pixel-identical and only
-// (light|match, modern) shifts font. Mirrored by Work#presentation_theme.
+// stays dark; otherwise typography selects the theme. Exactly 3 of the 9
+// legacy (theme, typography) pairs render pixel-identical — (match, book)
+// (the preserved Book Light default), (dark, modern), and
+// (light, technical); the other 6 shift font, tone, or both (light's
+// #fffdf8 and match's #fcfaf5 gradient starts differ, and dark now always
+// pairs with the modern face). Mirrored by Work#presentation_theme.
 export const PRESENTATION_THEMES = ["book-light", "modern-dark", "technical-light"] as const
 export type PresentationTheme = (typeof PRESENTATION_THEMES)[number]
 

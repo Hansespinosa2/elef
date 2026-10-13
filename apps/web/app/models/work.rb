@@ -5,7 +5,6 @@ class Work < ApplicationRecord
 
   WORK_TYPES = %w[document presentation].freeze
   CHECKPOINT_INTERVAL = 30.seconds
-  PRESENTATION_THEMES = %w[book-light modern-dark technical-light].freeze
 
   belongs_to :workspace
   belongs_to :latest_checkpoint, class_name: "WorkRevision", optional: true
@@ -118,10 +117,11 @@ class Work < ApplicationRecord
 
   # Canonical presentation theme (color + font pair) derived from the
   # resolved legacy theme/typography values. Mirrors presentationTheme() in
-  # packages/work-model/src/document_map.ts; stored values are untouched.
+  # packages/work-model/src/document_map.ts exactly, including normalization
+  # (quoted/padded/legacy values); stored values are untouched.
   def presentation_theme
-    return "modern-dark" if theme == "dark"
-    return "technical-light" if typography == "technical"
+    return "modern-dark" if Source::Document.normalize_theme_value(theme) == "dark"
+    return "technical-light" if Source::Document.normalize_typography_value(typography) == "technical"
 
     "book-light"
   end
