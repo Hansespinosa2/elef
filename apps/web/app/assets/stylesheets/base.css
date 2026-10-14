@@ -92,6 +92,28 @@ body.elef-app {
   border-color: var(--oradia-green-deep);
   color: #f5faf5;
 }
+/* Keyboard-first chrome: icon-only action buttons keep small, quiet chrome
+   (24x24 stroke-1.7 icons sized to the line, chord chips unobtrusive). */
+.icon-button svg { flex: none; height: 1.15rem; width: 1.15rem; }
+.icon-button kbd {
+  border: 1px solid currentColor;
+  border-radius: 0.3rem;
+  font-size: 0.65rem;
+  opacity: 0.75;
+  padding: 0.05rem 0.3rem;
+  white-space: nowrap;
+}
+/* Present chord chip rides beside the icon-only button (inside the publish
+   form, outside the button, so the button keeps its exact accessible name). */
+.present-form { align-items: center; display: inline-flex; gap: 0.3rem; }
+.present-chord {
+  border: 1px solid currentColor;
+  border-radius: 0.3rem;
+  font-size: 0.65rem;
+  opacity: 0.75;
+  padding: 0.05rem 0.3rem;
+  white-space: nowrap;
+}
 .elef-app .library-card a { color: var(--oradia-ink); }
 .elef-app .empty-state p { color: var(--oradia-muted); }
 .elef-app .math-shortcut-card h2 { color: var(--oradia-ink); }

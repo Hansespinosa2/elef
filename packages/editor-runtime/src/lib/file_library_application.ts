@@ -1,3 +1,4 @@
+import { desktopMenuKeyAction } from "./desktop_menu_keys.js"
 import { createWorkOpenFlow, prepareWorkOpen } from "./work_open_flow.js"
 import { measurePaintedAction } from "./performance_measurement.js"
 import { editorFor } from "./editor_controller_lookup.js"
@@ -1217,6 +1218,15 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       mount.querySelector<HTMLElement>("#library-search")?.focus()
       return
     }
+    // Own menu id since the Show-Library duplicate-id fix: returns to the
+    // library without stealing focus, unlike Open Work (Cmd+O), which jumps
+    // to search so a work can be opened by keyboard right away.
+    if (action === "show-library") {
+      if (!library) return chooseLibrary()
+      if (hasUnsavedChanges() && !(await flushSave())) return
+      showLibrary()
+      return
+    }
     if (action === "new-presentation") return showCreateDialog("presentation")
     if (action === "new-document") return showCreateDialog("document")
     if (action === "save") return flushSave({ force: true })
@@ -1329,9 +1339,17 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }))
 
   window.addEventListener("keydown", event => {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+    // Present chord (registry "present") rides the same menu action as the
+    // native item, webview-level so macOS, Linux, and Windows behave
+    // identically with no per-layout native accelerator. The menu action
+    // notices (instead of failing) when no presentation is open.
+    const action = desktopMenuKeyAction(event)
+    if (action === "focus-search") {
       event.preventDefault()
       mount.querySelector<HTMLElement>("#library-search")?.focus()
+    } else if (action === "start-presentation") {
+      event.preventDefault()
+      void handleMenuAction("start-presentation")
     }
   })
 

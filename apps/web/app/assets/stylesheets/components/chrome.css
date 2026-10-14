@@ -205,9 +205,22 @@
 .command-palette-option span {
   color: var(--oradia-muted);
   font-size: 0.68rem;
-  flex: 0 0 auto;
+  flex: 1 1 auto;
   overflow: hidden;
+  text-align: right;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Palette-row chord chip: label + description + <kbd> chord, per the shared
+   display convention (docs/keyboard-shortcuts.md). */
+.command-palette-shortcut {
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.3rem;
+  color: var(--oradia-muted);
+  flex: none;
+  font-family: var(--oradia-mono);
+  font-size: 0.68rem;
+  padding: 0.1rem 0.3rem;
   white-space: nowrap;
 }
 .command-palette-option:hover, .command-palette-option[aria-selected="true"] {
