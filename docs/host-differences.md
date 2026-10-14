@@ -119,15 +119,18 @@ Capability keys come from the `HostCapabilities` interface
   run the download → proof flow (`apps/desktop/e2e/specs/web.spec.js`,
   "shared export flow downloads PPTX in the web app";
   `apps/desktop/e2e/specs/desktop.spec.js`, "exports PPTX through the
-  desktop work-view trigger into the harness path", which clicks the
-  work-view Download PPTX trigger and asserts the harness file is a valid
-  zip containing a slide plus the embedded deck image).
-- Desktop trigger: the work-view Download PPTX button plus the File →
+  desktop Export menu option into the harness path", which opens the
+  work-view Export menu, clicks the Download PPTX option, and asserts the
+  harness file is a valid zip containing a slide plus the embedded deck
+  image).
+- Desktop trigger: one work-view Export menu whose options vary by kind —
+  documents offer Print / Save PDF only, presentations add Download PPTX
+  (the export registry scopes PPTX to presentations; `syncSourceLabel`
+  hides the option for documents). The PPTX option plus the File →
   Export PowerPoint… menu item call the desktop export seam
-  (`exportPptx` on the file-library transport); documents keep no PPTX
-  trigger (the export registry scopes PPTX to presentations). PDF on both
-  hosts goes through the shared print path: the work-view Print / Save PDF
-  button (both kinds) reuses the File → Print… seam (`printCurrentWork`).
+  (`exportPptx` on the file-library transport); the PDF option (both
+  kinds) reuses the File → Print… seam (`printCurrentWork`). The menu
+  closes on activation, outside pointerdown, and Escape.
 - Media resolution differs by necessity, bytes match by policy: the webview
   cannot fetch media (desktop CSP restricts `connect-src` to IPC), so the
   desktop `prepareMedia` seam resolves local `elefasset://` bytes through

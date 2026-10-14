@@ -1046,8 +1046,23 @@ function startFileLibraryApplication(platform) {
   });
   shellElement("#refresh-library").addEventListener("click", () => void refreshLibrary());
   shellElement("#import-elef").addEventListener("click", () => void importWork());
-  shellElement("#export-pptx").addEventListener("click", () => void exportPptxCurrentWork());
-  shellElement("#print-work").addEventListener("click", () => void printCurrentWork());
+  function closeExportMenu() {
+    shellElement("#export-menu").open = false;
+  }
+  shellElement("#export-pptx").addEventListener("click", () => {
+    closeExportMenu();
+    void exportPptxCurrentWork();
+  });
+  shellElement("#print-work").addEventListener("click", () => {
+    closeExportMenu();
+    void printCurrentWork();
+  });
+  document.addEventListener("pointerdown", (event) => {
+    if (event.target instanceof Element && !event.target.closest("#export-menu")) closeExportMenu();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeExportMenu();
+  });
   shellElement("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then((saved) => {

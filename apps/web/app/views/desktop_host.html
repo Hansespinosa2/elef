@@ -61,8 +61,13 @@
           <p id="work-notice" class="notice" role="status" hidden></p>
           <button id="start-presentation" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" hidden>Present</button>
           <div class="work-actions flex flex-wrap items-center gap-3">
-            <button id="print-work" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Print / Save PDF</button>
-            <button id="export-pptx" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Download PPTX</button>
+            <details id="export-menu" class="export-menu relative">
+              <summary id="export-menu-button" class="button secondary inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border px-4 py-2 font-bold" aria-haspopup="menu">Export <span aria-hidden="true">▾</span></summary>
+              <div class="export-menu-panel absolute top-full z-10 mt-2 w-56 rounded-lg border p-1" role="menu" aria-label="Export options">
+                <button id="print-work" class="export-menu-option block w-full rounded-lg px-3 py-2 text-left text-sm font-bold" role="menuitem" type="button">Print / Save PDF</button>
+                <button id="export-pptx" class="export-menu-option block w-full rounded-lg px-3 py-2 text-left text-sm font-bold" role="menuitem" type="button">Download PPTX</button>
+              </div>
+            </details>
             <span id="export-pptx-status" class="ml-2 text-sm" role="status" aria-live="polite"></span>
           </div>
           <p class="desktop-save-note">External edits are checked before every save. A simultaneous write in the final atomic replacement window can still be overwritten; keep version history enabled in your sync tool.</p>

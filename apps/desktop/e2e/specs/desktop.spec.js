@@ -433,11 +433,30 @@ class DesktopEditorUi {
     this.activeWorkTitle = title
   }
 
+  async openExportMenu() {
+    const button = $("#export-menu-button")
+    await button.waitForDisplayed()
+    const isOpen = await browser.execute(() => document.querySelector("#export-menu")?.open === true)
+    if (!isOpen) await button.click()
+    await browser.waitUntil(async () => browser.execute(() => document.querySelector("#export-menu")?.open === true), {
+      timeout: 5_000,
+      timeoutMsg: "The desktop Export menu did not open"
+    })
+  }
+
+  async assertExportMenuClosed(context) {
+    await browser.waitUntil(async () => browser.execute(() => document.querySelector("#export-menu")?.open !== true), {
+      timeout: 5_000,
+      timeoutMsg: `The desktop Export menu stayed open after ${context}`
+    })
+  }
+
   async downloadPptx() {
     await this.openWork("E2E seed")
     const pptxPath = process.env.ELEF_E2E_PPTX_EXPORT_PATH
     if (!pptxPath) throw new Error("ELEF_E2E_PPTX_EXPORT_PATH is not set for the desktop PPTX export")
     await rm(pptxPath, { force: true })
+    await this.openExportMenu()
     const trigger = $("#export-pptx")
     await trigger.waitForDisplayed()
     await trigger.click()
@@ -446,9 +465,9 @@ class DesktopEditorUi {
   async assertPptxDownloaded() {
     const pptxPath = process.env.ELEF_E2E_PPTX_EXPORT_PATH
     if (!pptxPath) throw new Error("ELEF_E2E_PPTX_EXPORT_PATH is not set for the desktop PPTX export")
-    // The work-view trigger drives the real transport + real engine + real
-    // save command; the harness bypass writes the chosen path instead of a
-    // native dialog (mirroring ELEF_E2E_EXPORT_PATH).
+    // The work-view Export menu option drives the real transport + real
+    // engine + real save command; the harness bypass writes the chosen path
+    // instead of a native dialog (mirroring ELEF_E2E_EXPORT_PATH).
     try {
       await browser.waitUntil(async () => (await $("#export-pptx-status").getText()) === "PowerPoint exported.", {
         timeout: 30_000,
@@ -457,6 +476,7 @@ class DesktopEditorUi {
     } catch (error) {
       throw new Error(`The desktop PPTX export did not report success (${await this.diagnosePptxExportFailure()})`, { cause: error })
     }
+    await this.assertExportMenuClosed("the PPTX export")
     const bytes = await readFile(pptxPath)
     if (bytes.subarray(0, 4).toString("binary") !== "PK\x03\x04") {
       throw new Error("The exported PPTX is not a valid zip archive")
@@ -2291,26 +2311,29 @@ describe("desktop binary workflows and native boundaries", () => {
     await presentationModeWorkflow(new DesktopEditorUi())
   })
 
-  it("exports PPTX through the desktop work-view trigger into the harness path", async () => {
+  it("exports PPTX through the desktop Export menu option into the harness path", async () => {
     await exportWorkflow(new DesktopEditorUi())
   })
 
-  it("shows the print trigger for both work kinds and scopes PPTX to presentations", async () => {
-    // The print button must reach the platform pipeline; stub window.print
+  it("offers one Export menu whose options vary by work kind", async () => {
+    const ui = new DesktopEditorUi()
+    // The print option must reach the platform pipeline; stub window.print
     // so the real binary proves the full caller chain without opening a
     // native dialog the driver cannot dismiss.
-    async function expectPrintButtonReachesPipeline() {
+    async function expectPrintOptionReachesPipeline() {
       await browser.execute(() => {
         window.__elefPrintCalled = false
         window.__elefRealPrint = window.print
         window.print = () => { window.__elefPrintCalled = true }
       })
       try {
+        await ui.openExportMenu()
         await $("#print-work").click()
         await browser.waitUntil(async () => browser.execute(() => window.__elefPrintCalled === true), {
           timeout: 10_000,
-          timeoutMsg: "The Print / Save PDF button did not reach window.print"
+          timeoutMsg: "The Print / Save PDF option did not reach window.print"
         })
+        await ui.assertExportMenuClosed("the print option")
       } finally {
         await browser.execute(() => {
           if (window.__elefRealPrint) window.print = window.__elefRealPrint
@@ -2321,19 +2344,22 @@ describe("desktop binary workflows and native boundaries", () => {
       }
     }
 
-    const ui = new DesktopEditorUi()
     await ui.openWork("E2E seed")
+    await $("#export-menu-button").waitForDisplayed()
+    await ui.openExportMenu()
     await $("#print-work").waitForDisplayed()
     await $("#export-pptx").waitForDisplayed()
-    await expectPrintButtonReachesPipeline()
+    await expectPrintOptionReachesPipeline()
 
     await ui.openWork("E2E document")
+    await $("#export-menu-button").waitForDisplayed()
+    await ui.openExportMenu()
     await $("#print-work").waitForDisplayed()
     await browser.waitUntil(async () => !(await $("#export-pptx").isDisplayed()), {
       timeout: 10_000,
-      timeoutMsg: "The PPTX trigger stayed visible for a document work"
+      timeoutMsg: "The PPTX option stayed visible for a document work"
     })
-    await expectPrintButtonReachesPipeline()
+    await expectPrintOptionReachesPipeline()
   })
 
   it("keeps slide position stacks and lanes aligned in the desktop preview", async () => {

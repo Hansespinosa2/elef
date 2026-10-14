@@ -1184,7 +1184,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     shellElement<HTMLElement>("#work-source-name").textContent = activeWorkFolder.source_file
     shellElement<HTMLElement>("#work-kind").textContent = activeWorkFolder.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
     // PowerPoint export is presentation-only (export registry); documents
-    // keep no trigger, and the handler gates the menu path as well.
+    // keep no PPTX option, and the handler gates the menu path as well.
     shellElement<HTMLElement>("#export-pptx").hidden = activeWorkFolder.source_file === "document.md"
   }
 
@@ -1225,10 +1225,28 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   })
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
-  shellElement<HTMLElement>("#export-pptx").addEventListener("click", () => void exportPptxCurrentWork())
-  // The Print / Save PDF button reuses the File → Print… seam for both
+  // The Export menu holds one option per format (the PPTX option hides for
+  // documents in syncSourceLabel). Desktop export never navigates, so the
+  // menu closes on activation, outside pointerdown, and Escape.
+  function closeExportMenu(): void {
+    shellElement<HTMLDetailsElement>("#export-menu").open = false
+  }
+  shellElement<HTMLElement>("#export-pptx").addEventListener("click", () => {
+    closeExportMenu()
+    void exportPptxCurrentWork()
+  })
+  // The Print / Save PDF option reuses the File → Print… seam for both
   // kinds; PDF bytes come from the platform print pipeline on both hosts.
-  shellElement<HTMLElement>("#print-work").addEventListener("click", () => void printCurrentWork())
+  shellElement<HTMLElement>("#print-work").addEventListener("click", () => {
+    closeExportMenu()
+    void printCurrentWork()
+  })
+  document.addEventListener("pointerdown", event => {
+    if (event.target instanceof Element && !event.target.closest("#export-menu")) closeExportMenu()
+  })
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeExportMenu()
+  })
   shellElement<HTMLElement>("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then(saved => {
