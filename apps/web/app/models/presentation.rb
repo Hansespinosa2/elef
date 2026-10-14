@@ -9,6 +9,14 @@ class Presentation < Work
   MARKDOWN
   FORK_TYPES = PresentationLineageEdge::FORK_TYPES
 
+  # New Works start with visible source metadata showing only the workspace
+  # theme default. The body stays in DEFAULT_SOURCE; the value is read from
+  # the workspace so a changed default flows into new sources.
+  def self.available_default_source(workspace: Workspace.default)
+    resolved = workspace || Workspace.default
+    "---\ntheme: #{resolved.default_theme}\n---\n#{DEFAULT_SOURCE}"
+  end
+
   default_scope { where(kind: WORK_TYPE) }
 
   class << self
