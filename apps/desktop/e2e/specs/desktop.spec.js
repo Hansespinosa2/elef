@@ -2318,31 +2318,24 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("offers one Export menu whose options vary by work kind", async () => {
     const ui = new DesktopEditorUi()
-    // The print option must reach the platform pipeline; stub window.print
-    // so the real binary proves the full caller chain without opening a
-    // native dialog the driver cannot dismiss.
+    // The print option must reach the native print_work command (script
+    // window.print() is a silent no-op in the desktop webviews on macOS and
+    // Linux). The WebDriver harness cannot dismiss the platform print
+    // dialog, so the command resolves without opening one there, and the
+    // app records which delivery seam it used for the driver to assert.
     async function expectPrintOptionReachesPipeline() {
-      await browser.execute(() => {
-        window.__elefPrintCalled = false
-        window.__elefRealPrint = window.print
-        window.print = () => { window.__elefPrintCalled = true }
+      await browser.execute(() => { delete window.__elefPrintResult })
+      await ui.openExportMenu()
+      await $("#print-work").click()
+      await browser.waitUntil(async () => browser.execute(() => window.__elefPrintResult?.native === true), {
+        timeout: 10_000,
+        timeoutMsg: "The Print / Save PDF option did not reach the native print command"
       })
-      try {
-        await ui.openExportMenu()
-        await $("#print-work").click()
-        await browser.waitUntil(async () => browser.execute(() => window.__elefPrintCalled === true), {
-          timeout: 10_000,
-          timeoutMsg: "The Print / Save PDF option did not reach window.print"
-        })
-        await ui.assertExportMenuClosed("the print option")
-      } finally {
-        await browser.execute(() => {
-          if (window.__elefRealPrint) window.print = window.__elefRealPrint
-          delete window.__elefRealPrint
-          delete window.__elefPrintCalled
-          document.body.classList.remove("printing-work")
-        })
-      }
+      await ui.assertExportMenuClosed("the print option")
+      // The native dialog fires no afterprint event: the printing-work
+      // marker must clear when the command resolves instead of leaking.
+      const markerLeaked = await browser.execute(() => document.body.classList.contains("printing-work"))
+      if (markerLeaked) throw new Error("The printing-work marker leaked after the native print command resolved")
     }
 
     await ui.openWork("E2E seed")

@@ -129,8 +129,16 @@ Capability keys come from the `HostCapabilities` interface
   hides the option for documents). The PPTX option plus the File →
   Export PowerPoint… menu item call the desktop export seam
   (`exportPptx` on the file-library transport); the PDF option (both
-  kinds) reuses the File → Print… seam (`printCurrentWork`). The menu
-  closes on activation, outside pointerdown or click, and Escape.
+  kinds) and File → Print… call `printCurrentWork`, which delivers
+  through the native `print_work` command (`apps/desktop/src-tauri/src/printing.rs`
+  → `WebviewWindow::print()` → the platform print dialog with its PDF
+  destination). Script `window.print()` is only the fallback: it is a
+  silent no-op in the desktop webviews on macOS and Linux, so it never
+  reached the platform pipeline there. The native dialog fires no
+  `afterprint` event, so the `printing-work` marker clears when the
+  command resolves; the WebDriver harness resolves the command without
+  opening the dialog. The menu closes on activation, outside pointerdown
+  or click, and Escape.
 - Media resolution differs by necessity, bytes match by policy: the webview
   cannot fetch media (desktop CSP restricts `connect-src` to IPC), so the
   desktop `prepareMedia` seam resolves local `elefasset://` bytes through

@@ -1068,10 +1068,28 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
     document.body.classList.add("printing-work")
     await new Promise(resolve => requestAnimationFrame(resolve))
-    window.addEventListener("afterprint", () => {
+    try {
+      // The platform print dialog (and its PDF destination) opens only
+      // through the native print_work command: script window.print() is a
+      // silent no-op in the desktop webviews on macOS and Linux, which is
+      // why desktop PDF export never produced a dialog. It stays as the
+      // last-resort fallback where no native pipeline answers. The native
+      // dialog fires no afterprint event, so the printing-work marker is
+      // cleared here on every path: dialog shown, cancelled, or failed.
+      const printViaNative = typeof fileLibrary.printWork === "function"
+      if (printViaNative) await fileLibrary.printWork()
+      else window.print()
+      // Harness probe: the e2e run cannot dismiss the platform dialog, so
+      // it asserts this flag (native seam reached) instead of dialog pixels.
+      if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
+        globalThis.__elefPrintResult = { native: printViaNative }
+      }
+    } catch (error) {
+      console.error("[desktop-print]", error)
+      showNotice("The print dialog could not be opened.", "error")
+    } finally {
       document.body.classList.remove("printing-work")
-    }, { once: true })
-    window.print()
+    }
   }
 
   // Present mode runs on the shared client presentation mount (the retired

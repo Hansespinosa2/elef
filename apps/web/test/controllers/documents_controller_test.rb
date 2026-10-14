@@ -58,7 +58,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     get new_document_path
     assert_response :success
     config = editor_host_config
-    assert_equal "# Untitled document 2", config.fetch("source")
+    assert_equal "---\ntheme: #{Workspace.default.default_theme}\n---\n# Untitled document 2", config.fetch("source")
     assert_includes config.fetch("previewHtml"), "Untitled document 2"
 
     assert_difference("Document.count") do
@@ -75,7 +75,14 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     document = Document.order(:id).last
     assert_redirected_to edit_document_path(document)
     assert_equal "New document started.", flash[:notice]
-    assert_match(/\A# Untitled document(?: \d+)?\z/, document.source)
+    assert_equal "---\ntheme: #{Workspace.default.default_theme}\n---\n# Untitled document", document.source
+  end
+
+  test "new document metadata shows only the workspace theme default" do
+    get new_document_path
+    assert_response :success
+    source = editor_host_config.fetch("source")
+    assert_equal "---\ntheme: #{Workspace.default.default_theme}\n---\n# Untitled document", source
   end
 
   test "exports a document as a downloadable Elef archive" do

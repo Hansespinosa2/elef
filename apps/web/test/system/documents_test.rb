@@ -55,6 +55,13 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
   end
 
+  # New documents start with visible source metadata showing only the workspace
+  # theme default; expectations for new-document sources build on this prefix
+  # instead of hardcoding the default value.
+  def new_document_prefix
+    "---\ntheme: #{Workspace.default.default_theme}\n---\n"
+  end
+
   def wait_for_preview_response(count)
     ready = page.evaluate_async_script(<<~JAVASCRIPT, count)
       const count = arguments[0];
@@ -727,13 +734,13 @@ class DocumentsTest < ApplicationSystemTestCase
 
     title = find(".document-editor-block", text: "Untitled document")
     title.send_keys(*Array.new("Untitled document".length + 6, :backspace))
-    assert_field "Markdown source", with: "# ", wait: 5
+    assert_field "Markdown source", with: new_document_prefix + "# ", wait: 5
     title.send_keys(*Array.new(6, :backspace))
-    assert_field "Markdown source", with: "# ", wait: 5
+    assert_field "Markdown source", with: new_document_prefix + "# ", wait: 5
     title.send_keys(" This is my First Document")
-    assert_field "Markdown source", with: "# This is my First Document", wait: 5
+    assert_field "Markdown source", with: new_document_prefix + "# This is my First Document", wait: 5
     title.send_keys(:enter)
-    assert_field "Markdown source", with: "# This is my First Document\n\n", wait: 5
+    assert_field "Markdown source", with: new_document_prefix + "# This is my First Document\n\n", wait: 5
 
     first_paragraph = active_document_block
     first_paragraph.send_keys("This is my first line in this document and it is a normal paragraph that may even wrap around. It creates one coherent block of text that can span one line or multiple depending on font or any other specific formatting, but it is one block.")
@@ -777,19 +784,19 @@ class DocumentsTest < ApplicationSystemTestCase
     active_document_block.send_keys("Display math: $$\\frac{1}{2}$$.")
     active_document_block.send_keys(:enter)
     active_document_block.send_keys("A final paragraph.")
-    assert_field "Markdown source", with: expected_source, wait: 5
+    assert_field "Markdown source", with: new_document_prefix + expected_source, wait: 5
     assert_selector ".document-editor-block .katex", minimum: 2, wait: 5
 
     click_on "Save document"
     assert_text "Document saved."
     document = Document.order(:id).last
     assert_equal "This is my First Document", document.title
-    assert_equal expected_source, document.source
+    assert_equal new_document_prefix + expected_source, document.source
 
     visit edit_document_path(document)
     assert_no_selector "#document_title"
     assert_selector ".document-editor-block h1", text: "This is my First Document"
-    assert_field "Markdown source", with: expected_source
+    assert_field "Markdown source", with: new_document_prefix + expected_source
 
     final_paragraph = find(".document-editor-block", text: "A final paragraph.")
     final_paragraph.click
@@ -798,7 +805,7 @@ class DocumentsTest < ApplicationSystemTestCase
     )
     assert_equal true, focused_paragraph
     final_paragraph.send_keys(:end, " Continued")
-    assert_field "Markdown source", with: expected_source.sub("A final paragraph.", "A final paragraph. Continued"), wait: 5
+    assert_field "Markdown source", with: new_document_prefix + expected_source.sub("A final paragraph.", "A final paragraph. Continued"), wait: 5
   end
 
   test "visual document editing preserves untouched Markdown and survives reopening" do
@@ -1286,7 +1293,7 @@ class DocumentsTest < ApplicationSystemTestCase
     # 13. Success: Latex renders correctly and caret is outside |$y=4
     assert_selector ".document-editor-block [data-editor-math-source='y=4']", wait: 5
     assert_no_selector ".document-editor-block .editor-math-active"
-    assert_field "Markdown source", with: "# Untitled document\n\n$y=4$", wait: 5
+    assert_field "Markdown source", with: new_document_prefix + "# Untitled document\n\n$y=4$", wait: 5
   end
 
   test "typing after clearing inline math stays inside the expression" do
@@ -1304,7 +1311,7 @@ class DocumentsTest < ApplicationSystemTestCase
     block.send_keys("x=3")
 
     assert_selector ".document-editor-block .editor-math-active", text: "$x=3$", wait: 5
-    assert_field "Markdown source", with: "# Untitled document\n\n$x=3$", wait: 5
+    assert_field "Markdown source", with: new_document_prefix + "# Untitled document\n\n$x=3$", wait: 5
   end
 
   test "typing after navigating into empty inline math stays inside the expression" do
@@ -1316,10 +1323,10 @@ class DocumentsTest < ApplicationSystemTestCase
     block.send_keys(:left)
     block.send_keys("x=3")
     assert_selector ".document-editor-block .editor-math-active", text: "$x=3$", wait: 5
-    assert_field "Markdown source", with: "# Untitled document\n\n$x=3$", wait: 5
+    assert_field "Markdown source", with: new_document_prefix + "# Untitled document\n\n$x=3$", wait: 5
     block.send_keys(:enter)
 
-    assert_field "Markdown source", with: "# Untitled document\n\n$x=3$\n\n", wait: 5
+    assert_field "Markdown source", with: new_document_prefix + "# Untitled document\n\n$x=3$\n\n", wait: 5
   end
 
   test "display latex visual mode enter and exit and click to edit" do
@@ -1343,7 +1350,7 @@ class DocumentsTest < ApplicationSystemTestCase
     block.send_keys(:right)
     assert_selector ".document-editor-block [data-editor-math-source='a=2']", wait: 5
     assert_no_selector ".document-editor-block .editor-math-active"
-    assert_field "Markdown source", with: "# Untitled document\n\n$$a=2$$", wait: 5
+    assert_field "Markdown source", with: new_document_prefix + "# Untitled document\n\n$$a=2$$", wait: 5
 
     # Click on the rendered KaTeX math element -> de-renders to active math
     find(".document-editor-block [data-editor-math-source='a=2']").click
@@ -1366,8 +1373,8 @@ class DocumentsTest < ApplicationSystemTestCase
     )
     find(".document-editor-block[data-editor-block-id]:focus").send_keys(:enter)
 
-    expected_source = "# Untitled document\n\n$$\n\n$$"
-    expected_caret = "# Untitled document\n\n".length + 3
+    expected_source = "#{new_document_prefix}# Untitled document\n\n$$\n\n$$"
+    expected_caret = "#{new_document_prefix}# Untitled document\n\n".length + 3
     assert_field "Markdown source", with: expected_source, wait: 5
 
     preview_settled = page.evaluate_async_script(<<~JAVASCRIPT, preview_request_before_enter)
@@ -3024,7 +3031,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     block.find(:xpath, "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' document-editor-block-shell ')]").hover
     control.select("Center")
-    assert_field "Markdown source", with: /\A:::align\{center\}\n\n# Untitled document\z/, wait: 5
+    assert_field "Markdown source", with: /\A#{Regexp.escape(new_document_prefix)}:::align\{center\}\n\n# Untitled document\z/, wait: 5
     centered_heading = find(".document-editor-block.position-center h1", text: "Untitled document", wait: 5)
     assert_equal "center", page.evaluate_script("getComputedStyle(arguments[0]).textAlign", centered_heading)
   end
