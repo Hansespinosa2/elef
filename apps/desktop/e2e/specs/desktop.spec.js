@@ -449,10 +449,15 @@ class DesktopEditorUi {
     // The work-view trigger drives the real transport + real engine + real
     // save command; the harness bypass writes the chosen path instead of a
     // native dialog (mirroring ELEF_E2E_EXPORT_PATH).
-    await browser.waitUntil(async () => (await $("#export-pptx-status").getText()) === "PowerPoint exported.", {
-      timeout: 30_000,
-      timeoutMsg: "The desktop PPTX export did not report success"
-    })
+    try {
+      await browser.waitUntil(async () => (await $("#export-pptx-status").getText()) === "PowerPoint exported.", {
+        timeout: 30_000,
+        timeoutMsg: "The desktop PPTX export did not report success"
+      })
+    } catch (error) {
+      const status = await $("#export-pptx-status").getText().catch(() => "<status unreadable>")
+      throw new Error(`The desktop PPTX export did not report success (work-view status: ${JSON.stringify(status)})`, { cause: error })
+    }
     const bytes = await readFile(pptxPath)
     if (bytes.subarray(0, 4).toString("binary") !== "PK\x03\x04") {
       throw new Error("The exported PPTX is not a valid zip archive")
