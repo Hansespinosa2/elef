@@ -455,8 +455,7 @@ class DesktopEditorUi {
         timeoutMsg: "The desktop PPTX export did not report success"
       })
     } catch (error) {
-      const status = await $("#export-pptx-status").getText().catch(() => "<status unreadable>")
-      throw new Error(`The desktop PPTX export did not report success (work-view status: ${JSON.stringify(status)})`, { cause: error })
+      throw new Error(`The desktop PPTX export did not report success (${await this.diagnosePptxExportFailure()})`, { cause: error })
     }
     const bytes = await readFile(pptxPath)
     if (bytes.subarray(0, 4).toString("binary") !== "PK\x03\x04") {
@@ -477,6 +476,48 @@ class DesktopEditorUi {
       )
       if (!embedded) throw new Error(`The exported PPTX does not embed the deck image: ${mediaEntries.join(", ")}`)
     }
+  }
+
+  // Failure-only probe: replays each export seam in the live app so a CI
+  // timeout names the failing stage (status, IPC, library) instead of
+  // only the wait. Never runs on success; never writes files.
+  async diagnosePptxExportFailure() {
+    const source = await this.readSource().catch(() => "<source unreadable>")
+    const digest = /elef-asset:([0-9a-f]{64})/i.exec(source)?.[1] ?? null
+    const probe = await browser.execute(async (assetDigest) => {
+      const out = {}
+      out.statusCount = document.querySelectorAll("#export-pptx-status").length
+      out.statusText = document.querySelector("#export-pptx-status")?.textContent ?? null
+      out.appStatus = document.querySelector("#status-text")?.textContent?.slice(0, 160) ?? null
+      out.desktopView = document.body.dataset.desktopView ?? null
+      out.workHidden = document.querySelector("#work-view")?.hidden ?? null
+      out.pptxInstalled = typeof window.PptxGenJS !== "undefined"
+      out.invokeType = typeof window.__TAURI__?.core?.invoke
+      const workId = document.querySelector("#desktop-editor-form")?.dataset.loadedWorkId ?? null
+      out.workId = workId
+      if (!workId || typeof window.__TAURI__?.core?.invoke !== "function") return out
+      try {
+        const media = await window.__TAURI__.core.invoke("list_media", { id: workId })
+        out.listMedia = `ok:${Array.isArray(media) ? media.length : typeof media}`
+      } catch (error) {
+        out.listMedia = `THREW:${error?.message ?? JSON.stringify(error)}`
+        return out
+      }
+      if (!assetDigest) {
+        out.readAsset = "skipped:no-digest-in-source"
+        return out
+      }
+      try {
+        const uri = await window.__TAURI__.core.invoke("read_pptx_asset", { id: workId, digest: assetDigest })
+        out.readAsset = (typeof uri === "string" && uri.startsWith("data:")) ? `ok:${uri.length}` : `unexpected:${String(uri).slice(0, 80)}`
+      } catch (error) {
+        out.readAsset = `THREW:${error?.message ?? JSON.stringify(error)}`
+      }
+      return out
+    }, digest).catch((error) => ({ probeFailed: String(error).slice(0, 200) }))
+    const logs = await browser.getLogs("browser").catch(() => [])
+    const consoleTail = logs.slice(-6).map((entry) => String(entry?.message ?? entry).slice(0, 160))
+    return `probe:${JSON.stringify(probe)} sourceHasAsset:${source.includes("elef-asset:")} console:${JSON.stringify(consoleTail)}`
   }
 
   async enableVimRelativeLineNumbers() {
