@@ -135,7 +135,10 @@ Capability keys come from the `HostCapabilities` interface
   `fetch_remote_image` command, which ports the server's strict remote
   policy (HTTPS/443, public-DNS pinning, redirect cap, timeouts, image
   allowlist, 10 MB per image; the 30 MB per-export total accumulates in
-  the seam). Parity proof: the export-parity fixtures
+  the seam). Export measurement stages media as same-origin `blob:`
+  object URLs, so `img-src`/`media-src` permit `blob:` (page-created
+  objects only; scripts stay `'self'`). Parity proof: the export-parity
+  fixtures
   (packages/client/test/fixtures/export-parity/) pin byte-identical
   canonical models on both hosts (Ruby service test plus client test over
   the same sources); model HTML renders through the chrome-composed
