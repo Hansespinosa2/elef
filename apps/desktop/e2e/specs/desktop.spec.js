@@ -515,7 +515,7 @@ class DesktopEditorUi {
       }
       return out
     }, digest).catch((error) => ({ probeFailed: String(error).slice(0, 200) }))
-    const logs = await browser.getLogs("browser").catch(() => [])
+    const logs = typeof browser.getLogs === "function" ? await browser.getLogs("browser").catch(() => []) : []
     const consoleTail = logs.slice(-6).map((entry) => String(entry?.message ?? entry).slice(0, 160))
     return `probe:${JSON.stringify(probe)} sourceHasAsset:${source.includes("elef-asset:")} console:${JSON.stringify(consoleTail)}`
   }
