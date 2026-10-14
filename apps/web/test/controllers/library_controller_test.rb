@@ -55,6 +55,55 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
     assert_select "article.library-card", count: 0
   end
 
+  test "command palette lists every registry palette action with chords" do
+    # Palette completeness: the web palette must list every palette-flagged
+    # entry of the shared registry (packages/client shortcuts, source of
+    # truth), so no action is mouse-only. Labels mirror the registry.
+    get root_path
+
+    assert_response :success
+    palette = css_select(".command-palette-root").first
+    commands = JSON.parse(palette["data-command-palette-commands-value"])
+    ids = commands.map { |command| command["id"] }
+    expected = %w[
+      quick-open new-presentation new-document new-snippet change-appearance
+      open-settings open-snippets open-math-shortcuts library-all
+      library-documents library-presentations save toggle-vim vim-settings
+      toggle-metadata present print download-pptx report-bug load-samples
+      slide-add slide-duplicate slide-delete slide-move-up slide-move-down
+    ]
+    missing = expected - ids
+    assert_empty missing, "palette is missing registry actions: #{missing.inspect}"
+    save = commands.find { |command| command["id"] == "save" }
+    assert_equal "s", save["shortcutKey"]
+    present = commands.find { |command| command["id"] == "present" }
+    assert_equal "Enter", present["shortcutKey"]
+    # User-visible contract: every palette row shows a label and a
+    # description; the added/changed rows mirror the shared registry exactly.
+    by_id = commands.to_h { |command| [command["id"], command] }
+    expected.each do |id|
+      assert by_id[id]["label"].to_s.strip != "", "palette #{id} label is empty"
+      assert by_id[id]["description"].to_s.strip != "", "palette #{id} description is empty"
+    end
+    registry_copy = {
+      "save" => ["Save current work", "Submit the active editor"],
+      "present" => ["Present work", "Publish and open the presentation stage"],
+      "print" => ["Print / save PDF", "Open the print view for the current work"],
+      "download-pptx" => ["Download PowerPoint", "Export the current presentation as .pptx"],
+      "report-bug" => ["Report a bug", "Open the bug report dialog"],
+      "load-samples" => ["Load sample works", "Seed the library with sample documents"],
+      "slide-add" => ["Add slide", "Add a slide after the selected slide"],
+      "slide-duplicate" => ["Duplicate slide", "Duplicate the selected slide"],
+      "slide-delete" => ["Delete slide", "Delete the selected slide"],
+      "slide-move-up" => ["Move slide earlier", "Move the selected slide earlier"],
+      "slide-move-down" => ["Move slide later", "Move the selected slide later"]
+    }
+    registry_copy.each do |id, (label, description)|
+      assert_equal label, by_id[id]["label"], "palette #{id} label drifted from the registry"
+      assert_equal description, by_id[id]["description"], "palette #{id} description drifted from the registry"
+    end
+  end
+
   test "search endpoint returns JSON results with type filtering and fallback" do
     doc = Document.create!(title: "Research Alpha", source: "# Alpha notes\n\nContent")
     pres = Presentation.create!(title: "Work Alpha", source: "# Alpha work\n\nContent")

@@ -57,6 +57,12 @@ bundle(
   join(here, "src", "features", "settings", "vimPreferences.ts"),
   join(here, "dist", "vim-preferences.js"),
 );
+// The keyboard registry is dependency-free, so web adapters, desktop
+// adapters, and tests import this slice instead of the boot barrel.
+bundle(
+  join(here, "src", "features", "shortcuts", "shortcuts.ts"),
+  join(here, "dist", "shortcuts.js"),
+);
 // The port session is dependency-free (contracts types erase), so hosts that
 // only need session coordination import this slice instead of the boot
 // bundle; in particular the Stable desktop entry stays a single client copy.
@@ -70,4 +76,4 @@ bundle(join(here, "src", "features", "export", "pptx_model.ts"), join(here, "dis
 // the desktop import must not couple to the client boot barrel, whose bare
 // specifier the Stable profile forbids.
 bundle(join(here, "src", "features", "export", "pptx_engine.ts"), join(here, "dist", "pptx-engine.js"));
-console.log("packages/client: dist/elef-client.js + dist/elef-client.stable.js + dist/preview-core.js + dist/sanitize.js + dist/presentation-chrome.js + dist/vim-preferences.js + dist/port-session.js + dist/pptx-test-internals.js + dist/pptx-model.js + dist/pptx-engine.js built");
+console.log("packages/client: dist/elef-client.js + dist/elef-client.stable.js + dist/preview-core.js + dist/sanitize.js + dist/presentation-chrome.js + dist/vim-preferences.js + dist/shortcuts.js + dist/port-session.js + dist/pptx-test-internals.js + dist/pptx-model.js + dist/pptx-engine.js built");

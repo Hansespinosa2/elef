@@ -151,6 +151,9 @@ export class PresentationController {
 
   handleKey(event: KeyboardEvent): void {
     if (!this.active) return
+    // Modified keys belong to global chords (e.g. Cmd+Enter presents,
+    // Cmd+S saves): present-mode travel must not swallow them.
+    if (event.metaKey || event.ctrlKey || event.altKey || event.isComposing) return
     if ((event.target as Element | null)?.closest?.("a, button, input, select, textarea, summary, [contenteditable='true']")) return
     const action = presentationActionForKey(event.key)
     if (!action) return

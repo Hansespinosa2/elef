@@ -214,6 +214,9 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
                 | "import-elef" | "print" | "settings" | "export-diagnostics" => {
                     let _ = app.emit("desktop-menu-action", id);
                 }
+                "show-library" => {
+                    let _ = app.emit("desktop-menu-action", "show-library");
+                }
                 #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
                 "check-for-updates" => {
                     let _ = app.emit("desktop-menu-action", id);
