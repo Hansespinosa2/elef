@@ -157,7 +157,7 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
 .presenting-work #desktop-preview.editor-projection.preview-pane { position: fixed; inset: 0; max-height: none; min-height: 0; height: 100vh; width: 100vw; overflow: hidden; border: 0; box-shadow: none; }
 .presenting-work .slide-frame { display: none !important; }
 .presenting-work .slide-frame.is-active-presentation-slide { display: block !important; position: fixed; inset: 0; width: 100vw; height: 100vh; aspect-ratio: auto; overflow: hidden; }
-.presenting-work .slide-frame > .slide { border: 0; border-radius: 0; height: 100vh; padding: 7vh 8vw; width: 100vw; }
+.presenting-work .slide-frame > .slide { border: 0; border-radius: 0; height: 100vh; padding: 7vh 8vw; transform: none; width: 100vw; }
 .presenting-work .presentation-editor-block-controls,
 .presenting-work .presentation-editor-slide-toolbar { display: none !important; }
 .presenting-work .presentation-mode-exit { display: inline-flex; position: fixed; top: 16px; right: 20px; z-index: 10002; gap: 12px; align-items: center; padding: 9px 13px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: #fff; }
