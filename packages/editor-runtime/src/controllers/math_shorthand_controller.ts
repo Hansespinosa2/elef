@@ -390,6 +390,123 @@ export function expandMathShorthand(token: string): string | null {
   return parsed?.status === "valid" ? parsed.expansion : null
 }
 
+export interface MathChainWindow {
+  start: number;
+  end: number;
+  opener: number;
+}
+
+/**
+ * Content span of the innermost `{...}`/`(...)` group strictly enclosing `caret`.
+ * Plain parens count as depth here (unlike the chain parser) so `(x.bar)` and
+ * `\frac{x.bar}{}` both resolve to their inner chain. Escaped delimiters (`\{`,
+ * `\(`, ...), `\left(`/`\right)` pairs, and math-boundary `$` are honored, and
+ * the scan stays within `[floor, ceiling)`. Null when no group encloses the caret.
+ */
+export function innermostMathChainWindow(text: string, caret: number, floor = 0, ceiling: number = text.length): MathChainWindow | null {
+  if (typeof text !== "string" || caret <= 0 || caret > text.length) return null
+  const low = Math.max(0, floor)
+  const high = Math.max(caret, Math.min(ceiling, text.length))
+  let depth = 0
+  let opener = -1
+  for (let index = caret - 1; index >= low; index -= 1) {
+    const character = text[index] ?? ""
+    if (character === "$" && !escapedAt(text, index)) break
+    if ((character === "}" || character === ")") && !escapedAt(text, index)) {
+      depth += 1
+      continue
+    }
+    if ((character === "{" || character === "(") && !escapedAt(text, index)) {
+      if (depth === 0) {
+        opener = index
+        break
+      }
+      depth -= 1
+    }
+  }
+  if (opener < 0) return null
+  depth = 1
+  for (let index = caret; index < high; index += 1) {
+    const character = text[index] ?? ""
+    if (character === "$" && !escapedAt(text, index)) break
+    if ((character === "{" || character === "(") && !escapedAt(text, index)) {
+      depth += 1
+      continue
+    }
+    if ((character === "}" || character === ")") && !escapedAt(text, index)) {
+      depth -= 1
+      if (depth === 0) return { start: opener + 1, end: index, opener }
+    }
+  }
+  return { start: opener + 1, end: high, opener }
+}
+
+function mathShorthandInGroup(text: string, caret: number, greedyEnd: number): MathShorthandMatch | null {
+  const tokenCharacter = /[A-Za-z0-9.@\\{}()_^-]/
+  let floor = 0
+  let ceiling = Math.max(caret, Math.min(greedyEnd, text.length))
+  while (floor < caret) {
+    const window = innermostMathChainWindow(text, caret, floor, ceiling)
+    if (!window) return null
+    let start = caret
+    let end = caret
+    while (start > window.start && tokenCharacter.test(text[start - 1] ?? "")) start -= 1
+    while (end < window.end && tokenCharacter.test(text[end] ?? "")) end += 1
+    const source = text.slice(start, end)
+    const parsed = parseMathShorthand(source)
+    if (parsed) return { ...parsed, start, end, source }
+    floor = window.start
+    ceiling = end
+  }
+  return null
+}
+
+function splitTopLevelChainFragments(token: string): Array<{ text: string; start: number }> {
+  const fragments: Array<{ text: string; start: number }> = []
+  let depth = 0
+  let current = ""
+  let currentStart = 0
+  for (let index = 0; index < token.length; index += 1) {
+    const character = token[index] ?? ""
+    if (character === "\\") {
+      current += character + (token[index + 1] ?? "")
+      if (token[index + 1]) index += 1
+      continue
+    }
+    if (character === "{" || character === "(") {
+      if (depth === 0) {
+        fragments.push({ text: current, start: currentStart })
+        current = ""
+        currentStart = index + 1
+      } else {
+        current += character
+      }
+      depth += 1
+      continue
+    }
+    if (character === "}" || character === ")") {
+      if (depth === 0) {
+        fragments.push({ text: current, start: currentStart })
+        current = ""
+        currentStart = index + 1
+        continue
+      }
+      depth -= 1
+      if (depth === 0) {
+        fragments.push({ text: current, start: currentStart })
+        current = ""
+        currentStart = index + 1
+        continue
+      }
+      current += character
+      continue
+    }
+    current += character
+  }
+  fragments.push({ text: current, start: currentStart })
+  return fragments
+}
+
 export function mathShorthandAt(text: string, caret: number): MathShorthandMatch | null {
   if (caret < 0 || caret > text.length) return null
   if (!insideMath(text, caret)) return null
@@ -400,7 +517,8 @@ export function mathShorthandAt(text: string, caret: number): MathShorthandMatch
   while (end < text.length && tokenCharacter.test(text[end] ?? "")) end += 1
   const source = text.slice(start, end)
   const parsed = parseMathShorthand(source)
-  return parsed ? { ...parsed, start, end, source } : null
+  if (parsed) return { ...parsed, start, end, source }
+  return mathShorthandInGroup(text, caret, end)
 }
 
 export function mathShorthandAtEditor(editor: any, caret: number): MathShorthandMatch | null {
@@ -416,8 +534,14 @@ export function mathShorthandAtEditor(editor: any, caret: number): MathShorthand
   const source = line.text.slice(start, end)
   const parsed = parseMathShorthand(source)
   const split = splitTopLevelModifiers(source)
-  if (!parsed || (split.names.length === 0 && (parsed.status !== "valid" || !parsed.nestedChain))) return null
-  return { ...parsed, start: line.from + start, end: line.from + end, source }
+  if (parsed && (split.names.length > 0 || (parsed.status === "valid" && parsed.nestedChain))) {
+    return { ...parsed, start: line.from + start, end: line.from + end, source }
+  }
+  const inner = mathShorthandInGroup(line.text, localCaret, end)
+  if (!inner) return null
+  const innerSplit = splitTopLevelModifiers(inner.source)
+  if (innerSplit.names.length === 0 && (inner.status !== "valid" || !inner.nestedChain)) return null
+  return { ...inner, start: line.from + inner.start, end: line.from + inner.end }
 }
 
 export function mathContextAt(text: string, caret: number): "display_math" | "inline_math" | null {
@@ -917,17 +1041,49 @@ export default class extends Controller<HTMLElement> {
 
     for (const match of matches) {
       const from = match.index ?? 0
-      const to = from + (match[0] ?? "").length
+      const token = match[0] ?? ""
+      const to = from + token.length
       if (!contexts[to]) continue
-      const chain = parseMathShorthand(match[0])
-      if (chain?.status !== "valid") continue
-      const split = splitTopLevelModifiers(match[0])
-      if (split.names.length === 0 && !chain.nestedChain) continue
-      if (chain.expansion === match[0] || this.wasChainCancelled(source, from, to, match[0])) continue
-      changes.push({ from, to, insert: chain.expansion })
+      const chain = parseMathShorthand(token)
+      const split = splitTopLevelModifiers(token)
+      if (
+        chain?.status === "valid" &&
+        (split.names.length > 0 || chain.nestedChain) &&
+        chain.expansion !== token &&
+        !this.wasChainCancelled(source, from, to, token)
+      ) {
+        changes.push({ from, to, insert: chain.expansion })
+        continue
+      }
+      if (token.includes(".") && /[{}()]/.test(token)) this.commitGroupChains(source, contexts, token, from, changes)
     }
 
     if (changes.length) editor.replaceRanges(changes)
+  }
+
+  commitGroupChains(source: string, contexts: Uint8Array, token: string, base: number, changes: Array<{ from: number; to: number; insert: string }>): void {
+    const fragments = splitTopLevelChainFragments(token)
+    if (fragments.length < 2) return
+    for (const fragment of fragments) {
+      if (!fragment.text.includes(".")) continue
+      const from = base + fragment.start
+      const to = from + fragment.text.length
+      const chain = parseMathShorthand(fragment.text)
+      if (chain?.status === "valid") {
+        if (contexts[to]) {
+          const split = splitTopLevelModifiers(fragment.text)
+          if (
+            (split.names.length > 0 || chain.nestedChain) &&
+            chain.expansion !== fragment.text &&
+            !this.wasChainCancelled(source, from, to, fragment.text)
+          ) {
+            changes.push({ from, to, insert: chain.expansion })
+          }
+        }
+        continue
+      }
+      this.commitGroupChains(source, contexts, fragment.text, from, changes)
+    }
   }
 
   wasChainCancelled(source: string, from: number, to: number, candidate: string): boolean {
