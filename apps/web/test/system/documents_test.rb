@@ -2113,6 +2113,61 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_no_selector ".snippet-palette [role='option'] strong", text: "left"
   end
 
+  test "colon in prose never opens the snippet palette" do
+    document = Document.create!(title: "Colon prose", source: "# Notes\n\nSome prose")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    source = find_field("Markdown source")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(editor.value.length);
+      editor.focus();
+    JAVASCRIPT
+
+    editor.send_keys(":")
+    assert_includes source.value, "Some prose:"
+    assert_no_selector ".snippet-palette:not([hidden])", wait: 1
+
+    editor.send_keys("align")
+    assert_includes source.value, "Some prose:align"
+    assert_no_selector ".snippet-palette:not([hidden])", wait: 1
+    refute_includes source.value, ":::align"
+  end
+
+  test "colon before prose on the same line never opens the snippet palette" do
+    document = Document.create!(title: "Colon line start", source: "# Notes\n\nSecond line")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const position = editor.value.indexOf('Second line');
+      editor.setSelectionRange(position);
+      editor.focus();
+    JAVASCRIPT
+    editor.send_keys(":")
+
+    assert_includes find_field("Markdown source").value, ":Second line"
+    assert_no_selector ".snippet-palette:not([hidden])", wait: 1
+  end
+
+  test "colon on a blank line still opens the directive palette" do
+    document = Document.create!(title: "Colon blank line", source: "# Notes")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    editor.send_keys(:end)
+
+    editor.send_keys("\n:")
+    assert_selector ".snippet-palette:not([hidden]) .snippet-option", text: /Align directive/, wait: 5
+
+    editor.send_keys(:escape)
+    assert_no_selector ".snippet-palette:not([hidden])", wait: 1
+    editor.send_keys(:enter, "  :")
+    assert_selector ".snippet-palette:not([hidden]) .snippet-option", text: /Align directive/, wait: 5
+  end
+
   test "slash palette inserts canonical image source" do
     document = Document.create!(title: "Source palette", source: "# Notes")
     visit edit_document_path(document)
