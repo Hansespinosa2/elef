@@ -142,7 +142,12 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_includes source, "\\omega"
 
     editor.send_keys(" @A")
-    assert_no_selector ".math-shortcut-palette:not([hidden])", wait: 1
+    assert_selector ".math-shortcut-palette .snippet-option", text: /Alpha/, wait: 5
+    assert_selector ".math-shortcut-option.is-selected", text: /Alpha/
+    editor.send_keys(:enter)
+
+    source = find_field("Markdown source").value
+    assert_equal 2, source.scan("\\alpha").length
   end
 
   test "shows and accepts beta and theta shortcuts after an inline math opener" do
@@ -192,7 +197,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     editor.click
     editor.send_keys("\n$@g")
 
-    gamma = find(".math-shortcut-option", text: /Gamma/, wait: 5)
+    gamma = find(".math-shortcut-option.is-selected", text: /Gamma/, wait: 5)
     within(gamma) do
       assert_selector ".math-shortcut-trigger", text: "@g"
       assert_selector ".math-shortcut-expansion", text: "\\gamma"
