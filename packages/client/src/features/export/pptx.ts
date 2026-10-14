@@ -41,6 +41,8 @@ export interface PptxPresentation {
   title: string
   theme: string
   typography: string
+  width: number
+  height: number
   fonts: PptxFonts
 }
 

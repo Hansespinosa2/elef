@@ -13,7 +13,7 @@ import { externalEditConflictWorkflow, CONFLICT_WORK_NAME, CONFLICT_SOURCE_FILE,
 import { hostileWorkNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-work.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
 import { authoringSettingsWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-settings.js"
-import { PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../../../../apps/web/test/e2e/scenarios/media-fixture.js"
+import { PIXEL_PNG_BYTES, PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../../../../apps/web/test/e2e/scenarios/media-fixture.js"
 import { presentationModeWorkflow } from "../../../../apps/web/test/e2e/scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../../apps/web/test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-aspect-ratio.js"
@@ -344,7 +344,7 @@ class DesktopEditorUi {
   constructor() {
     this.externalMediaPolicy = "reject-remote"
     this.activeWorkTitle = null
-    this.capabilities = { export: false }
+    this.capabilities = { export: true }
   }
 
   async pauseAutosave() {
@@ -433,11 +433,121 @@ class DesktopEditorUi {
     this.activeWorkTitle = title
   }
 
-  async assertExportUnavailable() {
+  async openExportMenu() {
+    const button = $("#export-menu-button")
+    await button.waitForDisplayed()
+    const isOpen = await browser.execute(() => document.querySelector("#export-menu")?.open === true)
+    if (!isOpen) await button.click()
+    await browser.waitUntil(async () => browser.execute(() => document.querySelector("#export-menu")?.open === true), {
+      timeout: 5_000,
+      timeoutMsg: "The desktop Export menu did not open"
+    })
+  }
+
+  async assertExportMenuClosed(context) {
+    await browser.waitUntil(async () => browser.execute(() => document.querySelector("#export-menu")?.open !== true), {
+      timeout: 5_000,
+      timeoutMsg: `The desktop Export menu stayed open after ${context}`
+    })
+  }
+
+  async downloadPptx() {
     await this.openWork("E2E seed")
-    if (await $("//button[contains(., 'Download PPTX')]").isExisting()) {
-      throw new Error("The desktop editor must not offer a PPTX export surface (HD-06)")
+    const pptxPath = process.env.ELEF_E2E_PPTX_EXPORT_PATH
+    if (!pptxPath) throw new Error("ELEF_E2E_PPTX_EXPORT_PATH is not set for the desktop PPTX export")
+    await rm(pptxPath, { force: true })
+    await this.openExportMenu()
+    const trigger = $("#export-pptx")
+    await trigger.waitForDisplayed()
+    await trigger.click()
+  }
+
+  async assertPptxDownloaded() {
+    const pptxPath = process.env.ELEF_E2E_PPTX_EXPORT_PATH
+    if (!pptxPath) throw new Error("ELEF_E2E_PPTX_EXPORT_PATH is not set for the desktop PPTX export")
+    // The work-view Export menu option drives the real transport + real
+    // engine + real save command; the harness bypass writes the chosen path
+    // instead of a native dialog (mirroring ELEF_E2E_EXPORT_PATH).
+    try {
+      await browser.waitUntil(async () => (await $("#export-pptx-status").getText()) === "PowerPoint exported.", {
+        timeout: 30_000,
+        timeoutMsg: "The desktop PPTX export did not report success"
+      })
+    } catch (error) {
+      throw new Error(`The desktop PPTX export did not report success (${await this.diagnosePptxExportFailure()})`, { cause: error })
     }
+    await this.assertExportMenuClosed("the PPTX export")
+    const bytes = await readFile(pptxPath)
+    if (bytes.subarray(0, 4).toString("binary") !== "PK\x03\x04") {
+      throw new Error("The exported PPTX is not a valid zip archive")
+    }
+    const listing = execFileSync("unzip", ["-l", pptxPath], { encoding: "utf8" })
+    if (!listing.includes("ppt/slides/slide1.xml")) {
+      throw new Error(`The exported PPTX contains no slide: ${listing}`)
+    }
+    const mediaEntries = [...listing.matchAll(/ppt\/media\/\S+/g)].map((match) => match[0])
+    if (!mediaEntries.length) throw new Error(`The exported PPTX embeds no media: ${listing}`)
+    // The seed deck carries the shared pixel fixture by now (the shared
+    // edit flow inserted it before this scenario runs): its bytes must be
+    // embedded verbatim, proving local IPC media resolution end to end.
+    if ((await this.readSource()).includes("elef-asset:")) {
+      const embedded = mediaEntries.some((entry) =>
+        Buffer.from(execFileSync("unzip", ["-p", pptxPath, entry])).equals(PIXEL_PNG_BYTES)
+      )
+      if (!embedded) throw new Error(`The exported PPTX does not embed the deck image: ${mediaEntries.join(", ")}`)
+    }
+  }
+
+  // Failure-only probe: replays each export seam in the live app so a CI
+  // timeout names the failing stage (status, IPC, library) instead of
+  // only the wait. Never runs on success; never writes files.
+  async diagnosePptxExportFailure() {
+    const source = await this.readSource().catch(() => "<source unreadable>")
+    const digest = /elef-asset:([0-9a-f]{64})/i.exec(source)?.[1] ?? null
+    const probe = await browser.execute(async (assetDigest) => {
+      const out = {}
+      out.statusCount = document.querySelectorAll("#export-pptx-status").length
+      out.statusText = document.querySelector("#export-pptx-status")?.textContent ?? null
+      out.statusStack = document.querySelector("#export-pptx-status")?.dataset?.errorStack?.slice(0, 1200) ?? null
+      out.appStatus = document.querySelector("#status-text")?.textContent?.slice(0, 160) ?? null
+      out.exportMenuOpen = document.querySelector("#export-menu")?.open ?? null
+      out.desktopView = document.body.dataset.desktopView ?? null
+      out.workHidden = document.querySelector("#work-view")?.hidden ?? null
+      out.pptxInstalled = typeof window.PptxGenJS !== "undefined"
+      out.invokeType = typeof window.__TAURI__?.core?.invoke
+      const workId = document.querySelector("#desktop-editor-form")?.dataset.loadedWorkId ?? null
+      out.workId = workId
+      if (!workId || typeof window.__TAURI__?.core?.invoke !== "function") return out
+      try {
+        const media = await window.__TAURI__.core.invoke("list_media", { id: workId })
+        out.listMedia = `ok:${Array.isArray(media) ? media.length : typeof media}`
+      } catch (error) {
+        out.listMedia = `THREW:${error?.message ?? JSON.stringify(error)}`
+        return out
+      }
+      if (!assetDigest) {
+        out.readAsset = "skipped:no-digest-in-source"
+        return out
+      }
+      try {
+        const uri = await window.__TAURI__.core.invoke("read_pptx_asset", { id: workId, digest: assetDigest })
+        out.readAsset = (typeof uri === "string" && uri.startsWith("data:")) ? `ok:${uri.length}` : `unexpected:${String(uri).slice(0, 80)}`
+      } catch (error) {
+        out.readAsset = `THREW:${error?.message ?? JSON.stringify(error)}`
+      }
+      // Failure path only (the spec already failed): replay the save seam
+      // with a realistic payload size through the harness bypass.
+      try {
+        const saved = await window.__TAURI__.core.invoke("save_pptx_bytes", { filename: "probe.pptx", bytes: new Array(600000).fill(7) })
+        out.saveBytes = `ok:${saved}`
+      } catch (error) {
+        out.saveBytes = `THREW:${error?.message ?? JSON.stringify(error)}`
+      }
+      return out
+    }, digest).catch((error) => ({ probeFailed: String(error).slice(0, 200) }))
+    const logs = typeof browser.getLogs === "function" ? await browser.getLogs("browser").catch(() => []) : []
+    const consoleTail = logs.slice(-6).map((entry) => String(entry?.message ?? entry).slice(0, 160))
+    return `probe:${JSON.stringify(probe)} sourceHasAsset:${source.includes("elef-asset:")} console:${JSON.stringify(consoleTail)}`
   }
 
   async enableVimRelativeLineNumbers() {
@@ -2202,8 +2312,62 @@ describe("desktop binary workflows and native boundaries", () => {
     await presentationModeWorkflow(new DesktopEditorUi())
   })
 
-  it("asserts the explicit export-disabled path in the desktop binary", async () => {
+  it("exports PPTX through the desktop Export menu option into the harness path", async () => {
     await exportWorkflow(new DesktopEditorUi())
+  })
+
+  it("offers one Export menu whose options vary by work kind", async () => {
+    const ui = new DesktopEditorUi()
+    // The print option must reach the platform pipeline; stub window.print
+    // so the real binary proves the full caller chain without opening a
+    // native dialog the driver cannot dismiss.
+    async function expectPrintOptionReachesPipeline() {
+      await browser.execute(() => {
+        window.__elefPrintCalled = false
+        window.__elefRealPrint = window.print
+        window.print = () => { window.__elefPrintCalled = true }
+      })
+      try {
+        await ui.openExportMenu()
+        await $("#print-work").click()
+        await browser.waitUntil(async () => browser.execute(() => window.__elefPrintCalled === true), {
+          timeout: 10_000,
+          timeoutMsg: "The Print / Save PDF option did not reach window.print"
+        })
+        await ui.assertExportMenuClosed("the print option")
+      } finally {
+        await browser.execute(() => {
+          if (window.__elefRealPrint) window.print = window.__elefRealPrint
+          delete window.__elefRealPrint
+          delete window.__elefPrintCalled
+          document.body.classList.remove("printing-work")
+        })
+      }
+    }
+
+    await ui.openWork("E2E seed")
+    await $("#export-menu-button").waitForDisplayed()
+    await ui.openExportMenu()
+    await $("#print-work").waitForDisplayed()
+    await $("#export-pptx").waitForDisplayed()
+    // The menu dismisses without choosing: Escape closes it and it reopens.
+    await browser.keys(Key.Escape)
+    await ui.assertExportMenuClosed("Escape")
+    await ui.openExportMenu()
+    // An outside pointerdown closes it too; the save note is inert.
+    await $(".desktop-save-note").click()
+    await ui.assertExportMenuClosed("an outside click")
+    await expectPrintOptionReachesPipeline()
+
+    await ui.openWork("E2E document")
+    await $("#export-menu-button").waitForDisplayed()
+    await ui.openExportMenu()
+    await $("#print-work").waitForDisplayed()
+    await browser.waitUntil(async () => !(await $("#export-pptx").isDisplayed()), {
+      timeout: 10_000,
+      timeoutMsg: "The PPTX option stayed visible for a document work"
+    })
+    await expectPrintOptionReachesPipeline()
   })
 
   it("keeps slide position stacks and lanes aligned in the desktop preview", async () => {

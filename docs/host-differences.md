@@ -90,26 +90,66 @@ Capability keys come from the `HostCapabilities` interface
 - Desktop side: work targets resolve through the existing openWork/file-open
   seam (desktop file-open/graph e2e flows).
 
-## HD-06 export surface (web-only)
+## HD-06 export surface (delivery differs, engine shared)
 
 - Capability: none (product surface, not a port capability).
 - Concrete reason: the web app delivers export bytes over HTTP download routes
   (the `get :export` member routes on presentations and documents in
   `apps/web/config/routes.rb`,
-  `apps/web/app/javascript/controllers/pptx_export_host_controller.js`)
-  over shared client logic (`packages/client/src/features/export/`); the
-  desktop has no export UI and no download transport.
-- Supported side: Rails pptx/pdf export service + system tests
+  `apps/web/app/javascript/controllers/pptx_export_host_controller.js`),
+  while the desktop has no HTTP server to download from, so it saves the same
+  bytes through a native save dialog (`save_pptx_bytes` in
+  `apps/desktop/src-tauri/src/exports.rs`, driven by
+  `apps/desktop/frontend/src/export-transport.js`). Both hosts run the shared
+  client engine (`packages/client/src/features/export/pptx.ts`) over the same
+  model shape: Rails serves it as JSON (`Presentations::PptxExport`), the
+  desktop builds it from local source (`buildPptxModel` in
+  `packages/client/src/features/export/pptx_model.ts`). The generator library
+  ships offline on both hosts (web `public/vendor`, desktop `assets/`).
+- Supported side (web): Rails pptx/pdf export service + system tests
   (`apps/web/test/services/presentations/pptx_export_test.rb`,
   `apps/web/test/system/pptx_export_test.rb`, `apps/web/test/system/media_pdf_export_test.rb`).
-- Disabled side: shared `apps/web/test/e2e/scenarios/export.js` branches on
-  `ui.capabilities.export`; the desktop UI declares `export: false` and
-  `assertExportUnavailable` proves no Download PPTX surface exists
-  (`apps/desktop/e2e/specs/desktop.spec.js`, "asserts the explicit
-  export-disabled path in the desktop binary").
-- Supported side (shared definition): the web UI declares `export: true` and
-  runs download → status proof (`apps/desktop/e2e/specs/web.spec.js`,
-  "shared export flow downloads PPTX in the web app").
+- Supported side (desktop): shared engine + model unit tests
+  (`packages/client/test/export.test.ts`), desktop transport test
+  (`apps/desktop/frontend/tests/export-transport.test.js`), the
+  `ELEF_E2E_PPTX_EXPORT_PATH` save-dialog harness bypass (mirroring
+  `ELEF_E2E_EXPORT_PATH`), and the Rust remote-image policy tests
+  (`cargo test -p elef-desktop remote_images`).
+- Supported side (shared definition): both hosts declare `export: true` and
+  run the download → proof flow (`apps/desktop/e2e/specs/web.spec.js`,
+  "shared export flow downloads PPTX in the web app";
+  `apps/desktop/e2e/specs/desktop.spec.js`, "exports PPTX through the
+  desktop Export menu option into the harness path", which opens the
+  work-view Export menu, clicks the Download PPTX option, and asserts the
+  harness file is a valid zip containing a slide plus the embedded deck
+  image).
+- Desktop trigger: one work-view Export menu whose options vary by kind —
+  documents offer Print / Save PDF only, presentations add Download PPTX
+  (the export registry scopes PPTX to presentations; `syncSourceLabel`
+  hides the option for documents). The PPTX option plus the File →
+  Export PowerPoint… menu item call the desktop export seam
+  (`exportPptx` on the file-library transport); the PDF option (both
+  kinds) reuses the File → Print… seam (`printCurrentWork`). The menu
+  closes on activation, outside pointerdown or click, and Escape.
+- Media resolution differs by necessity, bytes match by policy: the webview
+  cannot fetch media (desktop CSP restricts `connect-src` to IPC), so the
+  desktop `prepareMedia` seam resolves local `elefasset://` bytes through
+  the `read_pptx_asset` command and remote images through the
+  `fetch_remote_image` command, which ports the server's strict remote
+  policy (HTTPS/443, public-DNS pinning, redirect cap, timeouts, image
+  allowlist, 10 MB per image; the 30 MB per-export total accumulates in
+  the seam). Export measurement stages media as same-origin `blob:`
+  object URLs and the engine rasterizes SVG backgrounds and math as
+  `data:` images, so `img-src`/`media-src` permit `blob:` and `img-src`
+  permits `data:` (page-created objects and inert image data only;
+  scripts stay `'self'`). Parity proof: the export-parity fixtures
+  (packages/client/test/fixtures/export-parity/) pin byte-identical
+  canonical models on both hosts (Ruby service test plus client test over
+  the same sources); model HTML renders through the chrome-composed
+  projection on both (server bundle, `@elef/renderer/projection`). Final
+  .pptx bytes still differ per run by library design (JSZip entry dates
+  plus docProps timestamps; the engine sets neither), so content equality
+  — not file bytes — is the proven property past the model.
 
 ## HD-07 search implementation (contract-identical, locality differs)
 

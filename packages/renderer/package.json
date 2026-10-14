@@ -9,6 +9,10 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/elef-renderer.js"
+    },
+    "./projection": {
+      "types": "./src/projection.ts",
+      "default": "./dist/projection.js"
     }
   },
   "files": [

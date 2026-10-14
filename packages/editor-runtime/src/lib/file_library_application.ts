@@ -748,8 +748,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       elements.workTitle.textContent = work.name
       elements.workTitle.hidden = !isDocument
       elements.titleInput.value = work.name
-      shellElement<HTMLElement>("#work-kind").textContent = work.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
-      shellElement<HTMLElement>("#work-source-name").textContent = work.source_file
+      syncSourceLabel()
       elements.editorField.dataset.editorInitialSourceValue = JSON.stringify(work.source)
       const mediaUrls = mediaUrlsForWorkFolder(work)
       elements.editorForm.dataset.previewUrlValue = mediaUrls.previewUrl
@@ -957,6 +956,39 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
   }
 
+  async function exportPptxCurrentWork(): Promise<void> {
+    if (!activeWorkFolder) {
+      showNotice("Open a Work before exporting it.")
+      return
+    }
+    if (activeWorkFolder.source_file === "document.md") {
+      showNotice("PowerPoint export is available for presentations.", "error")
+      return
+    }
+    if (hasUnsavedChanges() && !(await flushSave({ force: true }))) return
+    const status = shellElement<HTMLElement>("#export-pptx-status")
+    try {
+      status.textContent = "Preparing PowerPoint…"
+      const saved = await fileLibrary.exportPptx(activeWorkFolder.id, {
+        title: elements.titleInput.value.trim() || activeWorkFolder.name,
+        source: currentSource()
+      })
+      if (saved) {
+        status.textContent = "PowerPoint exported."
+        setStatus("PowerPoint exported")
+      } else {
+        status.textContent = ""
+      }
+    } catch (error) {
+      status.textContent = (error as { message?: unknown } | null)?.message as string || "The PowerPoint export failed."
+      // Keep the failure diagnosable where the status toast cannot go: the
+      // e2e harness cannot read the console, so the stack rides along.
+      status.dataset.errorStack = String((error as { stack?: unknown } | null)?.stack ?? error).slice(0, 2000)
+      console.error("[pptx-export]", error)
+      showError(error)
+    }
+  }
+
   async function importWork(): Promise<void> {
     if (!library) {
       showNotice("Choose a library before importing a Work.")
@@ -1151,6 +1183,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     if (!activeWorkFolder) return
     shellElement<HTMLElement>("#work-source-name").textContent = activeWorkFolder.source_file
     shellElement<HTMLElement>("#work-kind").textContent = activeWorkFolder.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
+    // PowerPoint export is presentation-only (export registry); documents
+    // keep no PPTX option, and the handler gates the menu path as well.
+    shellElement<HTMLElement>("#export-pptx").hidden = activeWorkFolder.source_file === "document.md"
   }
 
   async function handleMenuAction(action: string): Promise<any> {
@@ -1168,6 +1203,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     if (action === "new-document") return showCreateDialog("document")
     if (action === "save") return flushSave({ force: true })
     if (action === "export-elef") return exportCurrentWork()
+    if (action === "export-pptx") return exportPptxCurrentWork()
     if (action === "import-elef") return importWork()
     if (action === "settings") return showSettings()
     if (action === "check-for-updates") return checkForUpdates(true)
@@ -1189,6 +1225,33 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   })
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
+  // The Export menu holds one option per format (the PPTX option hides for
+  // documents in syncSourceLabel). Desktop export never navigates, so the
+  // menu closes on activation, outside interaction, and Escape.
+  function closeExportMenu(): void {
+    shellElement<HTMLDetailsElement>("#export-menu").open = false
+  }
+  shellElement<HTMLElement>("#export-pptx").addEventListener("click", () => {
+    closeExportMenu()
+    void exportPptxCurrentWork()
+  })
+  // The Print / Save PDF option reuses the File → Print… seam for both
+  // kinds; PDF bytes come from the platform print pipeline on both hosts.
+  shellElement<HTMLElement>("#print-work").addEventListener("click", () => {
+    closeExportMenu()
+    void printCurrentWork()
+  })
+  // Outside pointerdown dismisses immediately for mouse and touch; outside
+  // click also dismisses because activation without a pointer (keyboard,
+  // assistive tech, programmatic clicks) never fires pointerdown.
+  function dismissExportMenuOnOutsideEvent(event: Event): void {
+    if (event.target instanceof Element && !event.target.closest("#export-menu")) closeExportMenu()
+  }
+  document.addEventListener("pointerdown", dismissExportMenuOnOutsideEvent)
+  document.addEventListener("click", dismissExportMenuOnOutsideEvent)
+  document.addEventListener("keydown", event => {
+    if (event.key === "Escape") closeExportMenu()
+  })
   shellElement<HTMLElement>("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then(saved => {

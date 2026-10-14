@@ -33,6 +33,8 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let new_document = MenuItem::with_id(app, "new-document", "New Document", true, None::<&str>)?;
     let save = MenuItem::with_id(app, "save", "Save", true, Some("CmdOrCtrl+S"))?;
     let export = MenuItem::with_id(app, "export-elef", "Export Work…", true, None::<&str>)?;
+    let export_pptx =
+        MenuItem::with_id(app, "export-pptx", "Export PowerPoint…", true, None::<&str>)?;
     let import = MenuItem::with_id(app, "import-elef", "Import .elef…", true, None::<&str>)?;
     let print = MenuItem::with_id(app, "print", "Print…", true, Some("CmdOrCtrl+P"))?;
     let file_separator = PredefinedMenuItem::separator(app)?;
@@ -48,6 +50,7 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
                 &new_document,
                 &save,
                 &export,
+                &export_pptx,
                 &import,
                 &print,
             ],
@@ -64,6 +67,7 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
                 &new_document,
                 &save,
                 &export,
+                &export_pptx,
                 &import,
                 &print,
                 &file_separator,

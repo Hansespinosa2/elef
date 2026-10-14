@@ -123,6 +123,15 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
 .restore-draft { margin-top: 0.75rem; }
 .work-notice { margin-bottom: 1rem; }
 .desktop-save-note { color: var(--muted); font-size: 0.75rem; line-height: 1.5; margin: 0 0 1rem; }
+/* Work-view Export menu: one trigger whose options vary by Work kind
+   (documents offer Print / Save PDF; presentations add Download PPTX).
+   Layout rides Tailwind utilities in the markup; only the disclosure-marker
+   reset and theme-aware surfaces live here. */
+.export-menu > summary { list-style: none; }
+.export-menu > summary::-webkit-details-marker { display: none; }
+.export-menu-panel { background: var(--panel); border-color: var(--line); box-shadow: var(--shadow); color: var(--ink); }
+.export-menu-option { background: transparent; color: var(--ink); cursor: pointer; }
+.export-menu-option:hover { background: var(--sidebar); }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 25px; }
 .authoring-settings-link { width: 100%; margin-top: 18px; }
 .about-dialog p:not(.native-eyebrow) { color: var(--muted); font-size: 12px; line-height: 1.6; }

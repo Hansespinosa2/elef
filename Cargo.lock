@@ -1008,7 +1008,12 @@ checksum = "d0881ea181b1df73ff77ffaaf9c7544ecc11e82fba9b5f27b262a3c73a332555"
 name = "elef-desktop"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
+ "futures-util",
+ "ipnet",
  "local-store",
+ "reqwest",
+ "rustls",
  "serde",
  "serde_json",
  "tauri",
@@ -1020,6 +1025,7 @@ dependencies = [
  "tauri-plugin-wdio",
  "tauri-plugin-wdio-webdriver",
  "tempfile",
+ "url",
 ]
 
 [[package]]

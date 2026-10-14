@@ -401,6 +401,7 @@ for menu_action in (
     "refresh-library",
     "save",
     "export-elef",
+    "export-pptx",
     "import-elef",
     "print",
     "settings",

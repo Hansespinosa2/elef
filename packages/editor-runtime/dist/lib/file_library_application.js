@@ -625,8 +625,7 @@ function startFileLibraryApplication(platform) {
       elements.workTitle.textContent = work.name;
       elements.workTitle.hidden = !isDocument;
       elements.titleInput.value = work.name;
-      shellElement("#work-kind").textContent = work.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION";
-      shellElement("#work-source-name").textContent = work.source_file;
+      syncSourceLabel();
       elements.editorField.dataset.editorInitialSourceValue = JSON.stringify(work.source);
       const mediaUrls = mediaUrlsForWorkFolder(work);
       elements.editorForm.dataset.previewUrlValue = mediaUrls.previewUrl;
@@ -812,6 +811,36 @@ function startFileLibraryApplication(platform) {
       showError(error);
     }
   }
+  async function exportPptxCurrentWork() {
+    if (!activeWorkFolder) {
+      showNotice("Open a Work before exporting it.");
+      return;
+    }
+    if (activeWorkFolder.source_file === "document.md") {
+      showNotice("PowerPoint export is available for presentations.", "error");
+      return;
+    }
+    if (hasUnsavedChanges() && !await flushSave({ force: true })) return;
+    const status = shellElement("#export-pptx-status");
+    try {
+      status.textContent = "Preparing PowerPoint\u2026";
+      const saved = await fileLibrary.exportPptx(activeWorkFolder.id, {
+        title: elements.titleInput.value.trim() || activeWorkFolder.name,
+        source: currentSource()
+      });
+      if (saved) {
+        status.textContent = "PowerPoint exported.";
+        setStatus("PowerPoint exported");
+      } else {
+        status.textContent = "";
+      }
+    } catch (error) {
+      status.textContent = error?.message || "The PowerPoint export failed.";
+      status.dataset.errorStack = String(error?.stack ?? error).slice(0, 2e3);
+      console.error("[pptx-export]", error);
+      showError(error);
+    }
+  }
   async function importWork() {
     if (!library) {
       showNotice("Choose a library before importing a Work.");
@@ -979,6 +1008,7 @@ function startFileLibraryApplication(platform) {
     if (!activeWorkFolder) return;
     shellElement("#work-source-name").textContent = activeWorkFolder.source_file;
     shellElement("#work-kind").textContent = activeWorkFolder.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION";
+    shellElement("#export-pptx").hidden = activeWorkFolder.source_file === "document.md";
   }
   async function handleMenuAction(action) {
     if (action === "quit") return getCurrentWindow().close();
@@ -995,6 +1025,7 @@ function startFileLibraryApplication(platform) {
     if (action === "new-document") return showCreateDialog("document");
     if (action === "save") return flushSave({ force: true });
     if (action === "export-elef") return exportCurrentWork();
+    if (action === "export-pptx") return exportPptxCurrentWork();
     if (action === "import-elef") return importWork();
     if (action === "settings") return showSettings();
     if (action === "check-for-updates") return checkForUpdates(true);
@@ -1015,6 +1046,25 @@ function startFileLibraryApplication(platform) {
   });
   shellElement("#refresh-library").addEventListener("click", () => void refreshLibrary());
   shellElement("#import-elef").addEventListener("click", () => void importWork());
+  function closeExportMenu() {
+    shellElement("#export-menu").open = false;
+  }
+  shellElement("#export-pptx").addEventListener("click", () => {
+    closeExportMenu();
+    void exportPptxCurrentWork();
+  });
+  shellElement("#print-work").addEventListener("click", () => {
+    closeExportMenu();
+    void printCurrentWork();
+  });
+  function dismissExportMenuOnOutsideEvent(event) {
+    if (event.target instanceof Element && !event.target.closest("#export-menu")) closeExportMenu();
+  }
+  document.addEventListener("pointerdown", dismissExportMenuOnOutsideEvent);
+  document.addEventListener("click", dismissExportMenuOnOutsideEvent);
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeExportMenu();
+  });
   shellElement("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then((saved) => {
