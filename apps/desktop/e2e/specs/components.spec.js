@@ -238,3 +238,112 @@ test("the source editor component has matching web and desktop layout styles", a
   expect(measured.web[".cm-editor"].rectHeight).toBeGreaterThan(300)
   expect(measured.web[".editor-shell"].backgroundColor).toBe("rgb(24, 33, 38)")
 })
+
+test("desktop present mode keeps every aligned slide fully inside the viewport", async ({ page }) => {
+  const styles = await hostStylesheets()
+  // All nine :::align positions across two slides, so the active-slide swap
+  // is exercised too. Blocks stay short so no slide overflows by content.
+  const previewHtml = renderPreview({
+    kind: "presentation",
+    title: "Present geometry",
+    allowRemoteMedia: false,
+    source: [
+      "# Corners",
+      "",
+      ":::align{top left}",
+      "Top-left marker.",
+      "",
+      ":::align{top center}",
+      "Top-center marker.",
+      "",
+      ":::align{top right}",
+      "Top-right marker.",
+      "",
+      ":::align{bottom left}",
+      "Bottom-left marker.",
+      "",
+      ":::align{bottom center}",
+      "Bottom-center marker.",
+      "",
+      ":::align{bottom right}",
+      "Bottom-right marker.",
+      "",
+      "---",
+      "",
+      "# Middles",
+      "",
+      ":::align{middle left}",
+      "Middle-left marker.",
+      "",
+      ":::align{middle center}",
+      "Middle-center marker.",
+      "",
+      ":::align{middle right}",
+      "Middle-right marker.",
+      ""
+    ].join("\n")
+  }).html
+
+  // Narrower than, near, and wider than the 1280px design canvas: the
+  // canvas scaler reports <1, ~1, and >1 across these sizes.
+  const viewports = [
+    { width: 1024, height: 768 },
+    { width: 1440, height: 900 },
+    { width: 1920, height: 1080 }
+  ]
+  for (const viewport of viewports) {
+    await page.setViewportSize(viewport)
+    await page.setContent(
+      `<!doctype html><html><head><style>${styles.desktop}\n*{box-sizing:border-box}body{margin:0}</style></head>` +
+      `<body class="presenting-work"><main>${previewHtml}</main></body></html>`
+    )
+    // Activate each slide in turn, exactly one active at a time.
+    const slideCount = await page.locator(".slide-frame").count()
+    expect(slideCount).toBe(2)
+    for (let active = 0; active < slideCount; active += 1) {
+      const measured = await page.evaluate((activeIndex) => {
+        const frames = [...document.querySelectorAll(".slide-frame")]
+        for (const [index, frame] of frames.entries()) {
+          frame.classList.toggle("is-active-presentation-slide", index === activeIndex)
+          // Steady state of the shared canvas scaler (packages/client
+          // presentation.ts): --slide-scale = frame.clientWidth / 1280.
+          frame.style.setProperty("--slide-scale", String(frame.clientWidth / 1280))
+        }
+        const rect = (element) => {
+          const bounds = element.getBoundingClientRect()
+          return { top: bounds.top, left: bounds.left, right: bounds.right, bottom: bounds.bottom }
+        }
+        const slide = frames[activeIndex].querySelector(":scope > .slide")
+        return {
+          transform: getComputedStyle(slide).transform,
+          slide: rect(slide),
+          blocks: [...frames[activeIndex].querySelectorAll(".slide-block")].map((block) => ({
+            label: block.textContent.trim().replace(/\s+/g, " ").slice(0, 24),
+            ...rect(block)
+          })),
+          inactiveDisplays: frames.filter((_, index) => index !== activeIndex).map((frame) => getComputedStyle(frame).display)
+        }
+      }, active)
+      const within = (label, bounds) => {
+        expect(bounds.left, `${label} left`).toBeGreaterThanOrEqual(-1)
+        expect(bounds.top, `${label} top`).toBeGreaterThanOrEqual(-1)
+        expect(bounds.right, `${label} right`).toBeLessThanOrEqual(viewport.width + 1)
+        expect(bounds.bottom, `${label} bottom`).toBeLessThanOrEqual(viewport.height + 1)
+      }
+      // The viewport-sized present slide must not carry the design-canvas
+      // scale transform: it would multiply the 100vw/100vh box and push
+      // bottom/right aligned content off screen (or shrink it toward the
+      // top-left corner on narrow windows).
+      expect(measured.transform, `slide ${active} transform @ ${viewport.width}x${viewport.height}`).toBe("none")
+      within(`slide ${active} @ ${viewport.width}x${viewport.height}`, measured.slide)
+      // Fully on screen means filling the viewport, not drifting to a corner.
+      expect(measured.slide.left).toBeLessThanOrEqual(1)
+      expect(measured.slide.top).toBeLessThanOrEqual(1)
+      expect(measured.slide.right).toBeGreaterThanOrEqual(viewport.width - 1)
+      expect(measured.slide.bottom).toBeGreaterThanOrEqual(viewport.height - 1)
+      expect(measured.blocks.length).toBeGreaterThan(0)
+      for (const block of measured.blocks) within(`slide ${active} ${block.label} @ ${viewport.width}x${viewport.height}`, block)
+      expect(measured.inactiveDisplays).toEqual(["none"])
+    }
+  }
+})

@@ -791,6 +791,12 @@ function createDocumentState(EditorState, source, extensions = []) {
   };
 }
 
+// src/lib/editor_tab_keymap.ts
+import { indentWithTab } from "@codemirror/commands";
+import { keymap } from "@codemirror/view";
+var editorTabBinding = indentWithTab;
+var editorTabKeymap = keymap.of([indentWithTab]);
+
 // src/lib/feature_flags.ts
 var DESKTOP_FEATURE_FLAGS = Object.freeze({
   ELEF_ENABLE_REVISIONS: false,
@@ -979,6 +985,7 @@ export {
   desktopFeatureEnabled,
   editorActionControl,
   editorFor,
+  editorTabBinding,
   enableVisualModeAfterPreview,
   enableVisualModeFromInstalledPreview,
   formatLineNumber,
