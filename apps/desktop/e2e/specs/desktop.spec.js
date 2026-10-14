@@ -2271,9 +2271,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
     await ui.openWork("E2E document")
     await $("#print-work").waitForDisplayed()
-    if (await $("#export-pptx").isDisplayed()) {
-      throw new Error("The PPTX trigger stayed visible for a document work")
-    }
+    await browser.waitUntil(async () => !(await $("#export-pptx").isDisplayed()), {
+      timeout: 10_000,
+      timeoutMsg: "The PPTX trigger stayed visible for a document work"
+    })
   })
 
   it("keeps slide position stacks and lanes aligned in the desktop preview", async () => {
