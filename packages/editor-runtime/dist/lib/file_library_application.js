@@ -836,6 +836,8 @@ function startFileLibraryApplication(platform) {
       }
     } catch (error) {
       status.textContent = error?.message || "The PowerPoint export failed.";
+      status.dataset.errorStack = String(error?.stack ?? error).slice(0, 2e3);
+      console.error("[pptx-export]", error);
       showError(error);
     }
   }

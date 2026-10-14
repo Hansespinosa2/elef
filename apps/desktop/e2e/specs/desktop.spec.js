@@ -488,6 +488,7 @@ class DesktopEditorUi {
       const out = {}
       out.statusCount = document.querySelectorAll("#export-pptx-status").length
       out.statusText = document.querySelector("#export-pptx-status")?.textContent ?? null
+      out.statusStack = document.querySelector("#export-pptx-status")?.dataset?.errorStack?.slice(0, 1200) ?? null
       out.appStatus = document.querySelector("#status-text")?.textContent?.slice(0, 160) ?? null
       out.desktopView = document.body.dataset.desktopView ?? null
       out.workHidden = document.querySelector("#work-view")?.hidden ?? null
@@ -512,6 +513,14 @@ class DesktopEditorUi {
         out.readAsset = (typeof uri === "string" && uri.startsWith("data:")) ? `ok:${uri.length}` : `unexpected:${String(uri).slice(0, 80)}`
       } catch (error) {
         out.readAsset = `THREW:${error?.message ?? JSON.stringify(error)}`
+      }
+      // Failure path only (the spec already failed): replay the save seam
+      // with a realistic payload size through the harness bypass.
+      try {
+        const saved = await window.__TAURI__.core.invoke("save_pptx_bytes", { filename: "probe.pptx", bytes: new Array(600000).fill(7) })
+        out.saveBytes = `ok:${saved}`
+      } catch (error) {
+        out.saveBytes = `THREW:${error?.message ?? JSON.stringify(error)}`
       }
       return out
     }, digest).catch((error) => ({ probeFailed: String(error).slice(0, 200) }))

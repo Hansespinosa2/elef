@@ -981,6 +981,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       }
     } catch (error) {
       status.textContent = (error as { message?: unknown } | null)?.message as string || "The PowerPoint export failed."
+      // Keep the failure diagnosable where the status toast cannot go: the
+      // e2e harness cannot read the console, so the stack rides along.
+      status.dataset.errorStack = String((error as { stack?: unknown } | null)?.stack ?? error).slice(0, 2000)
+      console.error("[pptx-export]", error)
       showError(error)
     }
   }
