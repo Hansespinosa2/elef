@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
 import { application } from "./application.js"
-import { editorInsideMath, expandMathShorthand, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js"
+import { editorInsideMath, expandMathShorthand, innermostMathChainWindow, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js"
 import { authoringRegistryFor } from "./authoring_registry.js"
 import type { RegistryEntry } from "../lib/authoring_registry_merge.js"
 import type { MathShorthandKeyEvent } from "./math_shorthand_controller.js"
@@ -219,6 +219,10 @@ export default class extends Controller<HTMLElement> {
     let baseStart = separatorStart
     const tokenCharacter = /[A-Za-z0-9.@\\{}()^-]/
     while (baseStart > 0 && tokenCharacter.test(before[baseStart - 1] ?? "")) baseStart -= 1
+    if (prefix === ".") {
+      const window = innermostMathChainWindow(before, separatorStart, 0, separatorStart)
+      if (window && window.start > baseStart) baseStart = window.start
+    }
     const candidateBase = before.slice(baseStart, separatorStart)
     if (prefix === "." && !this.validModifierBase(candidateBase)) return null
 
