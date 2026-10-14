@@ -510,6 +510,7 @@ class DesktopEditorUi {
       out.statusText = document.querySelector("#export-pptx-status")?.textContent ?? null
       out.statusStack = document.querySelector("#export-pptx-status")?.dataset?.errorStack?.slice(0, 1200) ?? null
       out.appStatus = document.querySelector("#status-text")?.textContent?.slice(0, 160) ?? null
+      out.exportMenuOpen = document.querySelector("#export-menu")?.open ?? null
       out.desktopView = document.body.dataset.desktopView ?? null
       out.workHidden = document.querySelector("#work-view")?.hidden ?? null
       out.pptxInstalled = typeof window.PptxGenJS !== "undefined"
@@ -2349,6 +2350,13 @@ describe("desktop binary workflows and native boundaries", () => {
     await ui.openExportMenu()
     await $("#print-work").waitForDisplayed()
     await $("#export-pptx").waitForDisplayed()
+    // The menu dismisses without choosing: Escape closes it and it reopens.
+    await browser.keys(Key.Escape)
+    await ui.assertExportMenuClosed("Escape")
+    await ui.openExportMenu()
+    // An outside pointerdown closes it too; the save note is inert.
+    await $(".desktop-save-note").click()
+    await ui.assertExportMenuClosed("an outside click")
     await expectPrintOptionReachesPipeline()
 
     await ui.openWork("E2E document")
