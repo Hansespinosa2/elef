@@ -195,6 +195,11 @@ class snippet_palette_controller_default extends Controller {
     const triggerStart = match.index ?? 0;
     const previousCharacter = beforeCaret[triggerStart - 1];
     if (previousCharacter === ":" || previousCharacter === "/" || previousCharacter === "\\") return null;
+    if ((match[1] ?? "") === ":") {
+      const beforeTrigger = beforeCaret.slice(0, triggerStart);
+      const afterCaret = line.text.slice(editor.selectionStart - line.from);
+      if (!/^\s*$/.test(beforeTrigger) || !/^\s*$/.test(afterCaret)) return null;
+    }
     return {
       prefix: match[1] ?? "",
       text: (match[2] ?? "").toLowerCase(),
