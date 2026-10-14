@@ -229,6 +229,15 @@ export default class extends Controller<HTMLElement> {
     const previousCharacter = beforeCaret[triggerStart - 1]
     if (previousCharacter === ":" || previousCharacter === "/" || previousCharacter === "\\") return null
 
+    if ((match[1] ?? "") === ":") {
+      // Colon directives are block-level own-line constructs, so a bare `:`
+      // in prose is punctuation: only trigger on a blank line (whitespace
+      // around the query is allowed for indented empty lines).
+      const beforeTrigger = beforeCaret.slice(0, triggerStart)
+      const afterCaret = line.text.slice(editor.selectionStart - line.from)
+      if (!/^\s*$/.test(beforeTrigger) || !/^\s*$/.test(afterCaret)) return null
+    }
+
     return {
       prefix: match[1] ?? "",
       text: (match[2] ?? "").toLowerCase(),
