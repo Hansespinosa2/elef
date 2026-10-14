@@ -33,6 +33,7 @@ test("the file library transport keeps native command names and payloads at the 
   await transport.pendingOpenedElefCount()
   await transport.confirmAppReady()
   await transport.exportDiagnostics()
+  await transport.printWork()
 
   assert.deepEqual(calls, [
     ["get_library_status", undefined],
@@ -53,7 +54,8 @@ test("the file library transport keeps native command names and payloads at the 
     ["resolve_import_conflict", { resolution: "keep_both" }],
     ["pending_open_elef_count", undefined],
     ["confirm_app_ready", undefined],
-    ["export_diagnostics", undefined]
+    ["export_diagnostics", undefined],
+    ["print_work", undefined]
   ])
 })
 
@@ -70,10 +72,12 @@ test("the stable file library transport keeps the base commands and omits the do
   await transport.listWorkFolders()
   await transport.readSourcePreview("work-id")
   await transport.exportDiagnostics()
+  await transport.printWork()
 
   assert.deepEqual(calls, [
     ["list_work_folders", undefined],
     ["read_work_folder_preview", { id: "work-id" }],
-    ["export_diagnostics", undefined]
+    ["export_diagnostics", undefined],
+    ["print_work", undefined]
   ])
 })

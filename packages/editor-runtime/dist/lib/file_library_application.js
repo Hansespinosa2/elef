@@ -912,10 +912,19 @@ function startFileLibraryApplication(platform) {
     }
     document.body.classList.add("printing-work");
     await new Promise((resolve) => requestAnimationFrame(resolve));
-    window.addEventListener("afterprint", () => {
+    try {
+      const printViaNative = typeof fileLibrary.printWork === "function";
+      if (printViaNative) await fileLibrary.printWork();
+      else window.print();
+      if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
+        globalThis.__elefPrintResult = { native: printViaNative };
+      }
+    } catch (error) {
+      console.error("[desktop-print]", error);
+      showNotice("The print dialog could not be opened.", "error");
+    } finally {
       document.body.classList.remove("printing-work");
-    }, { once: true });
-    window.print();
+    }
   }
   let presentationMount = null;
   function presentationStage() {

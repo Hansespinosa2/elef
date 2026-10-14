@@ -36,6 +36,7 @@ fn main() {
                 "confirm_app_ready",
                 "confirm_discard_unsaved_changes",
                 "export_diagnostics",
+                "print_work",
                 "record_preview_failure",
                 "record_bootstrap_failure",
                 $($extra),*

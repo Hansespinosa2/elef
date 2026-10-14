@@ -29,6 +29,7 @@ declare global {
   var __elefE2EControllerErrors: Array<Record<string, string>> | undefined;
   var __elefPreviewTrace: unknown[] | undefined;
   var __elefPresentationTestHooks: unknown;
+  var __elefPrintResult: { native: boolean } | undefined;
 }
 
 export {};
