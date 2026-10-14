@@ -1227,7 +1227,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
   // The Export menu holds one option per format (the PPTX option hides for
   // documents in syncSourceLabel). Desktop export never navigates, so the
-  // menu closes on activation, outside pointerdown, and Escape.
+  // menu closes on activation, outside interaction, and Escape.
   function closeExportMenu(): void {
     shellElement<HTMLDetailsElement>("#export-menu").open = false
   }
@@ -1241,9 +1241,14 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     closeExportMenu()
     void printCurrentWork()
   })
-  document.addEventListener("pointerdown", event => {
+  // Outside pointerdown dismisses immediately for mouse and touch; outside
+  // click also dismisses because activation without a pointer (keyboard,
+  // assistive tech, programmatic clicks) never fires pointerdown.
+  function dismissExportMenuOnOutsideEvent(event: Event): void {
     if (event.target instanceof Element && !event.target.closest("#export-menu")) closeExportMenu()
-  })
+  }
+  document.addEventListener("pointerdown", dismissExportMenuOnOutsideEvent)
+  document.addEventListener("click", dismissExportMenuOnOutsideEvent)
   document.addEventListener("keydown", event => {
     if (event.key === "Escape") closeExportMenu()
   })

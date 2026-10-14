@@ -1057,9 +1057,11 @@ function startFileLibraryApplication(platform) {
     closeExportMenu();
     void printCurrentWork();
   });
-  document.addEventListener("pointerdown", (event) => {
+  function dismissExportMenuOnOutsideEvent(event) {
     if (event.target instanceof Element && !event.target.closest("#export-menu")) closeExportMenu();
-  });
+  }
+  document.addEventListener("pointerdown", dismissExportMenuOnOutsideEvent);
+  document.addEventListener("click", dismissExportMenuOnOutsideEvent);
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") closeExportMenu();
   });

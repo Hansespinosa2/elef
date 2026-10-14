@@ -130,7 +130,7 @@ Capability keys come from the `HostCapabilities` interface
   Export PowerPoint… menu item call the desktop export seam
   (`exportPptx` on the file-library transport); the PDF option (both
   kinds) reuses the File → Print… seam (`printCurrentWork`). The menu
-  closes on activation, outside pointerdown, and Escape.
+  closes on activation, outside pointerdown or click, and Escape.
 - Media resolution differs by necessity, bytes match by policy: the webview
   cannot fetch media (desktop CSP restricts `connect-src` to IPC), so the
   desktop `prepareMedia` seam resolves local `elefasset://` bytes through
