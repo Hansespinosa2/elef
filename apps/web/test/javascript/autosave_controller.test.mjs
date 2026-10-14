@@ -1,0 +1,882 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+import { readFile } from "node:fs/promises"
+
+const workSessionUrl = import.meta.resolve("@elef/client")
+const conflictDialogSource = await readFile(new URL("../../../../packages/editor-runtime/dist/lib/conflict_dialog.js", import.meta.url), "utf8")
+const conflictDialogUrl = `data:text/javascript;base64,${Buffer.from(conflictDialogSource).toString("base64")}`
+const source = (await readFile(new URL("../../app/javascript/controllers/autosave_controller.js", import.meta.url), "utf8"))
+  .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
+  .replace('import { createWorkSession } from "@elef/client"', `import { createWorkSession } from "${workSessionUrl}"`)
+  .replace('import { presentConflictDialog } from "@elef/editor-runtime"', `const { presentConflictDialog } = await import("${conflictDialogUrl}")`)
+  .replace('import { editorFor } from "@elef/editor-runtime"', "const editorFor = () => null")
+  .replace('import { applyEditorSource } from "@elef/editor-runtime"', "const applyEditorSource = async () => true")
+  .replace('import { waitForEditorController } from "@elef/editor-runtime"', "const waitForEditorController = async () => null")
+const autosave = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
+
+test("the Rails transport saves the live editor source without requesting a source commit", async () => {
+  const dispatchedEvents = []
+  const sourceField = {
+    value: "$x.b$",
+    dispatchEvent(event) {
+      dispatchedEvents.push(event.type)
+      if (event.type === "elef:before-save") this.value = "$\\mathbf{x}$"
+    }
+  }
+  const form = {
+    action: "/documents/1/autosave",
+    dispatchEvent(event) { dispatchedEvents.push(event.type) },
+    querySelector: (selector) => selector === ".source-field" ? sourceField : null,
+  }
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: form,
+    fieldTargets: [sourceField],
+    active: true,
+    saveEnabledValue: true,
+    timeoutValue: 10000,
+    persistLocalDraft: async () => true,
+    updateRevisionTokens: () => {},
+    setStatus: () => {},
+    synchronizeCanonicalSource: () => {},
+    currentSource: () => sourceField.value,
+    sourceField: () => sourceField
+  })
+
+  const originalFetch = globalThis.fetch
+  const originalFormData = globalThis.FormData
+  const originalDocument = globalThis.document
+  const originalCustomEvent = globalThis.CustomEvent
+  globalThis.fetch = async () => ({ ok: true, status: 200, json: async () => ({ source: "$x.b$" }) })
+  globalThis.FormData = class {
+    constructor() { this.values = new Map() }
+    set(name, value) { this.values.set(name, value) }
+  }
+  globalThis.document = { querySelector: () => null }
+  globalThis.CustomEvent = class { constructor(type) { this.type = type } }
+
+  try {
+    const result = await controller.saveToRails("work-1", "$x.b$")
+    assert.equal(result.source, "$x.b$")
+    assert.equal(result.snapshot, "$x.b$")
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.FormData = originalFormData
+    globalThis.document = originalDocument
+    globalThis.CustomEvent = originalCustomEvent
+  }
+
+  assert.equal(sourceField.value, "$x.b$")
+  assert.equal(dispatchedEvents.includes("elef:before-save"), false)
+})
+
+test("Rails autosave rebuilds its payload after recovery storage finishes", async () => {
+  const sourceField = { name: "presentation[source]", value: "# Before" }
+  const titleField = { name: "presentation[title]", value: "Before" }
+  let releaseDraft
+  const pendingDraft = new Promise(resolve => { releaseDraft = resolve })
+  let requestBody
+  const form = {
+    action: "/presentations/1",
+    querySelector: selector => selector === '[name$="[source]"]' ? sourceField : null,
+    dispatchEvent() {}
+  }
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: form,
+    fieldTargets: [sourceField, titleField],
+    active: true,
+    saveEnabledValue: true,
+    timeoutValue: 10_000,
+    recoveryTimeoutValue: 2_000,
+    persistLocalDraft: () => pendingDraft,
+    materializeEditorEdits() {},
+    updateRevisionTokens() {},
+    setStatus() {},
+    currentSource: () => sourceField.value,
+    sourceField: () => sourceField,
+    synchronizeCanonicalSource() {}
+  })
+
+  const originalFetch = globalThis.fetch
+  const originalFormData = globalThis.FormData
+  const originalDocument = globalThis.document
+  const originalCustomEvent = globalThis.CustomEvent
+  globalThis.fetch = async (_url, options) => {
+    requestBody = options.body
+    return { ok: true, status: 200, json: async () => ({ source: "# After", revision_token: "r2" }) }
+  }
+  globalThis.FormData = class {
+    constructor() {
+      this.values = new Map(controller.fieldTargets.map(field => [field.name, field.value]))
+    }
+    set(name, value) { this.values.set(name, value) }
+    get(name) { return this.values.get(name) }
+  }
+  globalThis.document = { querySelector: () => null }
+  globalThis.CustomEvent = class { constructor(type) { this.type = type } }
+
+  try {
+    const saving = controller.saveToRails("# Before", "# Before\u001fBefore")
+    await Promise.resolve()
+    sourceField.value = "# After"
+    titleField.value = "After"
+    releaseDraft(true)
+    const result = await saving
+    assert.equal(requestBody.get(sourceField.name), "# After")
+    assert.equal(requestBody.get(titleField.name), "After")
+    assert.equal(result.snapshot, "# After\u001fAfter")
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.FormData = originalFormData
+    globalThis.document = originalDocument
+    globalThis.CustomEvent = originalCustomEvent
+  }
+})
+
+test("a stalled browser recovery store does not hold the autosave transport", async () => {
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    recoveryTimeoutValue: 5,
+    snapshot: () => "source",
+    persistLocalDraft: () => new Promise(() => {})
+  })
+
+  assert.equal(await controller.persistDraftBeforeSave(), false)
+})
+
+test("a stalled PATCH times out, aborts the request, and warns when recovery storage failed", async () => {
+  const sourceField = { name: "presentation[source]", value: "# Keep this" }
+  const form = {
+    action: "/presentations/1",
+    querySelector: selector => selector === '[name$="[source]"]' ? sourceField : null
+  }
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: form,
+    fieldTargets: [sourceField],
+    active: true,
+    saveEnabledValue: true,
+    timeoutValue: 5,
+    recoveryTimeoutValue: 1,
+    persistLocalDraft: async () => false,
+    materializeEditorEdits() {},
+    updateRevisionTokens() {},
+    setStatus() {},
+    currentSource: () => sourceField.value,
+    sourceField: () => sourceField
+  })
+
+  const originalFetch = globalThis.fetch
+  const originalFormData = globalThis.FormData
+  const originalDocument = globalThis.document
+  let requestSignal
+  globalThis.fetch = async (_url, options) => {
+    requestSignal = options.signal
+    return new Promise(() => {})
+  }
+  globalThis.FormData = class {
+    set() {}
+  }
+  globalThis.document = { querySelector: () => null }
+
+  try {
+    await assert.rejects(controller.saveToRails("# Keep this", "# Keep this"), error => {
+      assert.equal(error.code, "timeout")
+      assert.equal(error.retryable, true)
+      assert.match(error.message, /Browser recovery is unavailable/)
+      assert.match(error.message, /copy your changes before leaving/)
+      return true
+    })
+    assert.equal(requestSignal.aborted, true)
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.FormData = originalFormData
+    globalThis.document = originalDocument
+  }
+})
+
+test("Rails autosave uses the shared state machine for source and metadata snapshots", async () => {
+  const sourceField = { name: "presentation[source]", value: "# Start" }
+  const titleField = { name: "presentation[title]", value: "Start" }
+  const calls = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    delayValue: 1000,
+    fieldTargets: [sourceField, titleField],
+    flowWorkId: "presentation-1",
+    currentSource: () => sourceField.value,
+    currentRevisionBaseline: () => "revision-1",
+    snapshot: () => [sourceField.value, titleField.value].join("\u001f"),
+    saveToRails: async (value, snapshot) => {
+      calls.push({ value, snapshot })
+      return { content_hash: "next-version", source: value, snapshot }
+    },
+    acceptDiskVersion() {},
+    applyExternalSource: async () => true,
+    handleSaveState() {},
+    handleSaveConflict() {},
+    materializeEditorEdits() {}
+  })
+  controller.flow = controller.createSession()
+  titleField.value = "Updated title"
+  controller.flow.noteChange()
+
+  assert.equal((await controller.flow.flush({ force: true })).kind, "saved")
+  assert.deepEqual(calls, [{ value: "# Start", snapshot: "# Start\u001fUpdated title" }])
+  assert.equal(controller.flow.dirty, false)
+  assert.equal((await controller.flow.flush({ force: true })).kind, "clean")
+  assert.equal(calls.length, 1)
+})
+
+test("CRLF responses settle against the browser's normalized source snapshot", async () => {
+  const source = "# Before\n\nText."
+  const sourceWithCrLf = source.replace(/\n/g, "\r\n")
+  const sourceField = { name: "presentation[source]", value: source }
+  const titleField = { name: "presentation[title]", value: "Before" }
+  const form = {
+    action: "/presentations/1",
+    querySelector: selector => selector === '[name$="[source]"]' ? sourceField : null,
+    dispatchEvent() {}
+  }
+  const controller = new autosave.default()
+  let requestCount = 0
+  Object.assign(controller, {
+    element: form,
+    delayValue: 1000,
+    fieldTargets: [sourceField, titleField],
+    active: true,
+    saveEnabledValue: true,
+    timeoutValue: 1000,
+    recoveryTimeoutValue: 1,
+    persistLocalDraft: async () => true,
+    updateRevisionTokens() {},
+    setStatus() {},
+    materializeEditorEdits() {},
+    flowWorkId: "presentation-1",
+    currentSource: () => sourceWithCrLf,
+    currentRevisionBaseline: () => "revision-1",
+    snapshot: () => [sourceField.value, titleField.value].join("\u001f"),
+    sourceField: () => sourceField,
+    synchronizeCanonicalSource: savedSource => {
+      sourceField.value = savedSource.replace(/\r\n?/g, "\n")
+    }
+  })
+  controller.flow = controller.createSession()
+
+  const originalFetch = globalThis.fetch
+  const originalFormData = globalThis.FormData
+  const originalDocument = globalThis.document
+  const originalCustomEvent = globalThis.CustomEvent
+  globalThis.fetch = async () => {
+    requestCount += 1
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ source: sourceWithCrLf, revision_token: "revision-2" })
+    }
+  }
+  globalThis.FormData = class {
+    constructor() { this.values = new Map(controller.fieldTargets.map(field => [field.name, field.value])) }
+    set(name, value) { this.values.set(name, value) }
+  }
+  globalThis.document = { querySelector: () => null }
+  globalThis.CustomEvent = class { constructor(type) { this.type = type } }
+
+  try {
+    titleField.value = "Updated title"
+    controller.flow.noteChange()
+    assert.equal((await controller.flow.flush({ force: true })).kind, "saved", controller.lastSaveError?.stack)
+    assert.equal(controller.flow.dirty, false)
+    assert.equal(requestCount, 1)
+    assert.equal((await controller.flow.flush({ force: true })).kind, "clean")
+    assert.equal(requestCount, 1)
+  } finally {
+    globalThis.fetch = originalFetch
+    globalThis.FormData = originalFormData
+    globalThis.document = originalDocument
+    globalThis.CustomEvent = originalCustomEvent
+  }
+})
+
+test("Rails revision conflicts resolve through the shared flow without requiring a file hash", async () => {
+  const sourceField = { name: "document[source]", value: "original" }
+  const titleField = { name: "document[title]", value: "Initial title" }
+  const themeField = { name: "document[theme]", value: "light" }
+  const typographyField = { name: "document[typography]", value: "book" }
+  const accepted = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    delayValue: 1000,
+    fieldTargets: [sourceField, titleField, themeField, typographyField],
+    currentSource: () => sourceField.value,
+    snapshot: () => [sourceField.value, titleField.value, themeField.value, typographyField.value].join("\u001f"),
+    saveToRails: async () => {
+      throw Object.assign(new Error("The work changed."), {
+        code: "conflict",
+        details: {
+          message: "The work changed.",
+          current: { source: "disk", title: "Disk title", theme: null, typography: "technical", revision_token: "opaque-revision-2", lock_version: 2 }
+        }
+      })
+    },
+    updateRevisionTokens: current => accepted.push(current.revision_token),
+    applyExternalSource: async source => {
+      sourceField.value = source
+      titleField.value = "Disk title"
+      themeField.value = ""
+      typographyField.value = "technical"
+      return true
+    },
+    handleSaveState() {},
+    handleSaveConflict(conflict) {
+      this.conflictPayload = { current: conflict.current, message: conflict.message }
+    },
+    materializeEditorEdits() {}
+  })
+  controller.flowWorkId = "document-1"
+  controller.currentRevisionBaseline = () => "opaque-revision-1"
+  controller.flow = controller.createSession()
+  sourceField.value = "local"
+  titleField.value = "Local title"
+  controller.flow.noteChange()
+
+  assert.equal((await controller.flow.flush({ force: true })).kind, "conflict")
+  assert.equal(controller.flow.conflict.diskHash, "opaque-revision-2")
+  assert.equal(await controller.flow.useDiskVersion(), true)
+  assert.equal(sourceField.value, "disk")
+  assert.equal(titleField.value, "Disk title")
+  assert.equal(themeField.value, "")
+  assert.equal(typographyField.value, "technical")
+  assert.deepEqual(accepted, ["opaque-revision-2"])
+  assert.equal(controller.flow.dirty, false)
+})
+
+test("merged Rails text saves local metadata against the disk metadata baseline", async () => {
+  const sourceField = { name: "presentation[source]", value: "original" }
+  const titleField = { name: "presentation[title]", value: "Initial title" }
+  const calls = []
+  let conflictOnce = true
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    delayValue: 1000,
+    fieldTargets: [sourceField, titleField],
+    currentSource: () => sourceField.value,
+    snapshot: () => [sourceField.value, titleField.value].join("\u001f"),
+    saveToRails: async (source, snapshot) => {
+      calls.push({ source, snapshot })
+      if (conflictOnce) {
+        conflictOnce = false
+        throw Object.assign(new Error("The work changed."), {
+          code: "conflict",
+          details: {
+            message: "The work changed.",
+            current: { source: "disk", title: "Disk title", revision_token: "opaque-revision-2" }
+          }
+        })
+      }
+      return { content_hash: "opaque-revision-3", source, snapshot }
+    },
+    updateRevisionTokens() {},
+    applyExternalSource: async (source, { preserveMetadata = false } = {}) => {
+      sourceField.value = source
+      if (!preserveMetadata) titleField.value = "Disk title"
+      return true
+    },
+    handleSaveState() {},
+    handleSaveConflict(conflict) {
+      this.conflictPayload = { current: conflict.current, message: conflict.message }
+    },
+    materializeEditorEdits() {}
+  })
+  controller.flowWorkId = "presentation-1"
+  controller.currentRevisionBaseline = () => "opaque-revision-1"
+  controller.flow = controller.createSession()
+  sourceField.value = "local"
+  titleField.value = "Local title"
+  controller.flow.noteChange()
+
+  assert.equal((await controller.flow.flush({ force: true })).kind, "conflict")
+  assert.equal(await controller.flow.saveMergedVersion("disk"), true)
+  assert.ok(["saved", "clean"].includes((await controller.flow.flush({ force: true })).kind))
+  assert.deepEqual(calls, [
+    { source: "local", snapshot: "local\u001fLocal title" },
+    { source: "disk", snapshot: "disk\u001fLocal title" }
+  ])
+  assert.equal(controller.flow.dirty, false)
+})
+
+test("a style-only Rails conflict still saves local appearance overrides after merging unchanged text", async () => {
+  const fields = [
+    { name: "presentation[source]", value: "same source" },
+    { name: "presentation[title]", value: "Work" },
+    { name: "presentation[theme]", value: "" },
+    { name: "presentation[typography]", value: "" }
+  ]
+  const calls = []
+  let conflictOnce = true
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    delayValue: 1000,
+    fieldTargets: fields,
+    currentSource: () => fields[0].value,
+    snapshot: () => fields.map(field => field.value).join("\u001f"),
+    saveToRails: async (source, snapshot) => {
+      calls.push({ source, snapshot })
+      if (conflictOnce) {
+        conflictOnce = false
+        throw Object.assign(new Error("The work changed."), {
+          code: "conflict",
+          details: {
+            message: "The work changed.",
+            current: { source: "same source", title: "Work", theme: "dark", typography: "technical", revision_token: "opaque-revision-2" }
+          }
+        })
+      }
+      return { content_hash: "opaque-revision-3", source, snapshot }
+    },
+    updateRevisionTokens() {},
+    applyExternalSource: async (source, { preserveMetadata = false } = {}) => {
+      fields[0].value = source
+      if (!preserveMetadata) {
+        fields[1].value = "Work"
+        fields[2].value = "dark"
+        fields[3].value = "technical"
+      }
+      return true
+    },
+    handleSaveState() {},
+    handleSaveConflict(conflict) {
+      this.conflictPayload = { current: conflict.current, message: conflict.message }
+    },
+    materializeEditorEdits() {}
+  })
+  controller.flowWorkId = "presentation-1"
+  controller.currentRevisionBaseline = () => "opaque-revision-1"
+  controller.flow = controller.createSession()
+  fields[2].value = "light"
+  controller.flow.noteChange()
+
+  assert.equal((await controller.flow.flush({ force: true })).kind, "conflict")
+  assert.equal(await controller.flow.saveMergedVersion("same source"), true)
+  assert.ok(["saved", "clean"].includes((await controller.flow.flush({ force: true })).kind))
+  assert.deepEqual(calls, [
+    { source: "same source", snapshot: "same source\u001fWork\u001flight\u001f" },
+    { source: "same source", snapshot: "same source\u001fWork\u001flight\u001f" }
+  ])
+  assert.equal(controller.flow.dirty, false)
+})
+
+function draftRecoveryFixture() {
+  const sourceField = {
+    name: "presentation[source]",
+    value: "# Original",
+    dispatched: [],
+    dispatchEvent(event) { this.dispatched.push(event.type) }
+  }
+  const listeners = new Map()
+  const editorHost = {
+    editorController: null,
+    addEventListener(type, listener) { listeners.set(type, listener) },
+    removeEventListener(type, listener) {
+      if (listeners.get(type) === listener) listeners.delete(type)
+    }
+  }
+  const status = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    active: true,
+    localDraftKey: "presentation:1:identity",
+    fieldTargets: [sourceField],
+    element: { querySelector: selector => selector === ".source-field" ? editorHost : null },
+    readDraft: async () => ({
+      key: "presentation:1:identity",
+      snapshot: "# Offline edit",
+      values: ["# Offline edit"],
+      updatedAt: 1
+    }),
+    clearSaveTimer() {},
+    scheduleSave() {},
+    setStatus: text => status.push(text)
+  })
+
+  return { controller, editorHost, listeners, sourceField, status }
+}
+
+test("draft recovery waits for the live editor before restoring source input", async () => {
+  const { controller, editorHost, listeners, sourceField, status } = draftRecoveryFixture()
+  const restoring = controller.restoreLocalDraft()
+  await Promise.resolve()
+  assert.equal(controller.editorReadyCleanup instanceof Function, true)
+  assert.equal(sourceField.value, "# Original")
+
+  editorHost.editorController = {}
+  listeners.get("elef:editor-ready")()
+  await restoring
+
+  assert.equal(sourceField.value, "# Offline edit")
+  assert.deepEqual(sourceField.dispatched, ["input"])
+  assert.deepEqual(status, ["Recovered unsent changes"])
+  assert.equal(controller.editorReadyCleanup, null)
+})
+
+test("draft recovery leaves edits made while the editor connects untouched", async () => {
+  const { controller, editorHost, listeners, sourceField, status } = draftRecoveryFixture()
+  const restoring = controller.restoreLocalDraft()
+  await Promise.resolve()
+
+  sourceField.value = "# New user edit"
+  editorHost.editorController = {}
+  listeners.get("elef:editor-ready")()
+  await restoring
+
+  assert.equal(sourceField.value, "# New user edit")
+  assert.deepEqual(sourceField.dispatched, [])
+  assert.deepEqual(status, [])
+})
+
+test("draft reads fall back to local storage when IndexedDB throws", async () => {
+  const record = {
+    key: "presentation:1:identity",
+    snapshot: "# Browser copy",
+    values: ["Storage fallback", "# Browser copy"],
+    updatedAt: 123
+  }
+  const originalWindow = globalThis.window
+  globalThis.window = {
+    localStorage: { getItem: key => key === "draft-key" ? JSON.stringify(record) : null }
+  }
+
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    database: Promise.resolve({ transaction() { throw new Error("IndexedDB unavailable") } }),
+    storageKey: () => "draft-key"
+  })
+
+  try {
+    assert.deepEqual(await controller.readDraft(record.key), record)
+  } finally {
+    globalThis.window = originalWindow
+  }
+})
+
+test("typing during a Rails conflict preserves the conflict message", () => {
+  const sourceField = { name: "document[source]", value: "local edit" }
+  const status = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    fieldTargets: [sourceField],
+    conflictPayload: { message: "The disk version changed." },
+    flow: { conflict: {} },
+    persistLocalDraft: async () => true,
+    setStatus: (message, state) => status.push({ message, state })
+  })
+
+  controller.schedule()
+
+  assert.deepEqual(status, [{ message: "The disk version changed.", state: "conflict" }])
+})
+
+test("autosave conflict review presents both byte versions and starts the merge with local text", () => {
+  const nodes = new Map([
+    ["#conflict-message", { textContent: "" }],
+    ["#conflict-local", { textContent: "" }],
+    ["#conflict-disk", { textContent: "" }],
+    ["#conflict-source-name", { textContent: "" }],
+    ["#conflict-merge", { value: "" }]
+  ])
+  const dialog = { open: false, querySelector(selector) { return nodes.get(selector) }, showModal() { this.open = true } }
+  const sourceField = { value: "local <draft>" }
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: { querySelector: () => sourceField },
+    hasConflictTarget: true,
+    conflictTarget: dialog,
+    hasConflictMessageTarget: true,
+    hasLocalSourceTarget: true,
+    hasServerSourceTarget: true,
+    hasMergeSourceTarget: true
+  })
+
+  controller.showConflict({ message: "A newer version is active.", current: { source: "disk <edit>" } })
+
+  assert.equal(dialog.open, true)
+  assert.equal(nodes.get("#conflict-local").textContent, "local <draft>")
+  assert.equal(nodes.get("#conflict-disk").textContent, "disk <edit>")
+  assert.equal(nodes.get("#conflict-merge").value, "local <draft>")
+  assert.equal(nodes.get("#conflict-message").textContent, "A newer version is active.")
+})
+
+test("a Turbo revisit to a new-work form restores the unsent draft instead of discarding it", async () => {
+  const sourceField = {
+    name: "document[source]",
+    value: "",
+    dispatched: [],
+    dispatchEvent(event) { this.dispatched.push(event.type) }
+  }
+  const editorHost = { editorController: {}, dataset: {} }
+  const deletedKeys = []
+  const status = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: { querySelector: () => editorHost },
+    fieldTargets: [sourceField],
+    hasWorkKindValue: true,
+    workKindValue: "document",
+    hasWorkIdValue: false,
+    delayValue: 900,
+    openDatabase: () => null,
+    createSession: () => ({ dispose() {} }),
+    attachSessionToEditor() {},
+    readDraft: async key => {
+      assert.equal(key, "document:new:/documents/new:tab-1")
+      return {
+        key,
+        snapshot: "# Unsent new draft",
+        values: ["# Unsent new draft"],
+        updatedAt: Date.now()
+      }
+    },
+    deleteDraft: async key => { deletedKeys.push(key); return true },
+    scheduleSave() {},
+    setStatus: text => status.push(text)
+  })
+
+  const originalWindow = globalThis.window
+  globalThis.window = {
+    location: { pathname: "/documents/new" },
+    sessionStorage: { getItem: () => "tab-1", setItem: () => {} },
+    // Turbo Drive visits create no navigation entries, so this entry is the
+    // stale one from the initial full page load — exactly what used to wipe
+    // the draft on every Turbo revisit.
+    performance: { getEntriesByType: () => [{ type: "navigate" }] }
+  }
+
+  try {
+    controller.connect()
+    for (let i = 0; i < 50 && sourceField.value === ""; i++) await Promise.resolve()
+
+    assert.deepEqual(deletedKeys, [])
+    assert.equal(sourceField.value, "# Unsent new draft")
+    assert.deepEqual(sourceField.dispatched, ["input"])
+    assert.deepEqual(status, ["Recovered unsent changes"])
+  } finally {
+    globalThis.window = originalWindow
+  }
+})
+
+test("new-work drafts older than a week are discarded instead of restored", async () => {
+  const sourceField = {
+    name: "document[source]",
+    value: "",
+    dispatched: [],
+    dispatchEvent(event) { this.dispatched.push(event.type) }
+  }
+  const deletedKeys = []
+  const status = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    active: true,
+    isNewWork: true,
+    localDraftKey: "document:new:/documents/new:tab-1",
+    legacyLocalDraftKey: "document:new:/documents/new",
+    fieldTargets: [sourceField],
+    snapshot: () => sourceField.value,
+    readDraft: async () => ({
+      key: "document:new:/documents/new:tab-1",
+      snapshot: "# Ancient draft",
+      values: ["# Ancient draft"],
+      updatedAt: Date.now() - 8 * 24 * 60 * 60 * 1000
+    }),
+    deleteDraft: async key => { deletedKeys.push(key); return true },
+    scheduleSave() {},
+    setStatus: text => status.push(text)
+  })
+
+  await controller.restoreLocalDraft()
+
+  assert.deepEqual(deletedKeys, ["document:new:/documents/new:tab-1"])
+  assert.equal(sourceField.value, "")
+  assert.deepEqual(sourceField.dispatched, [])
+  assert.deepEqual(status, [])
+})
+
+test("new-work restore adopts a legacy global draft once", async () => {
+  const sourceField = {
+    name: "document[source]",
+    value: "",
+    dispatched: [],
+    dispatchEvent(event) { this.dispatched.push(event.type) }
+  }
+  const editorHost = { editorController: {}, dataset: {} }
+  const sessionKey = "document:new:/documents/new:tab-1"
+  const legacyKey = "document:new:/documents/new"
+  const reads = []
+  const written = []
+  const deletedKeys = []
+  const status = []
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    active: true,
+    isNewWork: true,
+    localDraftKey: sessionKey,
+    legacyLocalDraftKey: legacyKey,
+    element: { querySelector: () => editorHost },
+    fieldTargets: [sourceField],
+    snapshot: () => sourceField.value,
+    readDraft: async key => {
+      reads.push(key)
+      if (key === sessionKey) return null
+      return { key: legacyKey, snapshot: "# Legacy draft", values: ["# Legacy draft"], updatedAt: Date.now() }
+    },
+    writeDraft: async record => { written.push(record); return true },
+    deleteDraft: async key => { deletedKeys.push(key); return true },
+    scheduleSave() {},
+    setStatus: text => status.push(text)
+  })
+
+  await controller.restoreLocalDraft()
+
+  assert.deepEqual(reads, [sessionKey, legacyKey])
+  assert.equal(sourceField.value, "# Legacy draft")
+  assert.deepEqual(status, ["Recovered unsent changes"])
+  assert.deepEqual(written.map(record => record.key), [sessionKey])
+  assert.deepEqual(deletedKeys, [legacyKey])
+})
+
+test("new-work draft keys are scoped per browser tab", () => {
+  const connectWithToken = (token) => {
+    const readKeys = []
+    const controller = new autosave.default()
+    Object.assign(controller, {
+      element: { querySelector: () => null },
+      fieldTargets: [],
+      hasWorkKindValue: true,
+      workKindValue: "document",
+      hasWorkIdValue: false,
+      openDatabase: () => null,
+      createSession: () => ({ dispose() {} }),
+      attachSessionToEditor() {},
+      snapshot: () => "",
+      readDraft: async key => { readKeys.push(key); return null }
+    })
+    globalThis.window = {
+      location: { pathname: "/documents/new" },
+      sessionStorage: { getItem: () => token, setItem: () => {} }
+    }
+    controller.connect()
+    return { controller, readKeys }
+  }
+
+  const originalWindow = globalThis.window
+  try {
+    const first = connectWithToken("tab-1")
+    const second = connectWithToken("tab-2")
+    const again = connectWithToken("tab-1")
+
+    assert.equal(first.controller.localDraftKey, "document:new:/documents/new:tab-1")
+    assert.equal(second.controller.localDraftKey, "document:new:/documents/new:tab-2")
+    assert.equal(again.controller.localDraftKey, "document:new:/documents/new:tab-1")
+    assert.deepEqual(first.readKeys, ["document:new:/documents/new:tab-1"])
+    assert.deepEqual(second.readKeys, ["document:new:/documents/new:tab-2"])
+  } finally {
+    globalThis.window = originalWindow
+  }
+})
+
+test("new-work drafts fall back to a shared key when session storage throws", () => {
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: { querySelector: () => null },
+    fieldTargets: [],
+    hasWorkKindValue: true,
+    workKindValue: "document",
+    hasWorkIdValue: false,
+    openDatabase: () => null,
+    createSession: () => ({ dispose() {} }),
+    attachSessionToEditor() {},
+    snapshot: () => "",
+    readDraft: async () => null
+  })
+
+  const originalWindow = globalThis.window
+  globalThis.window = {
+    location: { pathname: "/documents/new" },
+    sessionStorage: {
+      getItem: () => { throw new Error("denied") },
+      setItem: () => { throw new Error("denied") }
+    }
+  }
+
+  try {
+    controller.connect()
+    assert.equal(controller.localDraftKey, "document:new:/documents/new:shared")
+  } finally {
+    globalThis.window = originalWindow
+  }
+})
+
+function submitFixture() {
+  const listeners = {}
+  const deletedKeys = []
+  const form = { addEventListener: (type, listener) => { listeners[type] = listener } }
+  const controller = new autosave.default()
+  Object.assign(controller, {
+    element: form,
+    saveEnabledValue: false,
+    localDraftKey: "document:new:/documents/new:tab-1",
+    deleteDraft: async key => { deletedKeys.push(key); return true }
+  })
+  return { controller, listeners, deletedKeys }
+}
+
+test("submit clears the new-work draft only after a successful create", () => {
+  const originalWindow = globalThis.window
+  globalThis.window = { Turbo: {} }
+
+  try {
+    const failed = submitFixture()
+    failed.controller.submit({})
+    assert.deepEqual(failed.deletedKeys, [])
+    assert.equal(typeof failed.listeners["turbo:submit-end"], "function")
+    failed.listeners["turbo:submit-end"]({ detail: { success: false } })
+    assert.deepEqual(failed.deletedKeys, [])
+
+    const succeeded = submitFixture()
+    succeeded.controller.submit({})
+    succeeded.listeners["turbo:submit-end"]({ detail: { success: true } })
+    assert.deepEqual(succeeded.deletedKeys, ["document:new:/documents/new:tab-1"])
+  } finally {
+    globalThis.window = originalWindow
+  }
+})
+
+test("submit without Turbo clears immediately", () => {
+  const originalWindow = globalThis.window
+  globalThis.window = {}
+
+  try {
+    const { controller, listeners, deletedKeys } = submitFixture()
+    controller.submit({})
+    assert.deepEqual(deletedKeys, ["document:new:/documents/new:tab-1"])
+    assert.deepEqual(Object.keys(listeners), [])
+  } finally {
+    globalThis.window = originalWindow
+  }
+})
+
+test("autosave delegates merged conflict text to the shared save flow", () => {
+  const controller = new autosave.default()
+  let merged = null
+  controller.flow = {
+    conflict: { diskSource: "disk" },
+    saveMergedVersion(value) { merged = value; return true }
+  }
+  Object.assign(controller, {
+    hasMergeSourceTarget: true,
+    mergeSourceTarget: { value: "combined" }
+  })
+
+  assert.equal(controller.saveMergedVersion(), true)
+  assert.equal(merged, "combined")
+})

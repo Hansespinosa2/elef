@@ -1,0 +1,20 @@
+/*
+  Tailwind utilities are for one-off layout and spacing in markup. Use component
+  classes for repeated patterns. Add styles in the matching partial and layer.
+  Never add !important to beat a utility; fix the layer instead.
+*/
+@layer elef-tokens, elef-base, elef-themes, elef-typography, elef-components, elef-utilities;
+
+@import url("./tokens.css") layer(elef-tokens);
+@import url("./base.css") layer(elef-base);
+@import url("./components/editor.css") layer(elef-components);
+@import url("./components/chrome.css") layer(elef-components);
+@import url("./themes.css") layer(elef-themes);
+@import url("./typography.css") layer(elef-typography);
+@import url("./components/slides.css") layer(elef-components);
+@import url("./components/code.css") layer(elef-components);
+@import url("./components/library.css") layer(elef-components);
+@import url("./components/documents.css") layer(elef-components);
+@import url("./components/art.css") layer(elef-components);
+@import url("./components/settings.css") layer(elef-components);
+@import url("./utilities.css") layer(elef-utilities);

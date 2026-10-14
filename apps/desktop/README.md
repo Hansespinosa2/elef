@@ -1,0 +1,27 @@
+# Elef Desktop
+
+Reach for when: working in the desktop shell, adapters, or e2e harness.
+
+This directory contains the Tauri shell and file-backed runtime. Shared product UI and behavior live in `packages/client` (React) and `packages/editor-runtime` (Stimulus editor shell); both hosts consume those packages through their public entries, and no host imports from the other host. See the [architecture map](../../docs/architecture.md) and [development guide](../../docs/development.md).
+
+## Local use
+
+For setup, artifact testing, and checks, see the [development guide](../../docs/development.md).
+
+~~~sh
+npm ci
+npm test
+npm run build
+npm run tauri:dev
+~~~
+
+These commands run from apps/desktop/frontend. The configured Tauri dev and production hooks build the shared packages before opening the app.
+
+## Structure
+
+- src-tauri builds on the shared crates/local-store core for Tauri-independent work folder and archive operations.
+- src-tauri: native command boundary, capabilities, menus, lifecycle, and updater integration.
+- frontend/src: Tauri bootstrap and native transport adapters.
+- e2e: shared Playwright web and WebdriverIO desktop scenarios.
+
+CI runs native app scenarios on Linux and macOS. For the full checks and safe local test setup, follow the development guide.

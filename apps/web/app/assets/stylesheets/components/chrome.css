@@ -1,0 +1,232 @@
+.command-palette-root { position: relative; }
+
+/* ── triggers ── */
+.command-palette-triggers { align-items: center; display: flex; gap: 0.45rem; }
+.command-palette-trigger { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 700; padding: 0.48rem 0.75rem; }
+.command-palette-trigger:hover, .command-palette-trigger:focus-visible { border-color: var(--oradia-green); color: var(--oradia-ink); }
+.command-palette-trigger kbd { border: 1px solid var(--oradia-slate-700); border-radius: 0.3rem; font-family: var(--oradia-mono); font-size: 0.7rem; margin-left: 0.35rem; padding: 0.1rem 0.3rem; }
+
+/* ── bug reports ── */
+.bug-report-root { align-items: center; display: flex; flex: 0 1 auto; gap: 0.65rem; max-width: 34rem; }
+.bug-report-trigger { background: var(--oradia-green-deep); border: 1px solid var(--oradia-green-deep); border-radius: 999px; color: #f5faf5; cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 800; padding: 0.48rem 0.8rem; }
+.bug-report-trigger:hover, .bug-report-trigger:focus-visible { background: var(--oradia-green); border-color: var(--oradia-green); color: var(--oradia-slate-950); }
+.bug-report-disclosure { background: var(--oradia-slate-800); border-left: 3px solid var(--oradia-green); border-radius: 0.35rem; color: var(--oradia-ink); flex: 1 1 auto; font-size: 0.72rem; line-height: 1.4; margin: 0; max-width: 25rem; padding: 0.45rem 0.55rem; }
+.bug-report-dialog { background: transparent; border: 0; color: var(--oradia-ink); max-height: calc(100dvh - 2rem); max-width: calc(100vw - 2rem); overflow: auto; padding: 0; width: min(44rem, calc(100vw - 2rem)); }
+.bug-report-dialog::backdrop { background: rgba(0, 0, 0, 0.62); backdrop-filter: blur(3px); }
+.conflict-dialog {
+  background: var(--oradia-slate-900);
+  border: 1px solid var(--oradia-line);
+  border-radius: 1rem;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+  color: var(--oradia-ink);
+  margin: auto;
+  max-height: min(90vh, 60rem);
+  max-width: calc(100vw - 2rem);
+  overflow: auto;
+  padding: clamp(1rem, 3vw, 1.75rem);
+  width: 62rem;
+}
+.conflict-dialog::backdrop { background: rgba(0, 0, 0, 0.68); backdrop-filter: blur(3px); }
+.conflict-eyebrow { color: var(--oradia-green); font-size: 0.68rem; font-weight: 800; letter-spacing: 0.14em; margin: 0 0 0.55rem; }
+.conflict-content h2 { margin: 0; }
+.conflict-explanation { color: var(--oradia-muted); font-size: 0.8rem; line-height: 1.55; }
+.conflict-columns { display: grid; gap: 0.9rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 1rem; }
+.conflict-columns h3 { font-size: 0.75rem; margin: 0 0 0.45rem; }
+.conflict-source {
+  background: var(--oradia-slate-950);
+  border: 1px solid var(--oradia-line);
+  border-radius: 0.55rem;
+  color: var(--oradia-ink);
+  font: 0.72rem/1.55 var(--oradia-mono);
+  margin: 0;
+  max-height: 34vh;
+  min-height: 8rem;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+}
+.merge-label { color: var(--oradia-muted); display: block; font-size: 0.72rem; font-weight: 700; margin: 1rem 0 0.4rem; }
+.conflict-merge {
+  background: var(--oradia-slate-950);
+  border: 1px solid var(--oradia-line);
+  border-radius: 0.55rem;
+  color: var(--oradia-ink);
+  font: 0.75rem/1.55 var(--oradia-mono);
+  min-height: 8rem;
+  outline-color: var(--oradia-green);
+  padding: 0.75rem;
+  resize: vertical;
+  white-space: pre;
+  width: 100%;
+}
+.conflict-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: flex-end; margin-top: 1rem; }
+.bug-report-panel { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.9rem; box-shadow: 0 24px 80px #0008; padding: 1.2rem; }
+.bug-report-heading { align-items: flex-start; display: flex; justify-content: space-between; }
+.bug-report-heading h2 { font-size: 1.35rem; margin: 0; }
+.bug-report-heading .eyebrow { font-size: 0.72rem; margin: 0 0 0.25rem; }
+.bug-report-close { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 0.4rem; color: var(--oradia-muted); cursor: pointer; font: inherit; font-size: 1.2rem; line-height: 1; padding: 0.25rem 0.45rem; }
+.bug-report-intro { color: var(--oradia-muted); font-size: 0.88rem; line-height: 1.5; margin: 0.75rem 0 1rem; }
+.bug-report-field { display: grid; gap: 0.4rem; margin-top: 0.9rem; }
+.bug-report-field label { font-size: 0.86rem; font-weight: 800; }
+.bug-report-field textarea { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.55rem; box-sizing: border-box; color: var(--oradia-ink); font: inherit; line-height: 1.45; padding: 0.65rem 0.75rem; resize: vertical; width: 100%; }
+.bug-report-field textarea:focus { border-color: var(--oradia-green); box-shadow: 0 0 0 3px rgba(159, 197, 169, 0.18); outline: none; }
+.bug-report-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; justify-content: flex-end; margin-top: 1rem; }
+.bug-report-actions .button { border-radius: 0.55rem; cursor: pointer; font: inherit; font-size: 0.86rem; font-weight: 800; padding: 0.55rem 0.8rem; }
+.bug-report-actions .button.primary { background: var(--oradia-green-deep); border: 1px solid var(--oradia-green-deep); color: #f5faf5; }
+.bug-report-actions .button.primary:disabled { opacity: 0.65; }
+.bug-report-error { background: #3a2428; border: 1px solid #92565e; border-radius: 0.55rem; color: #f3c7c9; line-height: 1.45; margin-top: 0.9rem; padding: 0.7rem 0.8rem; }
+.bug-report-error[hidden], .bug-report-success[hidden] { display: none; }
+.bug-report-success { line-height: 1.5; margin-top: 1rem; }
+.bug-report-success a { color: var(--oradia-green); }
+
+/* ── dialog shell ── */
+/* Break out of header flow: fixed, horizontally centered, top-anchored like VSCode. */
+.command-palette {
+  background: transparent;
+  border: 0;
+  inset: auto auto 0 50%;
+  margin-left: calc(-1 * min(42rem, calc(100vw - 2rem)) / 2);
+  max-width: calc(100vw - 2rem);
+  padding: 0;
+  position: fixed;
+  top: 1.25rem;
+  width: min(42rem, calc(100vw - 2rem));
+  z-index: 9999;
+}
+.command-palette::backdrop { background: rgba(0, 0, 0, 0.58); backdrop-filter: blur(3px); }
+.command-palette-panel {
+  background: var(--oradia-slate-900);
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.85rem;
+  box-shadow: 0 24px 80px #0008;
+  color: var(--oradia-ink);
+  overflow: hidden;
+  padding: 0.5rem 0.6rem 0.4rem;
+}
+
+/* heading */
+.command-palette-heading {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 0.15rem 0.35rem;
+}
+.command-palette-heading h2 {
+  font-family: var(--oradia-serif);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0;
+}
+.command-palette-heading button {
+  background: transparent;
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.35rem;
+  color: var(--oradia-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.4rem;
+}
+
+/* input */
+.command-palette-panel > input {
+  background: var(--oradia-slate-950);
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 0.5rem;
+  box-sizing: border-box;
+  color: var(--oradia-ink);
+  font: inherit;
+  font-size: 0.875rem;
+  padding: 0.45rem 0.6rem;
+  width: 100%;
+}
+.command-palette-hint {
+  color: var(--oradia-muted);
+  font-size: 0.68rem;
+  margin: 0.3rem 0.35rem 0;
+}
+
+/* filters */
+.command-palette-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  padding-top: 0.35rem;
+}
+.command-palette-filters[hidden] { display: none; }
+.command-palette-filters button {
+  background: transparent;
+  border: 1px solid var(--oradia-slate-700);
+  border-radius: 999px;
+  color: var(--oradia-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.65rem;
+  padding: 0.15rem 0.5rem;
+}
+.command-palette-filters button[aria-pressed="true"], .command-palette-filters button:hover {
+  background: var(--oradia-slate-800);
+  border-color: var(--oradia-green);
+  color: var(--oradia-ink);
+}
+
+/* results list */
+.command-palette-results {
+  max-height: min(50vh, 24rem);
+  overflow: auto;
+  padding-top: 0.15rem;
+}
+
+/* option row — single line, label left, metadata right */
+.command-palette-option {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 0.4rem;
+  color: var(--oradia-ink);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.3rem 0.45rem;
+  text-align: left;
+  width: 100%;
+  font-size: 0.82rem;
+  line-height: 1.3;
+}
+.command-palette-option strong {
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+.command-palette-option span {
+  color: var(--oradia-muted);
+  font-size: 0.68rem;
+  flex: 0 0 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.command-palette-option:hover, .command-palette-option[aria-selected="true"] {
+  background: var(--oradia-slate-800);
+  border-color: var(--oradia-slate-700);
+}
+
+.command-palette-empty {
+  color: var(--oradia-muted);
+  font-size: 0.78rem;
+  margin: 0;
+  padding: 0.5rem 0.45rem;
+  text-align: center;
+}
+
+.command-palette-status {
+  color: var(--oradia-muted);
+  font-size: 0.65rem;
+  margin: 0.2rem 0.3rem 0;
+  min-height: 1em;
+  text-align: center;
+}

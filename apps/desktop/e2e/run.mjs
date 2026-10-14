@@ -1,0 +1,394 @@
+import assert from "node:assert/strict"
+import { execFileSync, spawn, spawnSync } from "node:child_process"
+import { access, chmod, cp, mkdtemp, mkdir, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises"
+import os from "node:os"
+import path from "node:path"
+import { fileURLToPath } from "node:url"
+import { createHash, randomUUID } from "node:crypto"
+import { PIXEL_PNG_MARKDOWN } from "../../../apps/web/test/e2e/scenarios/media-fixture.js"
+import { SHARED_LIBRARY_CREATE_DELETE_TITLES } from "../../../apps/web/test/e2e/scenarios/library-create-delete.js"
+import { CONFLICT_BASELINE_SOURCE, CONFLICT_WORK_NAME, CONFLICT_SOURCE_FILE } from "../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
+import { RICH_RENDERING_TITLE } from "../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
+import { runNativeQuitSmokes } from "./native-quit-smoke.js"
+import { createDesktopAppEnvironment } from "./desktop-app-environment.js"
+import { verifyDiagnosticsArchive } from "./diagnostics-archive.js"
+import { installMacDmgFixture } from "./install-macos-dmg-fixture.js"
+import { desktopAppEnvironment, verifyOfflineSandbox } from "./offline-macos.js"
+import { runStableProfileSmoke } from "./stable-profile-smoke.js"
+import { runIdentityIsolationSmoke } from "./identity-isolation-smoke.js"
+import { e2eDocumentSource, e2eLinkedDocumentSource, hostileSource } from "./fixtures/seeds.mjs"
+
+const e2eRoot = path.dirname(fileURLToPath(import.meta.url))
+const repoRoot = path.resolve(e2eRoot, "../../..")
+const releaseFixtureRoot = path.join(repoRoot, "apps/web/test/fixtures/desktop/release")
+const temporaryRoot = await realpath(await mkdtemp(path.join(os.tmpdir(), "elef-desktop-e2e-")))
+const libraryRoot = path.join(temporaryRoot, "Elef")
+// The desktop app resolves its user directories from the process
+// environment, so every app launch gets disposable directories: no run may
+// read or write the developer's real home, config, data, or cache.
+const isolatedHome = path.join(temporaryRoot, "home")
+const isolatedConfig = path.join(temporaryRoot, "config")
+const isolatedData = path.join(temporaryRoot, "data")
+const isolatedCache = path.join(temporaryRoot, "cache")
+for (const directory of [isolatedHome, isolatedConfig, isolatedData, isolatedCache]) {
+  await mkdir(directory, { recursive: true })
+}
+const isolatedDirectories = { home: isolatedHome, config: isolatedConfig, data: isolatedData, cache: isolatedCache }
+const desktopEnv = () => createDesktopAppEnvironment(env, isolatedDirectories)
+const seedWorkFolder = path.join(libraryRoot, "E2E seed")
+const conflictWorkFolder = path.join(libraryRoot, CONFLICT_WORK_NAME)
+const hostileWorkFolder = path.join(libraryRoot, "E2E hostile")
+const archiveFixture = path.join(temporaryRoot, "E2E archive seed")
+const importArchive = path.join(temporaryRoot, "E2E archive seed.elef")
+const portableGraphArchiveFixture = path.join(temporaryRoot, "E2E portable graph archive")
+const portableGraphArchive = path.join(temporaryRoot, "E2E portable graph archive.elef")
+const exportArchive = path.join(temporaryRoot, "E2E seed exported.elef")
+const exportContents = path.join(temporaryRoot, "E2E seed exported")
+// Both runners complete the same editing, media, snippet, and math scenarios
+// against the same work, so the final source assertion is identical.
+const expectedSharedSource = `# Saved by shared scenario\n\nThe visual editor changed this text.\n\nSee [[E2E linked]].\n\n${PIXEL_PNG_MARKDOWN}\n**text**\n\n$$\n\\alpha\n$$\n`
+const expectedDesktopSource = expectedSharedSource
+const expectedWebSource = expectedSharedSource
+
+
+function normalizeLineEndings(source) {
+  return source.replace(/\r\n/g, "\n")
+}
+const webTitle = "E2E seed"
+let presentationId = null
+let hostilePresentationId = null
+let documentIds = []
+let updaterServer = null
+const env = {
+  ...process.env,
+  ELEF_E2E_LIBRARY_ROOT: libraryRoot,
+  ELEF_E2E_APP_BINARY: path.join(repoRoot, "target", "debug", "elef-desktop"),
+  ELEF_E2E_IMPORT_ARCHIVE: importArchive,
+  ELEF_E2E_PORTABLE_GRAPH_ARCHIVE: portableGraphArchive,
+  ELEF_E2E_EXPORT_PATH: exportArchive,
+  ELEF_E2E_PPTX_EXPORT_PATH: path.join(temporaryRoot, "E2E seed exported.pptx"),
+  ELEF_E2E_DIAGNOSTICS_EXPORT_PATH: path.join(temporaryRoot, "elef-diagnostics.zip"),
+  ELEF_E2E_SEED_WORK_ID: "a3d0f020-6605-4f9e-a96d-d825ee4b13f1"
+}
+
+// Installed self-updates run on macOS only. Linux upgrades through its
+// package manager: no install fixtures are built there and the packaged
+// flow stays off, while download verification still runs inside the desktop
+// scenarios.
+const packagedUpdatesRequested = process.env.ELEF_E2E_PACKAGED_UPDATES === "1" && process.platform === "darwin"
+if (packagedUpdatesRequested) {
+  const packages = path.join(repoRoot, "target/e2e-packages")
+  const installed = path.join(temporaryRoot, "installed")
+  await cp(path.join(packages, "n-1"), installed, { recursive: true, verbatimSymlinks: true })
+  env.ELEF_E2E_PACKAGED_UPDATES = "1"
+  env.ELEF_E2E_APP_BINARY = path.join(installed, "Elef.app/Contents/MacOS/elef-desktop")
+  env.ELEF_E2E_INSTALLED_ARTIFACT = env.ELEF_E2E_APP_BINARY
+  env.ELEF_E2E_UPDATE_PACKAGE = path.join(packages, "update.tar.gz")
+  env.ELEF_E2E_STABLE_DMG = path.join(packages, "stable-n-1", "Elef-0.1.0.dmg")
+  env.ELEF_E2E_STABLE_UPDATE_PACKAGE = path.join(packages, "stable-update.tar.gz")
+} else if (process.env.CI && process.platform === "darwin") {
+  throw new Error("macOS CI must exercise the installed N-1 and N updater packages")
+}
+
+async function hashTree(root, relative = "") {
+  const entries = await readdir(path.join(root, relative), { withFileTypes: true })
+  const result = {}
+  for (const entry of entries) {
+    const entryPath = path.posix.join(relative, entry.name)
+    if (entry.isSymbolicLink()) throw new Error(`Unexpected symlink in .elef fixture: ${entryPath}`)
+    if (entry.isDirectory()) Object.assign(result, await hashTree(root, entryPath))
+    else if (entry.isFile()) {
+      const bytes = await readFile(path.join(root, entryPath))
+      result[entryPath] = createHash("sha256").update(bytes).digest("hex")
+    } else {
+      throw new Error(`Unexpected special file in .elef fixture: ${entryPath}`)
+    }
+  }
+  return result
+}
+
+async function makeTreeAccessible(root) {
+  await chmod(root, 0o700)
+  for (const entry of await readdir(root, { withFileTypes: true })) {
+    const entryPath = path.join(root, entry.name)
+    if (entry.isDirectory()) await makeTreeAccessible(entryPath)
+    else if (entry.isFile()) await chmod(entryPath, 0o600)
+  }
+}
+
+function runRails(code) {
+  const result = spawnSync("bin/rails", ["runner", "-e", "test", code], {
+    cwd: path.join(repoRoot, "apps", "web"),
+    env: { ...env, RAILS_ENV: "test" },
+    encoding: "utf8"
+  })
+  if (result.error) throw result.error
+  if (result.status !== 0) throw new Error(result.stderr || result.stdout || "Rails E2E fixture command failed")
+  return result.stdout.trim()
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  let timer
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error(message)), timeoutMs)
+    })
+  ]).finally(() => clearTimeout(timer))
+}
+
+
+try {
+  await mkdir(seedWorkFolder, { recursive: true })
+  const libraryConfig = path.join(libraryRoot, ".elef")
+  await mkdir(libraryConfig, { recursive: true })
+  await writeFile(path.join(libraryConfig, "snippets.json"), JSON.stringify({
+    schema_version: 1,
+    entries: [{
+      id: "personal-note",
+      name: "Personal note",
+      description: "A custom personal note",
+      trigger: "note",
+      category: "Markdown",
+      body: "**${1:note}**",
+      namespace: "/",
+      built_in: false
+    }]
+  }))
+  await writeFile(path.join(libraryConfig, "math-shortcuts.json"), JSON.stringify({
+    schema_version: 1,
+    entries: [{
+      id: "personal-lambda",
+      name: "Lambda",
+      description: "The Greek letter lambda",
+      prefix: "@",
+      aliases: ["lambda"],
+      expansion: "\\lambda",
+      namespace: "@",
+      built_in: false
+    }]
+  }))
+  await writeFile(path.join(seedWorkFolder, "presentation.md"), "# Before E2E\n\nSeed paragraph.\n\nSee [[E2E linked]].\n")
+  await writeFile(path.join(seedWorkFolder, "elef.json"), JSON.stringify({
+    id: "a3d0f020-6605-4f9e-a96d-d825ee4b13f1",
+    schema_version: 1
+  }))
+  await mkdir(conflictWorkFolder, { recursive: true })
+  await writeFile(path.join(conflictWorkFolder, CONFLICT_SOURCE_FILE), CONFLICT_BASELINE_SOURCE)
+  await writeFile(path.join(conflictWorkFolder, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
+  await mkdir(hostileWorkFolder, { recursive: true })
+  await writeFile(path.join(hostileWorkFolder, "presentation.md"), hostileSource)
+  await writeFile(path.join(hostileWorkFolder, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
+  await mkdir(archiveFixture, { recursive: true })
+  await writeFile(path.join(archiveFixture, "presentation.md"), "# Imported from Elef\n\nPortable archive fixture.\n")
+  await writeFile(path.join(archiveFixture, "elef.json"), JSON.stringify({ id: randomUUID(), schema_version: 1 }))
+  execFileSync("zip", ["-q", "-r", importArchive, path.basename(archiveFixture)], { cwd: temporaryRoot })
+  await mkdir(portableGraphArchiveFixture, { recursive: true })
+  await writeFile(path.join(portableGraphArchiveFixture, "document.md"), [
+    "---",
+    'elef_document_key: "e2e-portable-graph-key"',
+    'elef_aliases: ["E2E portable graph alias"]',
+    "---",
+    "# E2E portable graph target",
+    ""
+  ].join("\n"))
+  const portableGraphTargetId = randomUUID()
+  await writeFile(path.join(portableGraphArchiveFixture, "elef.json"), JSON.stringify({
+    id: portableGraphTargetId,
+    schema_version: 1
+  }))
+  execFileSync("zip", ["-q", "-r", portableGraphArchive, path.basename(portableGraphArchiveFixture)], { cwd: temporaryRoot })
+  const portableKeySourceId = randomUUID()
+  const portableAliasSourceId = randomUUID()
+  env.ELEF_E2E_PORTABLE_GRAPH_TARGET_ID = portableGraphTargetId
+  env.ELEF_E2E_PORTABLE_KEY_SOURCE_ID = portableKeySourceId
+  env.ELEF_E2E_PORTABLE_ALIAS_SOURCE_ID = portableAliasSourceId
+  const desktopLinkedDocumentId = randomUUID()
+  for (const [name, source] of [
+    ["E2E document", e2eDocumentSource],
+    ["E2E linked", e2eLinkedDocumentSource]
+  ]) {
+    const folder = path.join(libraryRoot, name)
+    const id = name === "E2E linked" ? desktopLinkedDocumentId : randomUUID()
+    await mkdir(folder, { recursive: true })
+    await writeFile(path.join(folder, "document.md"), source)
+    await writeFile(path.join(folder, "elef.json"), JSON.stringify({ id, schema_version: 1 }))
+  }
+  env.ELEF_E2E_DESKTOP_LINKED_DOCUMENT_ID = desktopLinkedDocumentId
+
+  if ((env.CI || process.env.ELEF_E2E_RUN_WEB === "1") && env.ELEF_E2E_SKIP_WEB !== "1") {
+    // These fixture-only browser checks need Chromium, but not Rails or test data.
+    const componentsResult = spawnSync(
+      path.join(e2eRoot, "node_modules", ".bin", "playwright"),
+      ["test", "--config=playwright.components.config.js", "--project=components"],
+      { cwd: e2eRoot, env, stdio: "inherit" }
+    )
+    if (componentsResult.error) throw componentsResult.error
+    if (componentsResult.status !== 0) throw new Error("Static browser component checks failed with status " + componentsResult.status)
+
+    const seeded = runRails(
+      `Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all; Presentation.where(title: ${JSON.stringify(RICH_RENDERING_TITLE)}).destroy_all; Document.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document)}).destroy_all; presentation = Presentation.create!(title: ${JSON.stringify(webTitle)}, source: "# Before E2E\\n\\nSeed paragraph.\\n\\nSee [[E2E linked]].\\n"); conflict = Presentation.create!(title: ${JSON.stringify(CONFLICT_WORK_NAME)}, source: ${JSON.stringify(CONFLICT_BASELINE_SOURCE)}); hostile = Presentation.create!(title: "E2E hostile", source: ${JSON.stringify(hostileSource)}); document = Document.create!(source: ${JSON.stringify(e2eDocumentSource)}); linked = Document.create!(source: ${JSON.stringify(e2eLinkedDocumentSource)}); puts "ELEF_E2E_PRESENTATION_ID=#{presentation.id}"; puts "ELEF_E2E_CONFLICT_PRESENTATION_ID=#{conflict.id}"; puts "ELEF_E2E_HOSTILE_PRESENTATION_ID=#{hostile.id}"; puts "ELEF_E2E_DOCUMENT_IDS=#{[document.id, linked.id].join(',')}"`
+    )
+    const id = seeded.match(/^ELEF_E2E_PRESENTATION_ID=(\d+)$/m)?.[1]
+    assert.match(id, /^\d+$/, "Rails fixture command should return the presentation id")
+    presentationId = id
+    const conflictId = seeded.match(/^ELEF_E2E_CONFLICT_PRESENTATION_ID=(\d+)$/m)?.[1]
+    assert.match(conflictId, /^\d+$/, "Rails fixture command should return the conflict presentation id")
+    env.ELEF_E2E_CONFLICT_PRESENTATION_ID = conflictId
+    hostilePresentationId = seeded.match(/^ELEF_E2E_HOSTILE_PRESENTATION_ID=(\d+)$/m)?.[1]
+    assert.match(hostilePresentationId, /^\d+$/, "Rails fixture command should return the hostile presentation id")
+    env.ELEF_E2E_HOSTILE_PRESENTATION_ID = hostilePresentationId
+    const docs = seeded.match(/^ELEF_E2E_DOCUMENT_IDS=(\d+,\d+)$/m)?.[1]
+    assert.ok(docs, "Rails fixture command should return document IDs")
+    documentIds = docs.split(",")
+    env.ELEF_E2E_PRESENTATION_ID = id
+    env.ELEF_E2E_DOCUMENT_ID = documentIds[0]
+    env.ELEF_E2E_LINKED_DOCUMENT_ID = documentIds[1]
+    env.ELEF_E2E_START_WEB_SERVER = "1"
+  }
+
+  if (presentationId) {
+    const playwright = path.join(e2eRoot, "node_modules", ".bin", "playwright")
+    const webResult = spawnSync(playwright, ["test", "--project=web"], {
+      cwd: e2eRoot,
+      env,
+      stdio: "inherit"
+    })
+    if (webResult.error) throw webResult.error
+    if (webResult.status !== 0) throw new Error("Shared web scenarios failed with status " + webResult.status)
+  }
+
+  const webdriverio = path.join(e2eRoot, "node_modules", ".bin", "wdio")
+  await verifyOfflineSandbox()
+  updaterServer = spawn(process.execPath, [path.join(e2eRoot, "updater-fixture-server.mjs")], {
+    env,
+    stdio: ["ignore", "inherit", "inherit", "ipc"]
+  })
+  env.ELEF_E2E_UPDATER_PUBLIC_KEY = await withTimeout(new Promise((resolve, reject) => {
+    updaterServer.once("message", message => resolve(message.publicKey))
+    updaterServer.once("error", reject)
+    updaterServer.once("exit", code => reject(new Error(`Updater fixture server exited before readiness (${code})`)))
+  }), 10_000, "Updater fixture server did not start")
+  if (process.env.CI) await runNativeQuitSmokes(desktopEnv())
+  const desktopResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
+    cwd: e2eRoot,
+    env: {
+      ...desktopAppEnvironment(desktopEnv()),
+      TAURI_WEBDRIVER_PORT: process.env.TAURI_WEBDRIVER_PORT || "4445"
+    },
+    stdio: "inherit"
+  })
+  if (desktopResult.error) throw desktopResult.error
+  if (desktopResult.status !== 0) throw new Error("Shared desktop scenarios failed with status " + desktopResult.status)
+  if (env.ELEF_E2E_PACKAGED_UPDATES === "1") {
+    const upgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
+      cwd: e2eRoot, env: { ...desktopAppEnvironment(desktopEnv()), ELEF_E2E_VERIFY_UPGRADED: "1" }, stdio: "inherit"
+    })
+    if (upgradedResult.error) throw upgradedResult.error
+    if (upgradedResult.status !== 0) throw new Error("The installed update did not launch and preserve the work")
+    // Stable packaged N-1 → N on the production identifier: install the
+    // test-only Stable DMG, seed the previous library selection exactly as a
+    // pre-release install left it, then install the signed stable-package N
+    // and verify the relaunched N preserves the selection and cleans its
+    // receipt-matched backup.
+    const stableInstallDirectory = path.join(temporaryRoot, "stable-installed")
+    const stableBinary = await installMacDmgFixture(env.ELEF_E2E_STABLE_DMG, stableInstallDirectory)
+    const stableAppData = path.join(isolatedHome, "Library", "Application Support", "com.elef.desktop")
+    const stableStatePath = path.join(stableAppData, "library-root.json")
+    const preReleaseStateTemplate = await readFile(path.join(releaseFixtureRoot,
+      "pre-release-app-state/library-root.json.template"), "utf8")
+    const preReleaseState = preReleaseStateTemplate.replace("${ELEF_RELEASE_FIXTURE_LIBRARY_ROOT}", libraryRoot)
+    await mkdir(stableAppData, { recursive: true })
+    await writeFile(stableStatePath, preReleaseState)
+    const stableChildEnv = () => {
+      const child = {
+        ...desktopAppEnvironment(desktopEnv()),
+        ELEF_E2E_PROFILE: "stable-packaged",
+        ELEF_E2E_APP_BINARY: stableBinary,
+        ELEF_E2E_INSTALLED_ARTIFACT: stableBinary,
+        ELEF_E2E_PRE_RELEASE_STATE: stableStatePath,
+        ELEF_E2E_EXPECTED_PRE_RELEASE_STATE: preReleaseState,
+        TAURI_WEBDRIVER_PORT: process.env.TAURI_WEBDRIVER_PORT || "4445"
+      }
+      // The Stable packaged app must boot from its app-data selection (the
+      // identity-probe path), not the harness library override.
+      delete child.ELEF_E2E_LIBRARY_ROOT
+      if (child.ELEF_E2E_REAL_APP_BINARY) child.ELEF_E2E_REAL_APP_BINARY = stableBinary
+      return child
+    }
+    const stableInstallResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
+      cwd: e2eRoot, env: stableChildEnv(), stdio: "inherit"
+    })
+    if (stableInstallResult.error) throw stableInstallResult.error
+    if (stableInstallResult.status !== 0) throw new Error("The signed Stable package did not install")
+    assert.equal(await readFile(stableStatePath, "utf8"), preReleaseState,
+      "Stable's packaged install must preserve the previous library-root.json bytes")
+    await rm(env.ELEF_E2E_DIAGNOSTICS_EXPORT_PATH, { force: true })
+    const stableUpgradedResult = spawnSync(webdriverio, ["run", "wdio.conf.js"], {
+      cwd: e2eRoot, env: { ...stableChildEnv(), ELEF_E2E_VERIFY_STABLE_UPGRADED: "1" }, stdio: "inherit"
+    })
+    if (stableUpgradedResult.error) throw stableUpgradedResult.error
+    if (stableUpgradedResult.status !== 0) throw new Error("The installed Stable update did not launch and preserve the selection")
+    assert.equal(await readFile(stableStatePath, "utf8"), preReleaseState,
+      "The Stable N-1 to N update must preserve the previous Stable library selection bytes")
+    await verifyDiagnosticsArchive(env.ELEF_E2E_DIAGNOSTICS_EXPORT_PATH, "stable")
+  }
+
+  const desktopSource = await readFile(path.join(seedWorkFolder, "presentation.md"), "utf8")
+  assert.equal(normalizeLineEndings(desktopSource), expectedDesktopSource)
+  try {
+    await access(path.join(libraryRoot, "Hostile IPC side effect"))
+    throw new Error("Hostile work content reached the create_work_folder IPC command")
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error
+  }
+  assert.equal(
+    await readFile(path.join(libraryRoot, "E2E archive seed", "presentation.md"), "utf8"),
+    "# Imported from Elef\n\nPortable archive fixture.\n"
+  )
+  const exportSnapshot = `${exportArchive}.seed-bytes`
+  await access(exportSnapshot)
+  execFileSync("unzip", ["-q", "-o", exportSnapshot, "-d", exportContents])
+  await makeTreeAccessible(exportContents)
+  assert.deepEqual(await hashTree(exportContents), await hashTree(seedWorkFolder),
+    "Exporting a work must preserve every file byte, including its manifest and uploaded image")
+  if (presentationId) {
+    const persisted = runRails(
+      "presentation = Presentation.find(" + presentationId + "); puts \"ELEF_E2E_SOURCE=#{presentation.source.to_json}\"; presentation.destroy!; Presentation.where(title: " + JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation) + ").destroy_all; Presentation.where(id: [" + [Number(env.ELEF_E2E_CONFLICT_PRESENTATION_ID), Number(hostilePresentationId)].join(",") + "]).destroy_all; Document.where(title: " + JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document) + ").destroy_all; Document.where(id: [" + documentIds.map(Number).join(",") + "]).destroy_all"
+    )
+    const savedSource = persisted.match(/^ELEF_E2E_SOURCE=(.*)$/m)?.[1]
+    assert.ok(savedSource, "Rails fixture command should return the persisted source")
+    assert.equal(normalizeLineEndings(JSON.parse(savedSource)), expectedWebSource)
+  }
+  // The profile smokes build and probe the Stable and identity-split
+  // binaries; CI-only, like the native quit smokes.
+  if (process.env.CI) {
+    await runStableProfileSmoke(desktopEnv())
+    await runIdentityIsolationSmoke(desktopEnv())
+  }
+} finally {
+  if (updaterServer) {
+    const exited = new Promise(resolve => updaterServer.once("exit", resolve))
+    if (updaterServer.exitCode === null && updaterServer.signalCode === null) {
+      updaterServer.kill("SIGTERM")
+      await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 1_000))])
+      if (updaterServer.exitCode === null && updaterServer.signalCode === null) updaterServer.kill("SIGKILL")
+    }
+  }
+  if (presentationId) {
+    try {
+      runRails(`Presentation.find_by(id: ${presentationId})&.destroy!`)
+      runRails(`Presentation.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.presentation)}).destroy_all`)
+      runRails(`Presentation.find_by(id: ${Number(hostilePresentationId)})&.destroy!`)
+      if (env.ELEF_E2E_CONFLICT_PRESENTATION_ID) {
+        runRails(`Presentation.find_by(id: ${Number(env.ELEF_E2E_CONFLICT_PRESENTATION_ID)})&.destroy!`)
+      }
+      runRails(`Document.where(id: [${documentIds.map(Number).join(",")}]).destroy_all`)
+      runRails(`Document.where(title: ${JSON.stringify(SHARED_LIBRARY_CREATE_DELETE_TITLES.document)}).destroy_all`)
+    } catch (_error) {
+      // Preserve the browser/test failure while making fixture cleanup best-effort.
+    }
+  }
+  await makeTreeAccessible(temporaryRoot)
+  await rm(temporaryRoot, { recursive: true, force: true })
+}

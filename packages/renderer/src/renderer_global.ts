@@ -1,0 +1,63 @@
+import { collectMediaReferences, renderArtBlock, renderMarkdownBlock as renderMarkdownBlockCore, renderPreviewCore } from "@elef/renderer"
+import type { MarkdownBlockOptions, RenderPreviewInput } from "@elef/renderer"
+import { editorChrome } from "@elef/editor-runtime/editor-chrome"
+
+// The shipped bundle composes bare projection with editor chrome so every
+// consumer (MiniRacer, workers, importmap) keeps byte-identical output.
+const renderPreview = (input?: RenderPreviewInput) => renderPreviewCore(input, { chrome: editorChrome })
+const renderMarkdownBlock = (source?: string, options?: MarkdownBlockOptions) => renderMarkdownBlockCore(source, { ...options, chrome: editorChrome })
+import {
+  buildDocumentGraph,
+  buildEditorMap,
+  buildEditorStructure,
+  extractDocumentLinkTokens,
+  extractFirstMarkdownHeading,
+  frontMatterHasKey,
+  isLinkableDocumentTitle,
+  linkableDocumentTitles,
+  normalizeThemeValue,
+  normalizeTypographyValue,
+  parsePortableDocumentLinks,
+  readStyle,
+  readStyleOverrides,
+  replaceFirstHeading,
+  resolveArtBindings,
+  sourceAnchorLines,
+  withAppearanceValue,
+  withFrontMatterValue
+} from "@elef/work-model"
+import { slidePositionLayout } from "@elef/work-model/slide-position-layout"
+
+declare global {
+  // Bundle seam for MiniRacer, workers and importmap consumers: untyped by
+  // design, since only JS/Ruby read it. TypeScript consumers import the
+  // package entries instead.
+  var ElefRenderer: unknown
+}
+
+globalThis.ElefRenderer = Object.freeze({
+  collectMediaReferences,
+  renderArtBlock,
+  renderMarkdownBlock,
+  renderPreview,
+  renderPreviewCore,
+  buildEditorMap,
+  buildEditorStructure,
+  buildDocumentGraph,
+  extractDocumentLinkTokens,
+  extractFirstMarkdownHeading,
+  frontMatterHasKey,
+  isLinkableDocumentTitle,
+  linkableDocumentTitles,
+  normalizeThemeValue,
+  normalizeTypographyValue,
+  parsePortableDocumentLinks,
+  readStyle,
+  readStyleOverrides,
+  replaceFirstHeading,
+  resolveArtBindings,
+  sourceAnchorLines,
+  withAppearanceValue,
+  withFrontMatterValue,
+  slidePositionLayout
+})

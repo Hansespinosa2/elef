@@ -1,40 +1,31 @@
-# Repository Instructions
+# Elef Agent Instructions
 
-## Architecture
-- Elef is a Rails monolith for authoring and presenting Markdown slide decks.
-- Raw Markdown is canonical.
-- Prefer Rails views with Hotwire/Stimulus.
+Reach for when: starting any task in this repo — routing, checks, and safety rules.
 
-## Development Environment
-- Run agents natively on the user's Omarchy device in the current checkout.
-- Reuse `https://127.0.0.1:3000/`; never start another server or change ports.
-- Restart only for boot-time changes.
-- Do not use the retired `scripts/elef-agent` Apple Container/worktree workflow.
+Elef is a Markdown authoring and presentation app with a Rails web host and a Tauri desktop host. Shared behavior is implemented once and mounted by both hosts.
 
-## GitHub
-- Use the available GitHub integration for GitHub work.
-- Never print, request, save, or commit credentials. Do not copy credentials into `.env` files.
+## Start here
 
-## Testing
-- Unit-test parsing/rendering, request-test Rails boundaries, and use headless
-  Selenium for complete workflows.
-- Run the smallest relevant test first.
-- Re-test relevant behavior after the final change.
-- Report only what the performed tests directly establish.
+1. [ELEF-DOCTRINE.md](ELEF-DOCTRINE.md) — product principles and owner intent.
+2. [docs/architecture.md](docs/architecture.md) — boundaries, ownership, contracts, change routing.
+3. [docs/development.md](docs/development.md) — setup, check tiers, feature/bug workflow.
 
-## UI Verification
-- Browser automation must be headless.
-- Distinguish:
-  1. DOM assertions
-  2. exact reproduction of user state
-  3. inspected screenshot
-- Never claim a higher verification level than was performed.
+Each fact has exactly one home; link to it instead of copying it.
 
-## Git
-- For requested PR work, branch from the latest `dev` and target the PR at `dev`, unless the user specifies another base.
-- Commit coherent changes with concise imperative subjects.
-- Never add co-author trailers, rewrite history, or revert unrelated changes.
-- When an open PR exists for a task branch, use that PR as the merge boundary. If asked to merge the branch, merge the PR through GitHub rather than creating a substitute local merge commit.
-- Only perform a local branch merge when it is explicitly requested and no PR merge is intended.
-- PR descriptions must use the repository template, explain validation and database/migration impact, and must not record current merge status.
-- After a PR is merged, fetch its target branch and verify the merge commit is reachable from that target. Do not trust stale `origin/*` refs.
+## Verify with bin/check
+
+- `bin/check quick` (~20 s) during iteration, `bin/check affected` (~1 min) before handoff, `bin/check all` (~18 min, ceiling 45 min) for release-scale changes.
+- Rails suites need ambient `PGPASSWORD`; browser suites need /tmp headroom and run one at a time; keep browsers headless.
+- Report the exact tier actually exercised; never claim unrun or unavailable checks passed.
+
+## Safety
+
+- Never touch the owner's `https://127.0.0.1:3000/` server (diagnose read-only only), and never point tests at personal, live, or production data.
+- Never merge into `dev` or publish a release unless the owner explicitly orders it in that session — then merge only green, adversarial-reviewed PRs in a proven order, and tag a release only on a fully green tip. Never alter signing keys or invent/commit credentials.
+- Never weaken tests, checks, baselines, or fixtures to obtain green, and never silently change a frozen contract.
+
+## Changes
+
+- Route by ownership: shared behavior in `packages/*`, web-only in `apps/web`, native-only in `apps/desktop`; add a host adapter only when a concrete platform capability differs.
+- Read the relevant code and tests before changing anything; make the smallest fix at the root cause.
+- Leave the tree clean and green before handoff; commit with imperative subjects and no history rewriting.

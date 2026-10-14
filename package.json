@@ -1,0 +1,27 @@
+{
+  "name": "elef-shared-frontend",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "renderer:build": "node packages/renderer/build.mjs",
+    "test:javascript": "node --test apps/web/test/javascript/*.test.js apps/web/test/javascript/*.test.mjs apps/web/test/javascript/shared/*.test.js",
+    "check:release-fixtures": "node apps/desktop/scripts/check_release_fixture_manifest.mjs",
+    "check:desktop-profiles": "node apps/desktop/scripts/check_release_profiles.mjs",
+    "check:release-ci": "node apps/desktop/scripts/check_release_ci.mjs",
+    "test:arch-package": "node --test apps/desktop/release/arch-package.test.mjs"
+  },
+  "devDependencies": {
+    "@codemirror/commands": "6.11.1",
+    "@codemirror/state": "6.7.5",
+    "@codemirror/view": "6.43.12",
+    "esbuild": "0.25.11",
+    "highlight.js": "11.11.1",
+    "katex": "0.18.7",
+    "linkedom": "0.18.13",
+    "markdown-it": "14.3.2",
+    "typescript": "^5.9.3"
+  }
+}
