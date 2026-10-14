@@ -78,7 +78,7 @@ export function createDesktopPrepareMedia({ invoke, workId, remoteImagesCap = MA
         objectUrls.push(objectUrl)
         element.src = objectUrl
         media.set(element, { data, contentType: blob.type || (element.tagName === "VIDEO" ? "video/mp4" : "image/png") })
-        if (element.tagName === "IMG") await element.decode()
+        if (element.tagName === "IMG") await waitForImageLoad(element)
       }))
       if (stage.querySelectorAll(".katex").length) await stage.ownerDocument?.fonts?.ready
       return { media, objectUrls }
@@ -112,6 +112,20 @@ function elefAssetDigest(source) {
   const digest = segments.length === 3 ? segments[2] : ""
   if (!digest || !ASSET_DIGEST.test(digest)) return null
   return digest.toLowerCase()
+}
+
+// The shared seam awaits element.decode() after the src swap, but WebKit
+// rejects a same-task decode() while the previous custom-protocol load is
+// still settling (observed: "Loading error." from decode@[native code] on
+// WebKitGTK and Safari, where Chromium waits). Awaiting the load event
+// gives the identical guarantee (decoded pixels plus intrinsic size, loud
+// failure on broken bytes) on every engine.
+function waitForImageLoad(image) {
+  if (image.complete && image.naturalWidth > 0) return Promise.resolve()
+  return new Promise((resolve, reject) => {
+    image.addEventListener("load", () => resolve(), { once: true })
+    image.addEventListener("error", () => reject(new Error("A presentation image or video could not be loaded.")), { once: true })
+  })
 }
 
 function canonicalRemoteImageUrl(source) {

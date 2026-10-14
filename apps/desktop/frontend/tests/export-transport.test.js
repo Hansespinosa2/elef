@@ -125,14 +125,38 @@ test("both file library transports expose the PPTX export seam", async () => {
 
 const PIXEL_DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jkWQAAAAASUVORK5CYII="
 
-function fakeMediaElement(tagName, src) {
-  return {
+function fakeMediaElement(tagName, src, { failLoad = false } = {}) {
+  const listeners = {}
+  const element = {
     tagName,
-    src,
-    decoded: false,
-    getAttribute: (name) => (name === "src" ? src : null),
-    decode: async function () { this.decoded = true }
+    complete: false,
+    naturalWidth: 0,
+    loadWaited: false,
+    getAttribute: (name) => (name === "src" ? element.src : null),
+    addEventListener: (type, listener) => {
+      if (type === "load") element.loadWaited = true
+      ;(listeners[type] ??= []).push(listener)
+    }
   }
+  let currentSrc = src
+  Object.defineProperty(element, "src", {
+    get: () => currentSrc,
+    set: (value) => {
+      currentSrc = value
+      // Linkedom-less fake: resolve the load wait on a microtask like a
+      // successful fetch, or fire the error path when asked.
+      queueMicrotask(() => {
+        if (failLoad) {
+          for (const listener of listeners.error ?? []) listener()
+          return
+        }
+        element.complete = true
+        element.naturalWidth = 1
+        for (const listener of listeners.load ?? []) listener()
+      })
+    }
+  })
+  return element
 }
 
 function fakeStage(elements) {
@@ -175,9 +199,22 @@ test("desktop prepareMedia resolves local assets through IPC and passes data URI
   for (const element of [local, localHttp, duplicate, clip, inline]) {
     assert.match(element.src, /^blob:/)
   }
-  assert.equal(local.decoded, true)
-  assert.equal(clip.decoded, false)
+  assert.equal(local.loadWaited, true)
+  assert.equal(clip.loadWaited, false)
   assert.equal(assets.objectUrls.length, 5)
+})
+
+test("desktop prepareMedia fails loudly when an image cannot load", async () => {
+  const broken = fakeMediaElement("IMG", PIXEL_DATA_URI, { failLoad: true })
+  const prepareMedia = createDesktopPrepareMedia({
+    invoke: async () => { throw new Error("unexpected command") },
+    workId: "work-1"
+  })
+
+  await assert.rejects(
+    prepareMedia(fakeStage([broken])),
+    /A presentation image or video could not be loaded\./
+  )
 })
 
 test("desktop prepareMedia routes remote images through the policy command", async () => {
@@ -300,8 +337,10 @@ test("the wired prepareMedia resolves real model markup through IPC only", async
   const html = seen.engineModel.slides.flatMap((slide) => slide.blocks.map((block) => block.html)).join("\n")
   const { document } = parseHTML(`<div id="stage">${html}</div>`)
   const stage = document.querySelector("#stage")
-  // linkedom lacks media loading: decode what the seam needs.
-  for (const image of stage.querySelectorAll("img[src]")) image.decode = async () => {}
+  // linkedom lacks media loading: resolve the seam's load wait directly.
+  for (const image of stage.querySelectorAll("img[src]")) {
+    image.addEventListener = (type, listener) => { if (type === "load") queueMicrotask(listener) }
+  }
   const calls = []
   const resolving = createDesktopPrepareMedia({
     invoke: async (command, payload) => {
