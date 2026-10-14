@@ -44,6 +44,10 @@
     "./pptx-model": {
       "types": "./src/features/export/pptx_model.ts",
       "default": "./dist/pptx-model.js"
+    },
+    "./pptx-engine": {
+      "types": "./src/features/export/pptx_engine.ts",
+      "default": "./dist/pptx-engine.js"
     }
   },
   "files": [

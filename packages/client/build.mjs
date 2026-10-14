@@ -66,4 +66,8 @@ bundle(join(here, "src", "pptx-test-internals.ts"), join(here, "dist", "pptx-tes
 // beside preview-core: server-less hosts import it on demand while the boot
 // barrel stays free of the projection.
 bundle(join(here, "src", "features", "export", "pptx_model.ts"), join(here, "dist", "pptx-model.js"));
-console.log("packages/client: dist/elef-client.js + dist/elef-client.stable.js + dist/preview-core.js + dist/sanitize.js + dist/presentation-chrome.js + dist/vim-preferences.js + dist/port-session.js + dist/pptx-test-internals.js + dist/pptx-model.js built");
+// The PPTX engine (model-to-blob orchestration) ships beside the builder:
+// the desktop import must not couple to the client boot barrel, whose bare
+// specifier the Stable profile forbids.
+bundle(join(here, "src", "features", "export", "pptx_engine.ts"), join(here, "dist", "pptx-engine.js"));
+console.log("packages/client: dist/elef-client.js + dist/elef-client.stable.js + dist/preview-core.js + dist/sanitize.js + dist/presentation-chrome.js + dist/vim-preferences.js + dist/port-session.js + dist/pptx-test-internals.js + dist/pptx-model.js + dist/pptx-engine.js built");

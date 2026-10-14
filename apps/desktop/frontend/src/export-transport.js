@@ -5,8 +5,10 @@
 // pptx-model builder instead of a Rails JSON endpoint, and delivery goes
 // through the save_pptx_bytes command instead of an HTTP download. The
 // generator library ships with the app (assets/pptxgen.bundle.js), so export
-// works fully offline. Raw command names stay inside this adapter.
-import { dataUriToBlob, exportPptxModel } from "@elef/client"
+// works fully offline. Model and engine come through the deferred entries,
+// never the bare client barrel (the Stable profile forbids that specifier).
+// Raw command names stay inside this adapter.
+import { dataUriToBlob, exportPptxModel } from "@elef/client/pptx-engine"
 import { buildPptxModel } from "@elef/client/pptx-model"
 
 const PPTX_LIBRARY_URL = "./assets/pptxgen.bundle.js"
