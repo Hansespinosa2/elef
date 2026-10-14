@@ -1,0 +1,47 @@
+import { application } from "../controllers/application.js"
+import { installEditorRuntimeErrorHook } from "./editor_runtime_errors.js"
+import appearanceController from "../controllers/appearance_controller.js"
+import artLayoutController from "../controllers/art_layout_controller.js"
+import documentLinkPaletteController from "../controllers/document_link_palette_controller.js"
+import documentPagesController from "../controllers/document_pages_controller.js"
+import editorController from "../controllers/editor_controller.js"
+import mathShortcutPaletteController from "../controllers/math_shortcut_palette_controller.js"
+import mathShorthandController from "../controllers/math_shorthand_controller.js"
+import mediaController from "../controllers/media_controller.js"
+import mermaidAssistController from "../controllers/mermaid_assist_controller.js"
+import mermaidDiagramsController from "../controllers/mermaid_diagrams_controller.js"
+import previewController from "../controllers/preview_controller.js"
+import slideOverviewController from "../controllers/slide_overview_controller.js"
+import snippetPaletteController from "../controllers/snippet_palette_controller.js"
+import visualEditorController from "../controllers/visual_editor_controller.js"
+
+installEditorRuntimeErrorHook(application)
+
+let editorRuntimeRegistered = false
+
+// Synchronous by design: the dist entry bundles every controller, so a
+// dynamic import would only defer registration past Stimulus's first
+// connect pass and race the host's lazy controller loader (console
+// autoload errors on every page). Callers may still await the call.
+export function registerEditorRuntime(): void {
+  if (editorRuntimeRegistered) return
+  editorRuntimeRegistered = true
+  register("editor", editorController)
+  register("appearance", appearanceController)
+  register("document-link-palette", documentLinkPaletteController)
+  register("math-shortcut-palette", mathShortcutPaletteController)
+  register("math-shorthand", mathShorthandController)
+  register("mermaid-assist", mermaidAssistController)
+  register("media", mediaController)
+  register("preview", previewController)
+  register("visual-editor", visualEditorController)
+  register("slide-overview", slideOverviewController)
+  register("document-pages", documentPagesController)
+  register("mermaid-diagrams", mermaidDiagramsController)
+  register("snippet-palette", snippetPaletteController)
+  register("art-layout", artLayoutController)
+}
+
+function register(identifier: string, controller: unknown) {
+  application.register(identifier, controller)
+}

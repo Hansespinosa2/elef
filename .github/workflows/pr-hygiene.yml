@@ -23,7 +23,7 @@ jobs:
       - name: Validate pull request description
         env:
           PR_BODY: ${{ github.event.pull_request.body }}
-        run: ruby scripts/check_pr_description.rb
+        run: ruby tooling/check_pr_description.rb
 
   normalize:
     if: github.event.pull_request.head.ref != 'main' && github.event.pull_request.head.ref != 'dev'
@@ -36,11 +36,12 @@ jobs:
         with:
           script: |
             const branch = context.payload.pull_request.head.ref;
-            const match = branch.match(/^(feat|fix|chore)\/(.+)$/);
+            // Conventional Commits types (conventionalcommits.org).
+            const match = branch.match(/^(feat|fix|build|chore|ci|docs|style|refactor|perf|test|revert)\/(.+)$/);
 
             if (!match) {
               core.setFailed(
-                `Branch "${branch}" must use feat/<description>, fix/<description>, or chore/<description>.`
+                `Branch "${branch}" must use a Conventional Commits type prefix: feat/, fix/, build/, chore/, ci/, docs/, style/, refactor/, perf/, test/, or revert/, plus a description.`
               );
               return;
             }

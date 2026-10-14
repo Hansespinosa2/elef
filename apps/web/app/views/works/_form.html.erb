@@ -1,0 +1,86 @@
+<% persisted = work.persisted? %>
+<% type_label = work_type_label(work) %>
+<% editor_projection = shared_editor_projection(
+  work,
+  source: work.source.to_s.gsub(/\r\n?/, "\n"),
+  title: work.title.presence || work.default_title
+) %>
+<% visual_mode = params[:editor_mode] != "source" %>
+<% controllers = %w[dirty preview autosave visual-editor media] %>
+<% controllers << "presentation-host" if work.presentation? %>
+<% controllers << "slide-overview" if work.presentation? %>
+<% actions = ["submit->dirty#allowSubmit", "input->dirty#markDirty"] %>
+<% actions += ["input->preview#schedule", "change->preview#schedule"] %>
+<% actions += ["submit->autosave#submit", "input->autosave#schedule", "change->autosave#schedule", "autosave:saving->dirty#markSaving", "autosave:saved->dirty#markSaved"] %>
+<% actions << "paste->media#paste:capture" %>
+<% actions += ["input->slide-overview#sourceChanged", "change->slide-overview#sourceChanged", "preview:updated->slide-overview#previewUpdated"] if work.presentation? %>
+<% editor_mode = visual_mode ? "visual" : "source" %>
+<% form_data = { action: actions.join(" "), editor_mode: editor_mode, dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?", "bug-report-ignore": true } %>
+<% form_data[:preview_url_value] = persisted ? work_preview_path(work) : work_preview_collection_path(work) %>
+<% form_data[:visual_editor_kind_value] = work.kind %>
+<% form_data[:media_work_kind_value] = work.kind %>
+<% form_data[:media_upload_url_value] = persisted ? (work.document? ? upload_asset_document_path(work) : upload_asset_presentation_path(work)) : "" %>
+<% form_data[:media_enabled_value] = persisted %>
+<% form_data[:visual_editor_focus_title_value] = work.document? && !persisted %>
+<% form_data[:action] += " keydown->visual-editor#projectionKeydown" if work.document? %>
+<% if persisted %>
+  <% form_data[:autosave_work_id_value] = work.id %>
+  <% form_data[:autosave_work_kind_value] = work.kind %>
+  <% form_data[:autosave_work_identity_value] = work.created_at.to_f %>
+<% else %>
+  <% form_data[:autosave_work_kind_value] = work.kind %>
+  <% form_data[:autosave_save_enabled_value] = false %>
+<% end %>
+
+<%= form_with model: work, class: "visual-editor-form", data: form_data do |form| %>
+  <% if work.errors.any? %>
+    <section class="error-panel rounded-2xl border border-[#efb0a8] bg-[#fff1ee] p-4 text-[#a63a2d]" aria-label="Validation errors">
+      <h2><%= pluralize(work.errors.count, "error") %> prevented saving</h2>
+      <ul><% work.errors.full_messages.each do |message| %><li><%= message %></li><% end %></ul>
+    </section>
+  <% end %>
+
+  <% if persisted %>
+    <%= form.hidden_field :lock_version, value: work.lock_version %>
+    <%= form.hidden_field :base_revision, value: work.revision_token %>
+    <%= form.hidden_field :edit_session_id, value: SecureRandom.uuid %>
+  <% end %>
+  <%= hidden_field_tag :editor_mode, editor_mode %>
+
+  <% workspace = work.workspace || Workspace.default %>
+  <% editor_host_config = {
+    kind: work.document? ? "document" : "presentation",
+    persisted: persisted,
+    showTitle: work.presentation?,
+    showSubmit: true,
+    source: work.source.to_s,
+    title: work.title.presence || work.default_title,
+    titleName: work.presentation? ? form.field_name(:title) : nil,
+    sourceName: form.field_name(:source),
+    themeName: form.field_name(:theme),
+    typographyName: form.field_name(:typography),
+    theme: work.theme_override,
+    typography: work.typography_override,
+    mode: editor_mode,
+    previewUrl: persisted ? work_show_path(work) : nil,
+    previewHtml: editor_projection[:html],
+    editorMap: editor_projection[:editor_map],
+    warnings: editor_projection[:warnings],
+    slideCount: work.presentation? ? work.slides.length : 0,
+    authoringRegistry: AuthoringRegistry.for_editor(workspace: workspace),
+    documentTitles: work.document? ? document_link_titles(workspace: work.workspace) : [],
+    releaseStatus: work.presentation? ? work.published_release_status : nil,
+    releaseState: work.presentation? ? (work.published_release_status == "stale" ? "Published release is stale — republish to present the latest draft." : work.published_release_status == "current" ? "Published release is current." : nil) : nil,
+    ids: {
+      title: form.field_id(:title),
+      source: form.field_id(:source),
+      field: "#{form.field_id(:source)}_field",
+      surface: "#{form.field_id(:source)}_editor",
+      label: "#{form.field_id(:source)}_editor_label",
+      theme: form.field_id(:theme),
+      typography: form.field_id(:typography),
+      slideHeading: "#{form.field_id(:source)}_slide_overview_heading"
+    }
+  } %>
+  <div data-editor-form-controllers="<%= controllers.join(" ") %>" data-editor-view-config="<%= ERB::Util.html_escape(editor_host_config.to_json) %>"></div>
+<% end %>

@@ -1,5 +1,0 @@
-one:
-  workspace_id: 1
-  kind: presentation
-  title: Demo Deck
-  source: "# One\n\nBody\n---\n# Two"
