@@ -99,7 +99,7 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     )?;
 
     let fullscreen = PredefinedMenuItem::fullscreen(app, None)?;
-    let show_library = MenuItem::with_id(app, "open-work", "Show Library", true, None::<&str>)?;
+    let show_library = MenuItem::with_id(app, "show-library", "Show Library", true, None::<&str>)?;
     let refresh_library = MenuItem::with_id(
         app,
         "refresh-library",
@@ -175,4 +175,63 @@ pub(crate) fn build_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
         Menu::with_items(app, &[&file, &edit, &view, &presentation, &window, &help])?
     };
     Ok(menu)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::{HashMap, HashSet};
+
+    // Regression test for the Show-Library duplicate menu id: "Show Library"
+    // reused "open-work", so the View-menu entry fired the Open Work handler.
+    // The test reads this file's own `with_id` call sites, so it cannot drift
+    // from the menu under test the way a hand-kept id list would.
+    fn menu_ids() -> Vec<String> {
+        let mut ids = Vec::new();
+        let mut rest = include_str!("menus.rs");
+        while let Some(start) = rest.find("with_id(app, \"") {
+            rest = &rest[start + "with_id(app, \"".len()..];
+            if let Some(end) = rest.find('"') {
+                ids.push(rest[..end].to_string());
+                rest = &rest[end + 1..];
+            } else {
+                break;
+            }
+        }
+        ids
+    }
+
+    #[test]
+    fn menu_item_ids_are_unique() {
+        let ids = menu_ids();
+        assert!(!ids.is_empty(), "expected menu item ids in menus.rs");
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        for id in &ids {
+            *counts.entry(id.as_str()).or_default() += 1;
+        }
+        let duplicates: Vec<(&str, usize)> = counts
+            .iter()
+            .filter(|(_, count)| **count > 1)
+            .map(|(id, count)| (*id, *count))
+            .collect();
+        assert!(
+            duplicates.is_empty(),
+            "duplicate menu item ids: {duplicates:?}"
+        );
+        let unique: HashSet<&str> = ids.iter().map(String::as_str).collect();
+        assert_eq!(unique.len(), ids.len(), "menu item ids must be unique");
+    }
+
+    #[test]
+    fn show_library_has_its_own_id() {
+        let ids = menu_ids();
+        assert!(
+            ids.iter().any(|id| id == "show-library"),
+            "Show Library needs its own menu id, not the open-work id"
+        );
+        assert_eq!(
+            ids.iter().filter(|id| *id == "open-work").count(),
+            1,
+            "open-work must identify exactly one menu item"
+        );
+    }
 }

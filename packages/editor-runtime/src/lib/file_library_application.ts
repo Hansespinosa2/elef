@@ -1,3 +1,4 @@
+import { desktopMenuKeyAction } from "./desktop_menu_keys.js"
 import { createWorkOpenFlow, prepareWorkOpen } from "./work_open_flow.js"
 import { measurePaintedAction } from "./performance_measurement.js"
 import { editorFor } from "./editor_controller_lookup.js"
@@ -1067,10 +1068,28 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
     document.body.classList.add("printing-work")
     await new Promise(resolve => requestAnimationFrame(resolve))
-    window.addEventListener("afterprint", () => {
+    try {
+      // The platform print dialog (and its PDF destination) opens only
+      // through the native print_work command: script window.print() is a
+      // silent no-op in the desktop webviews on macOS and Linux, which is
+      // why desktop PDF export never produced a dialog. It stays as the
+      // last-resort fallback where no native pipeline answers. The native
+      // dialog fires no afterprint event, so the printing-work marker is
+      // cleared here on every path: dialog shown, cancelled, or failed.
+      const printViaNative = typeof fileLibrary.printWork === "function"
+      if (printViaNative) await fileLibrary.printWork()
+      else window.print()
+      // Harness probe: the e2e run cannot dismiss the platform dialog, so
+      // it asserts this flag (native seam reached) instead of dialog pixels.
+      if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
+        globalThis.__elefPrintResult = { native: printViaNative }
+      }
+    } catch (error) {
+      console.error("[desktop-print]", error)
+      showNotice("The print dialog could not be opened.", "error")
+    } finally {
       document.body.classList.remove("printing-work")
-    }, { once: true })
-    window.print()
+    }
   }
 
   // Present mode runs on the shared client presentation mount (the retired
@@ -1199,6 +1218,15 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       mount.querySelector<HTMLElement>("#library-search")?.focus()
       return
     }
+    // Own menu id since the Show-Library duplicate-id fix: returns to the
+    // library without stealing focus, unlike Open Work (Cmd+O), which jumps
+    // to search so a work can be opened by keyboard right away.
+    if (action === "show-library") {
+      if (!library) return chooseLibrary()
+      if (hasUnsavedChanges() && !(await flushSave())) return
+      showLibrary()
+      return
+    }
     if (action === "new-presentation") return showCreateDialog("presentation")
     if (action === "new-document") return showCreateDialog("document")
     if (action === "save") return flushSave({ force: true })
@@ -1311,9 +1339,17 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }))
 
   window.addEventListener("keydown", event => {
-    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+    // Present chord (registry "present") rides the same menu action as the
+    // native item, webview-level so macOS, Linux, and Windows behave
+    // identically with no per-layout native accelerator. The menu action
+    // notices (instead of failing) when no presentation is open.
+    const action = desktopMenuKeyAction(event)
+    if (action === "focus-search") {
       event.preventDefault()
       mount.querySelector<HTMLElement>("#library-search")?.focus()
+    } else if (action === "start-presentation") {
+      event.preventDefault()
+      void handleMenuAction("start-presentation")
     }
   })
 

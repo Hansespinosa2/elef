@@ -81,6 +81,33 @@ test("client presentation controller ignores keys outside travel and in fields",
   controller.destroy();
 });
 
+test("client presentation controller leaves modified keys to global chords", () => {
+  const { document, scope, stage } = mount(2);
+  const controller = new PresentationController(scope, { document: document as unknown as Document, stage });
+  controller.start();
+
+  // Cmd+Enter is the global Present chord and Cmd+S is Save: present-mode
+  // travel must not swallow either, even though bare Enter advances.
+  let prevented = false;
+  for (const event of [
+    { key: "Enter", metaKey: true },
+    { key: "Enter", ctrlKey: true },
+    { key: "s", metaKey: true },
+  ]) {
+    controller.handleKey({
+      ...{ ctrlKey: false, metaKey: false, altKey: false, isComposing: false },
+      ...event,
+      target: document.createElement("div"),
+      preventDefault: () => {
+        prevented = true;
+      },
+    } as unknown as KeyboardEvent);
+  }
+  assert.equal(prevented, false);
+  assert.equal(scope.querySelector("[data-presentation-counter]")?.textContent, "1 / 2");
+  controller.destroy();
+});
+
 test("client presentation mount resyncs slides after host re-render", () => {
   const { document, scope, stage } = mount(2);
   const mountHandle = mountPresentation(scope, {

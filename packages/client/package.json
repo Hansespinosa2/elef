@@ -25,6 +25,10 @@
       "types": "./src/features/settings/vimPreferences.ts",
       "default": "./dist/vim-preferences.js"
     },
+    "./shortcuts": {
+      "types": "./src/features/shortcuts/shortcuts.ts",
+      "default": "./dist/shortcuts.js"
+    },
     "./sanitize": {
       "types": "./src/ui/sanitize.ts",
       "default": "./dist/sanitize.js"

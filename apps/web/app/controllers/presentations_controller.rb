@@ -27,12 +27,12 @@ class PresentationsController < ApplicationController
   end
 
   def new
-    @presentation = Presentation.new(source: Presentation::DEFAULT_SOURCE)
+    @presentation = Presentation.new(source: Presentation.available_default_source)
     render "works/shell"
   end
 
   def start
-    presentation = Presentation.create!(source: Presentation::DEFAULT_SOURCE)
+    presentation = Presentation.create!(source: Presentation.available_default_source)
     redirect_to edit_presentation_path(presentation), notice: "New presentation started."
   end
 

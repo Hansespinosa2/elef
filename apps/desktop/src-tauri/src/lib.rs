@@ -6,6 +6,7 @@ mod error;
 mod exports;
 mod library;
 mod menus;
+mod printing;
 mod remote_images;
 mod state;
 mod updates;
@@ -31,6 +32,7 @@ use crate::library::{
     restore_library_root, write_authoring_registry, write_library_config,
 };
 use crate::menus::build_menu;
+use crate::printing::print_work;
 use crate::remote_images::fetch_remote_image;
 use crate::state::DesktopState;
 use crate::updates::confirm_app_ready;
@@ -85,6 +87,7 @@ macro_rules! app_commands {
             confirm_app_ready,
             confirm_discard_unsaved_changes,
             export_diagnostics,
+            print_work,
             record_preview_failure,
             record_bootstrap_failure,
             $($extra),*
@@ -213,6 +216,9 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
                 "open-work" | "refresh-library" | "save" | "export-elef" | "export-pptx"
                 | "import-elef" | "print" | "settings" | "export-diagnostics" => {
                     let _ = app.emit("desktop-menu-action", id);
+                }
+                "show-library" => {
+                    let _ = app.emit("desktop-menu-action", "show-library");
                 }
                 #[cfg(all(target_os = "macos", not(feature = "desktop-dev")))]
                 "check-for-updates" => {

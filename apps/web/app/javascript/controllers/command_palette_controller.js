@@ -38,11 +38,59 @@ export default class extends Controller {
     } else if (hasModifier && !event.shiftKey && key === "p") {
       event.preventDefault()
       this.openSearch()
+    } else if (hasModifier && !event.shiftKey && key === "s") {
+      // Owner ruling: Cmd+S prevents the browser save dialog in the editor
+      // context and wires to Save. Outside the editor the browser keeps its
+      // default, so this never fights save-page on library or settings.
+      // Window-level, modifier-only: Vim normal mode consumes unmodified
+      // keys and the vim layer passes modified keys through (verified in
+      // @replit/codemirror-vim-core vim.js vimKeyFromEvent/handleKey), so
+      // this fires with Vim mode enabled too.
+      if (this.editorForm()) {
+        event.preventDefault()
+        this.runCommand("save")
+      }
+    } else if (hasModifier && !event.shiftKey && key === "enter") {
+      // Present/publish chord. Conditional preventDefault: with no publish
+      // target on the page (e.g. present mode itself) the key is left alone.
+      if (this.publishTarget()) {
+        event.preventDefault()
+        this.runCommand("present")
+      }
     } else if (event.key === "Escape" && this.isOpen()) {
       event.preventDefault()
       if (this.mode === "appearance-values" || this.mode === "appearance-categories") this.goBackAppearance()
       else this.close()
     }
+  }
+
+  editorForm() {
+    return document.querySelector("form[data-controller~='autosave']")
+  }
+
+  publishTarget() {
+    return document.querySelector("form[action*='publish'] button[type='submit'], form[action*='publish'] input[type='submit']")
+      || document.querySelector("[data-command-palette-present]")
+  }
+
+  printTarget() {
+    return document.querySelector("a[href*='/print']")
+  }
+
+  pptxTarget() {
+    return document.querySelector("[data-controller='pptx-export-host'] button")
+  }
+
+  bugReportTrigger() {
+    return document.querySelector(".bug-report-trigger")
+  }
+
+  loadSamplesTarget() {
+    return document.querySelector("form[action*='load_samples']")
+  }
+
+  slideActionTarget(name) {
+    return document.querySelector(`[data-action='slide-overview#${name}']`)
   }
 
   open() {
@@ -242,9 +290,65 @@ export default class extends Controller {
     } else if (id === "change-appearance") {
       this.openAppearanceCategories()
     } else if (id === "save") {
-      const form = document.querySelector("form[data-controller~='autosave']")
-      form?.requestSubmit()
+      this.editorForm()?.requestSubmit()
       this.close()
+    } else if (id === "present") {
+      const target = this.publishTarget()
+      if (!target) {
+        this.setStatus("Present is not available on this page.")
+      } else if (target.tagName === "FORM") {
+        target.requestSubmit()
+        this.close()
+      } else {
+        // Click, not requestSubmit: the click passes the dirty-navigation
+        // guard, so presenting with unsaved changes still confirms first.
+        target.click()
+        this.close()
+      }
+    } else if (id === "print") {
+      const target = this.printTarget()
+      if (target) {
+        this.close()
+        window.location.assign(target.href)
+      } else {
+        this.setStatus("Print is not available on this page.")
+      }
+    } else if (id === "download-pptx") {
+      const target = this.pptxTarget()
+      if (target) {
+        target.click()
+        this.close()
+      } else {
+        this.setStatus("PowerPoint export is not available on this page.")
+      }
+    } else if (id === "report-bug") {
+      const trigger = this.bugReportTrigger()
+      if (trigger) {
+        trigger.click()
+        this.close()
+      } else {
+        this.setStatus("Bug reporting is not available on this page.")
+      }
+    } else if (id === "load-samples") {
+      const target = this.loadSamplesTarget()
+      if (target) {
+        target.requestSubmit()
+        this.close()
+      } else {
+        this.setStatus("Sample works can only be loaded from the library.")
+      }
+    } else if (id.startsWith("slide-")) {
+      // Slide-structure actions ride the overview buttons for the selected
+      // slide, so palette and toolbar share one behavior.
+      const target = this.slideActionTarget(
+        { "slide-add": "add", "slide-duplicate": "duplicate", "slide-delete": "delete", "slide-move-up": "moveUp", "slide-move-down": "moveDown" }[id]
+      )
+      if (target) {
+        target.click()
+        this.close()
+      } else {
+        this.setStatus("Slide actions need a presentation editor on this page.")
+      }
     } else if (id === "toggle-vim") {
       const toggle = document.querySelector("[data-editor-target='vimToggle']")
       if (toggle) {
@@ -302,8 +406,7 @@ export default class extends Controller {
     this.resultsTarget.replaceChildren()
     this.visibleCommands.forEach((command, index) => {
       const shortcut = command.shortcutKey ? this.shortcutLabel(command.shortcutKey) : command.shortcut
-      const details = [command.description, shortcut].filter(Boolean).join(" · ")
-      const button = this.commandButton(command.label, details, index)
+      const button = this.commandButton(command.label, command.description || "", index, shortcut)
       button.addEventListener("click", () => {
         this.selectedIndex = index
         this.activateSelected()
@@ -462,7 +565,7 @@ export default class extends Controller {
     }
   }
 
-  commandButton(label, description, index) {
+  commandButton(label, description, index, shortcut) {
     const button = document.createElement("button")
     button.type = "button"
     button.role = "option"
@@ -474,6 +577,15 @@ export default class extends Controller {
     const details = document.createElement("span")
     details.textContent = description || ""
     button.append(title, details)
+    // Display convention (shared with docs/keyboard-shortcuts.md): every
+    // palette row shows label + description + a <kbd> chord chip when the
+    // action has a direct chord.
+    if (shortcut) {
+      const chip = document.createElement("kbd")
+      chip.className = "command-palette-shortcut"
+      chip.textContent = shortcut
+      button.append(chip)
+    }
     return button
   }
 
@@ -498,13 +610,18 @@ export default class extends Controller {
   }
 
   updateShortcutLabels() {
-    this.element.querySelectorAll("[data-command-palette-shortcut]").forEach((element) => {
+    // Document-wide so icon-only action buttons (e.g. Present ⌘↵) share the
+    // platform-correct chip, not just the palette triggers.
+    const root = typeof document !== "undefined" ? document : this.element
+    root.querySelectorAll("[data-command-palette-shortcut]").forEach((element) => {
       element.textContent = this.shortcutLabel(element.dataset.commandPaletteShortcut)
     })
   }
 
   shortcutLabel(key) {
-    return `${this.shortcutModifier}${key.toUpperCase()}`
+    // Display convention: single letters uppercase (⌘S), Enter as ↵ (⌘↵).
+    const display = key === "Enter" ? "↵" : key.toUpperCase()
+    return `${this.shortcutModifier}${display}`
   }
 
   normalize(text) {

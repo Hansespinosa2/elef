@@ -9,7 +9,11 @@ class Document < Work
       title = "Untitled document #{suffix}"
       suffix += 1
     end
-    "# #{title}"
+    # New Works start with visible source metadata showing only the workspace
+    # theme default. The value is read from the workspace so a changed default
+    # flows into new sources; it is never hardcoded here.
+    resolved = workspace || Workspace.default
+    "---\ntheme: #{resolved.default_theme}\n---\n# #{title}"
   end
 
   before_validation :derive_title_from_source, if: -> { persisted? && will_save_change_to_source? }

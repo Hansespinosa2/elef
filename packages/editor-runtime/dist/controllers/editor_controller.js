@@ -17,9 +17,11 @@ import {
   readBoolean,
   readEscapeKey,
   readLineNumberMode,
+  readMetadataVisible,
   normalizeLineNumberMode,
   vimKeyFromEvent,
   writeBoolean,
+  writeMetadataVisible,
   writeValue
 } from "@elef/client/vim-preferences";
 import { snippetStopsField } from "./snippet_stops.js";
@@ -88,6 +90,7 @@ class editor_controller_default extends Controller {
     this.escapeKey = readEscapeKey();
     this.lineNumberMode = readLineNumberMode();
     this.modeAwareCursor = readBoolean(MODE_AWARE_CURSOR_STORAGE_KEY);
+    this.metadataVisible = readMetadataVisible();
     this.initialSource = this.readInitialSource();
     this.lineSeparator = detectLineSeparator(this.initialSource);
     this.vimCompartment = new Compartment();
@@ -247,14 +250,17 @@ class editor_controller_default extends Controller {
   toggleMetadataVisibility() {
     if (!this.view || !this.frontmatterRange) return;
     if (this.frontmatterIsFolded()) {
+      this.metadataVisible = true;
       this.view.dispatch({
         effects: unfoldEffect.of(this.frontmatterRange),
         selection: { anchor: this.frontmatterRange.from },
         scrollIntoView: true
       });
     } else {
+      this.metadataVisible = false;
       this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) });
     }
+    writeMetadataVisible(this.metadataVisible);
     this.syncMetadataToggle();
     this.focus();
   }
@@ -630,12 +636,17 @@ class editor_controller_default extends Controller {
   }
   syncFrontmatterVisibility() {
     if (!this.view || !this.frontmatterRange) return;
-    if (this.editingMode === "source" && this.frontmatterIsFolded()) {
-      this.view.dispatch({
-        effects: unfoldEffect.of(this.frontmatterRange),
-        selection: { anchor: this.frontmatterRange.from },
-        scrollIntoView: true
-      });
+    const visible = this.metadataVisible !== false;
+    if (this.editingMode === "source") {
+      if (visible && this.frontmatterIsFolded()) {
+        this.view.dispatch({
+          effects: unfoldEffect.of(this.frontmatterRange),
+          selection: { anchor: this.frontmatterRange.from },
+          scrollIntoView: true
+        });
+      } else if (!visible && !this.frontmatterIsFolded()) {
+        this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) });
+      }
     } else if (this.editingMode === "visual" && !this.frontmatterIsFolded()) {
       this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) });
     }

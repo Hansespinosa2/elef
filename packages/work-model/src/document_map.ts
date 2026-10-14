@@ -178,6 +178,30 @@ interface FenceState {
 const THEMES = new Set(["light", "dark", "match"])
 const TYPOGRAPHIES = new Set(["book", "modern", "technical"])
 
+// Canonical front-matter vocabulary for the metadata assist. The value lists
+// derive from the same Sets the parser/validator reads, so suggestions can
+// never drift from accepted values. Top-level keys are the user-facing
+// fields (theme, typography, show-in-margin); portable document keys
+// (elef_document_key, elef_aliases) stay system-managed and unsuggested.
+// Margin subkeys accept kebab, snake, and camel spellings at parse time;
+// the assist suggests the kebab and snake forms.
+export const THEME_VALUES: readonly string[] = [...THEMES]
+export const TYPOGRAPHY_VALUES: readonly string[] = [...TYPOGRAPHIES]
+export const METADATA_TOP_LEVEL_KEYS: readonly string[] = ["theme", "typography", "show-in-margin"]
+export const MARGIN_SETTING_KEYS: readonly string[] = ["section", "subsection", "footnote", "slide-count", "slide_count"]
+export const METADATA_BOOLEAN_VALUES: readonly string[] = ["true", "false"]
+
+export function metadataValueChoices(key: string): readonly string[] | null {
+  const normalized = String(key ?? "").trim().toLowerCase()
+  if (normalized === "theme") return THEME_VALUES
+  if (normalized === "typography") return TYPOGRAPHY_VALUES
+  const marginKey = normalized.replace(/-([a-z])/g, (_, letter: string) => `_${letter}`).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`).replace(/^_/, "")
+  if (marginKey === "section" || marginKey === "subsection" || marginKey === "footnote" || marginKey === "slide_count") {
+    return METADATA_BOOLEAN_VALUES
+  }
+  return null
+}
+
 // Canonical presentation themes: each pairs one color mode with one font, so
 // slides render three genuinely distinct looks. Legacy front-matter/workspace
 // theme/typography values keep parsing unchanged (no migration, no rejects);

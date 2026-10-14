@@ -17,6 +17,15 @@ export { mountElef } from "./application/shell.js";
 export { isSettingsRoute, isWorkRoute, parseLibraryRoute, parseSettingsRoute, parseWorkRoute } from "./application/router.js";
 export type { SettingsRoute, WorkRoute, WorkView } from "./application/router.js";
 export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
+export {
+  PALETTE_ACTION_IDS,
+  RESERVED_WEB_CHORDS,
+  SHORTCUT_ACTIONS,
+  chordDisplay,
+  eventMatchesChord,
+  shortcutById,
+} from "./features/shortcuts/shortcuts.js";
+export type { ShortcutAction, ShortcutChord, ShortcutKeyEvent } from "./features/shortcuts/shortcuts.js";
 export { createPresentationNavigation, presentationActionForKey } from "./features/presentation/navigation.js";
 export { attachCanvasScaling, PresentationController, mountPresentation } from "./features/presentation/presentation.js";
 export { PresentationEditor, mountPresentationEditor } from "./features/presentation/editor.js";

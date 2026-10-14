@@ -25,6 +25,10 @@
     "./art-layout": {
       "types": "./src/lib/art_layout.ts",
       "default": "./dist/lib/art_layout.js"
+    },
+    "./desktop-menu-keys": {
+      "types": "./src/lib/desktop_menu_keys.ts",
+      "default": "./dist/lib/desktop_menu_keys.js"
     }
   },
   "files": [

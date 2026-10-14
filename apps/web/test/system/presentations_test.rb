@@ -8,6 +8,13 @@ class PresentationsTest < ApplicationSystemTestCase
     RUBY_PLATFORM.match?(/darwin/) ? :meta : :control
   end
 
+  # New presentations start with visible source metadata showing only the
+  # workspace theme default; expectations for new-presentation sources build
+  # on this prefix instead of hardcoding the default value.
+  def new_presentation_prefix
+    "---\ntheme: #{Workspace.default.default_theme}\n---\n"
+  end
+
   def snippet_stop_marks
     page.evaluate_script(<<~JAVASCRIPT)
       [...document.querySelectorAll(".cm-snippet-stop")].map((mark) => mark.textContent)
@@ -189,7 +196,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "new presentation source positions its title explicitly and lets that position be changed" do
-    expected_source = <<~MARKDOWN.chomp
+    expected_source = new_presentation_prefix + <<~MARKDOWN.chomp
       :::align{middle center}
       # Untitled Document
 
@@ -2171,7 +2178,7 @@ class PresentationsTest < ApplicationSystemTestCase
     source = "# First\n\nBody\n---\n# Second"
     find("summary.editor-reveal-metadata", text: "Appearance").click
     select "Book", from: "Typography"
-    normalized_source = "---\ntypography: book\n---\n#{source}"
+    normalized_source = "---\ntheme: #{Workspace.default.default_theme}\ntypography: book\n---\n#{source}"
     fill_in "Markdown source", with: source
     click_on "Save presentation"
 

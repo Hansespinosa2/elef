@@ -10,6 +10,7 @@ import mathShorthandController from "../controllers/math_shorthand_controller.js
 import mediaController from "../controllers/media_controller.js"
 import mermaidAssistController from "../controllers/mermaid_assist_controller.js"
 import mermaidDiagramsController from "../controllers/mermaid_diagrams_controller.js"
+import metadataAssistController from "../controllers/metadata_assist_controller.js"
 import previewController from "../controllers/preview_controller.js"
 import slideOverviewController from "../controllers/slide_overview_controller.js"
 import snippetPaletteController from "../controllers/snippet_palette_controller.js"
@@ -32,6 +33,7 @@ export function registerEditorRuntime(): void {
   register("math-shortcut-palette", mathShortcutPaletteController)
   register("math-shorthand", mathShorthandController)
   register("mermaid-assist", mermaidAssistController)
+  register("metadata-assist", metadataAssistController)
   register("media", mediaController)
   register("preview", previewController)
   register("visual-editor", visualEditorController)
