@@ -1112,3 +1112,170 @@ test("keeps synchronous math assist within the performance gate during 1,000 rea
   assert.ok(p99 < 10, `p99 was ${p99.toFixed(3)} ms (limit 10 ms)`)
   assert.ok(maximum < 16, `maximum was ${maximum.toFixed(3)} ms (limit 16 ms)`)
 })
+
+const AT_REGISTRY = JSON.parse(
+  await readFile(new URL("../../app/javascript/data/default_authoring_registry.json", import.meta.url), "utf8")
+).filter((entry) => entry.namespace === "@")
+
+function atPaletteForQuery(queryText, registry = AT_REGISTRY) {
+  const text = `$@${queryText}$`
+  const caret = text.length - 1
+  const doc = {
+    length: text.length,
+    lineAt: () => ({ from: 0, to: text.length, text }),
+    sliceString: (from, to, separator = "\n") => text.slice(from, to).replaceAll("\n", separator)
+  }
+  const editor = {
+    editingMode: "source",
+    insertMode: true,
+    selectionStart: caret,
+    selectionEnd: caret,
+    view: { state: { doc, tree: { resolveInner: () => ({ name: "Text", parent: { name: "Paragraph", from: 0, parent: null } }) } } },
+    dom: { getBoundingClientRect: () => ({ left: 0, top: 0, bottom: 0, width: 0, height: 0 }) },
+    scrollElement: { addEventListener() {} },
+    focus() {}
+  }
+  const palette = new mathPalette.default()
+  palette.editorController = editor
+  palette.registry = registry
+  palette.paletteTarget = {
+    id: "at-test",
+    hidden: true,
+    replaceChildren() {},
+    append() {},
+    getBoundingClientRect: () => ({ width: 0, height: 0 }),
+    style: {},
+    querySelectorAll: () => [],
+    querySelector: () => null
+  }
+  palette.render = function () { this.paletteTarget.hidden = false }
+  palette.positionPalette = () => {}
+  palette.updateAccessibility = () => {}
+  const closePalette = palette.close.bind(palette)
+  palette.close = function () {
+    this.paletteTarget.hidden = true
+    this.matches = []
+    this.query = null
+  }
+  palette.refresh()
+  palette.restoreClose = closePalette
+  return palette
+}
+
+function atPoolIds(queryText, registry = AT_REGISTRY) {
+  const controller = new mathPalette.default()
+  controller.registry = registry
+  return new Set(
+    registry.filter((entry) => controller.matchScore(entry, queryText) !== null).map((entry) => entry.id)
+  )
+}
+
+test("@f prioritizes the exact phi alias first while keeping alternatives", () => {
+  const palette = atPaletteForQuery("f")
+  const ids = palette.matches.map((entry) => entry.id)
+
+  assert.equal(ids[0], "default-phi")
+  assert.ok(ids.includes("default-frac"), "@f should keep @frac as an alternative")
+  assert.ok(ids.includes("default-forall"), "@f should keep @forall as an alternative")
+  assert.ok(ids.length > 1, "@f must not collapse to a single exact match")
+})
+
+test("@fr narrows monotonically: every candidate also matches @f", () => {
+  const fPool = atPoolIds("f")
+  const frPool = atPoolIds("fr")
+
+  assert.ok(frPool.size > 0, "@fr should still match candidates")
+  for (const id of frPool) {
+    assert.ok(fPool.has(id), `@fr reveals ${id} which @f does not match`)
+  }
+
+  const pairs = [["", "f"], ["f", "fr"], ["f", "frac"], ["p", "ph"], ["ph", "phi"], ["a", "al"]]
+  for (const [shorter, longer] of pairs) {
+    const shortPool = atPoolIds(shorter)
+    const longPool = atPoolIds(longer)
+    for (const id of longPool) {
+      assert.ok(shortPool.has(id), `@${longer} reveals ${id} which @${shorter} does not match`)
+    }
+  }
+})
+
+test("@F ranks the case-sensitive Capital Phi first and keeps phi visible", () => {
+  const palette = atPaletteForQuery("F")
+  const ids = palette.matches.map((entry) => entry.id)
+
+  assert.equal(ids[0], "default-capital-phi")
+  assert.ok(ids.includes("default-phi"), "@F should keep lowercase phi visible")
+
+  const controller = new mathPalette.default()
+  assert.ok(controller.fieldScore("F", "F", 10000) > (controller.fieldScore("f", "F", 10000) ?? -1))
+})
+
+test("single-character queries use the same prefix and substring matching as longer queries", () => {
+  const controller = new mathPalette.default()
+  controller.registry = AT_REGISTRY
+
+  assert.ok(controller.fieldScore("frac", "f", 10000) !== null, "prefix match must score for a single character")
+  assert.ok(controller.fieldScore("inf", "f", 10000) !== null, "substring match must score for a single character")
+  assert.equal(controller.matchScore({ aliases: ["x"], name: "X", description: "ex" }, ""), 0)
+  assert.equal(controller.fieldScore("phi", "φ", 10000), null)
+  assert.equal(controller.fieldScore("", "f", 10000), null)
+})
+
+test("unicode @ queries close the palette without crashing", () => {
+  const palette = atPaletteForQuery("φ")
+  assert.equal(palette.matches.length, 0)
+  assert.equal(palette.paletteTarget.hidden, true)
+})
+
+test("@ palette ArrowDown and ArrowUp wrap around the visible matches", () => {
+  const controller = new mathPalette.default()
+  const options = [0, 1, 2].map((index) => ({
+    dataset: { index },
+    selected: index === 0,
+    setAttribute(name, value) { if (name === "aria-selected") this.selected = value === "true" },
+    getAttribute(name) { return name === "aria-selected" ? String(this.selected) : null },
+    classList: { toggle() {} },
+    scrollIntoView() {}
+  }))
+  controller.matches = [{ id: "a" }, { id: "b" }, { id: "c" }]
+  controller.selectedIndex = 0
+  controller.paletteTarget = {
+    querySelectorAll: () => options,
+    querySelector: () => options.find((option) => option.selected) ?? null
+  }
+  controller.updateAccessibility = () => {}
+
+  controller.move(1)
+  assert.equal(controller.selectedIndex, 1)
+  controller.move(1)
+  controller.move(1)
+  assert.equal(controller.selectedIndex, 0)
+  controller.move(-1)
+  assert.equal(controller.selectedIndex, 2)
+})
+
+test("@ palette Enter, Tab, and Escape keep their navigation behavior", () => {
+  const calls = []
+  const controller = new mathPalette.default()
+  controller.query = { prefix: "@", text: "f", start: 1, base: "", baseStart: 1 }
+  controller.editorController = { editingMode: "source", insertMode: true }
+  controller.paletteTarget = { hidden: false }
+  controller.stops = []
+  controller.selectionMoved = false
+  controller.queryAtCaret = () => controller.query
+  controller.validExactShorthandAtCaret = () => false
+  controller.validAppendedShorthandAtCaret = () => false
+  controller.move = (amount) => calls.push(["move", amount])
+  controller.insertSelected = () => calls.push(["insert"])
+  controller.close = () => calls.push(["close"])
+  controller.schedule = () => calls.push(["schedule"])
+  const eventFor = (key) => ({ key, defaultPrevented: false, preventDefault() { this.defaultPrevented = true } })
+
+  controller.keydown(eventFor("ArrowDown"))
+  controller.keydown(eventFor("ArrowUp"))
+  controller.keydown(eventFor("Enter"))
+  controller.keydown(eventFor("Tab"))
+  controller.keydown(eventFor("Escape"))
+
+  assert.deepEqual(calls, [["move", 1], ["move", -1], ["insert"], ["insert"], ["close"]])
+})

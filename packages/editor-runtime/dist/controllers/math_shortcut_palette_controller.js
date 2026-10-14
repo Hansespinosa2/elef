@@ -155,8 +155,7 @@ class math_shortcut_palette_controller_default extends Controller {
   refresh() {
     const query = this.queryAtCaret();
     if (!query) return this.close();
-    const singleCharacterAlias = query.prefix === "@" && query.text.length === 1;
-    const matches = this.registry.filter((shortcut) => shortcut.namespace === query.prefix).filter((shortcut) => query.prefix !== "." || shortcut.built_in && shortcut.behavior?.operator_class).filter((shortcut) => !singleCharacterAlias || (shortcut.aliases || []).includes(query.text)).map((shortcut) => ({ shortcut, score: this.matchScore(shortcut, query.text) })).filter((result) => result.score !== null).sort((left, right) => right.score - left.score || left.shortcut.name.localeCompare(right.shortcut.name)).slice(0, 6).map(({ shortcut }) => shortcut);
+    const matches = this.registry.filter((shortcut) => shortcut.namespace === query.prefix).filter((shortcut) => query.prefix !== "." || shortcut.built_in && shortcut.behavior?.operator_class).map((shortcut) => ({ shortcut, score: this.matchScore(shortcut, query.text) })).filter((result) => result.score !== null).sort((left, right) => right.score - left.score || left.shortcut.name.localeCompare(right.shortcut.name)).slice(0, 6).map(({ shortcut }) => shortcut);
     if (matches.length === 0) return this.close();
     this.query = query;
     this.matches = matches;
@@ -216,7 +215,7 @@ class math_shortcut_palette_controller_default extends Controller {
     if (!query) return 0;
     const candidates = (shortcut.aliases || []).map((alias) => ({ value: String(alias), weight: 1e4 }));
     candidates.push({ value: shortcut.name || "", weight: 7e3 });
-    if (query.length > 1) candidates.push({ value: shortcut.description || "", weight: 4e3 });
+    candidates.push({ value: shortcut.description || "", weight: 4e3 });
     return candidates.reduce((best, candidate) => {
       const score = this.fieldScore(candidate.value, query, candidate.weight);
       return score === null ? best : Math.max(best ?? 0, score);
@@ -230,7 +229,6 @@ class math_shortcut_palette_controller_default extends Controller {
     if (foldedValue === foldedQuery) return weight + 900;
     if (value.startsWith(query)) return weight + 800 - value.length;
     if (foldedValue.startsWith(foldedQuery)) return weight + 700 - value.length;
-    if (query.length < 2) return null;
     const exactCaseIndex = value.indexOf(query);
     if (exactCaseIndex !== -1) return weight + 600 - exactCaseIndex;
     const foldedIndex = foldedValue.indexOf(foldedQuery);

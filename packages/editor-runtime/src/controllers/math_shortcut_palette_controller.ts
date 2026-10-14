@@ -185,11 +185,9 @@ export default class extends Controller<HTMLElement> {
     const query = this.queryAtCaret()
     if (!query) return this.close()
 
-    const singleCharacterAlias = query.prefix === "@" && query.text.length === 1
     const matches = this.registry
       .filter((shortcut: RegistryEntry) => shortcut.namespace === query.prefix)
       .filter((shortcut: RegistryEntry) => query.prefix !== "." || (shortcut.built_in && shortcut.behavior?.operator_class))
-      .filter((shortcut: RegistryEntry) => !singleCharacterAlias || (shortcut.aliases || []).includes(query.text))
       .map((shortcut: RegistryEntry) => ({ shortcut, score: this.matchScore(shortcut, query.text) }))
       .filter((result: { shortcut: RegistryEntry; score: number | null }): result is { shortcut: RegistryEntry; score: number } => result.score !== null)
       .sort((left: { shortcut: RegistryEntry; score: number }, right: { shortcut: RegistryEntry; score: number }) => right.score - left.score || left.shortcut.name.localeCompare(right.shortcut.name))
@@ -265,7 +263,7 @@ export default class extends Controller<HTMLElement> {
 
     const candidates = (shortcut.aliases || []).map((alias: any) => ({ value: String(alias), weight: 10000 }))
     candidates.push({ value: shortcut.name || "", weight: 7000 })
-    if (query.length > 1) candidates.push({ value: shortcut.description || "", weight: 4000 })
+    candidates.push({ value: shortcut.description || "", weight: 4000 })
 
     return candidates.reduce((best: number | null, candidate: { value: string; weight: number }) => {
       const score = this.fieldScore(candidate.value, query, candidate.weight)
@@ -281,7 +279,6 @@ export default class extends Controller<HTMLElement> {
     if (foldedValue === foldedQuery) return weight + 900
     if (value.startsWith(query)) return weight + 800 - value.length
     if (foldedValue.startsWith(foldedQuery)) return weight + 700 - value.length
-    if (query.length < 2) return null
 
     const exactCaseIndex = value.indexOf(query)
     if (exactCaseIndex !== -1) return weight + 600 - exactCaseIndex
