@@ -19,9 +19,11 @@ import {
   readBoolean,
   readEscapeKey,
   readLineNumberMode,
+  readMetadataVisible,
   normalizeLineNumberMode,
   vimKeyFromEvent,
   writeBoolean,
+  writeMetadataVisible,
   writeValue
 } from "@elef/client/vim-preferences"
 
@@ -114,6 +116,7 @@ export default class extends Controller<HTMLElement> {
     this.escapeKey = readEscapeKey()
     this.lineNumberMode = readLineNumberMode()
     this.modeAwareCursor = readBoolean(MODE_AWARE_CURSOR_STORAGE_KEY)
+    this.metadataVisible = readMetadataVisible()
     this.initialSource = this.readInitialSource()
     this.lineSeparator = detectLineSeparator(this.initialSource)
     this.vimCompartment = new Compartment()
@@ -296,14 +299,17 @@ export default class extends Controller<HTMLElement> {
     if (!this.view || !this.frontmatterRange) return
 
     if (this.frontmatterIsFolded()) {
+      this.metadataVisible = true
       this.view.dispatch({
         effects: unfoldEffect.of(this.frontmatterRange),
         selection: { anchor: this.frontmatterRange.from },
         scrollIntoView: true
       })
     } else {
+      this.metadataVisible = false
       this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
     }
+    writeMetadataVisible(this.metadataVisible)
 
     this.syncMetadataToggle()
     this.focus()
@@ -754,12 +760,21 @@ export default class extends Controller<HTMLElement> {
   syncFrontmatterVisibility(): void {
     if (!this.view || !this.frontmatterRange) return
 
-    if (this.editingMode === "source" && this.frontmatterIsFolded()) {
-      this.view.dispatch({
-        effects: unfoldEffect.of(this.frontmatterRange),
-        selection: { anchor: this.frontmatterRange.from },
-        scrollIntoView: true
-      })
+    // Source mode respects the global visibility preference so hiding
+    // metadata on one Work hides it on the next; visual mode always folds
+    // because the projection owns the surface there. Undefined means visible
+    // (fresh controllers and legacy callers default to shown metadata).
+    const visible = this.metadataVisible !== false
+    if (this.editingMode === "source") {
+      if (visible && this.frontmatterIsFolded()) {
+        this.view.dispatch({
+          effects: unfoldEffect.of(this.frontmatterRange),
+          selection: { anchor: this.frontmatterRange.from },
+          scrollIntoView: true
+        })
+      } else if (!visible && !this.frontmatterIsFolded()) {
+        this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+      }
     } else if (this.editingMode === "visual" && !this.frontmatterIsFolded()) {
       this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
     }

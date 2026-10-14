@@ -48,3 +48,9 @@ export { setProjectionBlockEditable } from "./lib/projection_editability.js";
 export { createRendererClient } from "./lib/renderer_worker_client.js";
 export { createRequestGuard } from "./lib/request_identity.js";
 export { formatLineNumber } from "./lib/vim_line_numbers.js";
+export {
+  fieldScore as metadataFieldScore,
+  metadataCandidatesFor,
+  metadataQueryAt,
+  rankMetadataCandidates
+} from "./lib/metadata_assist.js";
