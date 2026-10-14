@@ -53,11 +53,12 @@ const EDITOR_VIEW = `
             <span class="media-upload-status" data-media-target="status" role="status" aria-live="polite" aria-busy="false"></span>
           </div>
 
-          <div class="editor-surface" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shorthand-target="editor" data-math-shortcut-palette-target="editor" data-document-link-palette-target="editor" data-action="dragover->media#sourceDragOver:capture dragleave->media#sourceDragLeave drop->media#sourceDrop:capture"></div>
-          <textarea rows="24" class="editor-input-proxy" spellcheck="false" tabindex="-1" aria-label="Markdown source" data-editor-target="input" data-dirty-target="field" data-autosave-target="field" data-snippet-palette-target="editor" data-math-shorthand-target="editor" data-math-shortcut-palette-target="editor" data-document-link-palette-target="editor" data-action="input->dirty#markDirty input->snippet-palette#input keydown->snippet-palette#keydown keydown->math-shorthand#keydown input->math-shortcut-palette#input keydown->math-shortcut-palette#keydown input->mermaid-assist#input input->document-link-palette#input keydown->document-link-palette#keydown"></textarea>
+          <div class="editor-surface" data-editor-target="surface" data-snippet-palette-target="editor" data-math-shorthand-target="editor" data-math-shortcut-palette-target="editor" data-metadata-assist-target="editor" data-document-link-palette-target="editor" data-action="dragover->media#sourceDragOver:capture dragleave->media#sourceDragLeave drop->media#sourceDrop:capture"></div>
+          <textarea rows="24" class="editor-input-proxy" spellcheck="false" tabindex="-1" aria-label="Markdown source" data-editor-target="input" data-dirty-target="field" data-autosave-target="field" data-snippet-palette-target="editor" data-math-shorthand-target="editor" data-math-shortcut-palette-target="editor" data-metadata-assist-target="editor" data-document-link-palette-target="editor" data-action="input->dirty#markDirty input->snippet-palette#input keydown->snippet-palette#keydown keydown->math-shorthand#keydown input->math-shortcut-palette#input keydown->math-shortcut-palette#keydown input->mermaid-assist#input input->metadata-assist#input keydown->metadata-assist#keydown input->document-link-palette#input keydown->document-link-palette#keydown"></textarea>
           <div class="snippet-palette" data-snippet-palette-target="palette" hidden role="listbox" aria-label="Snippet suggestions"></div>
           <div class="snippet-palette math-shortcut-palette" data-math-shortcut-palette-target="palette" hidden role="listbox" aria-label="Math shortcut suggestions"></div>
           <div class="snippet-palette" data-mermaid-assist-target="palette" hidden role="listbox" aria-label="Mermaid suggestions"></div>
+          <div class="snippet-palette" data-metadata-assist-target="palette" hidden role="listbox" aria-label="Metadata suggestions"></div>
           <div class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div>
           <p class="field-hint editor-mode-hint">Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type <code>/trigger</code> for document structures and <code>:align</code> or <code>:footnote</code> for Elef directives. Type <code>[[</code> to link another document. In math, type <code>@a</code>, <code>@frac</code>, or <code>@gather</code>; Tab walks multi-slot expressions. Type <code>/diagram</code> to open Mermaid Assist. Math transforms such as <code>$x.b.vec.t$</code> commit with Enter or Tab.</p>
         </div>
@@ -230,6 +231,7 @@ export function renderEditorView(container: Element | null, config: EditorViewCo
     ["snippet-palette", "snippet_palette", "snippet-palette"],
     ["math-shortcut-palette", "math_shortcut_palette", "math-shortcut-palette"],
     ["mermaid-assist", "mermaid_assist_palette", "mermaid-assist"],
+    ["metadata-assist", "metadata_assist_palette", "metadata-assist"],
     ["document-link-palette", "document_link_palette", "document-link-palette"]
   ]) {
     const palette = root.querySelector(`[data-${options}-target="palette"]`) as Element
@@ -339,7 +341,7 @@ export function configureEditorKind(root: Element | null, kind: string, {
   const sourceField = root.querySelector(".source-field") as HTMLElement
   const sourceSurface = root.querySelector("[data-editor-target='surface']") as HTMLElement
   const sourceInput = root.querySelector("[data-editor-target='input']") as HTMLTextAreaElement
-  const controllerNames = ["editor", "snippet-palette", "math-shorthand", "math-shortcut-palette", "mermaid-assist"]
+  const controllerNames = ["editor", "snippet-palette", "math-shorthand", "math-shortcut-palette", "mermaid-assist", "metadata-assist"]
   const documentLinkActions = ["input->document-link-palette#input", "keydown->document-link-palette#keydown"]
 
   root.setAttribute("aria-label", `${visualEditingEnabled ? "Visual" : "Source"} ${kind} editor`)

@@ -9,6 +9,10 @@ export {
   buildEditorStructure,
   frontMatterHasKey,
   initialFrontMatter,
+  MARGIN_SETTING_KEYS,
+  METADATA_BOOLEAN_VALUES,
+  METADATA_TOP_LEVEL_KEYS,
+  metadataValueChoices,
   normalizeThemeValue,
   normalizeTypographyValue,
   POSITION_VOCABULARY,
@@ -18,6 +22,8 @@ export {
   readStyleOverrides,
   replaceFirstHeading,
   sourceAnchorLines,
+  THEME_VALUES,
+  TYPOGRAPHY_VALUES,
   withAppearanceValue,
   withFrontMatterValue
 } from "@elef/work-model/document-map"

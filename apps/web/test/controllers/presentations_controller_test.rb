@@ -163,7 +163,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     get new_presentation_path
     assert_select 'form.visual-editor-form[data-autosave-save-enabled-value="false"]'
     config = editor_host_config
-    assert_equal Presentation::DEFAULT_SOURCE, config.fetch("source")
+    assert_equal Presentation.available_default_source, config.fetch("source")
+    assert_equal "---\ntheme: #{Workspace.default.default_theme}\n---\n#{Presentation::DEFAULT_SOURCE}", config.fetch("source")
     refute config.fetch("persisted")
     assert_select 'form[data-preview-url-value="/presentations/preview"]'
     assert_select '[data-editor-form-controllers*="slide-overview"][data-editor-form-controllers*="media"]'
@@ -566,7 +567,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     presentation = Presentation.order(:id).last
     assert_redirected_to edit_presentation_path(presentation)
     assert_equal "New presentation started.", flash[:notice]
-    assert_equal Presentation::DEFAULT_SOURCE, presentation.source
+    assert_equal Presentation.available_default_source, presentation.source
+    assert_equal "---\ntheme: #{Workspace.default.default_theme}\n---\n#{Presentation::DEFAULT_SOURCE}", presentation.source
   end
 
   test "exports a presentation as a downloadable Elef archive" do
