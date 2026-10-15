@@ -149,10 +149,7 @@ class editor_controller_default extends Controller {
     });
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event) => this.forwardProxyKeydown(event));
     this.form = this.element.closest("form");
-    this.handleProjectionNavigation = (event) => this.noteProjectionNavigation(event);
-    for (const type of ["pointerdown", "keydown", "beforeinput", "input"]) {
-      this.form?.addEventListener(type, this.handleProjectionNavigation);
-    }
+    this.observeProjectionNavigation();
     this.form?.addEventListener("submit", this.handleSubmit = () => {
       this.projectionController()?.flushPendingProjectionEdits?.();
       this.syncInput();
@@ -183,9 +180,7 @@ class editor_controller_default extends Controller {
     this.pendingMediaRanges?.clear();
     if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame);
     this.form?.removeEventListener("submit", this.handleSubmit);
-    for (const type of ["pointerdown", "keydown", "beforeinput", "input"]) {
-      this.form?.removeEventListener(type, this.handleProjectionNavigation);
-    }
+    this.stopObservingProjectionNavigation();
     this.resizeObserver?.disconnect();
     window.removeEventListener("resize", this.updateVisualSurfaceGeometry);
     this.form?.removeEventListener("formdata", this.handleFormData);
@@ -330,6 +325,17 @@ class editor_controller_default extends Controller {
   }
   projectionController() {
     return this.form?.presentationEditorController || this.form?.visualEditorController || null;
+  }
+  observeProjectionNavigation() {
+    this.handleProjectionNavigation = (event) => this.noteProjectionNavigation(event);
+    for (const type of ["pointerdown", "keydown", "beforeinput", "input"]) {
+      document.addEventListener(type, this.handleProjectionNavigation, true);
+    }
+  }
+  stopObservingProjectionNavigation() {
+    for (const type of ["pointerdown", "keydown", "beforeinput", "input"]) {
+      document.removeEventListener(type, this.handleProjectionNavigation, true);
+    }
   }
   noteProjectionNavigation(event) {
     if (this.editingMode !== "visual" || !(event.target instanceof Element)) return;

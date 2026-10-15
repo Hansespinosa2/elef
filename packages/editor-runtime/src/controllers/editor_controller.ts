@@ -182,10 +182,7 @@ export default class extends Controller<HTMLElement> {
     })
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event: KeyboardEvent) => this.forwardProxyKeydown(event))
     this.form = this.element.closest("form")
-    this.handleProjectionNavigation = (event: Event) => this.noteProjectionNavigation(event)
-    for (const type of ["pointerdown", "keydown", "beforeinput", "input"]) {
-      this.form?.addEventListener(type, this.handleProjectionNavigation)
-    }
+    this.observeProjectionNavigation()
     this.form?.addEventListener("submit", this.handleSubmit = () => {
       this.projectionController()?.flushPendingProjectionEdits?.()
       this.syncInput()
@@ -218,9 +215,7 @@ export default class extends Controller<HTMLElement> {
     this.pendingMediaRanges?.clear()
     if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame)
     this.form?.removeEventListener("submit", this.handleSubmit)
-    for (const type of ["pointerdown", "keydown", "beforeinput", "input"]) {
-      this.form?.removeEventListener(type, this.handleProjectionNavigation)
-    }
+    this.stopObservingProjectionNavigation()
     this.resizeObserver?.disconnect()
     window.removeEventListener("resize", this.updateVisualSurfaceGeometry)
     this.form?.removeEventListener("formdata", this.handleFormData)
@@ -398,6 +393,21 @@ export default class extends Controller<HTMLElement> {
 
   projectionController(): any {
     return this.form?.presentationEditorController || this.form?.visualEditorController || null
+  }
+
+  observeProjectionNavigation(): void {
+    this.handleProjectionNavigation = (event: Event) => this.noteProjectionNavigation(event)
+    // Existing block navigation runs during form capture. Observe on the
+    // document first, independently of controller connection order.
+    for (const type of ["pointerdown", "keydown", "beforeinput", "input"]) {
+      document.addEventListener(type, this.handleProjectionNavigation, true)
+    }
+  }
+
+  stopObservingProjectionNavigation(): void {
+    for (const type of ["pointerdown", "keydown", "beforeinput", "input"]) {
+      document.removeEventListener(type, this.handleProjectionNavigation, true)
+    }
   }
 
   noteProjectionNavigation(event: Event): void {
