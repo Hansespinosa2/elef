@@ -4,6 +4,7 @@ import type { ElefHost } from "@elef/contracts";
 import type { ElefMountOptions, NoticeTone } from "../../application/types.js";
 import type { DeviceStorage } from "./vimPreferences.js";
 import { UpdaterSection } from "./UpdaterSection.js";
+import type { VimEditorBridge } from "./VimSettings.js";
 import { VimSettings } from "./VimSettings.js";
 
 export interface SettingsControl {
@@ -15,6 +16,8 @@ export interface SettingsAppProps {
   readonly host: ElefHost;
   readonly options: ElefMountOptions;
   readonly storage?: DeviceStorage | null;
+  readonly editorBridge?: VimEditorBridge | null;
+  readonly onSaved?: (settings: Record<string, unknown>) => void;
   readonly registerControl?: (control: SettingsControl) => void;
 }
 
@@ -25,7 +28,7 @@ function settingText(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
-export function SettingsApp({ host, options, storage, registerControl }: SettingsAppProps): JSX.Element {
+export function SettingsApp({ host, options, storage, editorBridge, onSaved, registerControl }: SettingsAppProps): JSX.Element {
   const [theme, setTheme] = useState("dark");
   const [typography, setTypography] = useState("book");
   const [ready, setReady] = useState(false);
@@ -41,7 +44,10 @@ export function SettingsApp({ host, options, storage, registerControl }: Setting
     setReady(false);
     try {
       const current = await host.settings.getSettings();
-      setTheme(settingText(current["theme"], "dark"));
+      // The pre-parity desktop named the follow-the-system theme "system";
+      // the shared page calls it "match" (web vocabulary).
+      const storedTheme = settingText(current["theme"], "dark");
+      setTheme(storedTheme === "system" ? "match" : storedTheme);
       setTypography(settingText(current["typography"], "book"));
       setReady(true);
     } catch {
@@ -67,6 +73,7 @@ export function SettingsApp({ host, options, storage, registerControl }: Setting
       setTheme(settingText(updated["theme"], theme));
       setTypography(settingText(updated["typography"], typography));
       showNotice("Workspace appearance saved.");
+      onSaved?.(updated);
     } catch {
       showNotice("Workspace appearance could not be saved.", "error");
     }
@@ -133,7 +140,10 @@ export function SettingsApp({ host, options, storage, registerControl }: Setting
             </button>
           </form>
 
-          <VimSettings {...(storage === undefined ? {} : { storage })} />
+          <VimSettings
+            {...(storage === undefined ? {} : { storage })}
+            {...(editorBridge === undefined || editorBridge === null ? {} : { editorBridge })}
+          />
 
           {showUpdater && options.updater ? <UpdaterSection seam={options.updater} /> : null}
         </>

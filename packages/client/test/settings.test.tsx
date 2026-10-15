@@ -253,6 +253,40 @@ describe("settings route", () => {
     ]);
   });
 
+  it("normalizes the legacy desktop system theme to the shared match value", async () => {
+    const host = typedHost();
+    host.settings.getSettings = async () => ({ theme: "system", typography: "book" });
+    const { document } = await mountInto(host, { initialUrl: "/settings" });
+    const theme = document.getElementById("settings-theme") as unknown as HTMLSelectElement;
+    assert.equal(theme.value, "match");
+  });
+
+  it("forwards the vim editor bridge and settings-saved reports through mount options", async () => {
+    const host = typedHost();
+    const calls: [string, unknown][] = [];
+    const saved: Record<string, unknown>[] = [];
+    const { document } = await mountInto(host, {
+      initialUrl: "/settings",
+      vimEditorBridge: {
+        setVimEnabled: (v: unknown) => calls.push(["setVimEnabled", v]),
+        setEscapeKey: (v: unknown) => calls.push(["setEscapeKey", v]),
+        clearEscapeKey: () => calls.push(["clearEscapeKey", null]),
+        setLineNumberMode: (v: unknown) => calls.push(["setLineNumberMode", v]),
+        setModeAwareCursor: (v: unknown) => calls.push(["setModeAwareCursor", v]),
+      },
+      onSettingsSaved: (settings) => void saved.push(settings),
+    });
+    const toggle = document.querySelector('section[aria-label="Vim settings"] input[type="checkbox"]');
+    await setCheckbox(toggle, true);
+    assert.deepEqual(calls, [["setVimEnabled", true]]);
+    const theme = document.getElementById("settings-theme") as unknown as HTMLSelectElement;
+    await setSelectValue(theme, "light");
+    const form = theme.closest("form") as unknown;
+    await submitForm(form);
+    assert.equal(saved.length, 1);
+    assert.equal(saved[0]?.["theme"], "light");
+  });
+
   it("hides the updater affordance when the host has no updater", async () => {
     const host = typedHost();
     assert.equal(host.capabilities.updater, false);
