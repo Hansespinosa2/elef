@@ -60,7 +60,9 @@ import {
 const VIM_ESCAPE_MODES = ["normal", "insert", "visual", "operatorPending"]
 let activeEscapeKey = ""
 
-const elefMetadata = {
+// Shared with the live-preview suite so tests parse with the identical
+// ElefMetadata block grammar the engine ships.
+export const elefMetadata = {
   defineNodes: [{ name: "ElefMetadata", block: true, style: tags.processingInstruction }],
   parseBlock: [{
     name: "ElefMetadata",

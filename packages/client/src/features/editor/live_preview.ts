@@ -386,6 +386,17 @@ function addBlockMarkup(decorations: Range<Decoration>[], state: EditorState, so
   })
 }
 
+// Invisible-directive line shapes, mirrored from the work-model owners
+// (document_map align/step parsing, art_source). Only these conceal when
+// inactive; unknown or malformed ::: lines stay visible so broken syntax is
+// never hidden from its author.
+function invisibleDirectiveLine(line: string): boolean {
+  if (/^:::art[ \t]*$/.test(line)) return true
+  if (/^ {0,3}:::step(?:\{[0-9]+\})?[ \t]*$/.test(line)) return true
+  if (/^ {0,3}:::(align|position)[ \t]*\{[^}]*\}[ \t]*$/.test(line)) return true
+  return /^ {0,3}:::[ \t]*$/.test(line)
+}
+
 function addSyntaxTreeHints(decorations: Range<Decoration>[], state: EditorState): void {
   // The Markdown parser is the authority for fenced regions and inline node
   // boundaries. Regex projections above are intentionally conservative; this
@@ -397,13 +408,28 @@ function addSyntaxTreeHints(decorations: Range<Decoration>[], state: EditorState
       if (node.name === "Blockquote") {
         decorations.push(lineDecoration("cm-live-quote").range(node.from))
       } else if (node.name === "ElefMetadata") {
-        addMark(
-          decorations,
-          state,
-          node.from,
-          node.to,
-          activeRange(state, node.from, node.to) ? "cm-live-active-syntax" : "cm-live-syntax-marker"
-        )
+        if (!invisibleDirectiveLine(state.sliceDoc(node.from, node.to))) {
+          addMark(
+            decorations,
+            state,
+            node.from,
+            node.to,
+            activeRange(state, node.from, node.to) ? "cm-live-active-syntax" : "cm-live-syntax-marker"
+          )
+          return
+        }
+        // Invisible directives occupy no reader output, so inactive lines
+        // collapse entirely (including their line break); entering the line
+        // reveals the source in place.
+        let to = node.to
+        const breakAfter = state.sliceDoc(to, to + 2)
+        if (breakAfter.startsWith("\r\n")) to += 2
+        else if (breakAfter.startsWith("\n")) to += 1
+        if (activeRange(state, node.from, to)) {
+          addMark(decorations, state, node.from, node.to, "cm-live-active-syntax")
+        } else {
+          decorations.push(Decoration.replace({}).range(node.from, to))
+        }
       }
     }
   })
