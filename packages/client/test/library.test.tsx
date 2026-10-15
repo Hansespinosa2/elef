@@ -148,6 +148,12 @@ test("create dialog creates through the port and opens the new work", async () =
     const target = seen[0] as { workId: string };
     const works = await host.library.listWorks(ws("ws-1"));
     assert.ok(works.some((work) => work.id === target.workId));
+    const createdWork = await host.works.getWork(target.workId as WorkId);
+    assert.equal(
+      (createdWork as unknown as { text: string }).text,
+      "---\ntheme: match\n---\n# Fresh work\n\n",
+      "dialog create seeds editable front matter through the port",
+    );
   } finally {
     shell.unmount();
   }
