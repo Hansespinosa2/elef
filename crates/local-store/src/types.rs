@@ -102,10 +102,16 @@ pub struct StoredAsset {
     pub size: u64,
 }
 
+fn default_library_typography() -> String {
+    "book".into()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LibraryConfig {
     pub schema_version: u32,
     pub theme: String,
+    #[serde(default = "default_library_typography")]
+    pub typography: String,
     #[serde(default)]
     pub hotkeys: BTreeMap<String, String>,
 }

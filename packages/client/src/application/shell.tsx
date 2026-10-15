@@ -70,6 +70,10 @@ export async function mountElef(
         registerControl: (next) => {
           settingsControl = next;
         },
+        ...(options.vimEditorBridge === undefined || options.vimEditorBridge === null
+          ? {}
+          : { editorBridge: options.vimEditorBridge }),
+        ...(options.onSettingsSaved === undefined ? {} : { onSaved: options.onSettingsSaved }),
       });
     }
     return createElement(LibraryApp, {

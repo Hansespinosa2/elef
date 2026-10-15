@@ -83,15 +83,10 @@
     <footer class="statusbar" role="status"><span id="status-text" aria-live="polite">Ready</span><span class="status-right">Folders are the source of truth</span></footer>
 
     <dialog id="settings-dialog" class="app-dialog">
-      <form id="settings-form" method="dialog">
-        <p class="native-eyebrow">LIBRARY SETTINGS</p>
-        <h2>Appearance</h2>
-        <label for="library-theme">Theme</label>
-        <select id="library-theme" name="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
-        <div id="vim-settings-mount"></div>
-        <button id="manage-authoring" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold authoring-settings-link" type="button">Manage snippets and math shortcuts</button>
-        <div class="dialog-actions"><button class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="cancel">Cancel</button><button class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="save">Save settings</button></div>
-      </form>
+      <p class="native-eyebrow">LIBRARY SETTINGS</p>
+      <div id="settings-page-mount"></div>
+      <button id="manage-authoring" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold authoring-settings-link" type="button">Manage snippets and math shortcuts</button>
+      <form method="dialog" class="dialog-actions"><button id="close-settings" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="close">Close</button></form>
     </dialog>
     <dialog id="authoring-dialog" class="app-dialog">
       <div id="authoring-settings-mount"></div>

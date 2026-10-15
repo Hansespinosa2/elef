@@ -43,6 +43,7 @@ impl Default for LibraryConfig {
         Self {
             schema_version: LIBRARY_CONFIG_SCHEMA_VERSION,
             theme: "dark".into(),
+            typography: "book".into(),
             hotkeys: BTreeMap::new(),
         }
     }
@@ -50,7 +51,8 @@ impl Default for LibraryConfig {
 
 pub(crate) fn validate_library_config(config: &LibraryConfig) -> Result<(), CoreError> {
     if config.schema_version == 0
-        || !matches!(config.theme.as_str(), "system" | "light" | "dark")
+        || !matches!(config.theme.as_str(), "match" | "system" | "light" | "dark")
+        || !matches!(config.typography.as_str(), "book" | "modern" | "technical")
         || config.hotkeys.len() > 100
         || config.hotkeys.iter().any(|(action, binding)| {
             action.is_empty()
@@ -188,9 +190,15 @@ impl Library {
             Ok(_) => {}
         }
         let bytes = read_regular_file_limited(&path, 1024 * 1024)?;
-        let config: LibraryConfig =
+        let mut config: LibraryConfig =
             serde_json::from_slice(&bytes).map_err(|_| CoreError::InvalidInput)?;
         validate_library_config(&config)?;
+        // The pre-parity desktop stored the follow-the-system theme as
+        // "system"; the shared settings page names it "match" (web
+        // vocabulary). Normalize on read so both hosts see one value.
+        if config.theme == "system" {
+            config.theme = "match".into();
+        }
         Ok(config)
     }
 
@@ -342,13 +350,43 @@ mod tests {
         let (temp, library) = library();
         assert_eq!(library.read_config().unwrap(), LibraryConfig::default());
         assert_eq!(LibraryConfig::default().theme, "dark");
+        assert_eq!(LibraryConfig::default().typography, "book");
         let config = LibraryConfig {
             schema_version: 1,
             theme: "dark".into(),
+            typography: "book".into(),
             hotkeys: BTreeMap::from([("open".into(), "CmdOrCtrl+O".into())]),
         };
         library.write_config(&config).unwrap();
         assert_eq!(library.read_config().unwrap(), config);
+        // The shared settings page vocabulary round-trips through the
+        // library config, so desktop and web persist the same values.
+        let shared = LibraryConfig {
+            schema_version: 1,
+            theme: "match".into(),
+            typography: "modern".into(),
+            hotkeys: BTreeMap::new(),
+        };
+        library.write_config(&shared).unwrap();
+        assert_eq!(library.read_config().unwrap(), shared);
+        // Legacy desktop files predate typography and name the
+        // follow-the-system theme "system": they load with defaults and
+        // the shared vocabulary instead of failing.
+        fs::write(
+            temp.path().join(".elef/config.json"),
+            serde_json::json!({ "schema_version": 1, "theme": "system" }).to_string(),
+        )
+        .unwrap();
+        let migrated = library.read_config().unwrap();
+        assert_eq!(migrated.theme, "match");
+        assert_eq!(migrated.typography, "book");
+        assert!(matches!(
+            library.write_config(&LibraryConfig {
+                typography: "comic-sans".into(),
+                ..LibraryConfig::default()
+            }),
+            Err(CoreError::InvalidInput)
+        ));
         assert!(temp.path().join(".elef/config.json").is_file());
         assert!(matches!(
             library.write_config(&LibraryConfig {

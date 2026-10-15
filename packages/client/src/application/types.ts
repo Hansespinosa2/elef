@@ -1,5 +1,6 @@
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
 import type { AuthoringRegistryTransport } from "../features/settings/authoringRegistry.js";
+import type { VimEditorBridge } from "../features/settings/VimSettings.js";
 
 export type { WorkKind };
 
@@ -88,6 +89,16 @@ export interface ElefMountOptions {
   readonly updater?: UpdaterSeam;
   readonly authoring?: AuthoringSeam;
   readonly palette?: LibraryPaletteSeam;
+  // Optional host contribution for the shared workspace-defaults page. The
+  // vim preferences persist per device on every host; hosts that embed an
+  // editor beside the settings UI (desktop) pass a bridge so changes
+  // live-sync into the open editor, exactly like the authoring seam's
+  // reloadEditorRegistry. Hosts without an editor omit it.
+  readonly vimEditorBridge?: VimEditorBridge | null;
+  // Host status feedback for workspace-default saves (desktop statusbar),
+  // mirroring AuthoringSeam.onSaved: the page always reports inside its own
+  // notice region as well.
+  readonly onSettingsSaved?: (settings: Record<string, unknown>) => void;
   // Host capability declaration for the document-graph panel slot. Hosts
   // without graph support (the Stable desktop profile) pass false and the
   // client omits the panel element entirely; default true keeps every
