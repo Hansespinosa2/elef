@@ -22,9 +22,18 @@ const { default: EditorController } = await import(`data:text/javascript;base64,
 
 function modeFixture(t, selection, visualCaret = null, source = "# Heading\n\nFirst **bold** passage.\n\nFinal.") {
   const frames = []
-  const saved = Object.fromEntries(["requestAnimationFrame", "document"].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]))
+  const saved = Object.fromEntries(["requestAnimationFrame", "document", "window", "Element", "KeyboardEvent"].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]))
+  const projection = { flushPendingProjectionEdits() {}, captureCaret: () => visualCaret, restoreCaret() {} }
+  const nativeSelection = { anchorNode: {}, anchorOffset: 0, focusNode: {}, focusOffset: 0 }
+  class ElementStub { closest() { return projection } }
+  class KeyboardEventStub {
+    constructor(key) { this.key = key; this.type = "keydown"; this.target = new ElementStub() }
+  }
   Object.defineProperty(globalThis, "requestAnimationFrame", { configurable: true, value: callback => frames.push(callback) })
   Object.defineProperty(globalThis, "document", { configurable: true, value: { activeElement: {} } })
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { getSelection: () => nativeSelection } })
+  Object.defineProperty(globalThis, "Element", { configurable: true, value: ElementStub })
+  Object.defineProperty(globalThis, "KeyboardEvent", { configurable: true, value: KeyboardEventStub })
   t.after(() => {
     for (const [name, descriptor] of Object.entries(saved)) {
       if (descriptor) Object.defineProperty(globalThis, name, descriptor)
@@ -44,17 +53,61 @@ function modeFixture(t, selection, visualCaret = null, source = "# Heading\n\nFi
     focus() { this.focused = true }
   }
   const vim = { state: { vim: { mode: "visual", visualMode: true, registerName: "a", macroModeState: { recording: true } } } }
-  const projection = { flushPendingProjectionEdits() {}, captureCaret: () => visualCaret, restoreCaret() {} }
   const controller = new EditorController()
   Object.assign(controller, {
     view, vim, vimEnabled: true, editingMode: "source",
     element: { dataset: {} },
-    form: { setAttribute() {}, querySelector: () => null, dispatchEvent() {} },
+    form: { setAttribute() {}, querySelector: () => null, dispatchEvent() {}, contains: element => element === projection },
     projectionController: () => projection,
     syncFrontmatterVisibility() {}, syncMetadataToggle() {}
   })
-  return { controller, view, vim, dispatches, flushFrames: () => frames.splice(0).forEach(callback => callback()) }
+  return { controller, view, vim, dispatches, nativeSelection, flushFrames: () => frames.splice(0).forEach(callback => callback()) }
 }
+
+for (const eventKind of ["ArrowLeft", "beforeinput"]) {
+  test(`unchanged projection selection after ${eventKind} retains concealed source positions`, t => {
+    const { controller, view, flushFrames } = modeFixture(t, EditorSelection.single(8, 1), { sourceOffset: 2 }, "**bold**")
+    const before = view.state.selection
+    controller.setEditingMode("visual")
+    flushFrames()
+    const event = eventKind === "ArrowLeft"
+      ? new KeyboardEvent("ArrowLeft")
+      : { type: "beforeinput", target: new Element(), defaultPrevented: true }
+    controller.noteProjectionNavigation(event)
+    flushFrames()
+    assert.equal(controller.projectionNavigationOccurred, false)
+    controller.setEditingMode("source")
+    flushFrames()
+    assert.equal(view.state.selection, before)
+  })
+}
+
+test("actual projection selection movement transfers the source caret even before its next animation frame", t => {
+  const { controller, view, nativeSelection, flushFrames } = modeFixture(t, EditorSelection.single(8, 1), { sourceOffset: 3 }, "**bold**")
+  controller.setEditingMode("visual")
+  flushFrames()
+  controller.noteProjectionNavigation(new KeyboardEvent("ArrowRight"))
+  nativeSelection.anchorOffset = 1
+  nativeSelection.focusOffset = 1
+  controller.setEditingMode("source")
+  flushFrames()
+  assert.equal(view.state.selection.main.head, 3)
+  assert.equal(view.state.selection.main.anchor, 3)
+})
+
+test("non-navigation shortcuts preserve the source selection without reading a lossy projection caret", t => {
+  const { controller, view, flushFrames } = modeFixture(t, EditorSelection.single(8, 1), { sourceOffset: 2 }, "**bold**")
+  const before = view.state.selection
+  controller.setEditingMode("visual")
+  flushFrames()
+  const event = new KeyboardEvent("s")
+  event.ctrlKey = true
+  controller.noteProjectionNavigation(event)
+  flushFrames()
+  controller.setEditingMode("source")
+  flushFrames()
+  assert.equal(view.state.selection, before)
+})
 
 for (const selection of [
   EditorSelection.single(28, 12),

@@ -288,11 +288,15 @@ class editor_controller_default extends Controller {
     if (!silent && previousMode === nextMode) return;
     const projectionController = this.projectionController();
     if (!silent && previousMode === "visual") projectionController?.flushPendingProjectionEdits?.();
+    if (previousMode === "visual") this.resolveProjectionNavigation();
     const visualCaret = previousMode === "visual" && this.projectionNavigationOccurred ? projectionController?.captureCaret?.() : null;
     const sourceOffset = visualCaret?.sourceOffset ?? this.view.state.selection.main.head;
     const preferredBlockId = visualCaret?.blockId ?? null;
     this.editingMode = nextMode;
-    if (nextMode === "visual" && previousMode !== "visual") this.projectionNavigationOccurred = false;
+    if (nextMode === "visual" && previousMode !== "visual") {
+      this.projectionNavigationOccurred = false;
+      this.pendingProjectionInteraction = null;
+    }
     this.view?.dispatch({ effects: livePreviewMode.of(this.editingMode === "visual") });
     this.element.dataset.editorEditingMode = this.editingMode;
     this.form?.setAttribute("data-editor-mode", this.editingMode);
@@ -336,7 +340,34 @@ class editor_controller_default extends Controller {
       const selectsAll = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a";
       if (!movesSelection && !selectsAll) return;
     }
-    this.projectionNavigationOccurred = true;
+    this.resolveProjectionNavigation();
+    if (event.type === "input") {
+      this.projectionNavigationOccurred = true;
+      return;
+    }
+    if (this.projectionNavigationOccurred) return;
+    const selection = window.getSelection();
+    const before = {
+      source: this.value,
+      anchorNode: selection?.anchorNode,
+      anchorOffset: selection?.anchorOffset,
+      focusNode: selection?.focusNode,
+      focusOffset: selection?.focusOffset
+    };
+    this.pendingProjectionInteraction = before;
+    requestAnimationFrame(() => {
+      if (this.destroyed || this.pendingProjectionInteraction !== before) return;
+      this.resolveProjectionNavigation();
+    });
+  }
+  resolveProjectionNavigation() {
+    const before = this.pendingProjectionInteraction;
+    if (!before) return;
+    this.pendingProjectionInteraction = null;
+    const selection = window.getSelection();
+    if (before.source !== this.value || before.anchorNode !== selection?.anchorNode || before.anchorOffset !== selection?.anchorOffset || before.focusNode !== selection?.focusNode || before.focusOffset !== selection?.focusOffset) {
+      this.projectionNavigationOccurred = true;
+    }
   }
   syncVisualSurfaceGeometry() {
     if (!this.toolbar) return;
@@ -515,6 +546,8 @@ class editor_controller_default extends Controller {
     });
   }
   loadDocument(source) {
+    this.projectionNavigationOccurred = false;
+    this.pendingProjectionInteraction = null;
     const document2 = createDocumentState(EditorState, source, this.documentExtensions);
     this.lineSeparator = document2.lineSeparator;
     this.view.setState(document2.state);

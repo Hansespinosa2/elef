@@ -343,6 +343,7 @@ export default class extends Controller<HTMLElement> {
 
     const projectionController = this.projectionController()
     if (!silent && previousMode === "visual") projectionController?.flushPendingProjectionEdits?.()
+    if (previousMode === "visual") this.resolveProjectionNavigation()
     // A rendered caret cannot distinguish every source position (a link
     // destination and its closing delimiter share one visible offset). Read
     // it only after the author actually navigated or edited that surface.
@@ -352,7 +353,10 @@ export default class extends Controller<HTMLElement> {
     const preferredBlockId = visualCaret?.blockId ?? null
 
     this.editingMode = nextMode
-    if (nextMode === "visual" && previousMode !== "visual") this.projectionNavigationOccurred = false
+    if (nextMode === "visual" && previousMode !== "visual") {
+      this.projectionNavigationOccurred = false
+      this.pendingProjectionInteraction = null
+    }
     this.view?.dispatch({ effects: livePreviewMode.of(this.editingMode === "visual") })
     this.element.dataset.editorEditingMode = this.editingMode
     this.form?.setAttribute("data-editor-mode", this.editingMode)
@@ -405,7 +409,37 @@ export default class extends Controller<HTMLElement> {
       const selectsAll = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a"
       if (!movesSelection && !selectsAll) return
     }
-    this.projectionNavigationOccurred = true
+    this.resolveProjectionNavigation()
+    if (event.type === "input") {
+      this.projectionNavigationOccurred = true
+      return
+    }
+    if (this.projectionNavigationOccurred) return
+    const selection = window.getSelection()
+    const before = {
+      source: this.value,
+      anchorNode: selection?.anchorNode,
+      anchorOffset: selection?.anchorOffset,
+      focusNode: selection?.focusNode,
+      focusOffset: selection?.focusOffset
+    }
+    this.pendingProjectionInteraction = before
+    requestAnimationFrame(() => {
+      if (this.destroyed || this.pendingProjectionInteraction !== before) return
+      this.resolveProjectionNavigation()
+    })
+  }
+
+  resolveProjectionNavigation(): void {
+    const before = this.pendingProjectionInteraction
+    if (!before) return
+    this.pendingProjectionInteraction = null
+    const selection = window.getSelection()
+    if (before.source !== this.value || before.anchorNode !== selection?.anchorNode ||
+      before.anchorOffset !== selection?.anchorOffset || before.focusNode !== selection?.focusNode ||
+      before.focusOffset !== selection?.focusOffset) {
+      this.projectionNavigationOccurred = true
+    }
   }
 
   syncVisualSurfaceGeometry(): void {
@@ -622,6 +656,8 @@ export default class extends Controller<HTMLElement> {
   }
 
   loadDocument(source: string): void {
+    this.projectionNavigationOccurred = false
+    this.pendingProjectionInteraction = null
     const document = createDocumentState(EditorState, source, this.documentExtensions)
     this.lineSeparator = document.lineSeparator
     this.view.setState(document.state)
