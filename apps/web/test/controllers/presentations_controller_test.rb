@@ -159,7 +159,18 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     media_controllers = css_select("[data-editor-form-controllers]").first["data-editor-form-controllers"].split.count("media")
     assert_equal 1, media_controllers
     assert_select 'button[data-dirty-navigation]', text: "Present"
-    assert_select "a[href='#{print_presentation_path(presentations(:one))}']", text: "Print draft / save PDF"
+    # The edit page mounts the shared Export menu (same component as the
+    # desktop work view): draft-only works expose one edition, print rides
+    # an anchor href, PPTX rides the draft-form fetch. Labels live in the
+    # client registry (packages/client/test/export-menu.test.tsx).
+    mount = css_select('[data-controller="export-menu-host"]').first
+    assert mount, "expected the shared export menu mount"
+    assert_equal "presentation", mount["data-export-menu-host-kind-value"]
+    assert_equal ["draft"], JSON.parse(mount["data-export-menu-host-editions-value"])
+    assert_equal print_presentation_path(presentations(:one)),
+      JSON.parse(mount["data-export-menu-host-print-urls-value"])["draft"]
+    assert_equal pptx_presentation_path(presentations(:one), version: "draft"),
+      JSON.parse(mount["data-export-menu-host-pptx-urls-value"])["draft"]
     get new_presentation_path
     assert_select 'form.visual-editor-form[data-autosave-save-enabled-value="false"]'
     config = editor_host_config
@@ -434,25 +445,35 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
   test "PPTX editor actions expose draft and published exports" do
     presentation = presentations(:one)
     get edit_presentation_path(presentation)
-    assert_select '[data-controller="pptx-export-host"][data-pptx-export-host-url-value=?]', pptx_presentation_path(presentation, version: "draft") do
-      assert_select "button", text: "Download PPTX draft"
-    end
+    mount = css_select('[data-controller="export-menu-host"]').first
+    assert mount, "expected the shared export menu mount"
+    assert_equal ["draft"], JSON.parse(mount["data-export-menu-host-editions-value"])
+    assert_equal pptx_presentation_path(presentation, version: "draft"),
+      JSON.parse(mount["data-export-menu-host-pptx-urls-value"])["draft"]
 
     post publish_presentation_path(presentation)
     get edit_presentation_path(presentation)
-    assert_select '[data-controller="pptx-export-host"][data-pptx-export-host-url-value=?]', pptx_presentation_path(presentation, version: "published") do
-      assert_select "button", text: "Download published PPTX"
-    end
+    mount = css_select('[data-controller="export-menu-host"]').first
+    assert mount, "expected the shared export menu mount"
+    assert_equal %w[draft published], JSON.parse(mount["data-export-menu-host-editions-value"])
+    pptx_urls = JSON.parse(mount["data-export-menu-host-pptx-urls-value"])
+    assert_equal pptx_presentation_path(presentation, version: "draft"), pptx_urls["draft"]
+    assert_equal pptx_presentation_path(presentation, version: "published"), pptx_urls["published"]
+    print_urls = JSON.parse(mount["data-export-menu-host-print-urls-value"])
+    assert_equal print_presentation_path(presentation, version: "published"), print_urls["published"]
 
     get new_presentation_path
-    assert_select '[data-controller="pptx-export-host"][data-pptx-export-host-url-value=?][data-pptx-export-host-current-draft-value="true"]',
-      pptx_presentations_path(version: "draft") do
-      assert_select "button", text: "Download PPTX draft"
-    end
-    assert_select '[data-pptx-export-host-library-url-value="/vendor/pptxgen.bundle.js"]'
+    mount = css_select('[data-controller="export-menu-host"]').first
+    assert mount, "expected the shared export menu mount"
+    assert_equal ["draft"], JSON.parse(mount["data-export-menu-host-editions-value"])
+    assert_equal pptx_presentations_path(version: "draft"),
+      JSON.parse(mount["data-export-menu-host-pptx-urls-value"])["draft"]
+    assert_equal "/vendor/pptxgen.bundle.js", mount["data-export-menu-host-library-url-value"]
 
     get new_presentation_path, headers: { "SCRIPT_NAME" => "/apps/elef/dev" }
-    assert_select '[data-pptx-export-host-library-url-value="/apps/elef/dev/vendor/pptxgen.bundle.js"]'
+    mount = css_select('[data-controller="export-menu-host"]').first
+    assert mount, "expected the shared export menu mount"
+    assert_equal "/apps/elef/dev/vendor/pptxgen.bundle.js", mount["data-export-menu-host-library-url-value"]
   end
 
   test "previews an unsaved presentation without creating a record" do

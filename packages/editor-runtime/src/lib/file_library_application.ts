@@ -10,8 +10,8 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { CREATE_WORK_EVENT, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client"
-import type { GraphController } from "@elef/client"
+import { CREATE_WORK_EVENT, exportMenuOptionsFor, mountElef, mountExportMenu, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client"
+import type { ExportMenuHandle, ExportMenuProps, GraphController } from "@elef/client"
 
 export interface WorkFolder {
   id: string;
@@ -201,6 +201,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   let library: FileLibraryStatus | null = null
+  let exportMenu: ExportMenuHandle | null = null
   let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} }
   let workFolders: WorkFolder[] = []
   let activeWorkFolder: WorkFolder | null = null
@@ -1198,13 +1199,37 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     conflictDialog.close()
   }
 
+  // The work-view Export menu is the shared client component both hosts
+  // mount: labels and option visibility come from the export registry, so
+  // the desktop keeps no separate menu markup or dismissal wiring. Delivery
+  // stays in the desktop seams below (native print, native PPTX save).
+  function exportMenuProps(): ExportMenuProps {
+    const kind = activeWorkFolder?.source_file === "document.md" ? "document" : "presentation"
+    return {
+      menuId: "export-menu",
+      buttonId: "export-menu-button",
+      menuLabel: "Export",
+      statusId: "export-pptx-status",
+      options: exportMenuOptionsFor({
+        kind,
+        editions: [{
+          edition: "draft",
+          onPrint: () => printCurrentWork(),
+          onExportPptx: () => exportPptxCurrentWork(),
+          printOptionId: "print-work",
+          pptxOptionId: "export-pptx",
+        }],
+      }),
+    }
+  }
+
   function syncSourceLabel(): void {
     if (!activeWorkFolder) return
     shellElement<HTMLElement>("#work-source-name").textContent = activeWorkFolder.source_file
     shellElement<HTMLElement>("#work-kind").textContent = activeWorkFolder.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
-    // PowerPoint export is presentation-only (export registry); documents
-    // keep no PPTX option, and the handler gates the menu path as well.
-    shellElement<HTMLElement>("#export-pptx").hidden = activeWorkFolder.source_file === "document.md"
+    // The shared menu re-derives its options (PPTX is presentation-only per
+    // the registry) every time the open Work changes.
+    exportMenu?.update(exportMenuProps())
   }
 
   async function handleMenuAction(action: string): Promise<any> {
@@ -1253,33 +1278,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   })
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
-  // The Export menu holds one option per format (the PPTX option hides for
-  // documents in syncSourceLabel). Desktop export never navigates, so the
-  // menu closes on activation, outside interaction, and Escape.
-  function closeExportMenu(): void {
-    shellElement<HTMLDetailsElement>("#export-menu").open = false
-  }
-  shellElement<HTMLElement>("#export-pptx").addEventListener("click", () => {
-    closeExportMenu()
-    void exportPptxCurrentWork()
-  })
-  // The Print / Save PDF option reuses the File → Print… seam for both
-  // kinds; PDF bytes come from the platform print pipeline on both hosts.
-  shellElement<HTMLElement>("#print-work").addEventListener("click", () => {
-    closeExportMenu()
-    void printCurrentWork()
-  })
-  // Outside pointerdown dismisses immediately for mouse and touch; outside
-  // click also dismisses because activation without a pointer (keyboard,
-  // assistive tech, programmatic clicks) never fires pointerdown.
-  function dismissExportMenuOnOutsideEvent(event: Event): void {
-    if (event.target instanceof Element && !event.target.closest("#export-menu")) closeExportMenu()
-  }
-  document.addEventListener("pointerdown", dismissExportMenuOnOutsideEvent)
-  document.addEventListener("click", dismissExportMenuOnOutsideEvent)
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape") closeExportMenu()
-  })
+  // The work-view Export menu is the shared client component: one trigger
+  // whose options vary by Work kind, with the same dismissal contract on
+  // both hosts. Desktop export never navigates; the Print / Save PDF option
+  // reuses the File → Print… seam and the PPTX option the native save seam.
+  exportMenu = mountExportMenu(shellElement<HTMLElement>("#export-menu-mount"), exportMenuProps())
   shellElement<HTMLElement>("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then(saved => {

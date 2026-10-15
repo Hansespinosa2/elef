@@ -125,9 +125,16 @@ Capability keys come from the `HostCapabilities` interface
   image).
 - Desktop trigger: one work-view Export menu whose options vary by kind —
   documents offer Print / Save PDF only, presentations add Download PPTX
-  (the export registry scopes PPTX to presentations; `syncSourceLabel`
-  hides the option for documents). The PPTX option plus the File →
-  Export PowerPoint… menu item call the desktop export seam
+  (the export registry scopes PPTX to presentations; the shared menu
+  omits the option for documents). Both hosts mount the same client
+  `ExportMenu` (`packages/client/src/features/export/ExportMenu.tsx`,
+  options from `exportMenuOptionsFor` over the registry): the web edit
+  page mounts it through `export-menu-host` (print options stay anchors
+  to the print routes, PPTX runs the draft-form model fetch), the desktop
+  work view mounts it through `file_library_application.ts` (print runs
+  `printCurrentWork`, PPTX runs `exportPptxCurrentWork`). Neither host
+  keeps its own menu markup or dismissal wiring. The PPTX option plus the
+  File → Export PowerPoint… menu item call the desktop export seam
   (`exportPptx` on the file-library transport); the PDF option (both
   kinds) and File → Print… call `printCurrentWork`, which delivers
   through the native `print_work` command (`apps/desktop/src-tauri/src/printing.rs`

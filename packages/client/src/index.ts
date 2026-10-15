@@ -35,6 +35,16 @@ export type { DocumentEditorDeps, DocumentEditorSeam } from "./features/document
 export { SlideOverview } from "./features/overview/overview.js";
 export { exportPptxModel, downloadBlob, dataUriToBlob } from "./features/export/pptx.js";
 export { EXPORT_FORMATS, exportFormatsFor, exportFormatById } from "./features/export/registry.js";
+export { ExportMenu, exportMenuOptionsFor, mountExportMenu } from "./features/export/ExportMenu.js";
+export type {
+  ExportDelivery,
+  ExportEdition,
+  ExportMenuEditionSeams,
+  ExportMenuFormat,
+  ExportMenuHandle,
+  ExportMenuOption,
+  ExportMenuProps,
+} from "./features/export/ExportMenu.js";
 export {
   presentationBlockAttributes,
   presentationBlockControls,
