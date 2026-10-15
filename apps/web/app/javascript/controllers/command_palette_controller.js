@@ -78,7 +78,11 @@ export default class extends Controller {
   }
 
   pptxTarget() {
-    return document.querySelector("[data-controller='pptx-export-host'] button")
+    // The edit page renders the shared Export menu (options carry
+    // data-export-format); show pages keep standalone pptx-export-host
+    // buttons, which stay as the fallback.
+    return document.querySelector("[data-export-format='pptx']")
+      || document.querySelector("[data-controller='pptx-export-host'] button")
   }
 
   bugReportTrigger() {

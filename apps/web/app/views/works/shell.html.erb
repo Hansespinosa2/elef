@@ -9,52 +9,35 @@
       <h1 class="mb-0 text-4xl font-bold"><%= heading %></h1>
     </div>
     <div class="flex flex-wrap items-center gap-3">
-      <%# Icon-only trial (to-be-judged visually): icon + kbd chip, no text
-        label. Icons follow the new-work precedent (24x24, stroke 1.7);
-        every control keeps an aria-label/title and is keyboard-reachable
-        (direct chord chip or command-palette listing). %>
-      <% print_icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="7" y="3.5" width="10" height="5" rx="1"/><rect x="4.5" y="8.5" width="15" height="8" rx="1.5"/><rect x="7" y="13.5" width="10" height="7" rx="1"/></svg>'.html_safe %>
-      <% download_icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M12 4v10.5M7.5 10.5 12 15l4.5-4.5"/><path d="M5 19.5h14"/></svg>'.html_safe %>
+      <%# Shared Export menu: the same component both hosts mount (labels and
+        option visibility come from the client export registry). The web
+        adapter supplies print-route hrefs and the draft-form PPTX fetch;
+        the desktop adapter supplies its native seams. Present stays a
+        host-owned button (publish route vs in-app stage). %>
       <% present_icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10.2 8.9 15.6 12l-5.4 3.1V8.9Z"/></svg>'.html_safe %>
-      <% if work.document? %>
-        <%= link_to print_document_path(work),
-              class: "button icon-button inline-flex min-h-10 items-center gap-1 rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-2 font-bold no-underline hover:bg-[#f7efe2]",
-              aria: { label: "Print / Save PDF" },
-              title: "Print / Save PDF — also in the command palette" do %>
-          <%= print_icon %><span class="sr-only">Print / Save PDF</span>
-        <% end unless new_record %>
-      <% else %>
-        <% unless new_record %>
-          <%= link_to print_presentation_path(work),
-                class: "button icon-button inline-flex min-h-10 items-center gap-1 rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-2 font-bold no-underline hover:bg-[#f7efe2]",
-                aria: { label: "Print draft / save PDF" },
-                title: "Print draft / save PDF — also in the command palette" do %>
-            <%= print_icon %><span class="sr-only">Print draft / save PDF</span>
-          <% end %>
-        <% end %>
-        <div data-controller="pptx-export-host" data-pptx-export-host-url-value="<%= new_record ? pptx_presentations_path(version: "draft") : pptx_presentation_path(work, version: "draft") %>" data-pptx-export-host-library-url-value="<%= pptx_library_path %>" data-pptx-export-host-current-draft-value="true">
-          <button type="button" data-action="pptx-export-host#download" class="button icon-button inline-flex min-h-10 items-center gap-1 rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-2 font-bold no-underline hover:bg-[#f7efe2]" aria-label="Download PPTX draft" title="Download PPTX draft — also in the command palette"><%= download_icon %><span class="sr-only">Download PPTX draft</span></button>
-          <span class="ml-2 text-sm" role="status" aria-live="polite" data-pptx-export-host-target="status"></span>
-        </div>
-        <% if !new_record && work.published_release %>
-          <%= link_to print_presentation_path(work, version: "published"),
-                class: "button icon-button inline-flex min-h-10 items-center gap-1 rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-2 font-bold no-underline hover:bg-[#f7efe2]",
-                aria: { label: "Print published release" },
-                title: "Print published release — also in the command palette" do %>
-            <%= print_icon %><span class="sr-only">Print published release</span>
-          <% end %>
-          <div data-controller="pptx-export-host" data-pptx-export-host-url-value="<%= pptx_presentation_path(work, version: "published") %>" data-pptx-export-host-library-url-value="<%= pptx_library_path %>">
-            <button type="button" data-action="pptx-export-host#download" class="button icon-button inline-flex min-h-10 items-center gap-1 rounded-full border border-[#ddd5c8] bg-[#fffdf8] px-3 py-2 font-bold no-underline hover:bg-[#f7efe2]" aria-label="Download published PPTX" title="Download published PPTX — also in the command palette"><%= download_icon %><span class="sr-only">Download published PPTX</span></button>
-            <span class="ml-2 text-sm" role="status" aria-live="polite" data-pptx-export-host-target="status"></span>
-          </div>
-        <% end %>
-        <% unless new_record %>
-          <%= form_with url: publish_presentation_path(work), method: :post, data: { turbo: false }, html: { class: "present-form" } do %>
-            <button type="submit" data-command-palette-present data-dirty-navigation="true" class="button primary icon-button inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-3 py-2 font-bold text-white hover:brightness-95" aria-label="Present" title="Present (publish and open the stage)">
-              <%= present_icon %><span class="sr-only">Present</span>
-            </button>
-            <kbd class="present-chord" data-command-palette-shortcut="Enter" title="Keyboard: present">⌘↵</kbd>
-          <% end %>
+      <% has_published = !new_record && work.presentation? && work.published_release %>
+      <% export_editions = has_published ? %w[draft published] : %w[draft] %>
+      <% export_print_urls = {} %>
+      <% export_print_urls["draft"] = work.document? ? print_document_path(work) : print_presentation_path(work) unless new_record %>
+      <% export_print_urls["published"] = print_presentation_path(work, version: "published") if has_published %>
+      <% export_pptx_urls = {} %>
+      <% if work.presentation? %>
+        <% export_pptx_urls["draft"] = new_record ? pptx_presentations_path(version: "draft") : pptx_presentation_path(work, version: "draft") %>
+        <% export_pptx_urls["published"] = pptx_presentation_path(work, version: "published") if has_published %>
+      <% end %>
+      <div data-controller="export-menu-host"
+           data-export-menu-host-kind-value="<%= work.presentation? ? "presentation" : "document" %>"
+           data-export-menu-host-editions-value="<%= ERB::Util.html_escape(export_editions.to_json) %>"
+           data-export-menu-host-print-urls-value="<%= ERB::Util.html_escape(export_print_urls.to_json) %>"
+           data-export-menu-host-pptx-urls-value="<%= ERB::Util.html_escape(export_pptx_urls.to_json) %>"
+           data-export-menu-host-library-url-value="<%= pptx_library_path %>">
+      </div>
+      <% if work.presentation? && !new_record %>
+        <%= form_with url: publish_presentation_path(work), method: :post, data: { turbo: false }, html: { class: "present-form" } do %>
+          <button type="submit" data-command-palette-present data-dirty-navigation="true" class="button primary icon-button inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-3 py-2 font-bold text-white hover:brightness-95" aria-label="Present" title="Present (publish and open the stage)">
+            <%= present_icon %><span class="sr-only">Present</span>
+          </button>
+          <kbd class="present-chord" data-command-palette-shortcut="Enter" title="Keyboard: present">⌘↵</kbd>
         <% end %>
       <% end %>
     </div>

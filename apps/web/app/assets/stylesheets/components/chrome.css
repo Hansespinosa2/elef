@@ -243,3 +243,18 @@
   min-height: 1em;
   text-align: center;
 }
+
+/* ── shared work Export menu ── */
+/* Theme surfaces for the client ExportMenu both hosts mount (the desktop
+   copy of these rules lives in file_library_host.css, which the web layout
+   never loads; layout rides the Tailwind utilities in the component). */
+.export-menu > summary { list-style: none; }
+.export-menu > summary::-webkit-details-marker { display: none; }
+.export-menu-panel {
+  background: var(--panel, var(--oradia-slate-800));
+  border-color: var(--line, var(--oradia-line));
+  box-shadow: var(--shadow, 0 22px 60px rgb(0 0 0 / 45%));
+  color: var(--ink, var(--oradia-ink));
+}
+.export-menu-option { background: transparent; color: inherit; cursor: pointer; }
+.export-menu-option:hover { background: var(--sidebar, var(--oradia-slate-700)); }
