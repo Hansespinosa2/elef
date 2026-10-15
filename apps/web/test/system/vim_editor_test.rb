@@ -600,4 +600,52 @@ class VimEditorTest < ApplicationSystemTestCase
   ensure
     page.execute_script("localStorage.clear()")
   end
+
+  test "Vim normal-mode keys edit the source through the visual projection" do
+    document = Document.create!(title: "Vim visual editing", source: "# Vim visual\n\nFirst paragraph.\n")
+    visit edit_document_path(document)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+
+    block = find(".document-editor-block", text: "First paragraph.")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p").firstChild, 0);
+    JAVASCRIPT
+
+    # Normal-mode "x" deletes under the caret; plain typing would insert it.
+    block.send_keys("x")
+    assert_equal "# Vim visual\n\nirst paragraph.\n",
+      page.evaluate_script("document.querySelector('.source-field').editorController.value")
+
+    # The preview refresh replaces the block node; re-acquire and re-seat the caret.
+    block = find(".document-editor-block", text: "irst paragraph.", exact_text: true)
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p").firstChild, 0);
+    JAVASCRIPT
+
+    # A motion plus an operator compose through the projection caret.
+    block.send_keys("lx")
+    assert_field "Markdown source", with: "# Vim visual\n\nist paragraph.\n", wait: 5
+    assert_selector ".document-editor-block", text: "ist paragraph."
+
+    caret = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selection = window.getSelection();
+        const node = selection.focusNode;
+        const holder = node instanceof Element ? node : node?.parentElement;
+        return {
+          collapsed: selection.isCollapsed,
+          inBlock: Boolean(holder?.closest(".document-editor-block")?.textContent?.includes("ist paragraph.")),
+        };
+      })()
+    JAVASCRIPT
+    assert_equal true, caret["collapsed"]
+    assert_equal true, caret["inBlock"]
+  ensure
+    page.execute_script("localStorage.clear()")
+  end
 end

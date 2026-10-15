@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
 import {
   translateProjectionInput,
+  vimPassthroughKey,
   visibleBlockText,
   type ProjectionInputIntent,
 } from "../src/session/projection_input.js";
@@ -127,6 +128,15 @@ test("structural, composition, and history intents stay on the legacy path", () 
       null,
       `${inputType} must fall back`,
     );
+  }
+});
+
+test("unconsumed normal-mode keys pass through only navigation and focus keys", () => {
+  for (const key of ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown", "Tab", "F1", "F12"]) {
+    assert.equal(vimPassthroughKey(key), true, `${key} must keep native behavior`);
+  }
+  for (const key of ["j", "G", "$", "Enter", "Backspace", "Delete", "Escape", " ", ":"]) {
+    assert.equal(vimPassthroughKey(key), false, `${key} must never reach native editing in normal mode`);
   }
 });
 

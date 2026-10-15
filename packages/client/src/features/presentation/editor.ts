@@ -25,7 +25,7 @@ import {
   parseAlignment,
   removeBlock as removeBlockFromSource
 } from "@elef/work-model/document-transforms"
-import { translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
+import { translateProjectionInput, vimPassthroughKey, visibleBlockText } from "../../session/projection_input.js"
 
 export interface EditorSourceRange {
   start: number
@@ -84,11 +84,15 @@ export interface PresentationEditorSeam {
   value: string
   selectionStart: number
   selectionEnd: number
+  selectionHead: number
+  vimEnabled: boolean
+  insertMode: boolean
   inputTarget?: unknown
   commitSource?(source: string): unknown
   replaceRange(replacement: string, from: number, to: number): void
   replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
   setSelectionRange(anchor: number, head?: number): void
+  handleVimKey(event: ProjectionKeyEvent): boolean
 }
 
 export interface ProjectionEvent {
@@ -99,6 +103,11 @@ export interface ProjectionEvent {
 export interface ProjectionKeyEvent {
   readonly key: string
   readonly target: EventTarget | null | undefined
+  readonly isComposing: boolean
+  readonly altKey: boolean
+  readonly ctrlKey: boolean
+  readonly metaKey: boolean
+  readonly shiftKey: boolean
   preventDefault(): void
 }
 
@@ -535,6 +544,9 @@ export class PresentationEditor {
   syncEngineSelectionFromCaret(): void {
     const editor = this.editorController
     if (!editor || this.pendingProjectionEdits?.size) return
+    // A Vim visual range lives on the engine; the projection only ever shows
+    // its head, so syncing a collapsed native caret back must not clobber it.
+    if (editor.vimEnabled && !editor.insertMode && editor.selectionStart !== editor.selectionEnd) return
     const selection = this.getSelection()
     if (!selection?.isCollapsed || !selection.focusNode) return
     const focusNode = selection.focusNode
@@ -549,10 +561,44 @@ export class PresentationEditor {
     editor.setSelectionRange(caret.sourceOffset, caret.sourceOffset)
   }
 
+  // Routes visual-mode keys through the live Vim machinery when Vim is
+  // active outside insert mode (plus Escape, which leaves insert mode).
+  // Handled keys preventDefault; the native caret follows the engine head
+  // synchronously, and source-changing commands schedule a projection
+  // refresh with caret restoration. Unconsumed keys are swallowed except
+  // navigation/focus keys, which keep native behavior. Returns true when
+  // Vim owned the key and no further handling should run.
+  routeVimKey(event: ProjectionKeyEvent, blockElement: Element): boolean {
+    const editor = this.editorController
+    if (!editor || !editor.vimEnabled) return false
+    if ((blockElement as HTMLElement).contentEditable !== "true") return false
+    if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return false
+    if (editor.insertMode && event.key !== "Escape") return false
+    if (this.pendingProjectionEdits?.size) this.flushPendingProjectionEdits()
+    const valueBefore = editor.value
+    if (!editor.handleVimKey(event)) {
+      if (vimPassthroughKey(event.key)) return false
+      event.preventDefault()
+      return true
+    }
+    event.preventDefault()
+    const head = editor.selectionHead
+    const blockId = (blockElement as HTMLElement).dataset.editorBlockId ?? null
+    this.restoreCaret(head, blockId)
+    if (editor.value !== valueBefore) {
+      this.pendingCaretRestore = { sourceOffset: head, preferredBlockId: blockId }
+      blockElement.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+    return true
+  }
+
   blockKeydown(event: ProjectionKeyEvent): void {
     if (this.pendingProjectionFrame || this.pendingProjectionEdits?.size) {
       this.flushPendingProjectionEdits()
     }
+    const keyBlock = (event.target as Element | null | undefined)?.closest?.("[data-editor-block-id]")
+    const keyCanvas = this.canvas()
+    if (keyBlock && keyCanvas?.contains(keyBlock) && this.routeVimKey(event, keyBlock)) return
     if (this.deps.handleMathKeydown(event, this.canvas(), () => this.flushPendingProjectionEdits())) return
     if (this.deps.moveCaretBetweenBlocks(event, this.canvas())) return
     if (!["Backspace", "Delete"].includes(event.key)) return

@@ -5,7 +5,7 @@
 // the shared editing-utilities deps object, then delegates lifecycle and
 // actions. The web Stimulus controller is the thin adapter.
 import { blockOperationRange, directiveLineSpan, exciseRange, insertAlignDirective } from "@elef/work-model/document-transforms"
-import { translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
+import { translateProjectionInput, vimPassthroughKey, visibleBlockText } from "../../session/projection_input.js"
 
 export interface DocumentEditorRange {
   start: number
@@ -66,10 +66,14 @@ export interface DocumentEditorSeam {
   value: string
   selectionStart: number
   selectionEnd: number
+  selectionHead: number
+  vimEnabled: boolean
+  insertMode: boolean
   commitSource(source: string): unknown
   replaceRange(replacement: string, from: number, to: number): void
   replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
   setSelectionRange(anchor: number, head?: number): void
+  handleVimKey(event: DocumentProjectionKeyEvent): boolean
 }
 
 export interface DocumentProjectionEvent {
@@ -532,6 +536,9 @@ export class DocumentEditor {
   syncEngineSelectionFromCaret(): void {
     const editor = this.editorController
     if (!editor || this.pendingProjectionEdits?.size) return
+    // A Vim visual range lives on the engine; the projection only ever shows
+    // its head, so syncing a collapsed native caret back must not clobber it.
+    if (editor.vimEnabled && !editor.insertMode && editor.selectionStart !== editor.selectionEnd) return
     const selection = window.getSelection()
     if (!selection?.isCollapsed || !selection.focusNode) return
     const focusNode = selection.focusNode
@@ -616,12 +623,44 @@ export class DocumentEditor {
     requestAnimationFrame(() => this.restoreCaret(pending.sourceOffset, pending.preferredBlockId))
   }
 
+  // Routes visual-mode keys through the live Vim machinery when Vim is
+  // active outside insert mode (plus Escape, which leaves insert mode).
+  // Handled keys preventDefault; the native caret follows the engine head
+  // synchronously, and source-changing commands schedule a projection
+  // refresh with caret restoration. Unconsumed keys are swallowed except
+  // navigation/focus keys, which keep native behavior. Returns true when
+  // Vim owned the key and no further handling should run.
+  routeVimKey(event: DocumentProjectionKeyEvent, blockElement: Element): boolean {
+    const editor = this.editorController
+    if (!editor || !editor.vimEnabled) return false
+    if ((blockElement as HTMLElement).contentEditable !== "true") return false
+    if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return false
+    if (editor.insertMode && event.key !== "Escape") return false
+    if (this.pendingProjectionEdits?.size) this.flushPendingProjectionEdits()
+    const valueBefore = editor.value
+    if (!editor.handleVimKey(event)) {
+      if (vimPassthroughKey(event.key)) return false
+      event.preventDefault()
+      return true
+    }
+    event.preventDefault()
+    const head = editor.selectionHead
+    const blockId = (blockElement as HTMLElement).dataset.editorBlockId ?? null
+    this.restoreCaret(head, blockId)
+    if (editor.value !== valueBefore) {
+      this.pendingCaretRestore = { sourceOffset: head, preferredBlockId: blockId }
+      blockElement.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+    return true
+  }
+
   projectionKeydown(event: DocumentProjectionKeyEvent): void {
     if (event.defaultPrevented) return
     if (this.kind !== "document" || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
 
     const blockElement = (event.target as Element).closest?.(".document-editor-block[data-editor-block-id]")
     if (!blockElement || !this.canEditBlock(blockElement)) return
+    if (this.routeVimKey(event, blockElement)) return
     this.deps.finishMathBeforeEnter(event, this.projectionTarget, () => this.flushPendingProjectionEdits())
 
     const block = this.map?.slides?.flatMap((slide) => slide.blocks || [])

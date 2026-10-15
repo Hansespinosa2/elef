@@ -518,6 +518,44 @@ export class EditorEngine {
     return !this.vimEnabled || Boolean(this.vim?.state?.vim?.insertMode)
   }
 
+  get selectionHead(): number {
+    return this.view.state.selection.main.head
+  }
+
+  // Routes one visual-mode key through the live Vim machinery, mirroring
+  // the vim extension's own keydown flow (vimKeyFromEvent mapping, status
+  // accumulation, multiSelectHandleKey with the "user" origin). Returns
+  // whether Vim consumed the key. Callers must have synced the engine
+  // selection first and must restore the native caret afterwards; pure
+  // motions need no re-render.
+  handleVimKey(event: {
+    readonly key: string
+    readonly ctrlKey?: boolean | undefined
+    readonly altKey?: boolean | undefined
+    readonly metaKey?: boolean | undefined
+    readonly shiftKey?: boolean | undefined
+  }): boolean {
+    const cm = this.vim
+    if (!cm || this.destroyed || !this.view) return false
+    const vimState = cm.state.vim as unknown as {
+      status?: string
+      insertMode?: boolean
+      visualMode?: boolean
+      expectLiteralNext?: boolean
+    } | null | undefined
+    if (!vimState) return false
+    // The vendor types mark these two entry points unknown; the signatures
+    // below are verified against the shipped bundle at runtime.
+    const vimApi = Vim as unknown as {
+      vimKeyFromEvent(event: KeyboardEvent, vimState: unknown): string | undefined
+      multiSelectHandleKey(cm: unknown, key: string, origin: string): unknown
+    }
+    const key = vimApi.vimKeyFromEvent(event as KeyboardEvent, vimState)
+    if (!key) return false
+    vimState.status = (vimState.status || "") + key
+    return Boolean(vimApi.multiSelectHandleKey(cm, key, "user"))
+  }
+
   focus(): void {
     this.view.focus()
   }

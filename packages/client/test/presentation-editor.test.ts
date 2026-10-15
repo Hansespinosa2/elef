@@ -53,11 +53,19 @@ function fakeEditor() {
     ranges: [] as Array<[number, number]>,
     selectionStart: 0,
     selectionEnd: 0,
+    selectionHead: 0,
+    vimEnabled: false,
+    insertMode: true,
+    vimKeys: [] as string[],
     inputTarget: null,
     setSelectionRange(anchor: number, head: number = anchor) {
       state.selectionStart = anchor;
       state.selectionEnd = head;
       state.ranges.push([anchor, head]);
+    },
+    handleVimKey(event: { key: string }) {
+      state.vimKeys.push(event.key);
+      return false;
     },
     commitSource(text: string) {
       state.commits.push(text);
@@ -352,6 +360,7 @@ function syncFixture({ editable = true, collapsed = true }: { editable?: boolean
           anchorOffset: 2,
           focusNode: textNode,
           focusOffset: 2,
+          setPosition: () => {},
         }) as unknown as Selection,
     },
   });
@@ -436,5 +445,112 @@ test("presentation structural intents stay on the reconstruction path", () => {
 
   assert.equal(editor.value, before);
   assert.equal(mount.editor.pendingProjectionEdits, undefined);
+  mount.destroy();
+});
+
+function vimKeyEvent(block: Element, key: string, overrides: Record<string, unknown> = {}) {
+  const event = {
+    key,
+    target: block as unknown as EventTarget,
+    isComposing: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    defaultPrevented: false,
+    preventDefault: () => {
+      event.defaultPrevented = true;
+    },
+    ...overrides,
+  };
+  return event;
+}
+
+test("presentation Vim routes normal keys and follows with the caret", () => {
+  const { mount, editor, block } = syncFixture();
+  editor.vimEnabled = true;
+  editor.insertMode = false;
+  editor.selectionHead = 13;
+  editor.handleVimKey = (event: { key: string }) => {
+    editor.vimKeys.push(event.key);
+    return true;
+  };
+  const inputEvents: string[] = [];
+  (block as unknown as { dispatchEvent: unknown }).dispatchEvent = (event: { type: string }) => {
+    inputEvents.push(event.type);
+  };
+  const event = vimKeyEvent(block as unknown as Element, "l");
+
+  assert.equal(mount.editor.routeVimKey(event, block as unknown as Element), true);
+  assert.deepEqual(editor.vimKeys, ["l"]);
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(mount.editor.lastProjectionCaret?.blockId, "b1");
+  assert.deepEqual(inputEvents.filter((type) => type === "input"), []);
+  assert.equal(mount.editor.pendingCaretRestore, undefined);
+  mount.destroy();
+});
+
+test("presentation Vim edits schedule a refresh with caret restoration", () => {
+  const { mount, editor, block } = syncFixture();
+  editor.vimEnabled = true;
+  editor.insertMode = false;
+  editor.handleVimKey = () => {
+    editor.value = `${editor.value}!`;
+    editor.selectionHead = 12;
+    return true;
+  };
+  const inputEvents: string[] = [];
+  (block as unknown as { dispatchEvent: unknown }).dispatchEvent = (event: { type: string }) => {
+    inputEvents.push(event.type);
+  };
+
+  assert.equal(mount.editor.routeVimKey(vimKeyEvent(block as unknown as Element, "x"), block as unknown as Element), true);
+  assert.deepEqual(mount.editor.pendingCaretRestore, { sourceOffset: 12, preferredBlockId: "b1" });
+  assert.deepEqual(inputEvents.filter((type) => type === "input"), ["input"]);
+  mount.destroy();
+});
+
+test("presentation Vim bypasses disabled, insert, modified, and navigation input", () => {
+  const disabled = syncFixture();
+  assert.equal(disabled.mount.editor.routeVimKey(vimKeyEvent(disabled.block as unknown as Element, "j"), disabled.block as unknown as Element), false);
+  assert.deepEqual(disabled.editor.vimKeys, []);
+  disabled.mount.destroy();
+
+  const insert = syncFixture();
+  insert.editor.vimEnabled = true;
+  insert.editor.insertMode = true;
+  assert.equal(insert.mount.editor.routeVimKey(vimKeyEvent(insert.block as unknown as Element, "j"), insert.block as unknown as Element), false);
+  assert.deepEqual(insert.editor.vimKeys, []);
+  insert.mount.destroy();
+
+  const modified = syncFixture();
+  modified.editor.vimEnabled = true;
+  modified.editor.insertMode = false;
+  assert.equal(
+    modified.mount.editor.routeVimKey(vimKeyEvent(modified.block as unknown as Element, "j", { ctrlKey: true }), modified.block as unknown as Element),
+    false,
+  );
+  assert.deepEqual(modified.editor.vimKeys, []);
+  modified.mount.destroy();
+
+  const arrow = syncFixture();
+  arrow.editor.vimEnabled = true;
+  arrow.editor.insertMode = false;
+  const arrowEvent = vimKeyEvent(arrow.block as unknown as Element, "ArrowLeft");
+  assert.equal(arrow.mount.editor.routeVimKey(arrowEvent, arrow.block as unknown as Element), false);
+  assert.equal(arrowEvent.defaultPrevented, false);
+  arrow.mount.destroy();
+});
+
+test("presentation Vim visual ranges survive projection caret sync", () => {
+  const { mount, editor } = syncFixture();
+  editor.vimEnabled = true;
+  editor.insertMode = false;
+  editor.selectionStart = 5;
+  editor.selectionEnd = 9;
+
+  mount.editor.rememberProjectionCaret();
+
+  assert.deepEqual(editor.ranges, []);
   mount.destroy();
 });

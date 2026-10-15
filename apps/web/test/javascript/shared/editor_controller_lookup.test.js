@@ -14,10 +14,14 @@ function seamCandidate() {
     value: "source",
     selectionStart: 0,
     selectionEnd: 0,
+    selectionHead: 0,
+    vimEnabled: false,
+    insertMode: true,
     commitSource: () => {},
     replaceRange: () => {},
     replaceRanges: () => {},
     setSelectionRange: () => {},
+    handleVimKey: () => false,
   }
 }
 
@@ -32,8 +36,12 @@ test("editor seam guard rejects members with the wrong shape", () => {
   assert.equal(asEditorSeam({ ...seamCandidate(), value: 42 }), null)
   assert.equal(asEditorSeam({ ...seamCandidate(), selectionStart: "0" }), null)
   assert.equal(asEditorSeam({ ...seamCandidate(), selectionEnd: null }), null)
+  assert.equal(asEditorSeam({ ...seamCandidate(), selectionHead: "0" }), null)
+  assert.equal(asEditorSeam({ ...seamCandidate(), vimEnabled: 0 }), null)
+  assert.equal(asEditorSeam({ ...seamCandidate(), insertMode: 1 }), null)
   assert.equal(asEditorSeam({ ...seamCandidate(), commitSource: true }), null)
   assert.equal(asEditorSeam({ ...seamCandidate(), replaceRange: null }), null)
   assert.equal(asEditorSeam({ ...seamCandidate(), replaceRanges: "x" }), null)
   assert.equal(asEditorSeam({ ...seamCandidate(), setSelectionRange: 0 }), null)
+  assert.equal(asEditorSeam({ ...seamCandidate(), handleVimKey: null }), null)
 })

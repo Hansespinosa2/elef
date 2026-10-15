@@ -75,6 +75,13 @@ export function visibleBlockText(block: Element): string {
   return text
 }
 
+// Keys that keep their native behavior when Vim does not consume them in
+// visual normal mode: caret navigation, focus traversal, and function keys.
+// Everything else is swallowed so normal-mode keys can never insert text.
+export function vimPassthroughKey(key: string): boolean {
+  return /^(ArrowUp|ArrowDown|ArrowLeft|ArrowRight|Home|End|PageUp|PageDown|Tab|F\d{1,2})$/.test(key)
+}
+
 export function translateProjectionInput(
   intent: ProjectionInputIntent,
   visibleText = ""

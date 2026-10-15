@@ -286,3 +286,121 @@ test("cross-block selections stay on the reconstruction path", (t) => {
 
   assert.deepEqual(replaced, [])
 })
+
+// Visual Vim routing: normal-mode keys run through the live engine.
+function stubVimRouting(t, { vimEnabled = true, insertMode = false, handled = true, mutate = null } = {}) {
+  const { editor, engine, block } = stubSelectionBridge(t)
+  const vimCalls = []
+  const inputEvents = []
+  const restored = []
+  Object.assign(engine, {
+    vimEnabled,
+    insertMode,
+    selectionHead: 11,
+    handleVimKey: (event) => {
+      vimCalls.push(event.key)
+      if (mutate) mutate(engine)
+      return handled
+    },
+  })
+  block.dispatchEvent = (event) => inputEvents.push(event.type)
+  editor.restoreCaret = (offset, blockId) => restored.push([offset, blockId])
+  const keyEvent = (key, overrides = {}) => {
+    const event = {
+      key,
+      target: block,
+      defaultPrevented: false,
+      isComposing: false,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      preventDefault: () => { event.defaultPrevented = true },
+      ...overrides,
+    }
+    return event
+  }
+  return { editor, engine, block, vimCalls, inputEvents, restored, keyEvent }
+}
+
+test("visual keys bypass Vim when disabled or in insert mode", (t) => {
+  const disabled = stubVimRouting(t, { vimEnabled: false })
+  assert.equal(disabled.editor.routeVimKey(disabled.keyEvent("j"), disabled.block), false)
+  assert.deepEqual(disabled.vimCalls, [])
+
+  const insert = stubVimRouting(t, { insertMode: true })
+  assert.equal(insert.editor.routeVimKey(insert.keyEvent("j"), insert.block), false)
+  assert.deepEqual(insert.vimCalls, [])
+})
+
+test("Escape leaves visual insert mode through Vim", (t) => {
+  const { editor, block, vimCalls, keyEvent } = stubVimRouting(t, { insertMode: true })
+  const event = keyEvent("Escape")
+
+  assert.equal(editor.routeVimKey(event, block), true)
+  assert.deepEqual(vimCalls, ["Escape"])
+  assert.equal(event.defaultPrevented, true)
+})
+
+test("handled Vim motions move the projection caret without a refresh", (t) => {
+  const { editor, engine, block, vimCalls, inputEvents, restored, keyEvent } = stubVimRouting(t)
+  engine.selectionHead = 13
+  const event = keyEvent("l")
+
+  assert.equal(editor.routeVimKey(event, block), true)
+  assert.deepEqual(vimCalls, ["l"])
+  assert.equal(event.defaultPrevented, true)
+  assert.deepEqual(restored, [[13, "b1"]])
+  assert.deepEqual(inputEvents, [])
+  assert.equal(editor.pendingCaretRestore, undefined)
+})
+
+test("handled Vim edits schedule a refresh with caret restoration", (t) => {
+  const { editor, engine, block, inputEvents, restored, keyEvent } = stubVimRouting(t, {
+    mutate: (target) => { target.value = "changed"; target.selectionHead = 12 },
+  })
+  const event = keyEvent("x")
+
+  assert.equal(editor.routeVimKey(event, block), true)
+  assert.deepEqual(restored, [[12, "b1"]])
+  assert.deepEqual(editor.pendingCaretRestore, { sourceOffset: 12, preferredBlockId: "b1" })
+  assert.deepEqual(inputEvents, ["input"])
+})
+
+test("unconsumed normal-mode keys swallow except navigation", (t) => {
+  const printable = stubVimRouting(t, { handled: false })
+  const swallowed = printable.keyEvent("j")
+  assert.equal(printable.editor.routeVimKey(swallowed, printable.block), true)
+  assert.deepEqual(printable.vimCalls, ["j"])
+  assert.equal(swallowed.defaultPrevented, true)
+
+  const navigation = stubVimRouting(t, { handled: false })
+  const arrow = navigation.keyEvent("ArrowLeft")
+  assert.equal(navigation.editor.routeVimKey(arrow, navigation.block), false)
+  assert.equal(arrow.defaultPrevented, false)
+})
+
+test("visual Vim routing skips modified, composing, and readonly input", (t) => {
+  const modified = stubVimRouting(t)
+  assert.equal(modified.editor.routeVimKey(modified.keyEvent("j", { ctrlKey: true }), modified.block), false)
+  assert.deepEqual(modified.vimCalls, [])
+
+  const composing = stubVimRouting(t)
+  assert.equal(composing.editor.routeVimKey(composing.keyEvent("j", { isComposing: true }), composing.block), false)
+  assert.deepEqual(composing.vimCalls, [])
+
+  const readonly = stubVimRouting(t)
+  readonly.block.contentEditable = "false"
+  assert.equal(readonly.editor.routeVimKey(readonly.keyEvent("j"), readonly.block), false)
+  assert.deepEqual(readonly.vimCalls, [])
+})
+
+test("a Vim visual range survives projection caret sync", (t) => {
+  const { editor, engine, calls } = stubSelectionBridge(t)
+  Object.assign(engine, { vimEnabled: true, insertMode: false, selectionStart: 5, selectionEnd: 9 })
+
+  editor.rememberProjectionCaret()
+
+  assert.deepEqual(editor.lastProjectionCaret, { blockId: "b1", visibleOffset: 2 })
+  assert.deepEqual(calls, [])
+})
