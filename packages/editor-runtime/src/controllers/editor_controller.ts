@@ -182,6 +182,10 @@ export default class extends Controller<HTMLElement> {
     })
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event: KeyboardEvent) => this.forwardProxyKeydown(event))
     this.form = this.element.closest("form")
+    this.handleProjectionNavigation = (event: Event) => this.noteProjectionNavigation(event)
+    for (const type of ["pointerdown", "keydown", "beforeinput", "input"]) {
+      this.form?.addEventListener(type, this.handleProjectionNavigation)
+    }
     this.form?.addEventListener("submit", this.handleSubmit = () => {
       this.projectionController()?.flushPendingProjectionEdits?.()
       this.syncInput()
@@ -214,6 +218,9 @@ export default class extends Controller<HTMLElement> {
     this.pendingMediaRanges?.clear()
     if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame)
     this.form?.removeEventListener("submit", this.handleSubmit)
+    for (const type of ["pointerdown", "keydown", "beforeinput", "input"]) {
+      this.form?.removeEventListener(type, this.handleProjectionNavigation)
+    }
     this.resizeObserver?.disconnect()
     window.removeEventListener("resize", this.updateVisualSurfaceGeometry)
     this.form?.removeEventListener("formdata", this.handleFormData)
@@ -336,11 +343,16 @@ export default class extends Controller<HTMLElement> {
 
     const projectionController = this.projectionController()
     if (!silent && previousMode === "visual") projectionController?.flushPendingProjectionEdits?.()
-    const visualCaret = previousMode === "visual" ? projectionController?.captureCaret?.() : null
+    // A rendered caret cannot distinguish every source position (a link
+    // destination and its closing delimiter share one visible offset). Read
+    // it only after the author actually navigated or edited that surface.
+    const visualCaret = previousMode === "visual" && this.projectionNavigationOccurred
+      ? projectionController?.captureCaret?.() : null
     const sourceOffset = visualCaret?.sourceOffset ?? this.view.state.selection.main.head
     const preferredBlockId = visualCaret?.blockId ?? null
 
     this.editingMode = nextMode
+    if (nextMode === "visual" && previousMode !== "visual") this.projectionNavigationOccurred = false
     this.view?.dispatch({ effects: livePreviewMode.of(this.editingMode === "visual") })
     this.element.dataset.editorEditingMode = this.editingMode
     this.form?.setAttribute("data-editor-mode", this.editingMode)
@@ -382,6 +394,18 @@ export default class extends Controller<HTMLElement> {
 
   projectionController(): any {
     return this.form?.presentationEditorController || this.form?.visualEditorController || null
+  }
+
+  noteProjectionNavigation(event: Event): void {
+    if (this.editingMode !== "visual" || !(event.target instanceof Element)) return
+    const projection = event.target.closest(".editor-projection")
+    if (!projection || !this.form?.contains(projection)) return
+    if (event instanceof KeyboardEvent) {
+      const movesSelection = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)
+      const selectsAll = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a"
+      if (!movesSelection && !selectsAll) return
+    }
+    this.projectionNavigationOccurred = true
   }
 
   syncVisualSurfaceGeometry(): void {

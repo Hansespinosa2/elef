@@ -799,6 +799,104 @@ import { keymap } from "@codemirror/view";
 var editorTabBinding = indentWithTab;
 var editorTabKeymap = keymap.of([indentWithTab]);
 
+// src/controllers/editor_caret.ts
+var MARKDOWN_MATH = /^\$\$[\s\S]+?\$\$|^\$(?!\$)[^$\r\n]+?\$(?!\$)/;
+function sourceOffsetForVisibleOffset(source, requestedOffset) {
+  const mapping = markdownPositionMap(source);
+  const visibleOffset = Math.max(0, Math.min(requestedOffset, mapping.visibleToSource.length - 1));
+  return mapping.visibleToSource[visibleOffset] ?? source.length;
+}
+function visibleOffsetForSourceOffset(source, requestedOffset) {
+  const mapping = markdownPositionMap(source);
+  const sourceOffset = Math.max(0, Math.min(requestedOffset, source.length));
+  return mapping.sourceToVisible[sourceOffset] ?? mapping.visibleToSource.length - 1;
+}
+function markdownPositionMap(source) {
+  const sourceToVisible = new Array(source.length + 1).fill(0);
+  const visibleToSource = [0];
+  let sourceIndex = 0;
+  let visibleIndex = 0;
+  const skip = (end) => {
+    for (let index = sourceIndex; index < end; index += 1) sourceToVisible[index] = visibleIndex;
+    sourceIndex = end;
+    sourceToVisible[sourceIndex] = visibleIndex;
+    visibleToSource[visibleIndex] = sourceIndex;
+  };
+  const emit = (from, to) => {
+    skip(from);
+    for (let index = from; index < to; index += 1) {
+      sourceToVisible[index] = visibleIndex;
+      visibleIndex += 1;
+      sourceToVisible[index + 1] = visibleIndex;
+      visibleToSource[visibleIndex] = index + 1;
+    }
+    sourceIndex = to;
+  };
+  while (sourceIndex < source.length) {
+    const rest = source.slice(sourceIndex);
+    const linePrefix = rest.match(/^[ \t]{0,3}(?:#{1,6}[ \t]+|>[ \t]?|(?:[-+*]|\d+[.)])[ \t]+)/);
+    if (linePrefix) {
+      skip(sourceIndex + (linePrefix[0] ?? "").length);
+      continue;
+    }
+    const image = rest.match(/^!\[([^\]]*)\]\((?:\\.|[^)])*\)/);
+    if (image) {
+      const matchStart = sourceIndex;
+      const altStart = matchStart + 2;
+      emit(altStart, altStart + (image[1] ?? "").length);
+      skip(matchStart + (image[0] ?? "").length);
+      continue;
+    }
+    const link = rest.match(/^\[([^\]]+)\]\((?:\\.|[^)])*\)/);
+    if (link) {
+      const matchStart = sourceIndex;
+      const textStart = matchStart + 1;
+      emit(textStart, textStart + (link[1] ?? "").length);
+      skip(matchStart + (link[0] ?? "").length);
+      continue;
+    }
+    const documentLink = rest.match(/^\[\[([^\]]+)\]\]/);
+    if (documentLink) {
+      const matchStart = sourceIndex;
+      const textStart = matchStart + 2;
+      emit(textStart, textStart + (documentLink[1] ?? "").length);
+      skip(matchStart + (documentLink[0] ?? "").length);
+      continue;
+    }
+    const math = rest.match(MARKDOWN_MATH);
+    if (math) {
+      skip(sourceIndex + (math[0] ?? "").length);
+      continue;
+    }
+    const tableDivider = rest.match(/^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)+\|?[ \t]*(?=\r?$)/m);
+    if (tableDivider && (sourceIndex === 0 || source[sourceIndex - 1] === "\n")) {
+      skip(sourceIndex + (tableDivider[0] ?? "").length);
+      continue;
+    }
+    if (rest.startsWith("\\") && rest.length > 1 && /[\\`*_{}\[\]()#+.!|>~-]/.test(rest[1] ?? "")) {
+      emit(sourceIndex + 1, sourceIndex + 2);
+      continue;
+    }
+    if (rest.startsWith("\r\n")) {
+      skip(sourceIndex + 2);
+      continue;
+    }
+    if (rest[0] === "\n" || rest[0] === "\r" || rest[0] === "|") {
+      skip(sourceIndex + 1);
+      continue;
+    }
+    const delimiter = rest.match(/^(?:\*\*|__|~~|`+|\*|_)/);
+    if (delimiter) {
+      skip(sourceIndex + (delimiter[0] ?? "").length);
+      continue;
+    }
+    emit(sourceIndex, sourceIndex + 1);
+  }
+  sourceToVisible[source.length] = visibleIndex;
+  visibleToSource[visibleIndex] = source.length;
+  return { sourceToVisible, visibleToSource };
+}
+
 // src/lib/feature_flags.ts
 var DESKTOP_FEATURE_FLAGS = Object.freeze({
   ELEF_ENABLE_REVISIONS: false,
@@ -1093,8 +1191,10 @@ export {
   renderEditorView,
   renderWorkerMessage,
   setProjectionBlockEditable,
+  sourceOffsetForVisibleOffset,
   startClientMounts,
   translateClientMounts,
   translateElementMounts,
+  visibleOffsetForSourceOffset,
   waitForEditorController
 };

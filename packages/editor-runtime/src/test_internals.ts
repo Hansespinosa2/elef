@@ -30,6 +30,7 @@ export { bindEditorAction, editorActionControl } from "./lib/editor_actions.js";
 export { createCodeMirrorBinding } from "./lib/editor_binding.js";
 export { createDocumentState } from "./lib/editor_document_state.js";
 export { editorTabBinding } from "./lib/editor_tab_keymap.js";
+export { sourceOffsetForVisibleOffset, visibleOffsetForSourceOffset } from "./controllers/editor_caret.js";
 export {
   configureEditorKind,
   enableVisualModeAfterPreview,

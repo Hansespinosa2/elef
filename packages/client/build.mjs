@@ -11,7 +11,7 @@
 // the build instead of shipping hidden code. Every bundle writes its
 // metafile beside the output (gitignored); the Stable/Dev profile checker
 // proves slice absence from the stable metafiles.
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
@@ -34,6 +34,11 @@ const shared = {
 
 function bundle(entry, outfile, options = {}) {
   const result = esbuild.buildSync({ ...shared, ...options, entryPoints: [entry], outfile });
+  // Highlight.js's PHP grammar contains a literal tab before a template
+  // newline. Preserve the template value without committing trailing tabs
+  // when a renderer-dependent client artifact is rebuilt.
+  const output = readFileSync(outfile, "utf8").replaceAll("[ \t\n", "[ \\t\n");
+  writeFileSync(outfile, output);
   writeFileSync(outfile.replace(/\.js$/, ".metafile.json"), `${JSON.stringify(result.metafile, null, 2)}\n`);
 }
 

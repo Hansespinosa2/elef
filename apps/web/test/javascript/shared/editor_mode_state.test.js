@@ -3,6 +3,7 @@ import test from "node:test"
 import { readFile } from "node:fs/promises"
 import { EditorSelection, EditorState } from "@codemirror/state"
 import { history, historyField } from "@codemirror/commands"
+import { sourceOffsetForVisibleOffset, visibleOffsetForSourceOffset } from "@elef/editor-runtime/test-internals"
 
 // Exercise the shipped controller's mode transition without mounting a host.
 // Browser/native input parity is a separate acceptance tier.
@@ -19,7 +20,7 @@ const Vim = { handleKey() { throw new Error("Mode switch must not send Vim keys"
 `
 const { default: EditorController } = await import(`data:text/javascript;base64,${Buffer.from(prelude + source).toString("base64")}`)
 
-function modeFixture(t, selection, visualCaret = null) {
+function modeFixture(t, selection, visualCaret = null, source = "# Heading\n\nFirst **bold** passage.\n\nFinal.") {
   const frames = []
   const saved = Object.fromEntries(["requestAnimationFrame", "document"].map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]))
   Object.defineProperty(globalThis, "requestAnimationFrame", { configurable: true, value: callback => frames.push(callback) })
@@ -30,7 +31,7 @@ function modeFixture(t, selection, visualCaret = null) {
       else delete globalThis[name]
     }
   })
-  let state = EditorState.create({ doc: "# Heading\n\nFirst **bold** passage.\n\nFinal.", extensions: [history()], selection })
+  let state = EditorState.create({ doc: source, extensions: [history()], selection })
   state = state.update({ changes: { from: state.doc.length, insert: "!" }, userEvent: "input" }).state
   const dispatches = []
   const view = {
@@ -81,6 +82,7 @@ test("returning from a projection at the same head retains a backward source sel
   const { controller, view, flushFrames } = modeFixture(t, EditorSelection.single(28, 12), { sourceOffset: 12, blockId: "block-1" })
   const before = view.state.selection
   controller.editingMode = "visual"
+  controller.projectionNavigationOccurred = true
   controller.setEditingMode("source")
   flushFrames()
   assert.equal(view.state.selection, before)
@@ -89,6 +91,7 @@ test("returning from a projection at the same head retains a backward source sel
 test("explicit navigation in the projection transfers the new caret to source", t => {
   const { controller, view, flushFrames } = modeFixture(t, EditorSelection.single(28, 12), { sourceOffset: 35, blockId: "block-2" })
   controller.editingMode = "visual"
+  controller.projectionNavigationOccurred = true
   controller.setEditingMode("source")
   flushFrames()
   assert.equal(view.state.selection.main.anchor, 35)
@@ -98,12 +101,27 @@ test("explicit navigation in the projection transfers the new caret to source", 
 test("a deliberate selection change before focus restoration wins over the old projection caret", t => {
   const { controller, view, flushFrames } = modeFixture(t, EditorSelection.single(28, 12), { sourceOffset: 35 })
   controller.editingMode = "visual"
+  controller.projectionNavigationOccurred = true
   controller.setEditingMode("source")
   view.dispatch({ selection: { anchor: 2, head: 8 } })
   flushFrames()
   assert.equal(view.state.selection.main.anchor, 2)
   assert.equal(view.state.selection.main.head, 8)
 })
+
+for (const [source, head] of [["**bold**", 1], ["[text](https://example.com)", 10]]) {
+  test(`mode round trip preserves a source selection inside concealed syntax: ${source}`, t => {
+    const mappedHead = sourceOffsetForVisibleOffset(source, visibleOffsetForSourceOffset(source, head))
+    assert.notEqual(mappedHead, head, "Regression must exercise a lossy rendered mapping")
+    const { controller, view, flushFrames } = modeFixture(t, EditorSelection.single(source.length, head), { sourceOffset: mappedHead }, source)
+    const before = view.state.selection
+    controller.setEditingMode("visual")
+    flushFrames()
+    controller.setEditingMode("source")
+    flushFrames()
+    assert.equal(view.state.selection, before)
+  })
+}
 
 test("unfolding source metadata does not move the selection", () => {
   const dispatches = []
