@@ -63,6 +63,8 @@ export interface DocumentEditorMap {
 
 export interface DocumentEditorSeam {
   value: string
+  selectionStart: number
+  selectionEnd: number
   commitSource(source: string): unknown
   replaceRange(replacement: string, from: number, to: number): void
   replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
@@ -417,7 +419,10 @@ export class DocumentEditor {
       }
     }).filter((edit) => edit.replacement !== edit.source)
     this.pendingProjectionEdits.clear()
-    if (edits.length === 0) return
+    if (edits.length === 0) {
+      this.syncEngineSelectionFromCaret()
+      return
+    }
 
     edits.forEach((edit) => {
       if (edit.kind === "code") return
@@ -429,6 +434,7 @@ export class DocumentEditor {
       this.shiftMapAfterEdit(edit.from, edit.to, edit.replacement.length, edit.blockId)
     })
     this.editorController.replaceRanges(changes)
+    this.syncEngineSelectionFromCaret()
   }
 
   scheduleProjectionFlush(): void {
@@ -448,7 +454,31 @@ export class DocumentEditor {
     const block = node?.closest?.("[data-editor-block-id]")
     if (!block || !this.projectionTarget?.contains(block)) return
     const visibleOffset = this.visibleOffsetInBlockGroup(block, selection.focusNode, selection.focusOffset)
-    if (visibleOffset !== null) this.lastProjectionCaret = { blockId: (block as HTMLElement).dataset.editorBlockId ?? "", visibleOffset }
+    if (visibleOffset === null) return
+    this.lastProjectionCaret = { blockId: (block as HTMLElement).dataset.editorBlockId ?? "", visibleOffset }
+    if ((block as HTMLElement).contentEditable === "true") this.syncEngineSelectionFromCaret()
+  }
+
+  // Input-bridge selection leg: while an editable block carries the native
+  // caret, the engine selection tracks it, so Vim state, history context,
+  // and completion anchors follow visual editing instead of going stale.
+  // Typing paths skip here (their source is mid-edit) and sync after the
+  // flush commits; ranged drag selections stay projection-side until the
+  // drag-translation increment lands.
+  syncEngineSelectionFromCaret(): void {
+    const editor = this.editorController
+    if (!editor || this.pendingProjectionEdits?.size) return
+    const selection = window.getSelection()
+    if (!selection?.isCollapsed || !selection.focusNode) return
+    const focusNode = selection.focusNode
+    const node = (focusNode.nodeType === Node.ELEMENT_NODE ? focusNode : focusNode.parentElement) as Element | null
+    const block = node?.closest?.("[data-editor-block-id]")
+    if (!block || !this.projectionTarget?.contains(block)) return
+    if ((block as HTMLElement).contentEditable !== "true") return
+    const caret = this.captureCaret()
+    if (!caret) return
+    if (editor.selectionStart === caret.sourceOffset && editor.selectionEnd === caret.sourceOffset) return
+    editor.setSelectionRange(caret.sourceOffset, caret.sourceOffset)
   }
 
   blockMarkdown(blockElement: Element, region: DocumentEditorRegion, block: DocumentEditorBlock, source: string): { markdown: string; kind: string; start: number; end: number } {

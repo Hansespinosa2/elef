@@ -17,7 +17,7 @@ export {
   translateClientMounts,
 } from "./lib/client_mounts.js";
 export { presentConflictDialog } from "./lib/conflict_dialog.js";
-export { editorFor } from "./lib/editor_controller_lookup.js";
+export { asEditorSeam, editorFor } from "./lib/editor_controller_lookup.js";
 export { waitForEditorController } from "./lib/editor_ready.js";
 export { applyEditorSource } from "./lib/editor_source.js";
 export { mountEditorHosts } from "./lib/editor_view.js";

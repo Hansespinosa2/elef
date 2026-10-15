@@ -81,10 +81,13 @@ export interface PresentationEditorMap {
 
 export interface PresentationEditorSeam {
   value: string
+  selectionStart: number
+  selectionEnd: number
   inputTarget?: unknown
   commitSource?(source: string): unknown
   replaceRange(replacement: string, from: number, to: number): void
   replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
+  setSelectionRange(anchor: number, head?: number): void
 }
 
 export interface ProjectionEvent {
@@ -422,6 +425,7 @@ export class PresentationEditor {
         this.setControlsDisabled(false)
         this.setStatus("")
       }
+      this.syncEngineSelectionFromCaret()
       return
     }
 
@@ -434,6 +438,7 @@ export class PresentationEditor {
       this.shiftMapAfterEdit(edit.from, edit.to, edit.replacement.length)
     })
     this.editorController.replaceRanges(changes)
+    this.syncEngineSelectionFromCaret()
   }
 
   scheduleProjectionFlush(): void {
@@ -454,7 +459,32 @@ export class PresentationEditor {
     const canvas = this.canvas()
     if (!block || !canvas?.contains(block)) return
     const visibleOffset = this.deps.visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
-    if (visibleOffset !== null) this.lastProjectionCaret = { blockId: (block as HTMLElement).dataset.editorBlockId ?? "", visibleOffset }
+    if (visibleOffset === null) return
+    this.lastProjectionCaret = { blockId: (block as HTMLElement).dataset.editorBlockId ?? "", visibleOffset }
+    if ((block as HTMLElement).contentEditable === "true") this.syncEngineSelectionFromCaret()
+  }
+
+  // Input-bridge selection leg, shared with the document editor: while an
+  // editable block carries the native caret, the engine selection tracks it,
+  // so Vim state, history context, and completion anchors follow visual
+  // editing instead of going stale. Typing paths skip here (their source is
+  // mid-edit) and sync after the flush commits; ranged drag selections stay
+  // projection-side until the drag-translation increment lands.
+  syncEngineSelectionFromCaret(): void {
+    const editor = this.editorController
+    if (!editor || this.pendingProjectionEdits?.size) return
+    const selection = this.getSelection()
+    if (!selection?.isCollapsed || !selection.focusNode) return
+    const focusNode = selection.focusNode
+    const node = (focusNode.nodeType === this.Node.ELEMENT_NODE ? focusNode : focusNode.parentElement) as Element | null
+    const block = node?.closest?.("[data-editor-block-id]")
+    const canvas = this.canvas()
+    if (!block || !canvas?.contains(block)) return
+    if ((block as HTMLElement).contentEditable !== "true") return
+    const caret = this.captureCaret()
+    if (!caret) return
+    if (editor.selectionStart === caret.sourceOffset && editor.selectionEnd === caret.sourceOffset) return
+    editor.setSelectionRange(caret.sourceOffset, caret.sourceOffset)
   }
 
   blockKeydown(event: ProjectionKeyEvent): void {

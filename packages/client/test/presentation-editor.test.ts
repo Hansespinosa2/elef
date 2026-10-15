@@ -50,7 +50,15 @@ function fakeEditor() {
   const state = {
     value: SOURCE,
     commits: [] as string[],
+    ranges: [] as Array<[number, number]>,
+    selectionStart: 0,
+    selectionEnd: 0,
     inputTarget: null,
+    setSelectionRange(anchor: number, head: number = anchor) {
+      state.selectionStart = anchor;
+      state.selectionEnd = head;
+      state.ranges.push([anchor, head]);
+    },
     commitSource(text: string) {
       state.commits.push(text);
       state.value = text;
@@ -305,4 +313,85 @@ test("client presentation editor publishes itself for the code editor host", () 
   assert.ok(mount.editor instanceof PresentationEditor);
   mount.destroy();
   assert.equal((form as unknown as Record<string, unknown>).presentationEditorController, undefined);
+});
+
+// Input-bridge selection leg, shared with the document editor: a collapsed
+// native caret inside an editable block drives the engine selection.
+function syncFixture({ editable = true, collapsed = true }: { editable?: boolean; collapsed?: boolean } = {}) {
+  const { document } = parseHTML(
+    `<form data-editor-mode="visual"><div data-presentation-editor-target="canvas"><div data-editor-block-id="b1">First</div></div><output data-presentation-editor-target="status"></output></form>`,
+  );
+  const form = document.querySelector("form") as unknown as HTMLFormElement;
+  const block = document.querySelector('[data-editor-block-id="b1"]') as unknown as HTMLElement;
+  // Browsers reflect contenteditable as "true"/"false"; linkedom coerces to
+  // boolean, so shadow the property with the browser string value.
+  Object.defineProperty(block, "contentEditable", { configurable: true, value: editable ? "true" : "false" });
+  const textNode = block.firstChild as unknown as Text;
+  const editor = fakeEditor();
+  const mount = mountPresentationEditor(form as unknown as Parameters<typeof mountPresentationEditor>[0], {
+    editorMap: {
+      source_length: SOURCE.length,
+      slides: [],
+      directives: [],
+      editable_regions: [{ id: "r1", block_id: "b1", kind: "paragraph", editable: true, content_range: { start: 9, end: 14 } }],
+    },
+    getEditor: () => editor,
+    deps: {
+      ...stubDeps(),
+      syncActiveMath: () => {},
+      visibleOffsetAtPoint: () => 2,
+      sourceOffsetForVisibleOffset: (_source: string, offset: number) => offset,
+      markdownForVisibleText: (_source: string, text: string) => `${text}!`,
+    },
+    env: {
+      ...stubEnv(),
+      getSelection: () => ({ isCollapsed: collapsed, focusNode: textNode, focusOffset: 2 }) as unknown as Selection,
+    },
+  });
+  mount.editor.editorController = editor;
+  return { mount, editor, block };
+}
+
+test("presentation caret in an editable block drives the engine selection", () => {
+  const { mount, editor } = syncFixture();
+
+  mount.editor.rememberProjectionCaret();
+
+  assert.deepEqual(mount.editor.lastProjectionCaret, { blockId: "b1", visibleOffset: 2 });
+  assert.deepEqual(editor.ranges, [[11, 11]]);
+  mount.destroy();
+});
+
+test("presentation readonly blocks never move the engine selection", () => {
+  const { mount, editor } = syncFixture({ editable: false });
+
+  mount.editor.rememberProjectionCaret();
+
+  assert.deepEqual(mount.editor.lastProjectionCaret, { blockId: "b1", visibleOffset: 2 });
+  assert.deepEqual(editor.ranges, []);
+  mount.destroy();
+});
+
+test("presentation ranged selections stay projection-side", () => {
+  const { mount, editor } = syncFixture({ collapsed: false });
+
+  mount.editor.rememberProjectionCaret();
+
+  assert.deepEqual(editor.ranges, []);
+  mount.destroy();
+});
+
+test("presentation flush commits then syncs the engine selection", () => {
+  const { mount, editor, block } = syncFixture();
+  mount.editor.pendingProjectionEdits = new Map([
+    ["r1", { id: "r1", blockId: "b1", from: 9, to: 14, source: "First", kind: "paragraph", blockElement: block as unknown as Element }],
+  ]);
+
+  mount.editor.rememberProjectionCaret();
+  assert.deepEqual(editor.ranges, []);
+
+  mount.editor.flushPendingProjectionEdits();
+  assert.equal(editor.value.slice(9, 15), "First!");
+  assert.deepEqual(editor.ranges, [[11, 11]]);
+  mount.destroy();
 });
