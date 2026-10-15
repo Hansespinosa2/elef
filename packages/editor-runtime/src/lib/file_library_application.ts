@@ -10,7 +10,7 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { CREATE_WORK_EVENT, mountElef, mountPresentation, parseLibraryRoute } from "@elef/client"
+import { CREATE_WORK_EVENT, mountElef, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile } from "@elef/client"
 import type { GraphController } from "@elef/client"
 
 export interface WorkFolder {
@@ -1083,7 +1083,14 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       showNotice("Render the Work before printing it.", "error")
       return
     }
-    document.body.classList.add("printing-work")
+    // The printed payload is the Work preview only: the kind marker selects
+    // the matching web print geometry (A4 document pages, fixed 16:9
+    // presentation pages) from the shared print contract, and pausing videos
+    // mirrors the web print-view controller so PDFs carry the poster frame.
+    const printKind = printWorkKindForSourceFile(activeWorkFolder?.source_file)
+    const printMarkers = printMarkerClasses(printKind)
+    pausePrintVideos(preview)
+    document.body.classList.add(...printMarkers)
     await new Promise(resolve => requestAnimationFrame(resolve))
     try {
       // The platform print dialog (and its PDF destination) opens only
@@ -1099,13 +1106,13 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // Harness probe: the e2e run cannot dismiss the platform dialog, so
       // it asserts this flag (native seam reached) instead of dialog pixels.
       if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
-        globalThis.__elefPrintResult = { native: printViaNative }
+        globalThis.__elefPrintResult = { native: printViaNative, kind: printKind }
       }
     } catch (error) {
       console.error("[desktop-print]", error)
       showNotice("The print dialog could not be opened.", "error")
     } finally {
-      document.body.classList.remove("printing-work")
+      document.body.classList.remove(...printMarkers)
     }
   }
 

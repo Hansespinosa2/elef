@@ -172,15 +172,33 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
 .presenting-work .presentation-mode-exit { display: inline-flex; position: fixed; top: 16px; right: 20px; z-index: 10002; gap: 12px; align-items: center; padding: 9px 13px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: #fff; }
 .presenting-work .presentation-mode-exit kbd { color: #bbb; }
 
+@page desktop-document { size: A4 portrait; margin: 0; }
+@page desktop-presentation { size: 13.333in 7.5in; margin: 0; }
 @media print {
   @page { margin: 12mm; }
   body.printing-work { min-width: 0; color: #000; background: #fff; }
   body.printing-work.elef-app { background: #fff !important; color: #000 !important; }
+  /* The body margin would overflow the fixed print pages and emit a trailing
+     blank page; the web print views zero it the same way. */
+  body.printing-work.printing-presentation,
+  body.printing-work.printing-document { margin: 0; padding: 0; }
   .printing-work .desktop-app-shell,
   .printing-work .work-view,
   .printing-work #desktop-editor-form { display: block !important; min-height: 0; width: 100%; margin: 0; padding: 0; border: 0; box-shadow: none; }
+  /* Only the Work preview prints: every app-shell and editor-chrome surface
+     stays out of the PDF, matching the web print views (which render the
+     Work alone behind a hidden toolbar). */
   .printing-work .desktop-app-header,
+  .printing-work #export-menu,
+  .printing-work .export-menu,
+  .printing-work .export-menu-panel,
+  .printing-work #export-pptx-status,
+  .printing-work #start-presentation,
+  .printing-work #exit-presentation,
+  .printing-work .editor-shell-header,
   .printing-work .editor-toolbar,
+  .printing-work .editor-footer,
+  .printing-work .presentation-editor-tools,
   .printing-work .desktop-save-note,
   .printing-work .restore-draft,
   .printing-work #retry-save,
@@ -194,13 +212,35 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
   .printing-work .preview-warnings,
   .printing-work [data-preview-target="status"],
   .printing-work [data-preview-target="retry"],
+  .printing-work #work-notice,
   .printing-work .work-notice { display: none !important; }
-  .printing-work #desktop-preview { display: block !important; position: static; max-height: none; min-height: 0; overflow: visible; background: #fff; }
-  .printing-work .slide-frame { width: 100%; aspect-ratio: 16 / 9; overflow: visible; break-after: page; page-break-after: always; }
-  .printing-work .slide-frame:last-child { break-after: auto; page-break-after: auto; }
-  .printing-work .slide-frame > .slide { position: static; width: 100%; height: 100%; border: 0; border-radius: 0; overflow: visible; }
+  /* Editor affordances inside the projection never print: alignment selects,
+     slide toolbars, block controls, empty-slide actions, and media alt
+     captions are interactive chrome, not Work content. */
   .printing-work .presentation-editor-block-controls,
-  .printing-work .presentation-editor-slide-toolbar { display: none !important; }
+  .printing-work .presentation-editor-slide-toolbar,
+  .printing-work .document-block-position-control,
+  .printing-work .empty-slide-add-image,
+  .printing-work .editor-media-caption { display: none !important; }
+  .printing-work #desktop-preview { display: block !important; position: static; max-height: none; min-height: 0; overflow: visible; background: #fff; color-adjust: exact; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  /* Presentations print one fixed 16:9 landscape page per slide, exactly as
+     the web presentation print view does (components/documents.css). The
+     page lives on the body: naming it on the deep preview node would force a
+     break that emits a blank first page. */
+  body.printing-work.printing-presentation { page: desktop-presentation; }
+  .printing-work .slide-frame { aspect-ratio: auto; width: 13.333in; height: 7.5in; overflow: hidden; break-after: page; page-break-after: always; }
+  .printing-work .slide-frame:last-child { break-after: auto; page-break-after: auto; }
+  .printing-work .slide-frame > .slide { position: static; width: 13.333in; height: 7.5in; padding: 5rem; border: 0; border-radius: 0; box-shadow: none; transform: none; overflow: hidden; }
+  .printing-work .slide-frame.is-overflowing > .slide { outline: none; }
+  .printing-work .slide.is-overflowing::after { display: none; }
+  .printing-work video::-webkit-media-controls { display: none; }
+  /* Documents print as flowing A4 portrait pages carrying the same 16mm page
+     padding as the web document print view. The desktop preview is a single
+     flowing projection (the web print view paginates server-side), so pages
+     break naturally instead of on fixed frames. */
+  body.printing-work.printing-document { page: desktop-document; }
+  .printing-work.printing-document #desktop-preview .document-reader,
+  .printing-work.printing-document #desktop-preview [data-document-pages-target="surface"] { overflow: visible; }
   .printing-work .document-editor-block { break-inside: avoid; }
 }
 
