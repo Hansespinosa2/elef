@@ -26,6 +26,7 @@ export type { NewWorkMenuHandle } from "./application/new_work_menu_mount.js";
 export { isSettingsRoute, isWorkRoute, parseLibraryRoute, parseSettingsRoute, parseWorkRoute } from "./application/router.js";
 export type { SettingsRoute, WorkRoute, WorkView } from "./application/router.js";
 export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
+export { nextDefaultWorkTitle } from "./features/library/default_titles.js";
 export { NewWorkMenu } from "./features/library/NewWorkMenu.js";
 export type { NewWorkMenuProps } from "./features/library/NewWorkMenu.js";
 export { CommandPalette } from "./features/library/CommandPalette.js";

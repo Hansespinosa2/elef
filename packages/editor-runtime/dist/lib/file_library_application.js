@@ -534,14 +534,14 @@ function startFileLibraryApplication(platform) {
       showError(error);
     }
   }
-  function showCreateDialog(kind = "presentation") {
+  function requestDirectCreate(kind = "presentation") {
     mount.querySelector(".library-shared-view")?.dispatchEvent(
-      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })
+      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind, direct: true } })
     );
   }
   const newWorkMenu = mountNewWorkMenu(
     document.querySelector("#new-work-mount"),
-    { onSelect: (kind) => showCreateDialog(kind), disabled: true }
+    { onSelect: (kind) => requestDirectCreate(kind), disabled: true }
   );
   function desktopPaletteCommands() {
     const platform2 = /Mac|iPhone|iPad|iPod/i.test(
@@ -559,8 +559,8 @@ function startFileLibraryApplication(platform) {
       };
     };
     return [
-      command("new-presentation", () => showCreateDialog("presentation")),
-      command("new-document", () => showCreateDialog("document")),
+      command("new-presentation", () => requestDirectCreate("presentation")),
+      command("new-document", () => requestDirectCreate("document")),
       command("open-work", () => void handleMenuAction("open-work")),
       command("library-all", () => {
         showLibrary();
@@ -1075,8 +1075,8 @@ function startFileLibraryApplication(platform) {
       showLibrary();
       return;
     }
-    if (action === "new-presentation") return showCreateDialog("presentation");
-    if (action === "new-document") return showCreateDialog("document");
+    if (action === "new-presentation") return requestDirectCreate("presentation");
+    if (action === "new-document") return requestDirectCreate("document");
     if (action === "save") return flushSave({ force: true });
     if (action === "export-elef") return exportCurrentWork();
     if (action === "export-pptx") return exportPptxCurrentWork();

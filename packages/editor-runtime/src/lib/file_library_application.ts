@@ -642,21 +642,26 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
   }
 
-  // The create dialog is client-owned; the host only requests it. Creation
-  // itself flows through the host adapter, then the navigate adapter opens
-  // the new work, matching the old create-then-open sequence.
-  function showCreateDialog(kind = "presentation") {
+  // Direct-open parity with the web header menu: the web click navigates
+  // straight to the unsaved edit shell (documents#new / presentations#new
+  // with a default source). The desktop has no unsaved-shell route — a work
+  // folder needs a valid unique name at creation (local-store rejects empty
+  // and colliding names) — so the same click creates with the shared unique
+  // default title and opens the editor, where the title stays editable. The
+  // name-first dialog remains for the shared empty-state button, exactly
+  // like the web empty-state dialog.
+  function requestDirectCreate(kind = "presentation") {
     mount.querySelector(".library-shared-view")?.dispatchEvent(
-      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })
+      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind, direct: true } })
     )
   }
 
   // The shared New dropdown (the same component and web classes as the web
   // menu) sits where the old single-kind button sat; it only picks the kind
-  // and the dialog flow above does the rest.
+  // and the direct-create flow above does the rest.
   const newWorkMenu = mountNewWorkMenu(
     document.querySelector("#new-work-mount") as HTMLElement,
-    { onSelect: kind => showCreateDialog(kind), disabled: true }
+    { onSelect: kind => requestDirectCreate(kind), disabled: true }
   )
 
   // Library-meaningful palette commands: labels, descriptions, and chord
@@ -679,8 +684,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       }
     }
     return [
-      command("new-presentation", () => showCreateDialog("presentation")),
-      command("new-document", () => showCreateDialog("document")),
+      command("new-presentation", () => requestDirectCreate("presentation")),
+      command("new-document", () => requestDirectCreate("document")),
       command("open-work", () => void handleMenuAction("open-work")),
       command("library-all", () => {
         showLibrary()
@@ -1274,8 +1279,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       showLibrary()
       return
     }
-    if (action === "new-presentation") return showCreateDialog("presentation")
-    if (action === "new-document") return showCreateDialog("document")
+    if (action === "new-presentation") return requestDirectCreate("presentation")
+    if (action === "new-document") return requestDirectCreate("document")
     if (action === "save") return flushSave({ force: true })
     if (action === "export-elef") return exportCurrentWork()
     if (action === "export-pptx") return exportPptxCurrentWork()
