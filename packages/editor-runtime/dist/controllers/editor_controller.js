@@ -306,8 +306,9 @@ class editor_controller_default extends Controller {
         if (nextMode === "source") {
           if (this.view.dom.contains(document.activeElement)) return;
           if (!this.view.state.selection.eq(selectionAtModeChange)) return;
-          if (this.vimEnabled && this.vimMode.startsWith("visual")) Vim.handleKey(this.vim, "<Esc>", "user");
-          this.view.dispatch({ selection: { anchor: sourceOffset } });
+          if (sourceOffset !== this.view.state.selection.main.head) {
+            this.view.dispatch({ selection: { anchor: sourceOffset } });
+          }
           this.view.focus();
         } else if (restoreCaret) {
           this.projectionController()?.restoreCaret?.(sourceOffset, preferredBlockId);
@@ -640,9 +641,7 @@ class editor_controller_default extends Controller {
     if (this.editingMode === "source") {
       if (visible && this.frontmatterIsFolded()) {
         this.view.dispatch({
-          effects: unfoldEffect.of(this.frontmatterRange),
-          selection: { anchor: this.frontmatterRange.from },
-          scrollIntoView: true
+          effects: unfoldEffect.of(this.frontmatterRange)
         });
       } else if (!visible && !this.frontmatterIsFolded()) {
         this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) });

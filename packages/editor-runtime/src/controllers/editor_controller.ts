@@ -365,8 +365,13 @@ export default class extends Controller<HTMLElement> {
           // A toolbar action or file picker may set a new insertion range
           // before this frame runs. Preserve that deliberate selection.
           if (!this.view.state.selection.eq(selectionAtModeChange)) return
-          if (this.vimEnabled && this.vimMode.startsWith("visual")) Vim.handleKey(this.vim, "<Esc>", "user")
-          this.view.dispatch({ selection: { anchor: sourceOffset } })
+          // Presentation changes keep the live selection and Vim state. A
+          // different native projection caret is an explicit navigation;
+          // restoring the same head must not collapse a backward selection
+          // or terminate a Vim operator/visual selection.
+          if (sourceOffset !== this.view.state.selection.main.head) {
+            this.view.dispatch({ selection: { anchor: sourceOffset } })
+          }
           this.view.focus()
         } else if (restoreCaret) {
           this.projectionController()?.restoreCaret?.(sourceOffset, preferredBlockId)
@@ -768,9 +773,7 @@ export default class extends Controller<HTMLElement> {
     if (this.editingMode === "source") {
       if (visible && this.frontmatterIsFolded()) {
         this.view.dispatch({
-          effects: unfoldEffect.of(this.frontmatterRange),
-          selection: { anchor: this.frontmatterRange.from },
-          scrollIntoView: true
+          effects: unfoldEffect.of(this.frontmatterRange)
         })
       } else if (!visible && !this.frontmatterIsFolded()) {
         this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
