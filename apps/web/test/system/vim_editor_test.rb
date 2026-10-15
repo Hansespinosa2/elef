@@ -78,6 +78,76 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_selector "[data-autosave-target='status']", text: "Saved", wait: 5
   end
 
+  test "one Escape press closes each fuzzy popup and enters Vim Normal mode" do
+    Document.create!(title: "Escape link target", source: "# Target")
+    document = Document.create!(title: "Escape popups", source: "---\ntheme: \n---\n# Notes")
+    visit settings_path
+    find("#vim-enabled").check
+
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    focus_at_end = <<~JAVASCRIPT
+      (() => {
+        const controller = document.querySelector('.source-field').editorController;
+        controller.setSelectionRange(controller.value.length);
+        controller.focus();
+      })()
+    JAVASCRIPT
+    page.execute_script(focus_at_end)
+    editor.send_keys("i")
+    assert_selector "[data-editor-target='mode'][data-mode='insert']", text: "Insert"
+
+    # Slash snippet popup (: and / share this controller).
+    editor.send_keys("\n/table")
+    assert_selector "[data-snippet-palette-target='palette']:not([hidden]) .snippet-option", text: /Table/, wait: 5
+    editor.send_keys(:escape)
+    assert_no_selector "[data-snippet-palette-target='palette']:not([hidden])", wait: 5
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+
+    # At-sign math shortcut popup (also a pending math shorthand chain).
+    editor.send_keys("i", "\n$@a")
+    assert_selector ".math-shortcut-option.is-selected", text: /Alpha/, wait: 5
+    page.save_screenshot("../../assets/pr-shots/single-escape-dismiss/escape-math-popup-open.png")
+    editor.send_keys(:escape)
+    assert_no_selector "[data-math-shortcut-palette-target='palette']:not([hidden])", wait: 5
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+    assert_includes find_field("Markdown source").value, "$@a"
+    page.save_screenshot("../../assets/pr-shots/single-escape-dismiss/escape-math-normal-mode.png")
+
+    # Double-bracket document link popup.
+    editor.send_keys("i", "\n[[Escape li")
+    assert_selector ".document-link-option", text: "Escape link target", wait: 5
+    editor.send_keys(:escape)
+    assert_no_selector "[data-document-link-palette-target='palette']:not([hidden])", wait: 5
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+
+    # Slash mermaid assist popup (needs the caret at the end of its line).
+    page.execute_script(focus_at_end)
+    editor.send_keys("i", "\n/diagram")
+    assert_selector "[data-mermaid-assist-target='palette']:not([hidden])", wait: 5
+    editor.send_keys(:escape)
+    assert_no_selector "[data-mermaid-assist-target='palette']:not([hidden])", wait: 5
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+
+    # YAML front-matter metadata popup.
+    page.execute_script(<<~JAVASCRIPT)
+      (() => {
+        const controller = document.querySelector('.source-field').editorController;
+        const caret = controller.value.indexOf('theme: ') + 'theme: '.length;
+        controller.setSelectionRange(caret);
+        controller.focus();
+      })()
+    JAVASCRIPT
+    editor.send_keys("i", "d")
+    assert_selector "[data-metadata-assist-target='palette']:not([hidden])", text: /dark/, wait: 5
+    editor.send_keys(:escape)
+    assert_no_selector "[data-metadata-assist-target='palette']:not([hidden])", wait: 5
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+  ensure
+    page.execute_script("localStorage.clear()")
+  end
+
   test "Vim caret position survives visual source switches and its cursor stays out of the visual surface" do
     document = Document.create!(title: "Vim caret handoff", source: "# Vim handoff\n\nBody")
     visit edit_document_path(document)

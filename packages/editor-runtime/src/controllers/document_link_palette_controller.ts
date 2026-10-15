@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
+import { forwardEscapeToVim } from "../lib/vim_escape.js"
 
 // Prefix matches score 0, later substring matches score their index, and titles
 // that miss the query entirely drop out. Ties fall back to the title so the
@@ -165,6 +166,7 @@ export default class extends Controller {
     } else if (event.key === "Escape") {
       event.preventDefault()
       this.close()
+      forwardEscapeToVim(this.editorController, event)
     }
   }
 

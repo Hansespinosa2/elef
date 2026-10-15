@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
+import { forwardEscapeToVim } from "../lib/vim_escape.js"
 import {
   fieldScore,
   metadataCandidatesFor,
@@ -117,6 +118,7 @@ export default class extends Controller<HTMLElement> {
     } else if (event.key === "Escape") {
       event.preventDefault()
       this.close()
+      forwardEscapeToVim(editor, event)
     } else {
       queueMicrotask(() => this.refresh())
     }
