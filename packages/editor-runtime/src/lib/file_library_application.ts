@@ -10,7 +10,7 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { CREATE_WORK_EVENT, chordDisplay, mountElef, mountNewWorkMenu, mountPresentation, mountVimSettings, parseLibraryRoute, shortcutById } from "@elef/client"
+import { CREATE_WORK_EVENT, chordDisplay, mountElef, mountNewWorkMenu, mountPresentation, parseLibraryRoute, shortcutById } from "@elef/client"
 import type { GraphController, LibraryPaletteCommand } from "@elef/client"
 
 export interface WorkFolder {
