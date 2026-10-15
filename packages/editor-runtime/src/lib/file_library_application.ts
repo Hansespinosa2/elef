@@ -10,7 +10,7 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { CREATE_WORK_EVENT, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client"
+import { CREATE_WORK_EVENT, mountElef, mountPresentation, parseLibraryRoute } from "@elef/client"
 import type { GraphController } from "@elef/client"
 
 export interface WorkFolder {
@@ -182,8 +182,6 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     workTitle: document.querySelector("#work-title") as HTMLElement,
     status: document.querySelector("#status-text") as HTMLElement,
     settingsDialog: document.querySelector("#settings-dialog") as HTMLDialogElement,
-    settingsForm: document.querySelector("#settings-form") as HTMLFormElement,
-    libraryTheme: document.querySelector("#library-theme") as HTMLSelectElement,
     aboutDialog: document.querySelector("#about-dialog") as HTMLDialogElement,
     editorField: document.querySelector("#desktop-editor-field") as HTMLElement,
     editorForm: document.querySelector("#desktop-editor-form") as HTMLFormElement,
@@ -201,7 +199,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   let library: FileLibraryStatus | null = null
-  let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} }
+  let libraryConfig: { schema_version: number; theme: string; typography: string; hotkeys: Record<string, string> } = {
+    schema_version: 1, theme: "dark", typography: "book", hotkeys: {}
+  }
   let workFolders: WorkFolder[] = []
   let activeWorkFolder: WorkFolder | null = null
   let presentationEditorHandle: any = null
@@ -253,21 +253,57 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     authoringHostDialog.showModal()
   }
 
-  // Device-local vim preferences render through the shared client UI with a
-  // bridge that live-syncs the open editor, preserving the previous
-  // controller's behavior (same storage keys, same editor push).
-  const vimMount = document.querySelector("#vim-settings-mount")
-  if (vimMount) {
-    const editorForVim = () => document.querySelector(".source-field")?.editorController || null
-    mountVimSettings(vimMount, {
-      editorBridge: {
-        setVimEnabled: (enabled: boolean) => editorForVim()?.setVimEnabled(enabled),
-        setEscapeKey: (key: string) => editorForVim()?.setEscapeKey(key),
-        clearEscapeKey: () => editorForVim()?.clearEscapeKey(),
-        setLineNumberMode: (mode: string) => editorForVim()?.setLineNumberMode(mode),
-        setModeAwareCursor: (enabled: boolean) => editorForVim()?.setModeAwareCursor(enabled)
+  // The desktop settings surface is the same shared settings page the web
+  // app mounts (workspace defaults, vim preferences, updater), rendered
+  // through mountElef with the Tauri host adapter. Remount on every open so
+  // the page loads fresh values, matching the authoring dialog above; the
+  // native dialog keeps only host chrome (authoring link, close).
+  const settingsHostDialog = elements.settingsDialog
+  const settingsMount = document.querySelector("#settings-page-mount") as HTMLElement
+  let settingsShell: any = null
+  function closeSettings(): void {
+    if (settingsShell) {
+      settingsShell.unmount()
+      settingsShell = null
+    }
+    if (settingsHostDialog.open) settingsHostDialog.close()
+  }
+  // Device-local vim preferences live-sync into the open editor through
+  // this bridge, preserving the previous controller's behavior (same
+  // storage keys, same editor push); the shared page owns the UI.
+  function vimEditorBridge(): any {
+    const editorForVim = () => (document.querySelector(".source-field") as any)?.editorController || null
+    return {
+      setVimEnabled: (enabled: boolean) => editorForVim()?.setVimEnabled(enabled),
+      setEscapeKey: (key: string) => editorForVim()?.setEscapeKey(key),
+      clearEscapeKey: () => editorForVim()?.clearEscapeKey(),
+      setLineNumberMode: (mode: string) => editorForVim()?.setLineNumberMode(mode),
+      setModeAwareCursor: (enabled: boolean) => editorForVim()?.setModeAwareCursor(enabled)
+    }
+  }
+  async function showSettings(): Promise<void> {
+    try {
+      closeSettings()
+      if (libraryHost === null) {
+        showError({ message: "The library is still loading. Try again in a moment." })
+        return
       }
-    })
+      settingsShell = await mountElef(settingsMount, libraryHost, {
+        initialUrl: "/settings",
+        vimEditorBridge: vimEditorBridge(),
+        onSettingsSaved: saved => {
+          const theme = typeof saved["theme"] === "string" ? saved["theme"] : libraryConfig.theme
+          const typography = typeof saved["typography"] === "string" ? saved["typography"] : libraryConfig.typography
+          libraryConfig = { ...libraryConfig, schema_version: 1, theme, typography }
+          applyTheme(theme)
+          setStatus("Library settings saved")
+        },
+        ...(updateEnabled && platform.updaterSeam ? { updater: platform.updaterSeam } : {})
+      })
+      settingsHostDialog.showModal()
+    } catch (error) {
+      showError(error)
+    }
   }
 
   const transport = createTransportAdapter({ onConflict: (event: any) => saveFlow?.handleConflict(event) })
@@ -518,7 +554,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   function applyTheme(theme: string): void {
-    document.documentElement.dataset.theme = ["system", "light", "dark"].includes(theme) ? theme : "system"
+    // The shared page stores the follow-the-system theme as "match" (web
+    // vocabulary); the desktop stylesheet keys it as "system".
+    const normalized = theme === "match" ? "system" : theme
+    document.documentElement.dataset.theme = ["system", "light", "dark"].includes(normalized) ? normalized : "system"
   }
 
   function showError(error: any): void {
@@ -919,30 +958,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     return editorFor(elements.editorField)?.sourceValue ?? elements.editorInput.value
   }
 
-  async function showSettings(): Promise<void> {
-    try {
-      libraryConfig = await fileLibrary.readLibraryConfig()
-      elements.libraryTheme.value = libraryConfig.theme
-      elements.settingsDialog.showModal()
-    } catch (error) {
-      showError(error)
-    }
-  }
-
-  async function saveSettings(event: SubmitEvent): Promise<void> {
-    if ((event.submitter as HTMLButtonElement | null)?.value !== "save") return
-    event.preventDefault()
-    const next = { ...libraryConfig, schema_version: 1, theme: elements.libraryTheme.value }
-    try {
-      await fileLibrary.writeLibraryConfig(next)
-      libraryConfig = next
-      applyTheme(next.theme)
-      elements.settingsDialog.close()
-      setStatus("Library settings saved")
-    } catch (error) {
-      showError(error)
-    }
-  }
+  // showSettings lives beside the authoring mount above: the dialog body is
+  // the shared settings page, so there is no host-owned form to save.
 
   async function exportCurrentWork(): Promise<void> {
     if (!activeWorkFolder) {
@@ -1292,9 +1309,14 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     showLibrary()
     setStatus("Library")
   })
-  elements.settingsForm.addEventListener("submit", event => void saveSettings(event))
+  settingsHostDialog.addEventListener("close", () => {
+    if (settingsShell) {
+      settingsShell.unmount()
+      settingsShell = null
+    }
+  })
   shellElement<HTMLElement>("#manage-authoring").addEventListener("click", () => {
-    elements.settingsDialog.close()
+    closeSettings()
     void openAuthoringSettings()
   })
   // The updater affordances exist only on updater-capable builds; the shell
