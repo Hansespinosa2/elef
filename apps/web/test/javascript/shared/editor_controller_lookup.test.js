@@ -22,6 +22,7 @@ function seamCandidate() {
     replaceRanges: () => {},
     setSelectionRange: () => {},
     handleVimKey: () => false,
+    runKeymap: () => false,
   }
 }
 
@@ -44,4 +45,5 @@ test("editor seam guard rejects members with the wrong shape", () => {
   assert.equal(asEditorSeam({ ...seamCandidate(), replaceRanges: "x" }), null)
   assert.equal(asEditorSeam({ ...seamCandidate(), setSelectionRange: 0 }), null)
   assert.equal(asEditorSeam({ ...seamCandidate(), handleVimKey: null }), null)
+  assert.equal(asEditorSeam({ ...seamCandidate(), runKeymap: null }), null)
 })

@@ -67,6 +67,11 @@ function fakeEditor() {
       state.vimKeys.push(event.key);
       return false;
     },
+    keymapCalls: [] as string[],
+    runKeymap(event: { key: string }) {
+      state.keymapCalls.push(event.key);
+      return false;
+    },
     commitSource(text: string) {
       state.commits.push(text);
       state.value = text;
@@ -510,7 +515,22 @@ test("presentation Vim edits schedule a refresh with caret restoration", () => {
   mount.destroy();
 });
 
-test("presentation Vim bypasses disabled, insert, modified, and navigation input", () => {
+test("presentation modified keys reach Vim first and fall through when declined", () => {
+  // Source precedence (verified in the vendor bundle): the Vim plugin sees
+  // every keydown before the keymaps. Visual routing mirrors it, so e.g.
+  // Ctrl-r redoes through Vim rather than through history.
+  const modified = syncFixture();
+  modified.editor.vimEnabled = true;
+  modified.editor.insertMode = false;
+  assert.equal(
+    modified.mount.editor.routeVimKey(vimKeyEvent(modified.block as unknown as Element, "j", { ctrlKey: true }), modified.block as unknown as Element),
+    false,
+  );
+  assert.deepEqual(modified.editor.vimKeys, ["j"]);
+  modified.mount.destroy();
+});
+
+test("presentation Vim bypasses disabled, insert, and navigation input", () => {
   const disabled = syncFixture();
   assert.equal(disabled.mount.editor.routeVimKey(vimKeyEvent(disabled.block as unknown as Element, "j"), disabled.block as unknown as Element), false);
   assert.deepEqual(disabled.editor.vimKeys, []);
@@ -523,16 +543,6 @@ test("presentation Vim bypasses disabled, insert, modified, and navigation input
   assert.deepEqual(insert.editor.vimKeys, []);
   insert.mount.destroy();
 
-  const modified = syncFixture();
-  modified.editor.vimEnabled = true;
-  modified.editor.insertMode = false;
-  assert.equal(
-    modified.mount.editor.routeVimKey(vimKeyEvent(modified.block as unknown as Element, "j", { ctrlKey: true }), modified.block as unknown as Element),
-    false,
-  );
-  assert.deepEqual(modified.editor.vimKeys, []);
-  modified.mount.destroy();
-
   const arrow = syncFixture();
   arrow.editor.vimEnabled = true;
   arrow.editor.insertMode = false;
@@ -540,6 +550,38 @@ test("presentation Vim bypasses disabled, insert, modified, and navigation input
   assert.equal(arrow.mount.editor.routeVimKey(arrowEvent, arrow.block as unknown as Element), false);
   assert.equal(arrowEvent.defaultPrevented, false);
   arrow.mount.destroy();
+});
+
+test("presentation shortcuts run through the shared keymap", () => {
+  const { mount, editor, block } = syncFixture();
+  editor.runKeymap = (event: { key: string }) => {
+    editor.keymapCalls.push(event.key);
+    editor.value = `${editor.value}!`;
+    editor.selectionHead = 12;
+    return true;
+  };
+  const inputEvents: string[] = [];
+  (block as unknown as { dispatchEvent: unknown }).dispatchEvent = (event: { type: string }) => {
+    inputEvents.push(event.type);
+  };
+  const event = vimKeyEvent(block as unknown as Element, "z", { metaKey: true });
+
+  assert.equal(mount.editor.routeKeymapKey(event, block as unknown as Element), true);
+  assert.deepEqual(editor.keymapCalls, ["z"]);
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(mount.editor.pendingCaretRestore, { sourceOffset: 12, preferredBlockId: "b1" });
+  assert.deepEqual(inputEvents.filter((type) => type === "input"), ["input"]);
+  mount.destroy();
+});
+
+test("presentation blockKeydown wires shortcuts after Vim", () => {
+  const { mount, editor, block } = syncFixture();
+  mount.editor.blockKeydown(vimKeyEvent(block as unknown as Element, "z", { metaKey: true }));
+  assert.deepEqual(editor.keymapCalls, ["z"]);
+
+  mount.editor.blockKeydown(vimKeyEvent(block as unknown as Element, "a"));
+  assert.deepEqual(editor.keymapCalls, ["z"]);
+  mount.destroy();
 });
 
 test("presentation Vim visual ranges survive projection caret sync", () => {

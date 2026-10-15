@@ -2,7 +2,7 @@
 import { createDocumentState } from "./document_state.js"
 import { Compartment, EditorState } from "@codemirror/state"
 import type { ChangeSet, Extension } from "@codemirror/state"
-import { EditorView, lineNumbers } from "@codemirror/view"
+import { EditorView, lineNumbers, runScopeHandlers } from "@codemirror/view"
 import type { ViewUpdate } from "@codemirror/view"
 import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
 import { basicSetup } from "codemirror"
@@ -554,6 +554,22 @@ export class EditorEngine {
     if (!key) return false
     vimState.status = (vimState.status || "") + key
     return Boolean(vimApi.multiSelectHandleKey(cm, key, "user"))
+  }
+
+  // Runs a genuine projection keydown through the engine's registered
+  // editor-scope keymap: the same bindings, precedence, and commands source
+  // mode uses. The caller syncs the engine selection from the native caret
+  // first (via the selection bridge) and owns after-care — restoring the
+  // native caret and refreshing the projection when the document changed.
+  runKeymap(event: {
+    readonly key: string
+    readonly ctrlKey?: boolean | undefined
+    readonly altKey?: boolean | undefined
+    readonly metaKey?: boolean | undefined
+    readonly shiftKey?: boolean | undefined
+  }): boolean {
+    if (this.destroyed || !this.view) return false
+    return runScopeHandlers(this.view, event as KeyboardEvent, "editor")
   }
 
   focus(): void {

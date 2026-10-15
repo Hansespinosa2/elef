@@ -144,7 +144,7 @@ function stubSelectionBridge(t, { editable = true, collapsed = true, focusOffset
     contentEditable: editable ? "true" : "false",
     children: [],
     textContent: "First",
-    closest: (selector) => (selector === "[data-editor-block-id]" ? block : null),
+    closest: (selector) => (String(selector).includes("[data-editor-block-id]") ? block : null),
   }
   textNode.parentElement = block
   const otherText = { nodeType: 3, parentElement: null, textContent: "Other" }
@@ -288,9 +288,10 @@ test("cross-block selections stay on the reconstruction path", (t) => {
 })
 
 // Visual Vim routing: normal-mode keys run through the live engine.
-function stubVimRouting(t, { vimEnabled = true, insertMode = false, handled = true, mutate = null } = {}) {
+function stubVimRouting(t, { vimEnabled = true, insertMode = false, handled = true, mutate = null, keymapHandled = false, keymapMutate = null } = {}) {
   const { editor, engine, block } = stubSelectionBridge(t)
   const vimCalls = []
+  const keymapCalls = []
   const inputEvents = []
   const restored = []
   Object.assign(engine, {
@@ -301,6 +302,11 @@ function stubVimRouting(t, { vimEnabled = true, insertMode = false, handled = tr
       vimCalls.push(event.key)
       if (mutate) mutate(engine)
       return handled
+    },
+    runKeymap: (event) => {
+      keymapCalls.push(event.key)
+      if (keymapMutate) keymapMutate(engine)
+      return keymapHandled
     },
   })
   block.dispatchEvent = (event) => inputEvents.push(event.type)
@@ -320,7 +326,7 @@ function stubVimRouting(t, { vimEnabled = true, insertMode = false, handled = tr
     }
     return event
   }
-  return { editor, engine, block, vimCalls, inputEvents, restored, keyEvent }
+  return { editor, engine, block, vimCalls, keymapCalls, inputEvents, restored, keyEvent }
 }
 
 test("visual keys bypass Vim when disabled or in insert mode", (t) => {
@@ -380,11 +386,59 @@ test("unconsumed normal-mode keys swallow except navigation", (t) => {
   assert.equal(arrow.defaultPrevented, false)
 })
 
-test("visual Vim routing skips modified, composing, and readonly input", (t) => {
-  const modified = stubVimRouting(t)
-  assert.equal(modified.editor.routeVimKey(modified.keyEvent("j", { ctrlKey: true }), modified.block), false)
-  assert.deepEqual(modified.vimCalls, [])
+test("modified keys reach Vim first and fall through when declined", (t) => {
+  // Source precedence (verified in the vendor bundle): the Vim plugin sees
+  // every keydown before the keymaps. Visual routing mirrors it, so e.g.
+  // Ctrl-r redoes through Vim rather than through history.
+  const attempted = stubVimRouting(t)
+  const event = attempted.keyEvent("j", { ctrlKey: true })
+  assert.equal(attempted.editor.routeVimKey(event, attempted.block), true)
+  assert.deepEqual(attempted.vimCalls, ["j"])
 
+  const declined = stubVimRouting(t, { handled: false })
+  const fallthrough = declined.keyEvent("j", { ctrlKey: true })
+  assert.equal(declined.editor.routeVimKey(fallthrough, declined.block), false)
+  assert.deepEqual(declined.vimCalls, ["j"])
+  assert.equal(fallthrough.defaultPrevented, false)
+})
+
+test("shortcuts run through the shared keymap with engine after-care", (t) => {
+  const { editor, engine, block, keymapCalls, inputEvents, restored, keyEvent } = stubVimRouting(t, {
+    vimEnabled: false,
+    keymapHandled: true,
+    keymapMutate: (target) => { target.value = "undone"; target.selectionHead = 7 },
+  })
+  const event = keyEvent("z", { metaKey: true })
+
+  assert.equal(editor.routeKeymapKey(event, block), true)
+  assert.deepEqual(keymapCalls, ["z"])
+  assert.equal(event.defaultPrevented, true)
+  assert.deepEqual(restored, [[7, "b1"]])
+  assert.deepEqual(editor.pendingCaretRestore, { sourceOffset: 7, preferredBlockId: "b1" })
+  assert.deepEqual(inputEvents, ["input"])
+  assert.equal(engine.value, "undone")
+})
+
+test("plain keys never reach the shared keymap", (t) => {
+  const { editor, block, keymapCalls, keyEvent } = stubVimRouting(t, { vimEnabled: false, keymapHandled: true })
+
+  for (const key of ["a", "Enter", "Backspace", "ArrowLeft"]) {
+    assert.equal(editor.routeKeymapKey(keyEvent(key), block), false)
+  }
+  assert.deepEqual(keymapCalls, [])
+})
+
+test("projection keydown wires shortcuts through the shared keymap", (t) => {
+  const { editor, block, keymapCalls, keyEvent } = stubVimRouting(t, { vimEnabled: false })
+  editor.kind = "document"
+  editor.element = { dataset: { editorMode: "visual" } }
+
+  editor.projectionKeydown(keyEvent("z", { metaKey: true }))
+
+  assert.deepEqual(keymapCalls, ["z"])
+})
+
+test("visual Vim routing skips composing and readonly input", (t) => {
   const composing = stubVimRouting(t)
   assert.equal(composing.editor.routeVimKey(composing.keyEvent("j", { isComposing: true }), composing.block), false)
   assert.deepEqual(composing.vimCalls, [])

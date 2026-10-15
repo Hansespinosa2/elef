@@ -5,7 +5,8 @@
 // the shared editing-utilities deps object, then delegates lifecycle and
 // actions. The web Stimulus controller is the thin adapter.
 import { blockOperationRange, directiveLineSpan, exciseRange, insertAlignDirective } from "@elef/work-model/document-transforms"
-import { translateProjectionInput, vimPassthroughKey, visibleBlockText } from "../../session/projection_input.js"
+import { translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
+import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 
 export interface DocumentEditorRange {
   start: number
@@ -74,6 +75,7 @@ export interface DocumentEditorSeam {
   replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
   setSelectionRange(anchor: number, head?: number): void
   handleVimKey(event: DocumentProjectionKeyEvent): boolean
+  runKeymap(event: DocumentProjectionKeyEvent): boolean
 }
 
 export interface DocumentProjectionEvent {
@@ -623,44 +625,25 @@ export class DocumentEditor {
     requestAnimationFrame(() => this.restoreCaret(pending.sourceOffset, pending.preferredBlockId))
   }
 
-  // Routes visual-mode keys through the live Vim machinery when Vim is
-  // active outside insert mode (plus Escape, which leaves insert mode).
-  // Handled keys preventDefault; the native caret follows the engine head
-  // synchronously, and source-changing commands schedule a projection
-  // refresh with caret restoration. Unconsumed keys are swallowed except
-  // navigation/focus keys, which keep native behavior. Returns true when
-  // Vim owned the key and no further handling should run.
+  // Shared visual key routing (session/projection_keys); documents and
+  // presentations execute identical behavior through these delegates.
   routeVimKey(event: DocumentProjectionKeyEvent, blockElement: Element): boolean {
-    const editor = this.editorController
-    if (!editor || !editor.vimEnabled) return false
-    if ((blockElement as HTMLElement).contentEditable !== "true") return false
-    if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return false
-    if (editor.insertMode && event.key !== "Escape") return false
-    if (this.pendingProjectionEdits?.size) this.flushPendingProjectionEdits()
-    const valueBefore = editor.value
-    if (!editor.handleVimKey(event)) {
-      if (vimPassthroughKey(event.key)) return false
-      event.preventDefault()
-      return true
-    }
-    event.preventDefault()
-    const head = editor.selectionHead
-    const blockId = (blockElement as HTMLElement).dataset.editorBlockId ?? null
-    this.restoreCaret(head, blockId)
-    if (editor.value !== valueBefore) {
-      this.pendingCaretRestore = { sourceOffset: head, preferredBlockId: blockId }
-      blockElement.dispatchEvent(new Event("input", { bubbles: true }))
-    }
-    return true
+    return routeProjectionVimKey(this, event, blockElement)
+  }
+
+  routeKeymapKey(event: DocumentProjectionKeyEvent, blockElement: Element): boolean {
+    return routeProjectionKeymapKey(this, event, blockElement)
   }
 
   projectionKeydown(event: DocumentProjectionKeyEvent): void {
     if (event.defaultPrevented) return
-    if (this.kind !== "document" || event.isComposing || event.altKey || event.ctrlKey || event.metaKey) return
+    if (this.kind !== "document" || event.isComposing) return
 
     const blockElement = (event.target as Element).closest?.(".document-editor-block[data-editor-block-id]")
     if (!blockElement || !this.canEditBlock(blockElement)) return
     if (this.routeVimKey(event, blockElement)) return
+    if (this.routeKeymapKey(event, blockElement)) return
+    if (event.altKey || event.ctrlKey || event.metaKey) return
     this.deps.finishMathBeforeEnter(event, this.projectionTarget, () => this.flushPendingProjectionEdits())
 
     const block = this.map?.slides?.flatMap((slide) => slide.blocks || [])

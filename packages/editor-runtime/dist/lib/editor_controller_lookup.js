@@ -15,6 +15,7 @@ function asEditorSeam(candidate) {
   if (typeof seam.replaceRanges !== "function") return null;
   if (typeof seam.setSelectionRange !== "function") return null;
   if (typeof seam.handleVimKey !== "function") return null;
+  if (typeof seam.runKeymap !== "function") return null;
   return candidate;
 }
 export {

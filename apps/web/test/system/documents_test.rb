@@ -494,6 +494,36 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal expected.split("\n"), source_editor_state["lines"]
   end
 
+  test "visual shortcuts execute shared engine commands" do
+    source = "# Shortcuts\n\nFirst paragraph.\n"
+    document = Document.create!(title: "Visual shortcuts", source: source)
+    visit edit_document_path(document)
+
+    # Undo a scripted engine edit: native undo has no stack here (nothing was
+    # typed), so only the shared history command can revert the source.
+    page.execute_script("document.querySelector('.source-field').editorController.replaceRange('Second paragraph.', 13, 29)")
+    block = find(".document-editor-block", text: "Second paragraph.", exact_text: true)
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p").firstChild, 17);
+    JAVASCRIPT
+    mod = page.evaluate_script("navigator.platform").match?(/Mac/i) ? :command : :control
+    block.send_keys([mod, "z"])
+    assert_field "Markdown source", with: source, wait: 5
+    assert_selector ".document-editor-block", text: "First paragraph."
+
+    # Tab indents through the shared Tab binding, not focus traversal.
+    block = find(".document-editor-block", text: "First paragraph.", exact_text: true)
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p").firstChild, 0);
+    JAVASCRIPT
+    block.send_keys(:tab)
+    assert_field "Markdown source", with: "# Shortcuts\n\n  First paragraph.\n", wait: 5
+  end
+
   test "mermaid continuation falls back safely when the caret is in the middle of a label" do
     source = "```mermaid\nflowchart LR\n    A[Research] --> B[Design]\n```"
     document = Document.create!(title: "Mermaid middle edit", source: source)
