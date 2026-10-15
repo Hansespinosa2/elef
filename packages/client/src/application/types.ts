@@ -48,6 +48,29 @@ export interface AuthoringSeam {
   readonly onSaved?: (message: string) => void;
 }
 
+// One runnable entry in the shared command palette. Hosts inject their own
+// command list (native menu actions on desktop, navigation commands on web);
+// the palette only renders, filters, and runs them — never host-name
+// branching. Chord chips are preformatted display strings so hosts keep
+// their per-host chord vocabulary in the shared registry.
+export interface LibraryPaletteCommand {
+  readonly id: string;
+  readonly label: string;
+  readonly description: string;
+  readonly chord: string | null;
+  run(): void;
+}
+
+// Optional host contribution for the shared command palette + quick-open.
+// Present only on hosts that mount the palette; without it the client
+// renders no palette surface at all. Quick-open searches the loaded library
+// titles; opening a work reuses the standard navigate seam.
+export interface LibraryPaletteSeam {
+  readonly commands: readonly LibraryPaletteCommand[];
+}
+
+export type PaletteMode = "commands" | "search";
+
 export interface ElefMountOptions {
   readonly initialUrl?: string;
   readonly navigate?: (
@@ -64,6 +87,7 @@ export interface ElefMountOptions {
   readonly operationNotice?: (operation: LibraryOperation, work: WorkSummary) => string | null;
   readonly updater?: UpdaterSeam;
   readonly authoring?: AuthoringSeam;
+  readonly palette?: LibraryPaletteSeam;
   // Host capability declaration for the document-graph panel slot. Hosts
   // without graph support (the Stable desktop profile) pass false and the
   // client omits the panel element entirely; default true keeps every
@@ -82,6 +106,9 @@ export interface ElefMountOptions {
 
 export interface ElefShell {
   refresh(): Promise<void>;
+  // Host-to-client palette control: opens the shared palette in the given
+  // mode. No-op without the palette seam; hosts own the key that calls it.
+  openPalette(mode: PaletteMode): void;
   // Host-to-client control, mirroring the onLibraryEvent client-to-host
   // reports: the host owns view-level state (which tab is showing, which
   // notice is visible) while the client owns the pixels.

@@ -1786,7 +1786,8 @@ class DesktopEditorUi {
 class DesktopLibraryUi {
   async createWork(title, kind) {
     await this.openLibrary()
-    await $("#new-work").click()
+    await $(".new-work-trigger").click()
+    await $(`[data-new-work-kind="${kind}"]`).click()
     await $("#new-work-kind").selectByAttribute("value", kind)
     await $("#new-work-name").setValue(title)
     await $("#create-submit").click()

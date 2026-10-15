@@ -5,11 +5,14 @@ import type { ElefMountOptions, LibraryFilter, NoticeTone } from "../../applicat
 import { parseLibraryRoute } from "../../application/router.js";
 import { filterWorks, sameWorks } from "./filtering.js";
 import { LibraryCard } from "./LibraryCard.js";
+import type { PaletteMode } from "../../application/types.js";
+import { CommandPalette } from "./CommandPalette.js";
 
 export interface LibraryControl {
   reload(): Promise<void>;
   notify(message: string | null, tone?: NoticeTone): void;
   setFilter(filter: LibraryFilter): void;
+  openPalette(mode: PaletteMode): void;
 }
 
 export interface LibraryAppProps {
@@ -50,6 +53,8 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogKind, setDialogKind] = useState<WorkKind>("presentation");
   const [dialogName, setDialogName] = useState("");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteMode, setPaletteMode] = useState<PaletteMode>("commands");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const loadMoreRef = useRef<HTMLButtonElement | null>(null);
@@ -116,6 +121,10 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
       setFilter: (next) => {
         setFilter(next);
         setVisibleCount(LIBRARY_RENDER_BATCH_SIZE);
+      },
+      openPalette: (mode) => {
+        setPaletteMode(mode);
+        setPaletteOpen(true);
       },
     });
   }, [registerControl, reload, showNotice]);
@@ -380,6 +389,27 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
           No Works match this search.
         </p>
       </section>
+
+      {options.palette !== undefined && (
+        <CommandPalette
+          open={paletteOpen}
+          initialMode={paletteMode}
+          commands={options.palette.commands}
+          works={works.map((work) => ({ id: work.id, title: work.title, kind: work.kind }))}
+          onOpenWork={(selected) => {
+            const kind = selected.kind === "document" ? "document" : "presentation";
+            options.navigate?.({ workId: selected.id, kind });
+          }}
+          onClose={() => {
+            setPaletteOpen(false);
+            // Keyboard home: ⌘K came from the search box, so Esc returns
+            // focus there instead of dropping it to the body. Command runs
+            // that open a surface re-focus afterwards through their own
+            // autofocus, so this never steals a dialog's focus.
+            rootRef.current?.querySelector<HTMLElement>("#library-search")?.focus?.();
+          }}
+        />
+      )}
 
       <dialog ref={dialogRef} id="create-dialog" className="app-dialog" onCancel={() => setDialogOpen(false)}>
         <form id="create-form" onSubmit={(event) => void create(event)}>

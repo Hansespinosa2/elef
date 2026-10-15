@@ -10,8 +10,8 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { CREATE_WORK_EVENT, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client"
-import type { GraphController } from "@elef/client"
+import { CREATE_WORK_EVENT, chordDisplay, mountElef, mountNewWorkMenu, mountPresentation, mountVimSettings, parseLibraryRoute, shortcutById } from "@elef/client"
+import type { GraphController, LibraryPaletteCommand } from "@elef/client"
 
 export interface WorkFolder {
   id: string;
@@ -535,7 +535,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     elements.library.hidden = !library
     elements.workView.hidden = true
     elements.libraryName.textContent = library ? library.root.split(/[\\/]/).filter(Boolean).at(-1) || library.root : "No library selected"
-    shellElement<HTMLButtonElement>("#new-work").disabled = !library
+    newWorkMenu.setDisabled(!library)
     shellElement<HTMLButtonElement>("#import-elef").disabled = !library
     shellElement<HTMLElement>("#breadcrumb-current").textContent = "Works"
     // The first show preserves the boot filter (a deep-linked tab); every
@@ -649,6 +649,53 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     mount.querySelector(".library-shared-view")?.dispatchEvent(
       new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })
     )
+  }
+
+  // The shared New dropdown (the same component and web classes as the web
+  // menu) sits where the old single-kind button sat; it only picks the kind
+  // and the dialog flow above does the rest.
+  const newWorkMenu = mountNewWorkMenu(
+    document.querySelector("#new-work-mount") as HTMLElement,
+    { onSelect: kind => showCreateDialog(kind), disabled: true }
+  )
+
+  // Library-meaningful palette commands: labels, descriptions, and chord
+  // chips come from the shared registry so the palette cannot drift from
+  // the documented shortcut map. Editor-scoped actions (save, present,
+  // print) stay out: the palette mounts in the library view.
+  function desktopPaletteCommands(): LibraryPaletteCommand[] {
+    const platform = /Mac|iPhone|iPad|iPod/i.test(
+      ((navigator as any).userAgentData?.platform || navigator.platform || "")
+    ) ? "mac" : "other"
+    const command = (id: string, run: () => void): LibraryPaletteCommand => {
+      const action = shortcutById(id)
+      const chord = action?.desktopChord ?? null
+      return {
+        id,
+        label: action?.label ?? id,
+        description: action?.description ?? "",
+        chord: chord === null ? null : chordDisplay(chord, platform),
+        run
+      }
+    }
+    return [
+      command("new-presentation", () => showCreateDialog("presentation")),
+      command("new-document", () => showCreateDialog("document")),
+      command("open-work", () => void handleMenuAction("open-work")),
+      command("library-all", () => {
+        showLibrary()
+        shell?.setFilter("all")
+      }),
+      command("library-documents", () => {
+        showLibrary()
+        shell?.setFilter("documents")
+      }),
+      command("library-presentations", () => {
+        showLibrary()
+        shell?.setFilter("presentations")
+      }),
+      command("open-settings", () => void showSettings())
+    ]
   }
 
   const openWork = createWorkOpenFlow(openWorkNow)
@@ -1248,9 +1295,6 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     shellElement<HTMLElement>("#back-to-library").click()
   })
   shellElement<HTMLElement>("#open-settings").addEventListener("click", () => void showSettings())
-  shellElement<HTMLElement>("#new-work").addEventListener("click", () => {
-    showCreateDialog(currentFilter() === "documents" ? "document" : "presentation")
-  })
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
   // The Export menu holds one option per format (the PPTX option hides for
@@ -1346,7 +1390,12 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     const action = desktopMenuKeyAction(event)
     if (action === "focus-search") {
       event.preventDefault()
-      mount.querySelector<HTMLElement>("#library-search")?.focus()
+      // Library-scoped: ⌘K opens the shared palette in search mode — the
+      // same keyboard-first entry the old inline-search focus gave (type to
+      // filter, Enter to open), with every library command one toggle away.
+      // In the editor the palette has no surface, so the key stays a no-op
+      // there exactly as before.
+      if (!elements.library.hidden) shell?.openPalette("search")
     } else if (action === "start-presentation") {
       event.preventDefault()
       void handleMenuAction("start-presentation")
@@ -1378,6 +1427,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
           if (opened) void startPresentation()
         })
       },
+      palette: { commands: desktopPaletteCommands() },
       onLibraryEvent: handleLibraryEvent
     })
   }

@@ -10,7 +10,7 @@ import { presentConflictDialog } from "./conflict_dialog.js";
 import { createRendererClient } from "./renderer_worker_client.js";
 import { applyDesktopFeatureFlags } from "./feature_flags.js";
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js";
-import { CREATE_WORK_EVENT, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client";
+import { CREATE_WORK_EVENT, chordDisplay, mountElef, mountNewWorkMenu, mountPresentation, mountVimSettings, parseLibraryRoute, shortcutById } from "@elef/client";
 function ensureWorkFolderHash(workFolder) {
   workFolder.content_hash ??= "";
   return workFolder;
@@ -450,7 +450,7 @@ function startFileLibraryApplication(platform) {
     elements.library.hidden = !library;
     elements.workView.hidden = true;
     elements.libraryName.textContent = library ? library.root.split(/[\\/]/).filter(Boolean).at(-1) || library.root : "No library selected";
-    shellElement("#new-work").disabled = !library;
+    newWorkMenu.setDisabled(!library);
     shellElement("#import-elef").disabled = !library;
     shellElement("#breadcrumb-current").textContent = "Works";
     if (libraryShown) {
@@ -538,6 +538,44 @@ function startFileLibraryApplication(platform) {
     mount.querySelector(".library-shared-view")?.dispatchEvent(
       new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })
     );
+  }
+  const newWorkMenu = mountNewWorkMenu(
+    document.querySelector("#new-work-mount"),
+    { onSelect: (kind) => showCreateDialog(kind), disabled: true }
+  );
+  function desktopPaletteCommands() {
+    const platform2 = /Mac|iPhone|iPad|iPod/i.test(
+      navigator.userAgentData?.platform || navigator.platform || ""
+    ) ? "mac" : "other";
+    const command = (id, run) => {
+      const action = shortcutById(id);
+      const chord = action?.desktopChord ?? null;
+      return {
+        id,
+        label: action?.label ?? id,
+        description: action?.description ?? "",
+        chord: chord === null ? null : chordDisplay(chord, platform2),
+        run
+      };
+    };
+    return [
+      command("new-presentation", () => showCreateDialog("presentation")),
+      command("new-document", () => showCreateDialog("document")),
+      command("open-work", () => void handleMenuAction("open-work")),
+      command("library-all", () => {
+        showLibrary();
+        shell?.setFilter("all");
+      }),
+      command("library-documents", () => {
+        showLibrary();
+        shell?.setFilter("documents");
+      }),
+      command("library-presentations", () => {
+        showLibrary();
+        shell?.setFilter("presentations");
+      }),
+      command("open-settings", () => void showSettings())
+    ];
   }
   const openWork = createWorkOpenFlow(openWorkNow);
   async function openWorkNow(id) {
@@ -1057,9 +1095,6 @@ function startFileLibraryApplication(platform) {
     shellElement("#back-to-library").click();
   });
   shellElement("#open-settings").addEventListener("click", () => void showSettings());
-  shellElement("#new-work").addEventListener("click", () => {
-    showCreateDialog(currentFilter() === "documents" ? "document" : "presentation");
-  });
   shellElement("#refresh-library").addEventListener("click", () => void refreshLibrary());
   shellElement("#import-elef").addEventListener("click", () => void importWork());
   function closeExportMenu() {
@@ -1140,7 +1175,7 @@ function startFileLibraryApplication(platform) {
     const action = desktopMenuKeyAction(event);
     if (action === "focus-search") {
       event.preventDefault();
-      mount.querySelector("#library-search")?.focus();
+      if (!elements.library.hidden) shell?.openPalette("search");
     } else if (action === "start-presentation") {
       event.preventDefault();
       void handleMenuAction("start-presentation");
@@ -1169,6 +1204,7 @@ function startFileLibraryApplication(platform) {
           if (opened) void startPresentation();
         });
       },
+      palette: { commands: desktopPaletteCommands() },
       onLibraryEvent: handleLibraryEvent
     });
   }

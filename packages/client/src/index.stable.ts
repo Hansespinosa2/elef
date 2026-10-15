@@ -21,9 +21,15 @@ export {
   toEditorLineEndings,
 } from "./session/source_ops.js";
 export { mountElef } from "./application/shell.js";
+export { mountNewWorkMenu } from "./application/new_work_menu_mount.js";
+export type { NewWorkMenuHandle } from "./application/new_work_menu_mount.js";
 export { isSettingsRoute, isWorkRoute, parseLibraryRoute, parseSettingsRoute, parseWorkRoute } from "./application/router.js";
 export type { SettingsRoute, WorkRoute, WorkView } from "./application/router.js";
 export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
+export { NewWorkMenu } from "./features/library/NewWorkMenu.js";
+export type { NewWorkMenuProps } from "./features/library/NewWorkMenu.js";
+export { CommandPalette } from "./features/library/CommandPalette.js";
+export type { PaletteMode } from "./application/types.js";
 export {
   PALETTE_ACTION_IDS,
   RESERVED_WEB_CHORDS,
@@ -56,6 +62,8 @@ export type {
   ElefShell,
   LibraryFilter,
   LibraryOperation,
+  LibraryPaletteCommand,
+  LibraryPaletteSeam,
   NoticeTone,
   UpdaterSeam,
   UpdaterStatus,
