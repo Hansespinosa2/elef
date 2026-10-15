@@ -194,13 +194,13 @@ class media_controller_default extends Controller {
       const url = urlFromTransfer(transfer);
       const file = url ? await this.fileFromUrl(url) : null;
       if (!file) {
-        this.editor?.releaseMediaRange(rangeId);
+        if (rangeId !== null) this.editor?.releaseMediaRange(rangeId);
         this.setStatus("Only image files can be dropped here \u2014 to use an image from a web page, save it first.");
         return;
       }
       await this.insertSourceImage([file], rangeId);
     } catch (_error) {
-      this.editor?.releaseMediaRange(rangeId);
+      if (rangeId !== null) this.editor?.releaseMediaRange(rangeId);
       this.setStatus("Only image files can be dropped here \u2014 to use an image from a web page, save it first.");
     }
   }
@@ -273,13 +273,13 @@ class media_controller_default extends Controller {
         if (image) break;
       }
       if (!image) {
-        this.editor?.releaseMediaRange(rangeId);
+        if (rangeId !== null) this.editor?.releaseMediaRange(rangeId);
         this.setStatus("Choose an image file to insert into source mode.");
         return;
       }
       await this.upload(image, null, { rangeId });
     } catch (error) {
-      this.editor?.releaseMediaRange(rangeId);
+      if (rangeId !== null) this.editor?.releaseMediaRange(rangeId);
       this.setStatus(error instanceof Error ? error.message || "Media could not be uploaded." : "Media could not be uploaded.");
     }
   }

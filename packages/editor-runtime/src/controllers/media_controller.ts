@@ -256,21 +256,21 @@ export default class extends Controller<HTMLElement> {
     await this.insertSourceTransfer(transfer, rangeId)
   }
 
-  async insertSourceTransfer(transfer: MediaTransfer | null | undefined, rangeId: string | null): Promise<void> {
+  async insertSourceTransfer(transfer: MediaTransfer | null | undefined, rangeId: number | null): Promise<void> {
     this.setStatus("Preparing image…", true)
     try {
       const url = urlFromTransfer(transfer)
       const file = url ? await this.fileFromUrl(url) : null
 
       if (!file) {
-        this.editor?.releaseMediaRange(rangeId)
+        if (rangeId !== null) this.editor?.releaseMediaRange(rangeId)
         this.setStatus("Only image files can be dropped here — to use an image from a web page, save it first.")
         return
       }
 
       await this.insertSourceImage([file], rangeId)
     } catch (_error) {
-      this.editor?.releaseMediaRange(rangeId)
+      if (rangeId !== null) this.editor?.releaseMediaRange(rangeId)
       this.setStatus("Only image files can be dropped here — to use an image from a web page, save it first.")
     }
   }
@@ -346,7 +346,7 @@ export default class extends Controller<HTMLElement> {
     return new File([file], name, { type, lastModified: file.lastModified })
   }
 
-  async insertSourceImage(files: File[], rangeId: string | null): Promise<void> {
+  async insertSourceImage(files: File[], rangeId: number | null): Promise<void> {
     this.setStatus("Preparing image…", true)
     try {
       let image: File | null = null
@@ -356,14 +356,14 @@ export default class extends Controller<HTMLElement> {
       }
 
       if (!image) {
-        this.editor?.releaseMediaRange(rangeId)
+        if (rangeId !== null) this.editor?.releaseMediaRange(rangeId)
         this.setStatus("Choose an image file to insert into source mode.")
         return
       }
 
       await this.upload(image, null, { rangeId })
     } catch (error) {
-      this.editor?.releaseMediaRange(rangeId)
+      if (rangeId !== null) this.editor?.releaseMediaRange(rangeId)
       this.setStatus(error instanceof Error ? error.message || "Media could not be uploaded." : "Media could not be uploaded.")
     }
   }
@@ -499,7 +499,7 @@ export default class extends Controller<HTMLElement> {
     return true
   }
 
-  async upload(file: File, range: SourceRange | null, { rangeId = null }: { rangeId?: string | null } = {}): Promise<void> {
+  async upload(file: File, range: SourceRange | null, { rangeId = null }: { rangeId?: number | null } = {}): Promise<void> {
     const fileName = file.name || "pasted-image"
     this.setStatus(`${this.enabledValue && this.uploadUrlValue ? "Uploading" : "Preparing"} ${fileName}…`, true)
     try {

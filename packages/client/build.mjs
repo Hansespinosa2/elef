@@ -77,8 +77,20 @@ bundle(join(here, "src", "pptx-test-internals.ts"), join(here, "dist", "pptx-tes
 // beside preview-core: server-less hosts import it on demand while the boot
 // barrel stays free of the projection.
 bundle(join(here, "src", "features", "export", "pptx_model.ts"), join(here, "dist", "pptx-model.js"));
+// The CodeMirror editing engine (source and visual presentations of one
+// session) ships as its own entry: the editor-runtime Stimulus shell keeps
+// the engine external and both hosts resolve this file once. Device
+// preferences stay external so the engine shares the canonical
+// vim-preferences chunk with the settings surfaces instead of inlining a
+// second copy (the desktop profile checker pins the shared input).
+bundle(join(here, "src", "features", "editor", "index.ts"), join(here, "dist", "editor.js"), {
+  external: ["@elef/client/vim-preferences"],
+});
+bundle(join(here, "src", "features", "editor", "test_internals.ts"), join(here, "dist", "editor-test-internals.js"), {
+  external: ["@elef/client/vim-preferences"],
+});
 // The PPTX engine (model-to-blob orchestration) ships beside the builder:
 // the desktop import must not couple to the client boot barrel, whose bare
 // specifier the Stable profile forbids.
 bundle(join(here, "src", "features", "export", "pptx_engine.ts"), join(here, "dist", "pptx-engine.js"));
-console.log("packages/client: dist/elef-client.js + dist/elef-client.stable.js + dist/preview-core.js + dist/sanitize.js + dist/presentation-chrome.js + dist/vim-preferences.js + dist/shortcuts.js + dist/port-session.js + dist/pptx-test-internals.js + dist/pptx-model.js + dist/pptx-engine.js built");
+console.log("packages/client: dist/elef-client.js + dist/elef-client.stable.js + dist/preview-core.js + dist/sanitize.js + dist/presentation-chrome.js + dist/vim-preferences.js + dist/shortcuts.js + dist/port-session.js + dist/pptx-test-internals.js + dist/pptx-model.js + dist/pptx-engine.js + dist/editor.js + dist/editor-test-internals.js built");

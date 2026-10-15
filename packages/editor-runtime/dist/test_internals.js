@@ -668,17 +668,7 @@ function renderWorkerMessage(data, renderPreview, renderMarkdownBlock = renderPr
 }
 
 // src/controllers/mermaid_runtime.ts
-function mermaidAssetUrl() {
-  const importmap = document.querySelector('script[type="importmap"]');
-  if (importmap) {
-    try {
-      const mappedUrl = JSON.parse(importmap.textContent).imports?.mermaid;
-      if (mappedUrl) return mappedUrl;
-    } catch {
-    }
-  }
-  return document.querySelector('meta[name="elef-mermaid-url"]')?.content || null;
-}
+import { MERMAID_CONTAINER_SELECTOR, MERMAID_ERROR_CLASS, mermaidContainers, nextMermaidRenderId, mermaidAssetUrl, loadMermaid, mermaidConfig, renderMermaidDiagrams, renderMermaidSvg } from "@elef/client/editor";
 
 // src/lib/work_open_flow.ts
 function createWorkOpenFlow(open) {
@@ -785,19 +775,10 @@ function createCodeMirrorBinding({
 }
 
 // src/lib/editor_document_state.ts
-function createDocumentState(EditorState, source, extensions = []) {
-  const lineSeparator = source.match(/\r\n|\r|\n/)?.[0] || "\n";
-  return {
-    lineSeparator,
-    state: EditorState.create({ doc: source, extensions: [EditorState.lineSeparator.of(lineSeparator), ...extensions] })
-  };
-}
+import { createDocumentState } from "@elef/client/editor";
 
 // src/lib/editor_tab_keymap.ts
-import { indentWithTab } from "@codemirror/commands";
-import { keymap } from "@codemirror/view";
-var editorTabBinding = indentWithTab;
-var editorTabKeymap = keymap.of([indentWithTab]);
+import { editorTabBinding, editorTabKeymap } from "@elef/client/editor";
 
 // src/controllers/editor_caret.ts
 var MARKDOWN_MATH = /^\$\$[\s\S]+?\$\$|^\$(?!\$)[^$\r\n]+?\$(?!\$)/;
@@ -1063,11 +1044,7 @@ function createRequestGuard() {
 }
 
 // src/lib/vim_line_numbers.ts
-function formatLineNumber(number, state, mode) {
-  if (mode !== "relative") return String(number);
-  const activeLine = state.doc.lineAt(state.selection.main.head).number;
-  return String(Math.abs(activeLine - number));
-}
+import { formatLineNumber } from "@elef/client/editor";
 
 // src/lib/metadata_assist.ts
 import { frontmatterRangeFor } from "@elef/client";

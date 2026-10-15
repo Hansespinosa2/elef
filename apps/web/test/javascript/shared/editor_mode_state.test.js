@@ -1,24 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
 import { EditorSelection, EditorState } from "@codemirror/state"
 import { history, historyField } from "@codemirror/commands"
 import { sourceOffsetForVisibleOffset, visibleOffsetForSourceOffset } from "@elef/editor-runtime/test-internals"
+import { EditorEngine as EditorController } from "@elef/client/editor-test-internals"
 
-// Exercise the shipped controller's mode transition without mounting a host.
+// Exercise the shipped engine's mode transition without mounting a host.
 // Browser/native input parity is a separate acceptance tier.
-let source = await readFile(new URL("../../../../../packages/editor-runtime/dist/controllers/editor_controller.js", import.meta.url), "utf8")
-source = source.replace(/^import\s+[\s\S]*?\s+from\s+["'][^"']+["'];?\s*/gm, "")
-const prelude = `
-class Controller {}
-const tags = { processingInstruction: {} }
-const EditorView = { theme: () => [] }
-const livePreviewMode = { of: value => ({ mode: value }) }
-const foldEffect = { of: value => ({ fold: value }) }
-const unfoldEffect = { of: value => ({ unfold: value }) }
-const Vim = { handleKey() { throw new Error("Mode switch must not send Vim keys") } }
-`
-const { default: EditorController } = await import(`data:text/javascript;base64,${Buffer.from(prelude + source).toString("base64")}`)
 
 function modeFixture(t, selection, visualCaret = null, source = "# Heading\n\nFirst **bold** passage.\n\nFinal.") {
   const frames = []
@@ -53,10 +41,11 @@ function modeFixture(t, selection, visualCaret = null, source = "# Heading\n\nFi
     focus() { this.focused = true }
   }
   const vim = { state: { vim: { mode: "visual", visualMode: true, registerName: "a", macroModeState: { recording: true } } } }
-  const controller = new EditorController()
+  const element = { dataset: {}, querySelector: () => null }
+  const controller = new EditorController(element)
   Object.assign(controller, {
     view, vim, vimEnabled: true, editingMode: "source",
-    element: { dataset: {} },
+    element,
     form: { setAttribute() {}, querySelector: () => null, dispatchEvent() {}, contains: element => element === projection },
     projectionController: () => projection,
     syncFrontmatterVisibility() {}, syncMetadataToggle() {}

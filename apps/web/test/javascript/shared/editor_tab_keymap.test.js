@@ -46,11 +46,11 @@ test("Shift+Tab on an unindented line still captures the key", () => {
   assert.equal(state.sliceDoc(), "hello")
 })
 
-test("the shipped editor controller wires the Tab keymap", async () => {
-  const controller = await readFile(
-    new URL("../../../../../packages/editor-runtime/dist/controllers/editor_controller.js", import.meta.url),
+test("the shipped client editor wires the Tab keymap", async () => {
+  const engine = await readFile(
+    new URL("../../../../../packages/client/src/features/editor/engine.ts", import.meta.url),
     "utf8"
   )
-  assert.match(controller, /editor_tab_keymap/)
-  assert.match(controller, /editorTabKeymap/)
+  assert.match(engine, /from "\.\/tab_keymap\.js"/)
+  assert.match(engine, /editorTabKeymap/)
 })

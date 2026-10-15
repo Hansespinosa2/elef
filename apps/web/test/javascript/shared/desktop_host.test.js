@@ -186,7 +186,7 @@ test("the desktop host defaults to Rails' Visual mode and gates it until preview
   assert.match(application, /document\.body\.dataset\.desktopView = "editor"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "library"/)
   assert.match(application, /editor\.loadDocument\(work\.source\)[\s\S]*?editor\.setEditingMode\(desktopFeatures\.visualEditing \? "visual" : "source", \{ restoreCaret: false \}\)/)
-  const editorController = await read("packages/editor-runtime/src/controllers/editor_controller.ts")
+  const editorController = await read("packages/client/src/features/editor/engine.ts")
   assert.match(editorController, /this\.form\?\.dispatchEvent\(new CustomEvent\("elef:editor-mode-change"/)
   assert.match(application, /theme: "dark"/)
   assert.match(application, /void openWork\(target\.workId\)/)
@@ -273,7 +273,7 @@ test("Markdown appearance persistence is shared and absent from desktop orchestr
 })
 
 test("structural source operations commit through the bound session", async () => {
-  const editorController = await read("packages/editor-runtime/src/controllers/editor_controller.ts")
+  const editorController = await read("packages/client/src/features/editor/engine.ts")
   const clientEditor = await read("packages/client/src/features/presentation/editor.ts")
   const visualEditor = await read("packages/editor-runtime/src/controllers/visual_editor_controller.ts")
   const documentEditor = await read("packages/client/src/features/document/document_editor.ts")
@@ -303,7 +303,7 @@ test("structural source operations commit through the bound session", async () =
 })
 
 test("document reload reapplies editor preferences and readiness follows connection", async () => {
-  const controller = await read("packages/editor-runtime/src/controllers/editor_controller.ts")
+  const controller = await read("packages/client/src/features/editor/engine.ts")
   const load = controller.slice(controller.indexOf("  loadDocument(source:"), controller.indexOf("  setExternalValue(value:"))
   for (const method of ["vimCompartment.reconfigure", "applyLineNumbers", "applyCursorStyle", "refreshFrontmatterRange", "setEditingMode", "syncMetadataToggle"]) {
     assert.ok(load.includes(method), `New documents must reapply ${method}`)
