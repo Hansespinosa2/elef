@@ -53,6 +53,7 @@ import {
   detectLineSeparator,
   diffSource,
   frontmatterRangeFor,
+  frontmatterRevealAction,
   normalizeLineEndings,
   offsetSelection
 } from "../../session/source_ops.js"
@@ -626,6 +627,7 @@ export class EditorEngine {
     this.reportLivePreviewState(update.state)
     if (update.selectionSet) {
       this.element.dispatchEvent(new Event("elef:editor-selection-change"))
+      this.revealFrontmatterOnEntry(update.state)
     }
     if (update.docChanged) {
       this.mapPendingMediaRanges(update.changes)
@@ -638,6 +640,28 @@ export class EditorEngine {
     if (update.selectionSet || update.docChanged) this.updateMode()
     if (update.selectionSet || update.docChanged || update.viewportChanged) this.scheduleLineNumberUpdate()
     this.syncMetadataToggle()
+  }
+
+  // Hidden frontmatter reveals in place when the selection enters it and
+  // refolds when the selection leaves, in source mode only. Explicit
+  // visibility and visual-mode folding stay owned by
+  // syncFrontmatterVisibility; this only manages the auto-revealed state.
+  revealFrontmatterOnEntry(state: EditorState): void {
+    if (this.editingMode !== "source" || !this.frontmatterRange) return
+    const action = frontmatterRevealAction(
+      state.selection.ranges,
+      this.frontmatterRange,
+      this.frontmatterIsFolded(),
+      this.metadataVisible !== false,
+      this.frontmatterAutoRevealed === true
+    )
+    if (action === "unfold") {
+      this.frontmatterAutoRevealed = true
+      this.view.dispatch({ effects: unfoldEffect.of(this.frontmatterRange) })
+    } else if (action === "refold") {
+      this.frontmatterAutoRevealed = false
+      this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+    }
   }
 
   mapPendingMediaRanges(changes: ChangeSet): void {
@@ -692,6 +716,7 @@ export class EditorEngine {
   loadDocument(source: string): void {
     this.projectionNavigationOccurred = false
     this.pendingProjectionInteraction = null
+    this.frontmatterAutoRevealed = false
     const document = createDocumentState(EditorState, source, this.documentExtensions)
     this.lineSeparator = document.lineSeparator
     this.view.setState(document.state)
@@ -869,11 +894,14 @@ export class EditorEngine {
         this.view.dispatch({
           effects: unfoldEffect.of(this.frontmatterRange)
         })
-      } else if (!visible && !this.frontmatterIsFolded()) {
+      } else if (!visible && !this.frontmatterIsFolded() && !this.frontmatterAutoRevealed) {
         this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
       }
-    } else if (this.editingMode === "visual" && !this.frontmatterIsFolded()) {
-      this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+    } else if (this.editingMode === "visual") {
+      this.frontmatterAutoRevealed = false
+      if (!this.frontmatterIsFolded()) {
+        this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
+      }
     }
   }
 
