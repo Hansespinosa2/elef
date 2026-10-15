@@ -1810,6 +1810,13 @@ class DesktopLibraryUi {
       })
       await this.openLibrary()
       await this.renameWork(defaultTitle, title)
+      // The card list renders the rename optimistically: force a server
+      // round-trip so the open below reads the persisted folder name.
+      await $("#refresh-library").click()
+      await browser.waitUntil(async () => (await $(`[aria-label='Edit ${title}']`).isDisplayed()), {
+        timeout: 10_000,
+        timeoutMsg: `The renamed ${title} work did not survive a library refresh`
+      })
       await editor.openWork(title)
     } else {
       await editor.renameEditorTitle(title)
