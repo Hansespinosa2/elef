@@ -624,7 +624,7 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
 // Default chrome: plain structural wrappers with no editor controls, host
 // framework hooks or editing affordances. Hosts compose richer chrome (see
 // @elef/editor-runtime/editor-chrome) through the `chrome` option.
-const bareChrome: RendererChrome = {
+export const bareChrome: RendererChrome = {
   imageAttributes: () => "",
   mathAttributes: () => "",
   mediaFigure: ({ rendered, alt }) => `<figure>${rendered}<figcaption>${escapeHtml(alt)}</figcaption></figure>`,
