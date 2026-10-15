@@ -1167,6 +1167,7 @@ export {
   enableVisualModeFromInstalledPreview,
   formatLineNumber,
   installPreviewHtml,
+  markProjectionBlocksReadOnly,
   measurePaintedAction,
   mergeAuthoringRegistryEntries,
   mermaidAssetUrl,
