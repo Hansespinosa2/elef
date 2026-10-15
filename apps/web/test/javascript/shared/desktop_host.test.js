@@ -283,9 +283,10 @@ test("structural source operations commit through the bound session", async () =
   assert.match(editorController, /commitSource\(source:/)
   assert.match(editorController, /this\.session && !this\.session\.disposed/)
   // Whole-buffer structural replacements funnel through it (direct replace
-  // survives only as the no-session fallback inside those two call sites)…
+  // survives only as the no-session fallback inside those two call sites,
+  // plus the precise beforeinput intent transaction)…
   assert.equal((clientEditor.match(/\.commitSource\(/g) || []).length, 2)
-  assert.equal((clientEditor.match(/\.replaceRange\(/g) || []).length, 2)
+  assert.equal((clientEditor.match(/\.replaceRange\(/g) || []).length, 3)
   assert.match(visualEditor, /new DocumentEditor\(/)
   assert.equal((documentEditor.match(/\.commitSource\(/g) || []).length, 3)
   assert.match(overview, /new SlideOverview\(/)

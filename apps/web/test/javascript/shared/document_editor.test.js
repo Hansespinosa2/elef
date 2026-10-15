@@ -126,7 +126,7 @@ test("empty list markers collapse back to the previous lines", () => {
 
 // Input-bridge selection leg: a collapsed native caret inside an editable
 // projection block drives the engine selection.
-function stubSelectionBridge(t, { editable = true, collapsed = true, focusOffset = 2, engineSelection = [0, 0] } = {}) {
+function stubSelectionBridge(t, { editable = true, collapsed = true, focusOffset = 2, anchorOffset = null, anchorInOtherBlock = false, engineSelection = [0, 0] } = {}) {
   const saved = new Map()
   const setGlobal = (name, value) => {
     saved.set(name, Object.getOwnPropertyDescriptor(globalThis, name))
@@ -147,26 +147,38 @@ function stubSelectionBridge(t, { editable = true, collapsed = true, focusOffset
     closest: (selector) => (selector === "[data-editor-block-id]" ? block : null),
   }
   textNode.parentElement = block
+  const otherText = { nodeType: 3, parentElement: null, textContent: "Other" }
+  const otherBlock = {
+    dataset: { editorBlockId: "b2" },
+    contentEditable: "true",
+    children: [],
+    textContent: "Other",
+    closest: (selector) => (selector === "[data-editor-block-id]" ? otherBlock : null),
+  }
+  otherText.parentElement = otherBlock
   const projection = {
-    contains: (node) => node === block || node === textNode,
+    contains: (node) => node === block || node === textNode || node === otherBlock || node === otherText,
     querySelectorAll: () => [block],
   }
-  setGlobal("window", { getSelection: () => ({ isCollapsed: collapsed, focusNode: textNode, focusOffset }) })
+  const anchorNode = anchorInOtherBlock ? otherText : textNode
+  setGlobal("window", { getSelection: () => ({ isCollapsed: collapsed, anchorNode, anchorOffset: anchorOffset ?? focusOffset, focusNode: textNode, focusOffset }) })
   setGlobal("Node", { ELEMENT_NODE: 1 })
   setGlobal("CSS", { escape: (value) => value })
   const calls = []
+  const replaced = []
   const engine = {
     value: "x".repeat(20),
     selectionStart: engineSelection[0],
     selectionEnd: engineSelection[1],
     setSelectionRange: (anchor, head) => calls.push([anchor, head]),
+    replaceRange: (text, from, to) => replaced.push({ text, from, to }),
     replaceRanges: () => {},
   }
   const editor = new DocumentEditor({
     projection,
     deps: {
       syncActiveMath: () => {},
-      visibleOffsetAtPoint: () => focusOffset,
+      visibleOffsetAtPoint: (block, node, offset) => offset,
       sourceOffsetForVisibleOffset: (source, offset) => offset,
       markdownForVisibleText: (source, text) => `${text}!`,
       renderInlineMath: () => {},
@@ -174,7 +186,7 @@ function stubSelectionBridge(t, { editable = true, collapsed = true, focusOffset
   })
   editor.map = { editable_regions: [{ id: "r1", block_id: "b1", kind: "paragraph", editable: true, content_range: { start: 9, end: 14 } }] }
   Object.defineProperty(editor, "editorController", { value: engine })
-  return { editor, engine, block, calls }
+  return { editor, engine, block, calls, replaced }
 }
 
 test("a collapsed caret in an editable block drives the engine selection", (t) => {
@@ -215,14 +227,62 @@ test("an already matching engine selection is left alone", (t) => {
 test("pending projection edits defer the sync until the flush commits", (t) => {
   const { editor, engine, block, calls } = stubSelectionBridge(t)
   editor.pendingProjectionEdits = new Map([["r1", { from: 9, to: 14, source: "First", kind: "paragraph", blockId: "b1", blockElement: block }]])
-  const replaced = []
-  engine.replaceRanges = (changes) => replaced.push(changes)
+  const flushed = []
+  engine.replaceRanges = (changes) => flushed.push(changes)
 
   editor.rememberProjectionCaret()
   assert.deepEqual(calls, [])
 
   editor.flushPendingProjectionEdits()
-  assert.equal(replaced.length, 1)
-  assert.deepEqual(replaced[0], [{ from: 9, to: 14, insert: "First!" }])
+  assert.equal(flushed.length, 1)
+  assert.deepEqual(flushed[0], [{ from: 9, to: 14, insert: "First!" }])
   assert.deepEqual(calls, [[11, 11]])
+})
+
+// Precise-intent leg: caret-local plain-text beforeinput commits exact
+// source transactions; everything else stays on the reconstruction path.
+test("typing commits a precise source transaction without pending", (t) => {
+  const { editor, block, replaced } = stubSelectionBridge(t)
+
+  editor.projectionBeforeinput({ target: block, inputType: "insertText", data: "X" })
+
+  assert.deepEqual(replaced, [{ text: "X", from: 11, to: 11 }])
+  assert.equal(editor.pendingProjectionEdits, undefined)
+  assert.deepEqual(editor.map.editable_regions[0].content_range, { start: 9, end: 15 })
+})
+
+test("backward deletion removes one visible grapheme precisely", (t) => {
+  const { editor, block, replaced } = stubSelectionBridge(t)
+
+  editor.projectionBeforeinput({ target: block, inputType: "deleteContentBackward", data: null })
+
+  assert.deepEqual(replaced, [{ text: "", from: 10, to: 11 }])
+})
+
+test("structural intents stay on the reconstruction path", (t) => {
+  const { editor, block, replaced } = stubSelectionBridge(t)
+
+  for (const inputType of ["insertParagraph", "insertLineBreak", "insertCompositionText", "historyUndo"]) {
+    editor.projectionBeforeinput({ target: block, inputType, data: inputType === "historyUndo" ? null : "x" })
+  }
+
+  assert.deepEqual(replaced, [])
+  assert.equal(editor.pendingProjectionEdits, undefined)
+})
+
+test("precise intents decline while legacy pending edits exist", (t) => {
+  const { editor, block, replaced } = stubSelectionBridge(t)
+  editor.pendingProjectionEdits = new Map([["r1", { from: 9, to: 14, source: "First", kind: "paragraph", blockId: "b1", blockElement: block }]])
+
+  editor.projectionBeforeinput({ target: block, inputType: "insertText", data: "X" })
+
+  assert.deepEqual(replaced, [])
+})
+
+test("cross-block selections stay on the reconstruction path", (t) => {
+  const { editor, block, replaced } = stubSelectionBridge(t, { collapsed: false, anchorOffset: 1, anchorInOtherBlock: true })
+
+  editor.projectionBeforeinput({ target: block, inputType: "insertText", data: "X" })
+
+  assert.deepEqual(replaced, [])
 })

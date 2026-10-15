@@ -345,7 +345,14 @@ function syncFixture({ editable = true, collapsed = true }: { editable?: boolean
     },
     env: {
       ...stubEnv(),
-      getSelection: () => ({ isCollapsed: collapsed, focusNode: textNode, focusOffset: 2 }) as unknown as Selection,
+      getSelection: () =>
+        ({
+          isCollapsed: collapsed,
+          anchorNode: textNode,
+          anchorOffset: 2,
+          focusNode: textNode,
+          focusOffset: 2,
+        }) as unknown as Selection,
     },
   });
   mount.editor.editorController = editor;
@@ -393,5 +400,41 @@ test("presentation flush commits then syncs the engine selection", () => {
   mount.editor.flushPendingProjectionEdits();
   assert.equal(editor.value.slice(9, 15), "First!");
   assert.deepEqual(editor.ranges, [[11, 11]]);
+  mount.destroy();
+});
+
+test("presentation typing commits a precise source transaction without pending", () => {
+  const { mount, editor, block } = syncFixture();
+  const replaced: Array<{ text: string; from: number; to: number }> = [];
+  const double = editor as unknown as Record<string, unknown>;
+  double.replaceRange = (text: string, from: number, to: number) => {
+    replaced.push({ text, from, to });
+  };
+
+  mount.editor.projectionBeforeinput({
+    target: block as unknown as EventTarget,
+    inputType: "insertText",
+    data: "X",
+  });
+
+  assert.deepEqual(replaced, [{ text: "X", from: 11, to: 11 }]);
+  assert.equal(mount.editor.pendingProjectionEdits, undefined);
+  mount.destroy();
+});
+
+test("presentation structural intents stay on the reconstruction path", () => {
+  const { mount, editor, block } = syncFixture();
+  const before = editor.value;
+
+  for (const inputType of ["insertParagraph", "insertCompositionText", "historyUndo"]) {
+    mount.editor.projectionBeforeinput({
+      target: block as unknown as EventTarget,
+      inputType,
+      data: "x",
+    });
+  }
+
+  assert.equal(editor.value, before);
+  assert.equal(mount.editor.pendingProjectionEdits, undefined);
   mount.destroy();
 });

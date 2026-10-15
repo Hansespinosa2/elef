@@ -25,6 +25,7 @@ import {
   parseAlignment,
   removeBlock as removeBlockFromSource
 } from "@elef/work-model/document-transforms"
+import { translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 
 export interface EditorSourceRange {
   start: number
@@ -99,6 +100,16 @@ export interface ProjectionKeyEvent {
   readonly key: string
   readonly target: EventTarget | null | undefined
   preventDefault(): void
+}
+
+export interface ProjectionBeforeinputEvent {
+  readonly target: EventTarget | null | undefined
+  readonly inputType: string
+  readonly data?: string | null | undefined
+  readonly dataTransfer?: {
+    readonly types?: ArrayLike<string> | null | undefined
+    getData(type: string): string
+  } | null | undefined
 }
 
 export interface PresentationEditorDeps {
@@ -252,6 +263,7 @@ export class PresentationEditor {
       this.sourceInput(event)
       this.blockInput(event)
     }, true)
+    on(form, "beforeinput", (event) => this.projectionBeforeinput(event), true)
     on(form, "elef:editor-mode-change", (event) => this.applyMode(event.detail.mode))
     on(form, "elef:preview-updated", (event) => this.previewUpdated(event.detail.payload))
     on(form, "elef:preview-stale", (event) => this.previewStale(event.detail))
@@ -331,6 +343,56 @@ export class PresentationEditor {
 
     event.preventDefault()
     ;(link.closest("[contenteditable='true']") as HTMLElement | null)?.focus()
+  }
+
+  // Precise-intent leg, shared with the document editor: caret-local
+  // plain-text intents commit exact source transactions immediately, so
+  // history and Vim observe real edits. The native mutation still proceeds
+  // and the pending flush reconciles, which also covers any batch the
+  // precise path declines.
+  projectionBeforeinput(event: ProjectionBeforeinputEvent): void {
+    const editor = this.editorController
+    if (!editor || this.updatingSource || this.pendingProjectionEdits?.size) return
+    const block = (event.target as Element | null | undefined)?.closest?.("[data-editor-block-id]") as HTMLElement | null | undefined
+    const canvas = this.canvas()
+    if (!block || !canvas?.contains(block)) return
+    if (block.contentEditable !== "true") return
+    const region = this.regionForBlock(block.dataset.editorBlockId)
+    if (!region) return
+    const selection = this.getSelection()
+    if (!selection?.anchorNode || !selection.focusNode) return
+    const endpointBlock = (node: Node): Element | null => {
+      const element = (node.nodeType === this.Node.ELEMENT_NODE ? node : (node as ChildNode).parentElement) as Element | null
+      return element?.closest?.("[data-editor-block-id]") ?? null
+    }
+    if (endpointBlock(selection.anchorNode) !== block || endpointBlock(selection.focusNode) !== block) return
+    const anchorVisible = this.deps.visibleOffsetAtPoint(block, selection.anchorNode, selection.anchorOffset)
+    const focusVisible = this.deps.visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
+    if (anchorVisible === null || focusVisible === null) return
+    const transferTypes = Array.from(event.dataTransfer?.types ?? [])
+    let transferText: string | null = null
+    if (transferTypes.includes("text/plain")) {
+      try {
+        transferText = event.dataTransfer?.getData("text/plain") ?? null
+      } catch {
+        transferText = null
+      }
+    }
+    const edit = translateProjectionInput({
+      inputType: event.inputType,
+      data: event.data ?? null,
+      transferText,
+      transferHasHtml: transferTypes.includes("text/html"),
+      anchorVisible,
+      focusVisible
+    }, visibleBlockText(block))
+    if (!edit) return
+    const slice = editor.value.slice(region.content_range.start, region.content_range.end)
+    const from = region.content_range.start + this.deps.sourceOffsetForVisibleOffset(slice, edit.fromVisible)
+    const to = region.content_range.start + this.deps.sourceOffsetForVisibleOffset(slice, edit.toVisible)
+    if (region.kind !== "code") this.deps.renderInlineMath(block)
+    this.shiftMapAfterEdit(from, to, edit.insert.length)
+    editor.replaceRange(edit.insert, from, to)
   }
 
   blockInput(event: ProjectionEvent): void {

@@ -5,6 +5,7 @@
 // the shared editing-utilities deps object, then delegates lifecycle and
 // actions. The web Stimulus controller is the thin adapter.
 import { blockOperationRange, directiveLineSpan, exciseRange, insertAlignDirective } from "@elef/work-model/document-transforms"
+import { translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 
 export interface DocumentEditorRange {
   start: number
@@ -74,6 +75,16 @@ export interface DocumentEditorSeam {
 export interface DocumentProjectionEvent {
   readonly target: EventTarget | null | undefined
   preventDefault(): void
+}
+
+export interface DocumentProjectionBeforeinputEvent {
+  readonly target: EventTarget | null | undefined
+  readonly inputType: string
+  readonly data?: string | null | undefined
+  readonly dataTransfer?: {
+    readonly types?: ArrayLike<string> | null | undefined
+    getData(type: string): string
+  } | null | undefined
 }
 
 export interface DocumentProjectionKeyEvent {
@@ -160,6 +171,7 @@ export class DocumentEditor {
   projectionLinkHandler: ((event: any) => void) | undefined
   positionControlOutsidePointerDown: ((event: any) => void) | undefined
   blockKeydownHandler: ((event: any) => void) | undefined
+  beforeinputHandler: ((event: any) => void) | undefined
   selectionChangeHandler: (() => void) | undefined
   hasPresentationProjection: boolean | undefined
   pendingProjectionFrame: number | undefined
@@ -251,6 +263,8 @@ export class DocumentEditor {
     if (!this.hasPresentationProjection) {
       this.blockKeydownHandler = (event) => this.blockKeydown(event)
       this.element.addEventListener("keydown", this.blockKeydownHandler, true)
+      this.beforeinputHandler = (event) => this.projectionBeforeinput(event)
+      this.element.addEventListener("beforeinput", this.beforeinputHandler, true)
       this.selectionChangeHandler = () => this.rememberProjectionCaret()
       document.addEventListener("selectionchange", this.selectionChangeHandler)
     }
@@ -267,6 +281,7 @@ export class DocumentEditor {
     this.element.removeEventListener("click", this.projectionLinkHandler as EventListener)
     document.removeEventListener("pointerdown", this.positionControlOutsidePointerDown as EventListener, true)
     this.element.removeEventListener("keydown", this.blockKeydownHandler as EventListener, true)
+    this.element.removeEventListener("beforeinput", this.beforeinputHandler as EventListener, true)
     document.removeEventListener("selectionchange", this.selectionChangeHandler as EventListener)
     if (this.pendingProjectionFrame) cancelAnimationFrame(this.pendingProjectionFrame)
     this.flushPendingProjectionEdits()
@@ -304,6 +319,55 @@ export class DocumentEditor {
 
     event.preventDefault()
     ;(link.closest("[contenteditable='true']") as HTMLElement | null)?.focus()
+  }
+
+  // Precise-intent leg: caret-local plain-text intents commit exact source
+  // transactions immediately, so history and Vim observe real edits. The
+  // native mutation still proceeds and the pending flush reconciles, which
+  // also covers any batch the precise path declines.
+  projectionBeforeinput(event: DocumentProjectionBeforeinputEvent): void {
+    const editor = this.editorController
+    if (!editor || this.updatingProjection || this.pendingProjectionEdits?.size) return
+    const block = (event.target as Element | null | undefined)?.closest?.("[data-editor-block-id]") as HTMLElement | null | undefined
+    if (!block || !this.projectionTarget?.contains(block)) return
+    if (block.contentEditable !== "true") return
+    const blockId = block.dataset.editorBlockId
+    const region = this.regionForBlock(blockId)
+    if (!region) return
+    const selection = window.getSelection()
+    if (!selection?.anchorNode || !selection.focusNode) return
+    const endpointBlock = (node: Node): Element | null => {
+      const element = (node.nodeType === Node.ELEMENT_NODE ? node : (node as ChildNode).parentElement) as Element | null
+      return element?.closest?.("[data-editor-block-id]") ?? null
+    }
+    if (endpointBlock(selection.anchorNode) !== block || endpointBlock(selection.focusNode) !== block) return
+    const anchorVisible = this.visibleOffsetInBlockGroup(block, selection.anchorNode, selection.anchorOffset)
+    const focusVisible = this.visibleOffsetInBlockGroup(block, selection.focusNode, selection.focusOffset)
+    if (anchorVisible === null || focusVisible === null) return
+    const transferTypes = Array.from(event.dataTransfer?.types ?? [])
+    let transferText: string | null = null
+    if (transferTypes.includes("text/plain")) {
+      try {
+        transferText = event.dataTransfer?.getData("text/plain") ?? null
+      } catch {
+        transferText = null
+      }
+    }
+    const edit = translateProjectionInput({
+      inputType: event.inputType,
+      data: event.data ?? null,
+      transferText,
+      transferHasHtml: transferTypes.includes("text/html"),
+      anchorVisible,
+      focusVisible
+    }, visibleBlockText(block))
+    if (!edit) return
+    const slice = editor.value.slice(region.content_range.start, region.content_range.end)
+    const from = region.content_range.start + this.deps.sourceOffsetForVisibleOffset(slice, edit.fromVisible)
+    const to = region.content_range.start + this.deps.sourceOffsetForVisibleOffset(slice, edit.toVisible)
+    if (region.kind !== "code") this.blockFragments(blockId).forEach((fragment) => this.deps.renderInlineMath(fragment))
+    this.shiftMapAfterEdit(from, to, edit.insert.length, blockId)
+    editor.replaceRange(edit.insert, from, to)
   }
 
   projectionInput(event: DocumentProjectionEvent): void {
