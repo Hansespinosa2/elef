@@ -82,6 +82,11 @@ jobs:
         run: npm ci --prefix apps/desktop/frontend
       - name: Install Rails-owned frontend dependencies
         run: npm ci
+      - name: Build the shared packages
+        # dist/ is built, never committed: every lane builds before consuming.
+        # client/renderer/editor-runtime form a build-time cycle, so the exact
+        # bootstrap order inside `npm run build:packages` matters; call it whole.
+        run: npm run build:packages
       - name: Run the fast desktop unit tier
         run: |
           # Three in-job lanes, longest-first: the Rust compile starts before
@@ -180,6 +185,19 @@ jobs:
         run: bin/rails tailwindcss:build
       - name: Verify the shared Tailwind artifact is current
         run: git diff --exit-code -- apps/web/app/assets/builds/tailwind.css
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
+      - name: Build the shared packages
+        # dist/ is built, never committed: every lane builds before consuming.
+        # client/renderer/editor-runtime form a build-time cycle, so the exact
+        # bootstrap order inside `npm run build:packages` matters; call it whole.
+        run: npm run build:packages
       - name: Run tests
         env:
           RAILS_ENV: test
@@ -212,6 +230,19 @@ jobs:
       - name: Build Tailwind CSS
         working-directory: apps/web
         run: bin/rails tailwindcss:build
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
+      - name: Build the shared packages
+        # dist/ is built, never committed: every lane builds before consuming.
+        # client/renderer/editor-runtime form a build-time cycle, so the exact
+        # bootstrap order inside `npm run build:packages` matters; call it whole.
+        run: npm run build:packages
       - name: Run SQLite compatibility tests
         env:
           RAILS_ENV: test
@@ -252,6 +283,11 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install Rails-owned frontend dependencies
         run: npm ci
+      - name: Build the shared packages
+        # dist/ is built, never committed: every lane builds before consuming.
+        # client/renderer/editor-runtime form a build-time cycle, so the exact
+        # bootstrap order inside `npm run build:packages` matters; call it whole.
+        run: npm run build:packages
       - name: Run System Tests
         env:
           RAILS_ENV: test
@@ -360,18 +396,13 @@ jobs:
         run: bin/rails tailwindcss:build
       - name: Verify the Rails Tailwind artifact is current
         run: git diff --exit-code -- apps/web/app/assets/builds/tailwind.css
-      - name: Build the shared renderer
-        run: npm run renderer:build
-      - name: Verify the shared renderer bundles are current
-        run: git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js
-      - name: Build the profile-split shared packages
-        # Freshness of the tracked bundles is enforced by the affected job's
-        # bin/check run; these builds regenerate the ignored metafiles the
-        # Stable/Dev profile gate reads.
-        run: |
-          npm run build --prefix packages/client
-          npm run build --prefix packages/work-model
-          npm run build --prefix packages/editor-runtime
+      - name: Build the shared packages
+        # dist/ is built, never committed: every lane builds before consuming.
+        # client/renderer/editor-runtime form a build-time cycle, so the exact
+        # bootstrap order inside `npm run build:packages` matters; call it whole.
+        # These builds also regenerate the ignored metafiles the Stable/Dev
+        # profile gate reads.
+        run: npm run build:packages
       - name: Bundle the desktop frontend
         run: npm run build --prefix apps/desktop/frontend
       - name: Bundle the Dev desktop frontend
@@ -606,18 +637,13 @@ jobs:
         run: bin/rails tailwindcss:build
       - name: Verify the Rails Tailwind artifact is current
         run: git diff --exit-code -- apps/web/app/assets/builds/tailwind.css
-      - name: Build the shared renderer
-        run: npm run renderer:build
-      - name: Verify the shared renderer bundles are current
-        run: git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js
-      - name: Build the profile-split shared packages
-        # Freshness of the tracked bundles is enforced by the affected job's
-        # bin/check run; these builds regenerate the ignored metafiles the
-        # Stable/Dev profile gate reads.
-        run: |
-          npm run build --prefix packages/client
-          npm run build --prefix packages/work-model
-          npm run build --prefix packages/editor-runtime
+      - name: Build the shared packages
+        # dist/ is built, never committed: every lane builds before consuming.
+        # client/renderer/editor-runtime form a build-time cycle, so the exact
+        # bootstrap order inside `npm run build:packages` matters; call it whole.
+        # These builds also regenerate the ignored metafiles the Stable/Dev
+        # profile gate reads.
+        run: npm run build:packages
       - name: Bundle the desktop frontend
         run: npm run build --prefix apps/desktop/frontend
       - name: Bundle the Dev desktop frontend
@@ -714,11 +740,11 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install Rails-owned frontend dependencies
         run: npm ci
-      - name: Build the shared renderer bundle
-        run: |
-          npm run renderer:build
-      - name: Verify the shared renderer bundles are current
-        run: git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js
+      - name: Build the shared packages
+        # dist/ is built, never committed: every lane builds before consuming.
+        # client/renderer/editor-runtime form a build-time cycle, so the exact
+        # bootstrap order inside `npm run build:packages` matters; call it whole.
+        run: npm run build:packages
       - name: Exercise Rails rendering on Apple Silicon macOS
         env:
           RAILS_ENV: test
@@ -769,6 +795,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
+      - name: Build the shared packages
+        # dist/ is built, never committed, and development compose mounts the
+        # source tree over the image, so the checkout itself must carry dist.
+        run: npm run build:packages
       - name: Validate development Compose configuration
         run: docker compose --project-name elef-development-ci --env-file ops/.env.development.example --file ops/compose.development.yml config --quiet
       - name: Build development image

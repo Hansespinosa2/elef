@@ -16,6 +16,7 @@ For a separate local Rails environment, install dependencies and prepare the con
 
 ~~~sh
 npm ci
+npm run build:packages
 cd apps/web
 bundle install
 bin/rails db:prepare
@@ -46,7 +47,7 @@ Tagging and publishing a release (draft → publish, Gate A, emergency block) is
 | Tier | Command | Covers |
 |---|---|---|
 | quick | `bin/check quick` | JS/package unit suites, ownership/boundary/spec/CI-planner checkers, local-store tests (~20 s) |
-| affected | `bin/check affected` | quick + generated-asset diffs, Rails unit subset, adapter conformance, frontend build, Tauri arch checker, fmt/clippy, Rust workspace tests (~1 min) |
+| affected | `bin/check affected` | quick + bundle rebuilds, Rails unit subset, adapter conformance, frontend build, Tauri arch checker, fmt/clippy, Rust workspace tests (~1 min) |
 | all | `bin/check all` | affected + full Rails unit (PostgreSQL + SQLite) + Rails system + desktop e2e + web e2e + native benchmark (~18 min, ceiling 45 min) |
 
 Rails suites need ambient `PGPASSWORD` for the local PostgreSQL test database (same as CI). Browser suites need a graphical harness (`dbus-run-session`, `xvfb-run`, `openbox`, all installed in dev/CI) and /tmp headroom: the client and browser suites stage tens of MB under `/tmp/elef-*`; on `ENOSPC` clear stale `elef-*` entries left by killed runs and retry before concluding anything is broken. Keep browser automation headless and run suites one at a time on small machines.
@@ -96,7 +97,7 @@ Rails system tests use Selenium in headless mode. Keep browser automation headle
 
 ## Generated assets and review
 
-JavaScript tests run against committed `dist/` bundles, and `bin/check quick` does not rebuild them. `bin/check affected` rebuilds every bundle and fails on any diff, so always run it before handoff. When changing package sources or styles, rebuild the relevant artifacts and inspect the diff yourself first:
+JavaScript tests run against locally built `dist/` bundles, which are never committed: build them once after checkout (and again after changing package sources), then run the suite. `bin/check quick` does not rebuild them; `bin/check affected` rebuilds every bundle first, so always run it before handoff:
 
 ~~~sh
 npm run renderer:build
@@ -104,10 +105,10 @@ npm run build --prefix packages/client
 npm run build --prefix packages/work-model
 npm run build --prefix packages/editor-runtime
 bin/rails tailwindcss:build
-git diff -- apps/web/app/assets/builds/tailwind.css packages/renderer/dist/ packages/client/dist/ packages/editor-runtime/dist/ packages/work-model/dist/
+git diff -- apps/web/app/assets/builds/tailwind.css
 ~~~
 
-The package order matters: the editor-runtime Stable entry bundles the Stable client and work-model dists, so those two must be built first on a fresh checkout.
+Build order is fixed by a dependency cycle, so always call `npm run build:packages` whole and never reorder or split its steps: client needs renderer dist, renderer needs editor-runtime dist, editor-runtime needs client dist. The bootstrap builds client without its renderer-dependent entries first, then renderer, then client whole. Committing a bundle to "fix" a missing-file failure reintroduces the merge-conflict treadmill — rebuild instead. Breaking the cycle properly (moving one edge) is tracked follow-up work.
 
 ## PR evidence rule
 
@@ -123,4 +124,4 @@ Conventional Commits type prefix (`feat/`, `fix/`, `build/`, `chore/`,
 `ci/`, `docs/`, `style/`, `refactor/`, `perf/`, `test/`, `revert/`) plus a
 description; PR hygiene derives the PR title from the branch name.
 
-CI checks that these generated files match their sources, checks the one-way frontend ownership and Tauri capability/CSP contracts, runs Rails tests with PostgreSQL and SQLite, runs Rails system tests, and builds/tests desktop on Linux and macOS. The lane design (quick, shadow plan, slow, nightly), the dev shepherd loop, and the manual promotion path live in [CI operations](ci-operations.md). Re-run the smallest relevant check after the final edit; report the exact tier and platform actually exercised.
+CI rebuilds the shared bundles before consuming them (they are never committed), checks the one-way frontend ownership and Tauri capability/CSP contracts, runs Rails tests with PostgreSQL and SQLite, runs Rails system tests, and builds/tests desktop on Linux and macOS. The lane design (quick, shadow plan, slow, nightly), the dev shepherd loop, and the manual promotion path live in [CI operations](ci-operations.md). Re-run the smallest relevant check after the final edit; report the exact tier and platform actually exercised.
