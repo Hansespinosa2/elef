@@ -1,0 +1,21 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Elef E2E",
+  "identifier": "com.elef.desktop.e2e",
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": ["main-dev-capability", "e2e-webdriver"]
+    }
+  },
+  "build": {
+    "frontendDist": "../frontend/dist-e2e"
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["http://127.0.0.1:8888/manifest"],
+      "requireSignedVersion": true,
+      "dangerousInsecureTransportProtocol": true
+    }
+  }
+}

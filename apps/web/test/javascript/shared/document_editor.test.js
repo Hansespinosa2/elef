@@ -1,0 +1,125 @@
+import assert from "node:assert/strict"
+import test from "node:test"
+import { DocumentEditor } from "@elef/client"
+import { buildEditorMap } from "@elef/work-model"
+
+test("document block kind classification follows the source grammar", () => {
+  const editor = new DocumentEditor({})
+  assert.equal(editor.currentBlockKind("# Title", "paragraph"), "heading")
+  assert.equal(editor.currentBlockKind("   ## Deep", "paragraph"), "heading")
+  assert.equal(editor.currentBlockKind("- item", "paragraph"), "list")
+  assert.equal(editor.currentBlockKind("  1. item", "paragraph"), "list")
+  assert.equal(editor.currentBlockKind("> quote", "paragraph"), "quote")
+  assert.equal(editor.currentBlockKind("```js", "paragraph"), "code")
+  assert.equal(editor.currentBlockKind("~~~", "paragraph"), "code")
+  assert.equal(editor.currentBlockKind("plain text", "paragraph"), "paragraph")
+  assert.equal(editor.currentBlockKind("plain text", null), "paragraph")
+  assert.equal(editor.currentBlockKind("#nospace", "paragraph"), "paragraph")
+})
+
+test("empty trailing markers detect only bare list and quote lines", () => {
+  const editor = new DocumentEditor({})
+  assert.equal(editor.hasEmptyTrailingMarker("- one\n- ", "list"), true)
+  assert.equal(editor.hasEmptyTrailingMarker("1. one\n2. ", "list"), true)
+  assert.equal(editor.hasEmptyTrailingMarker("- one\n- two", "list"), false)
+  assert.equal(editor.hasEmptyTrailingMarker("> a\n> ", "quote"), true)
+  assert.equal(editor.hasEmptyTrailingMarker("> a\n> b", "quote"), false)
+  assert.equal(editor.hasEmptyTrailingMarker("- item", "quote"), false)
+})
+
+test("document block source ranges include the block directive", () => {
+  // No scoped groups: each position directive applies to its single
+  // following block, and a bare ::: is an unknown directive line.
+  const editor = new DocumentEditor({})
+  const source = ":::align{center}\n\n# Solo\n\n:::\n\nAfter\n"
+  editor.map = buildEditorMap(source)
+  const [solo, after] = editor.map.slides[0].blocks
+  assert.deepEqual(editor.blockSourceRange(after), { from: after.range.start, to: after.range.end })
+  assert.deepEqual(editor.blockSourceRange(solo), { from: 0, to: 25 })
+
+  const plain = new DocumentEditor({})
+  plain.map = buildEditorMap("# T\n\nBody\n")
+  const [title] = plain.map.slides[0].blocks
+  assert.deepEqual(plain.blockSourceRange(title), { from: title.range.start, to: title.range.end })
+})
+
+test("document map shifting pins the edited block start", () => {
+  const editor = new DocumentEditor({})
+  editor.map = buildEditorMap("# One\n\nBody one.\n")
+  const block = editor.map.slides[0].blocks[1]
+  editor.shiftMapAfterEdit(7, 17, 4, block.id)
+  assert.deepEqual([block.range.start, block.range.end], [7, 11])
+  assert.equal(editor.map.source_length, 11)
+
+  const untouched = new DocumentEditor({})
+  untouched.map = buildEditorMap("# One\n\nBody one.\n")
+  const first = untouched.map.slides[0].blocks[0]
+  untouched.shiftMapAfterEdit(7, 17, 4, "other")
+  assert.deepEqual([first.range.start, first.range.end], [0, 6])
+})
+
+test("visual source edits preserve the edited block start and shift shared map entries once", () => {
+  const edited = { id: "block-1", range: { start: 10, end: 14 }, source_range: { start: 8, end: 12 } }
+  const after = { range: { start: 14, end: 20 } }
+  const editor = new DocumentEditor({})
+  editor.map = {
+    source_length: 20,
+    slides: [{ blocks: [edited, after] }],
+    editable_regions: [edited]
+  }
+
+  editor.shiftMapAfterEdit(10, 14, 2, "block-1")
+
+  assert.equal(editor.map.source_length, 18)
+  assert.deepEqual(edited.range, { start: 10, end: 12 })
+  assert.deepEqual(edited.source_range, { start: 8, end: 12 })
+  assert.deepEqual(after.range, { start: 12, end: 18 })
+})
+
+test("presentation source edits shift nested slide ranges and leave directives alone", () => {
+  // The retired presentation editor shifted with older no-pin rules; the
+  // unified editor pins only the edited block start, so an unedited block
+  // starting inside a replacement collapses to the edit start.
+  const block = { range: { start: 12, end: 14 }, content_range: { start: 14, end: 20 } }
+  const editor = new DocumentEditor({})
+  editor.map = {
+    source_length: 20,
+    slides: [{ range: { start: 4, end: 18 }, blocks: [block] }],
+    directives: [{ range: { start: 0, end: 10 } }]
+  }
+
+  editor.shiftMapAfterEdit(10, 14, 2)
+
+  assert.equal(editor.map.source_length, 18)
+  assert.deepEqual(editor.map.slides[0].range, { start: 4, end: 16 })
+  assert.deepEqual(block.range, { start: 10, end: 12 })
+  assert.deepEqual(block.content_range, { start: 12, end: 18 })
+  assert.deepEqual(editor.map.directives[0].range, { start: 0, end: 10 })
+})
+
+test("structured continuation appends the list marker through the editor seam", () => {
+  const calls = []
+  const editor = new DocumentEditor({})
+  Object.defineProperty(editor, "editorController", { value: { replaceRange: (text, from, to) => calls.push({ text, from, to }) } })
+  const blockElement = { dataset: { editorBlockId: "b1" }, blur() {} }
+  const region = { content_range: { start: 10, end: 20 } }
+
+  editor.continueStructuredBlock(blockElement, region, "list", "- one", "# T\n\n- one", false)
+
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0], { text: "- one\n- ", from: 10, to: 20 })
+  assert.deepEqual(editor.pendingCaret, { sourceOffset: 10 + "- one\n- ".length, location: "list_item_end" })
+})
+
+test("empty list markers collapse back to the previous lines", () => {
+  const calls = []
+  const editor = new DocumentEditor({})
+  Object.defineProperty(editor, "editorController", { value: { replaceRange: (text, from, to) => calls.push({ text, from, to }) } })
+  const blockElement = { dataset: { editorBlockId: "b1" }, blur() {} }
+  const region = { content_range: { start: 10, end: 22 } }
+
+  editor.continueStructuredBlock(blockElement, region, "list", "- one\n- ", "# T\n\n- one\n- ", true)
+
+  assert.equal(calls.length, 1)
+  assert.deepEqual(calls[0], { text: "- one\n\n", from: 10, to: 22 })
+})

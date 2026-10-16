@@ -1,0 +1,48 @@
+<% work = @document || @presentation %>
+<% new_record = work.new_record? %>
+<% heading = new_record ? "New #{work.presentation? ? "presentation" : "document"}" : "Edit #{work.title}" %>
+<% content_for :title, heading %>
+<div id="work-shell" data-work-shell data-work-kind="<%= work.presentation? ? "presentation" : "document" %>" data-work-id="<%= work.id %>" data-work-view="<%= new_record ? "new" : "edit" %>">
+  <div class="page-title mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
+    <div>
+      <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]"><%= new_record ? (work.document? ? "Visual document editor" : "Source-first editor") : "Visual editor" %></p>
+      <h1 class="mb-0 text-4xl font-bold"><%= heading %></h1>
+    </div>
+    <div class="flex flex-wrap items-center gap-3">
+      <%# Shared Export menu: the same component both hosts mount (labels and
+        option visibility come from the client export registry). The web
+        adapter supplies PDF hrefs (print routes with from_export, so the
+        print page opens its PDF dialog immediately) and the draft-form
+        PPTX fetch; the desktop adapter supplies its native seams. Present
+        stays a host-owned button (publish route vs in-app stage). %>
+      <% present_icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10.2 8.9 15.6 12l-5.4 3.1V8.9Z"/></svg>'.html_safe %>
+      <% has_published = !new_record && work.presentation? && work.published_release %>
+      <% export_editions = has_published ? %w[draft published] : %w[draft] %>
+      <% export_pdf_url = ->(path) { path.include?("?") ? "#{path}&from_export=1" : "#{path}?from_export=1" } %>
+      <% export_pdf_urls = {} %>
+      <% export_pdf_urls["draft"] = export_pdf_url.call(work.document? ? print_document_path(work) : print_presentation_path(work)) unless new_record %>
+      <% export_pdf_urls["published"] = export_pdf_url.call(print_presentation_path(work, version: "published")) if has_published %>
+      <% export_pptx_urls = {} %>
+      <% if work.presentation? %>
+        <% export_pptx_urls["draft"] = new_record ? pptx_presentations_path(version: "draft") : pptx_presentation_path(work, version: "draft") %>
+        <% export_pptx_urls["published"] = pptx_presentation_path(work, version: "published") if has_published %>
+      <% end %>
+      <div data-controller="export-menu-host"
+           data-export-menu-host-kind-value="<%= work.presentation? ? "presentation" : "document" %>"
+           data-export-menu-host-editions-value="<%= ERB::Util.html_escape(export_editions.to_json) %>"
+           data-export-menu-host-pdf-urls-value="<%= ERB::Util.html_escape(export_pdf_urls.to_json) %>"
+           data-export-menu-host-pptx-urls-value="<%= ERB::Util.html_escape(export_pptx_urls.to_json) %>"
+           data-export-menu-host-library-url-value="<%= pptx_library_path %>">
+      </div>
+      <% if work.presentation? && !new_record %>
+        <%= form_with url: publish_presentation_path(work), method: :post, data: { turbo: false }, html: { class: "present-form" } do %>
+          <button type="submit" data-command-palette-present data-dirty-navigation="true" class="button primary icon-button inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-3 py-2 font-bold text-white hover:brightness-95" aria-label="Present" title="Present (publish and open the stage)">
+            <%= present_icon %><span class="sr-only">Present</span>
+          </button>
+          <kbd class="present-chord" data-command-palette-shortcut="Enter" title="Keyboard: present">⌘↵</kbd>
+        <% end %>
+      <% end %>
+    </div>
+  </div>
+  <%= render "works/form", work: work %>
+</div>

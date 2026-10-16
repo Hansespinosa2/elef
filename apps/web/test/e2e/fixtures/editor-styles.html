@@ -1,0 +1,39 @@
+<!doctype html>
+<html data-theme="dark">
+  <head>
+    <meta charset="utf-8">
+    <style data-host-styles></style>
+    <style>
+      .cm-editor { display: flex; height: 100%; }
+      .cm-scroller { flex: 1; overflow: auto; }
+      .cm-content { min-height: 100%; white-space: pre; }
+    </style>
+  </head>
+  <body class="elef-app">
+    <main class="app-shell mx-auto max-w-[1440px] p-[clamp(1rem,4vw,3rem)]">
+      <form class="visual-editor-form" data-editor-mode="source">
+        <section class="editor-shell" aria-label="Visual editor">
+          <header class="editor-shell-header"><div class="editor-kind-badge">Presentation</div></header>
+          <div class="editor-layout">
+            <div class="source-pane">
+              <div class="field source-field relative mb-4">
+                <div class="editor-toolbar" aria-label="Editor controls">
+                  <div class="editor-mode-switch" role="group" aria-label="Editing mode">
+                    <button type="button" class="editor-mode-button">Visual</button>
+                    <button type="button" class="editor-mode-button" aria-pressed="true">Source</button>
+                  </div>
+                </div>
+                <div class="editor-surface">
+                  <div class="cm-editor"><div class="cm-scroller"><div class="cm-content" contenteditable="true"># Example</div></div></div>
+                </div>
+              </div>
+            </div>
+            <div class="editor-projection preview-pane" aria-label="Visual editing surface">
+              <div class="presentation-surface slides"><section class="slide"><h1>Example</h1></section></div>
+            </div>
+          </div>
+        </section>
+      </form>
+    </main>
+  </body>
+</html>
