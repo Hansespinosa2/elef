@@ -1,0 +1,66 @@
+name: Web performance (non-gating)
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 4"
+
+permissions:
+  contents: read
+
+jobs:
+  web-performance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: elef_test
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U postgres -d elef_test" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          working-directory: apps/web
+          bundler-cache: true
+      - name: Build Tailwind CSS
+        working-directory: apps/web
+        run: bin/rails tailwindcss:build
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
+      - name: Record web performance over twenty samples per fixture
+        env:
+          RAILS_ENV: test
+          PARALLEL_WORKERS: "1"
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGTESTDATABASE: elef_test
+          ELEF_PERF_REPORT: ${{ github.workspace }}/web-performance.json
+          ELEF_PERF_RUNNER: ${{ runner.name }} (${{ runner.os }}/${{ runner.arch }})
+        working-directory: apps/web
+        run: |
+          bin/rails db:test:prepare
+          bin/rails test test/performance/visual_pages_test.rb -n test_measure_visual_page_benchmarks
+      - name: Preserve web performance report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: web-performance
+          path: ${{ github.workspace }}/web-performance.json
+          if-no-files-found: warn

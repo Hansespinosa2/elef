@@ -211,6 +211,7 @@ class VisualPagesTest < ApplicationSystemTestCase
     {
       ruby: RUBY_VERSION,
       rails_env: Rails.env,
+      ci_runner: ENV["ELEF_PERF_RUNNER"],
       sqlite: ENV["ELEF_USE_SQLITE"] == "1",
       hardware: "#{`nproc`.strip} cores, #{(mem_kb / 1024 / 1024.0).round(1)}GB RAM, #{`uname -m`.strip}",
       network: "loopback Puma test server",
