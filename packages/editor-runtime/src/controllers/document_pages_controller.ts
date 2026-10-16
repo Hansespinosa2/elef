@@ -46,6 +46,8 @@ export default class extends Controller<HTMLElement> {
     this.resizeFrame = null
     this.reflowFrame = null
     this.reflowTimer = null
+    this.paginatedOnce = false
+    this.fontTimer = null
     this.boundResize = () => this.resizeFrames()
     this.form = this.element.closest(".visual-editor-form")
     this.modeChangedHandler = () => this.resizeFrames()
@@ -59,12 +61,29 @@ export default class extends Controller<HTMLElement> {
     window.addEventListener("resize", this.boundResize)
     this.surfaceTarget.addEventListener("focusout", this.boundFocusOut)
     this.surfaceTarget.dataset.documentPagesSettled = "false"
-    this.paginate()
     this.mutationObserver?.observe(this.surfaceTarget, { childList: true, characterData: true, subtree: true })
 
-    if (document.fonts?.ready) {
+    // Fonts-first single pagination: webfont arrival shifts every line
+    // box, so a pre-fonts pass is always thrown away (2.0s mixed /
+    // 4.7s math of the cold-open profile). When fonts are still
+    // loading, await them before the first pass instead of paginating
+    // twice; a timeout keeps a slow font host from holding the page
+    // hostage (the late pass then repaginates once fonts land, as
+    // before). Cached fonts paginate immediately with no second pass.
+    if (!document.fonts?.ready || document.fonts.status === "loaded") {
+      this.paginate()
+    } else {
+      const firstPass = () => {
+        if (this.paginatedOnce || !this.active) return
+        this.paginate()
+      }
+      this.fontTimer = setTimeout(firstPass, 3000)
       document.fonts.ready.then(() => {
-        if (this.active) this.schedulePagination()
+        clearTimeout(this.fontTimer)
+        this.fontTimer = null
+        if (!this.active) return
+        if (this.paginatedOnce) this.schedulePagination()
+        else firstPass()
       })
     }
   }
@@ -79,6 +98,8 @@ export default class extends Controller<HTMLElement> {
     cancelAnimationFrame(this.resizeFrame)
     cancelAnimationFrame(this.reflowFrame)
     clearTimeout(this.reflowTimer)
+    clearTimeout(this.fontTimer)
+    this.fontTimer = null
   }
 
   resizeFrames(): void {
@@ -108,6 +129,10 @@ export default class extends Controller<HTMLElement> {
 
   schedulePagination(): void {
     if (!this.active) return
+    // Pre-first-pass schedules are subsumed by the coming first pass,
+    // which paginates live content (this also preserves fonts-first
+    // single pagination when the user interacts during the font wait).
+    if (!this.paginatedOnce) return
     this.surfaceTarget.dataset.documentPagesSettled = "false"
     if (this.focusedEditable()) {
       clearTimeout(this.reflowTimer)
@@ -178,6 +203,7 @@ export default class extends Controller<HTMLElement> {
 
     this.resizeFrames()
     this.mutationObserver?.takeRecords()
+    this.paginatedOnce = true
     requestAnimationFrame(() => {
       if (!this.active || generation !== this.paginationGeneration) return
       markStage("paginate-end")

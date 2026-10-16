@@ -15,6 +15,8 @@ class document_pages_controller_default extends Controller {
     this.resizeFrame = null;
     this.reflowFrame = null;
     this.reflowTimer = null;
+    this.paginatedOnce = false;
+    this.fontTimer = null;
     this.boundResize = () => this.resizeFrames();
     this.form = this.element.closest(".visual-editor-form");
     this.modeChangedHandler = () => this.resizeFrames();
@@ -27,11 +29,21 @@ class document_pages_controller_default extends Controller {
     window.addEventListener("resize", this.boundResize);
     this.surfaceTarget.addEventListener("focusout", this.boundFocusOut);
     this.surfaceTarget.dataset.documentPagesSettled = "false";
-    this.paginate();
     this.mutationObserver?.observe(this.surfaceTarget, { childList: true, characterData: true, subtree: true });
-    if (document.fonts?.ready) {
+    if (!document.fonts?.ready || document.fonts.status === "loaded") {
+      this.paginate();
+    } else {
+      const firstPass = () => {
+        if (this.paginatedOnce || !this.active) return;
+        this.paginate();
+      };
+      this.fontTimer = setTimeout(firstPass, 3e3);
       document.fonts.ready.then(() => {
-        if (this.active) this.schedulePagination();
+        clearTimeout(this.fontTimer);
+        this.fontTimer = null;
+        if (!this.active) return;
+        if (this.paginatedOnce) this.schedulePagination();
+        else firstPass();
       });
     }
   }
@@ -45,6 +57,8 @@ class document_pages_controller_default extends Controller {
     cancelAnimationFrame(this.resizeFrame);
     cancelAnimationFrame(this.reflowFrame);
     clearTimeout(this.reflowTimer);
+    clearTimeout(this.fontTimer);
+    this.fontTimer = null;
   }
   resizeFrames() {
     if (!this.surfaceTarget) return;
@@ -68,6 +82,7 @@ class document_pages_controller_default extends Controller {
   }
   schedulePagination() {
     if (!this.active) return;
+    if (!this.paginatedOnce) return;
     this.surfaceTarget.dataset.documentPagesSettled = "false";
     if (this.focusedEditable()) {
       clearTimeout(this.reflowTimer);
@@ -130,6 +145,7 @@ class document_pages_controller_default extends Controller {
     if (preview && this.resizeObserver) this.resizeObserver.observe(preview);
     this.resizeFrames();
     this.mutationObserver?.takeRecords();
+    this.paginatedOnce = true;
     requestAnimationFrame(() => {
       if (!this.active || generation !== this.paginationGeneration) return;
       markStage("paginate-end");
