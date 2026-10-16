@@ -143,7 +143,7 @@ importmap = (ROOT / "apps/web/config/importmap.rb").read_text()
 renderer_build = (ROOT / "packages/renderer/build.mjs").read_text()
 renderer_sources = (
     ROOT / "packages/renderer/src/renderer.ts",
-    ROOT / "packages/renderer/src/renderer_global.ts",
+    ROOT / "packages/editor-runtime/src/composed_renderer.ts",
     ROOT / "packages/work-model/src/document_links.ts",
     ROOT / "packages/work-model/src/document_map.ts",
 )
@@ -197,9 +197,9 @@ assert not missing_shared_alias_pins, (
     "Every shared Elef module alias must be pinned in the Rails importmap: "
     + ", ".join(missing_shared_alias_pins)
 )
-# The renderer bundle entry lives in packages/renderer (see its build.mjs), outside
-# the served tree: every @elef/* specifier under app/javascript is importmap-
-# served and must be pinned.
+# The composed renderer bundle entry lives in packages/editor-runtime (see
+# its build.mjs), outside the served tree: every @elef/* specifier under
+# app/javascript is importmap-served and must be pinned.
 frontend_package_imports = {
     specifier
     for path in app_frontend.rglob("*.js")
@@ -398,7 +398,7 @@ assert 'path.join(repoRoot, "apps/web/app/views/desktop_host.html")' in build, "
 assert 'path.join(repoRoot, "apps/web/app/assets/stylesheets/file_library_host.css")' in build, "the Rails-owned host stylesheet must be packaged by the desktop build"
 assert '"apps/web/app/assets/builds/tailwind.css"' in build, "desktop must package the checked-in Rails-generated utility stylesheet"
 assert (ROOT / "apps/web/app/assets/builds/tailwind.css").is_file(), "shared utility CSS must be present in a clean checkout"
-assert '"packages/renderer/dist/elef-renderer.bundle.js"' in build, "desktop must package the package-owned renderer artifact"
+assert '"packages/editor-runtime/dist/composed_renderer.js"' in build, "desktop must package the package-owned composed renderer artifact"
 assert "bin/rails" not in build and "execFileSync" not in build, "desktop packaging must not boot Rails"
 assert "manifest.exports" in build, "desktop bundling must resolve shared editor code as workspace packages"
 assert "preview_sanitizer" not in build, "desktop must not keep the retired preview-sanitizer alias"
@@ -594,6 +594,9 @@ assert '"@elef/renderer"' in preview_core_entry and "renderPreviewCore" in previ
 assert 'pin "@elef/client/preview-core", to: "client/dist/preview-core.js"' in importmap, (
     "Rails must serve the deferred preview renderer entry"
 )
+assert 'pin "elef-renderer", to: "editor-runtime/dist/composed_renderer.js"' in importmap, (
+    "Rails must serve the editor-runtime-owned composed renderer bundle under the stable elef-renderer pin"
+)
 client_presentation_editor = (ROOT / "packages/client/src/features/presentation/editor.ts").read_text()
 assert '"lib/projection_editability"' not in client_presentation_editor, (
     "the client presentation editor must receive editing utilities through injection, not host imports"
@@ -629,11 +632,15 @@ assert 'pin "@elef/editor-runtime/editor-chrome", to: "editor-runtime/dist/previ
 assert 'pin "lib/' not in importmap, "retired host-owned lib pins must not linger in the Rails importmap"
 assert all(path.is_file() for path in renderer_sources), "renderer sources must stay in shared apps/web/app/javascript or packages"
 assert "desktop/" not in renderer_build, "Rails renderer generation must not reference desktop files"
-bundle_entry = (ROOT / "packages/renderer/src/renderer_global.ts").read_text()
+bundle_entry = (ROOT / "packages/editor-runtime/src/composed_renderer.ts").read_text()
+assert not (ROOT / "packages/renderer/src/renderer_global.ts").is_file(), "the renderer-owned bundle entry is retired with the build cycle"
 assert not (ROOT / "apps/web/app/javascript/lib/preview_chrome.js").is_file(), "editor chrome moved to the shared editor runtime package"
 assert (ROOT / "packages/editor-runtime/src/preview_chrome.ts").is_file(), "editor chrome must live in the shared editor runtime package"
-assert '"@elef/editor-runtime/editor-chrome"' in bundle_entry and "editorChrome" in bundle_entry, (
+assert '"./preview_chrome.js"' in bundle_entry and "editorChrome" in bundle_entry, (
     "the bundle entry must compose bare projection with package-owned editor chrome"
+)
+assert '"@elef/editor-runtime/editor-chrome"' not in bundle_entry, (
+    "the editor-runtime-owned bundle entry must not import its own package seam"
 )
 for bridge_function in (
     "parsePortableDocumentLinks", "extractFirstMarkdownHeading", "frontMatterHasKey",

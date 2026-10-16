@@ -1,6 +1,6 @@
 module Source
   module JavascriptRenderer
-    BUNDLE_PATH = Rails.root.join("../../packages/renderer/dist/elef-renderer.bundle.js").freeze
+    BUNDLE_PATH = Rails.root.join("../../packages/editor-runtime/dist/composed_renderer.js").freeze
     MAX_RENDER_BYTES = 50 * 1024 * 1024
     MAX_MEDIA_REFERENCES = 10_000
     CONTEXT_TIMEOUT_MS = 4_000
@@ -27,14 +27,14 @@ module Source
       context.call("ElefRenderer.linkableDocumentTitles", Array(titles).map(&:to_s))
     end
 
-    def render(markdown, media_resolver: nil, document_nodes: [], allow_remote_media: true)
+    def render(markdown, media_resolver: nil, document_nodes: [], allow_remote_media: true, bare: false)
       source = markdown.to_s
       raise ArgumentError, "Markdown source exceeds the renderer limit" if source.bytesize > MAX_RENDER_BYTES
 
       renderer = context
       media_map = resolved_media(renderer, source, media_resolver)
       renderer.call(
-        "ElefRenderer.renderMarkdownBlock",
+        bare ? "ElefRenderer.renderMarkdownBlockBare" : "ElefRenderer.renderMarkdownBlock",
         source,
         {
           mediaMap: media_map,
@@ -192,14 +192,14 @@ module Source
       end
 
       Thread.current.thread_variable_get(CONTEXT_KEY) || begin
-        raise LoadError, "shared Elef renderer bundle is missing; run npm run renderer:build" unless BUNDLE_PATH.file?
+        raise LoadError, "shared Elef composed renderer bundle is missing; run npm run build:packages" unless BUNDLE_PATH.file?
 
         renderer = MiniRacer::Context.new(
           timeout: CONTEXT_TIMEOUT_MS,
           max_memory: CONTEXT_MAX_MEMORY,
           ensure_gc_after_idle: 60_000
         ).tap do |renderer|
-          renderer.eval(BUNDLE_PATH.read, filename: "elef-renderer.bundle.js")
+          renderer.eval(BUNDLE_PATH.read, filename: "composed_renderer.js")
         end
         Thread.current.thread_variable_set(CONTEXT_KEY, renderer)
         Thread.current.thread_variable_set(CONTEXT_PID_KEY, Process.pid)

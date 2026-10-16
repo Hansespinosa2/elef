@@ -117,8 +117,8 @@ assert.ok(
   "Stable lost the shared sanitizer chunk"
 )
 assert.deepEqual(
-  readFileSync(path.join(repoRoot, "packages/renderer/dist/elef-renderer.bundle.js")),
-  readFileSync(path.join(repoRoot, "apps/desktop/frontend/dist/assets/renderer.bundle.js")),
+  readFileSync(path.join(repoRoot, "packages/editor-runtime/dist/composed_renderer.js")),
+  readFileSync(path.join(repoRoot, "apps/desktop/frontend/dist/assets/composed_renderer.js")),
   "Stable must copy the canonical renderer bundle byte-identically"
 )
 const stableChunks = metafileOutputs(verification.stable_metafile).filter(output => output.includes("chunks/preview-core-"))

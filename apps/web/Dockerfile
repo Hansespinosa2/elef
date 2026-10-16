@@ -29,8 +29,8 @@ RUN cd apps/web && bundle install \
 COPY . .
 
 # dist/ is built, never committed: the image builds the shared packages in
-# the canonical bootstrap order (the client/renderer/editor-runtime build
-# cycle forbids any other order).
+# the canonical topological order (work-model, renderer, client,
+# editor-runtime) via the single-pass bootstrap.
 RUN npm ci && npm run build:packages
 
 # Propshaft and Tailwind assets are compiled into the image. The dummy values

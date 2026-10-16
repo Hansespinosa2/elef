@@ -1,4 +1,4 @@
-import "./renderer.bundle.js"
+import "./composed_renderer.js"
 import { renderWorkerMessage } from "@elef/editor-runtime/worker"
 import { editorChrome } from "@elef/editor-runtime/editor-chrome"
 import { desktopProfile } from "./desktop-profile.js"
