@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300" role="img" aria-label="latency chart">
+  <rect width="400" height="300" fill="#eef2f7"/>
+  <rect x="60" y="180" width="50" height="80" fill="#1d4ed8"/>
+  <rect x="125" y="140" width="50" height="120" fill="#1d4ed8"/>
+  <rect x="190" y="100" width="50" height="160" fill="#b91c1c"/>
+  <rect x="255" y="150" width="50" height="110" fill="#1d4ed8"/>
+  <line x1="40" y1="260" x2="330" y2="260" stroke="#44403c" stroke-width="2"/>
+  <text x="60" y="288" font-family="sans-serif" font-size="16" fill="#44403c">p50 p95 p99 max</text>
+</svg>
