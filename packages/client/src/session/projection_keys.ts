@@ -24,6 +24,7 @@ export interface ProjectionKeyEditor {
   readonly selectionStart: number
   readonly selectionEnd: number
   readonly selectionHead: number
+  readonly selectionRangeCount: number
   readonly vimEnabled: boolean
   readonly insertMode: boolean
   setSelectionRange(anchor: number, head?: number): void
@@ -35,6 +36,7 @@ export interface ProjectionKeyHost {
   editorController: ProjectionKeyEditor | null | undefined
   pendingProjectionEdits: { readonly size: number } | null | undefined
   pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null } | null | undefined
+  suppressProjectionInput: boolean
   flushPendingProjectionEdits(): void
   restoreCaret(sourceOffset: number, preferredBlockId: string | null): boolean
 }
@@ -81,12 +83,23 @@ function afterProjectionEngineKey(
   blockElement: Element,
   valueBefore: string,
 ): void {
+  // The projection shows a single caret; secondary engine ranges would act
+  // invisibly on later commands, so collapse them to the main head.
+  if (editor.selectionRangeCount > 1) editor.setSelectionRange(editor.selectionHead, editor.selectionHead)
   const head = editor.selectionHead
   const blockId = (blockElement as HTMLElement).dataset.editorBlockId ?? null
   host.restoreCaret(head, blockId)
   if (editor.value !== valueBefore) {
     host.pendingCaretRestore = { sourceOffset: head, preferredBlockId: blockId }
+    // The engine already holds the new source; the block DOM still shows
+    // the old text until the refresh lands. Suppress the input
+    // reconciliation for this dispatch, or it reads the stale DOM and
+    // writes it back over the engine. Preview, dirty, and autosave
+    // listeners still run. The flag clears synchronously in case the
+    // block detached before its own input handler ran.
+    host.suppressProjectionInput = true
     blockElement.dispatchEvent(new Event("input", { bubbles: true }))
+    host.suppressProjectionInput = false
   }
 }
 
@@ -127,12 +140,12 @@ export function routeProjectionVimKey(
 }
 
 // Routes modified shortcuts and Tab through the engine's registered keymap —
-// history, word/line motion, deletion, and structural commands — so visual mode
-// executes the same implementations as source mode. Native undo/redo in
-// particular must never run against projection content. Plain keys,
-// Alt-only combinations (word motion, word deletion, and composed
-// characters, all correct natively), and panel-anchored shortcuts keep
-// native behavior. Returns true when the keymap owned the key.
+// history, word/line motion, deletion, line move/copy, and structural
+// commands — so visual mode executes the same implementations as source
+// mode. Native undo/redo in particular must never run against projection
+// content. Plain keys and panel-anchored shortcuts keep native behavior;
+// unbound Alt combinations (composed characters) fall through to native
+// automatically. Returns true when the keymap owned the key.
 export function routeProjectionKeymapKey(
   host: ProjectionKeyHost,
   event: ProjectionKeyEventLike,
@@ -144,7 +157,6 @@ export function routeProjectionKeymapKey(
   if (event.isComposing) return false
   const modified = hasModifier(event)
   if (!modified && event.key !== "Tab") return false
-  if (event.altKey && !event.ctrlKey && !event.metaKey) return false
   if (isPanelAnchored(event)) return false
   if (host.pendingProjectionEdits?.size) host.flushPendingProjectionEdits()
   const valueBefore = editor.value

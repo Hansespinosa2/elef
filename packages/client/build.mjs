@@ -83,11 +83,28 @@ bundle(join(here, "src", "features", "export", "pptx_model.ts"), join(here, "dis
 // preferences stay external so the engine shares the canonical
 // vim-preferences chunk with the settings surfaces instead of inlining a
 // second copy (the desktop profile checker pins the shared input).
+// CodeMirror, KaTeX, and the Vim bindings stay external for the same
+// identity reason: the editor-runtime shell imports the importmap-pinned
+// copies, and a second bundled copy would split StateField identity so
+// cross-boundary syntaxTree reads (palette suppression, math shorthand
+// code guards) silently see an empty tree.
+const editorExternals = [
+  "@elef/client/vim-preferences",
+  "codemirror",
+  "codemirror/*",
+  "@codemirror/*",
+  "@lezer/highlight",
+  "@lezer/highlight/*",
+  "@replit/codemirror-vim",
+  "@replit/codemirror-vim/*",
+  "katex",
+  "katex/*",
+];
 bundle(join(here, "src", "features", "editor", "index.ts"), join(here, "dist", "editor.js"), {
-  external: ["@elef/client/vim-preferences"],
+  external: editorExternals,
 });
 bundle(join(here, "src", "features", "editor", "test_internals.ts"), join(here, "dist", "editor-test-internals.js"), {
-  external: ["@elef/client/vim-preferences"],
+  external: editorExternals,
 });
 // The PPTX engine (model-to-blob orchestration) ships beside the builder:
 // the desktop import must not couple to the client boot barrel, whose bare

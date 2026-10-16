@@ -7,6 +7,7 @@ import {
   PresentationEditor,
 } from "../src/features/presentation/editor.js";
 
+
 const SOURCE = "# Alpha\n\nFirst\n\n---\n\n# Beta\n\nSecond\n";
 
 function slideRanges() {
@@ -54,6 +55,7 @@ function fakeEditor() {
     selectionStart: 0,
     selectionEnd: 0,
     selectionHead: 0,
+    selectionRangeCount: 1,
     vimEnabled: false,
     insertMode: true,
     vimKeys: [] as string[],
@@ -354,6 +356,7 @@ function syncFixture({ editable = true, collapsed = true }: { editable?: boolean
       syncActiveMath: () => {},
       visibleOffsetAtPoint: () => 2,
       sourceOffsetForVisibleOffset: (_source: string, offset: number) => offset,
+      visibleOffsetForSourceOffset: (source: string) => source.length,
       markdownForVisibleText: (_source: string, text: string) => `${text}!`,
     },
     env: {
@@ -584,6 +587,17 @@ test("presentation blockKeydown wires shortcuts after Vim", () => {
   mount.destroy();
 });
 
+test("presentation suppressed block input clears the flag without reconciling", () => {
+  const { mount, block } = syncFixture();
+  mount.editor.suppressProjectionInput = true;
+
+  mount.editor.blockInput({ target: block } as never);
+
+  assert.equal(mount.editor.suppressProjectionInput, false);
+  assert.equal(mount.editor.pendingProjectionEdits, undefined);
+  mount.destroy();
+});
+
 test("presentation Vim visual ranges survive projection caret sync", () => {
   const { mount, editor } = syncFixture();
   editor.vimEnabled = true;
@@ -595,4 +609,40 @@ test("presentation Vim visual ranges survive projection caret sync", () => {
 
   assert.deepEqual(editor.ranges, []);
   mount.destroy();
+});
+
+test("presentation map shifting grows the edited block end on appends", () => {
+  const edited = { id: "b2", block_id: "b2", range: { start: 9, end: 14 }, content_range: { start: 9, end: 14 } };
+  const after = { id: "b3", block_id: "b3", range: { start: 14, end: 20 }, content_range: { start: 14, end: 20 } };
+  const { form } = mountForm();
+  const mount = mountEditor(form, {
+    source_length: 20,
+    slides: [{ blocks: [edited, after] }],
+    editable_regions: [edited, after],
+  } as unknown as Parameters<typeof mountEditor>[1]);
+  const editor = mount.editor;
+
+  // Pure insert at the edited end (appending one char): the edited end
+  // must advance or later offsets clamp and prepend (reversed ghost).
+  editor.shiftMapAfterEdit(14, 14, 1, "b2");
+
+  assert.equal(editor.map?.source_length, 21);
+  assert.deepEqual(edited.content_range, { start: 9, end: 15 });
+  assert.deepEqual(after.content_range, { start: 14, end: 21 });
+});
+
+test("presentation map shifting pins the edited block start on replacement", () => {
+  const edited = { id: "b2", block_id: "b2", range: { start: 9, end: 14 }, content_range: { start: 9, end: 14 } };
+  const { form } = mountForm();
+  const mount = mountEditor(form, {
+    source_length: 20,
+    slides: [{ blocks: [edited] }],
+    editable_regions: [edited],
+  } as unknown as Parameters<typeof mountEditor>[1]);
+  const editor = mount.editor;
+
+  editor.shiftMapAfterEdit(9, 14, 2, "b2");
+
+  assert.deepEqual(edited.content_range, { start: 9, end: 11 });
+  assert.equal(editor.map?.source_length, 17);
 });

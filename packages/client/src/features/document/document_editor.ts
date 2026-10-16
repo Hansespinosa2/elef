@@ -5,7 +5,7 @@
 // the shared editing-utilities deps object, then delegates lifecycle and
 // actions. The web Stimulus controller is the thin adapter.
 import { blockOperationRange, directiveLineSpan, exciseRange, insertAlignDirective } from "@elef/work-model/document-transforms"
-import { translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
+import { touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 
 export interface DocumentEditorRange {
@@ -68,6 +68,7 @@ export interface DocumentEditorSeam {
   selectionStart: number
   selectionEnd: number
   selectionHead: number
+  selectionRangeCount: number
   vimEnabled: boolean
   insertMode: boolean
   commitSource(source: string): unknown
@@ -183,6 +184,7 @@ export class DocumentEditor {
   pendingProjectionFrame: number | undefined
   pendingProjectionEdits: Map<string, DocumentProjectionEdit> | undefined
   pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null } | null | undefined
+  suppressProjectionInput = false
   pendingCaret: { sourceOffset: number; location: string } | null | undefined
   lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
   updatingProjection: boolean | undefined
@@ -359,16 +361,26 @@ export class DocumentEditor {
         transferText = null
       }
     }
+    const visibleText = visibleBlockText(block)
     const edit = translateProjectionInput({
       inputType: event.inputType,
       data: event.data ?? null,
       transferText,
       transferHasHtml: transferTypes.includes("text/html"),
       anchorVisible,
-      focusVisible
-    }, visibleBlockText(block))
+      focusVisible,
+      kind: region.kind ?? "paragraph"
+    }, visibleText)
     if (!edit) return
     const slice = editor.value.slice(region.content_range.start, region.content_range.end)
+    // The precise path is an optimization over a correct legacy: it runs
+    // only when the DOM and the source model agree exactly on the
+    // block's visible text. Revealed source (image/link syntax),
+    // collapsed directives, and rendered math all widen or narrow one
+    // side; those blocks stay on the structure-aware legacy path.
+    const modelLength = this.deps.visibleOffsetForSourceOffset(slice, slice.length)
+    if (visibleText.length !== modelLength) return
+    if (touchesConcealedBoundary(this.deps.sourceOffsetForVisibleOffset, slice, edit.fromVisible, edit.toVisible)) return
     const from = region.content_range.start + this.deps.sourceOffsetForVisibleOffset(slice, edit.fromVisible)
     const to = region.content_range.start + this.deps.sourceOffsetForVisibleOffset(slice, edit.toVisible)
     if (region.kind !== "code") this.blockFragments(blockId).forEach((fragment) => this.deps.renderInlineMath(fragment))
@@ -377,6 +389,14 @@ export class DocumentEditor {
   }
 
   projectionInput(event: DocumentProjectionEvent): void {
+    // Engine-routed keys dispatch input to refresh the preview while the
+    // block DOM still shows the old text; reconciling it would write stale
+    // content back over the engine. Consumed first so a suppressed event
+    // never arms the flag for the next real input.
+    if (this.suppressProjectionInput) {
+      this.suppressProjectionInput = false
+      return
+    }
     if (!this.editorController || this.updatingProjection) return
 
     const blockElement = (event.target as Element).closest?.("[data-editor-block-id]")
@@ -474,7 +494,8 @@ export class DocumentEditor {
     this.pendingProjectionFrame = undefined
     if (!this.pendingProjectionEdits?.size || !this.editorController) return
 
-    const edits = [...this.pendingProjectionEdits.values()].map((edit) => {
+    const pending = [...this.pendingProjectionEdits.values()]
+    const edits = pending.map((edit) => {
       const blockElement = this.combinedBlockForId(edit.blockId) || edit.blockElement
       return {
         ...edit,
@@ -490,6 +511,14 @@ export class DocumentEditor {
     }).filter((edit) => edit.replacement !== edit.source)
     this.pendingProjectionEdits.clear()
     if (edits.length === 0) {
+      // Precise translator commits reconcile here: the engine already
+      // matches, but post-mutation math still needs its live render
+      // (the beforeinput render saw pre-mutation text).
+      pending.forEach((edit) => {
+        if (edit.kind === "code") return
+        const blockElement = this.combinedBlockForId(edit.blockId) || edit.blockElement
+        if (blockElement) this.blockFragments(edit.blockId).forEach((fragment) => this.deps.renderInlineMath(fragment))
+      })
       this.syncEngineSelectionFromCaret()
       return
     }
@@ -640,9 +669,14 @@ export class DocumentEditor {
     if (this.kind !== "document" || event.isComposing) return
 
     const blockElement = (event.target as Element).closest?.(".document-editor-block[data-editor-block-id]")
-    if (!blockElement || !this.canEditBlock(blockElement)) return
+    if (!blockElement) return
+    // Engine-routed keys act on engine state and defer caret restoration
+    // while stale, so they run even when the projection is refreshing;
+    // dropping them would swallow Vim motions, Tab, and undo after every
+    // edit. Structural handlers below stay behind the freshness gate.
     if (this.routeVimKey(event, blockElement)) return
     if (this.routeKeymapKey(event, blockElement)) return
+    if (!this.canEditBlock(blockElement)) return
     if (event.altKey || event.ctrlKey || event.metaKey) return
     this.deps.finishMathBeforeEnter(event, this.projectionTarget, () => this.flushPendingProjectionEdits())
 
@@ -1310,7 +1344,11 @@ export class DocumentEditor {
     while (walker.nextNode()) {
       const node = walker.currentNode
       if (node.parentElement?.closest(".katex-mathml, [aria-hidden='true']")) continue
-      length += (node.textContent ?? "").length
+      // Mirror: editor_caret.ts and visibleBlockText skip the same
+      // newlines; the source map never models newlines as visible.
+      const content = node.textContent ?? ""
+      if (content.trim() === "" && /[\r\n]/.test(content)) continue
+      length += content.replace(/[\r\n]/g, "").length
     }
     return length
   }

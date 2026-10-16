@@ -55,3 +55,4 @@ export {
   metadataQueryAt,
   rankMetadataCandidates
 } from "./lib/metadata_assist.js";
+export { pointAtVisibleOffset, visibleOffsetAtPoint } from "./controllers/editor_caret.js";

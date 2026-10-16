@@ -17,6 +17,7 @@ export function asEditorSeam(candidate: unknown): DocumentEditorSeam | null {
   if (typeof seam.selectionStart !== "number") return null
   if (typeof seam.selectionEnd !== "number") return null
   if (typeof seam.selectionHead !== "number") return null
+  if (typeof seam.selectionRangeCount !== "number") return null
   if (typeof seam.vimEnabled !== "boolean") return null
   if (typeof seam.insertMode !== "boolean") return null
   if (typeof seam.commitSource !== "function") return null

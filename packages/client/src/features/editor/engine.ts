@@ -522,6 +522,10 @@ export class EditorEngine {
     return this.view.state.selection.main.head
   }
 
+  get selectionRangeCount(): number {
+    return this.view.state.selection.ranges.length
+  }
+
   // Routes one visual-mode key through the live Vim machinery, mirroring
   // the vim extension's own keydown flow (vimKeyFromEvent mapping, status
   // accumulation, multiSelectHandleKey with the "user" origin). Returns

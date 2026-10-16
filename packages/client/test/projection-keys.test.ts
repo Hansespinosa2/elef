@@ -33,6 +33,7 @@ function stubEditor(overrides: Record<string, unknown> = {}) {
     selectionStart: 0,
     selectionEnd: 0,
     selectionHead: 0,
+    selectionRangeCount: 1,
     vimEnabled: true,
     insertMode: false,
     vimCalls: [] as string[],
@@ -43,6 +44,7 @@ function stubEditor(overrides: Record<string, unknown> = {}) {
       state.selectionStart = Math.min(anchor, head);
       state.selectionEnd = Math.max(anchor, head);
       state.selectionHead = head;
+      state.selectionRangeCount = 1;
     },
     handleVimKey: (event: ProjectionKeyEventLike) => {
       state.vimCalls.push(event.key);
@@ -68,6 +70,8 @@ function stubHost(editor: ProjectionKeyEditor | null) {
     editorController: editor,
     pendingProjectionEdits: null as { readonly size: number } | null,
     pendingCaretRestore: null as { sourceOffset: number; preferredBlockId: string | null } | null,
+    suppressProjectionInput: false,
+    suppressedDuringDispatch: null as boolean | null,
     flushed: 0,
     restored: [] as Array<[number, string | null]>,
     dispatched: [] as string[],
@@ -84,6 +88,7 @@ function stubHost(editor: ProjectionKeyEditor | null) {
     contentEditable: "true",
     dataset: { editorBlockId: "b1" },
     dispatchEvent: (event: { type: string }) => {
+      host.suppressedDuringDispatch = host.suppressProjectionInput;
       host.dispatched.push(event.type);
       return true;
     },
@@ -92,6 +97,7 @@ function stubHost(editor: ProjectionKeyEditor | null) {
     flushed: number;
     restored: Array<[number, string | null]>;
     dispatched: string[];
+    suppressedDuringDispatch: boolean | null;
     block: Element;
   };
 }
@@ -165,6 +171,19 @@ test("source-changing Vim commands schedule a refresh with caret restoration", (
   assert.deepEqual(host.dispatched, ["input"]);
 });
 
+test("multi-range Vim outcomes collapse to the main head", () => {
+  const editor = stubEditor({ selectionHead: 4 });
+  editor.handleVimKey = () => {
+    (editor as unknown as { selectionRangeCount: number }).selectionRangeCount = 3;
+    return true;
+  };
+  const host = stubHost(editor);
+
+  assert.equal(routeProjectionVimKey(host, keyEvent("v"), host.block), true);
+  assert.deepEqual(editor.rangesSet, [[4, 4]]);
+  assert.deepEqual(host.restored, [[4, "b1"]]);
+});
+
 test("declined plain Vim keys swallow except navigation", () => {
   const editor = stubEditor();
   editor.handleVimKey = () => false;
@@ -227,13 +246,42 @@ test("plain caret and structural keys never reach the shared keymap", () => {
   }
 });
 
-test("Alt-only combinations stay native", () => {
-  for (const event of [keyEvent("ArrowLeft", { altKey: true }), keyEvent("Backspace", { altKey: true })]) {
-    const editor = stubEditor();
-    const host = stubHost(editor);
-    assert.equal(routeProjectionKeymapKey(host, event, host.block), false);
-    assert.deepEqual(editor.keymapCalls, []);
-  }
+test("Alt combinations route through the shared keymap", () => {
+  const editor = stubEditor({ selectionHead: 6 });
+  editor.runKeymap = (event) => {
+    editor.keymapCalls.push(event.key);
+    return true;
+  };
+  const host = stubHost(editor);
+  const event = keyEvent("ArrowUp", { altKey: true });
+
+  assert.equal(routeProjectionKeymapKey(host, event, host.block), true);
+  assert.deepEqual(editor.keymapCalls, ["ArrowUp"]);
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(host.restored, [[6, "b1"]]);
+});
+
+test("unbound Alt combinations fall through to native input", () => {
+  const editor = stubEditor();
+  const host = stubHost(editor);
+  const event = keyEvent("e", { altKey: true });
+
+  assert.equal(routeProjectionKeymapKey(host, event, host.block), false);
+  assert.deepEqual(editor.keymapCalls, ["e"]);
+  assert.equal(event.defaultPrevented, false);
+});
+
+test("multi-range keymap outcomes collapse to the main head", () => {
+  const editor = stubEditor({ selectionHead: 4 });
+  editor.runKeymap = () => {
+    (editor as unknown as { selectionRangeCount: number }).selectionRangeCount = 2;
+    return true;
+  };
+  const host = stubHost(editor);
+
+  assert.equal(routeProjectionKeymapKey(host, keyEvent("ArrowUp", { metaKey: true, altKey: true }), host.block), true);
+  assert.deepEqual(editor.rangesSet, [[4, 4]]);
+  assert.deepEqual(host.restored, [[4, "b1"]]);
 });
 
 test("panel-anchored shortcuts stay native", () => {
@@ -285,6 +333,19 @@ test("Tab runs through the shared keymap", () => {
   assert.equal(routeProjectionKeymapKey(host, keyEvent("Tab"), host.block), true);
   assert.deepEqual(editor.keymapCalls, ["Tab"]);
   assert.deepEqual(host.restored, [[5, "b1"]]);
+});
+
+test("refresh dispatches suppress input reconciliation while stale", () => {
+  const editor = stubEditor();
+  editor.runKeymap = () => {
+    (editor as unknown as { value: string }).value = "undone";
+    return true;
+  };
+  const host = stubHost(editor);
+
+  assert.equal(routeProjectionKeymapKey(host, keyEvent("z", { metaKey: true }), host.block), true);
+  assert.equal(host.suppressedDuringDispatch, true);
+  assert.equal(host.suppressProjectionInput, false);
 });
 
 test("source-changing shortcuts schedule a refresh with caret restoration", () => {

@@ -194,6 +194,7 @@ function asEditorSeam(candidate) {
   if (typeof seam.selectionStart !== "number") return null;
   if (typeof seam.selectionEnd !== "number") return null;
   if (typeof seam.selectionHead !== "number") return null;
+  if (typeof seam.selectionRangeCount !== "number") return null;
   if (typeof seam.vimEnabled !== "boolean") return null;
   if (typeof seam.insertMode !== "boolean") return null;
   if (typeof seam.commitSource !== "function") return null;
@@ -799,6 +800,60 @@ import { editorTabBinding, editorTabKeymap } from "@elef/client/editor";
 
 // src/controllers/editor_caret.ts
 var MARKDOWN_MATH = /^\$\$[\s\S]+?\$\$|^\$(?!\$)[^$\r\n]+?\$(?!\$)/;
+function visibleOffsetAtPoint(root, target, offset) {
+  let visibleOffset = 0;
+  let result = null;
+  const raw = countsRawNewlines(root);
+  const visit = (node) => {
+    if (result !== null || isHiddenText(node, root, raw)) return;
+    if (node === target) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        result = visibleOffset + visibleSubOffset(node.textContent ?? "", offset, raw);
+      } else {
+        const childOffset = Math.max(0, Math.min(offset, node.childNodes.length));
+        for (let index = 0; index < childOffset; index += 1) visibleOffset += visibleLength(node.childNodes[index], root, raw);
+        result = visibleOffset;
+      }
+      return;
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      visibleOffset += visibleTextLength(node.textContent ?? "", raw);
+      return;
+    }
+    for (const child of node.childNodes || []) visit(child);
+  };
+  visit(root);
+  return result;
+}
+function pointAtVisibleOffset(root, requestedOffset) {
+  const target = Math.max(0, requestedOffset);
+  let visibleOffset = 0;
+  let lastText = null;
+  let result = null;
+  const raw = countsRawNewlines(root);
+  const visit = (node) => {
+    if (result || isHiddenText(node, root, raw)) return;
+    if (node.nodeType === Node.TEXT_NODE) {
+      lastText = node;
+      const text = node.textContent ?? "";
+      const end = visibleOffset + visibleTextLength(text, raw);
+      if (target <= end) {
+        result = [node, domSubOffset(text, target - visibleOffset, raw)];
+        return;
+      }
+      visibleOffset = end;
+      return;
+    }
+    for (const child of node.childNodes || []) visit(child);
+  };
+  visit(root);
+  if (result) return result;
+  if (lastText) {
+    const tail = lastText;
+    return [tail, (tail.textContent ?? "").length];
+  }
+  return [root, 0];
+}
 function sourceOffsetForVisibleOffset(source, requestedOffset) {
   const mapping = markdownPositionMap(source);
   const visibleOffset = Math.max(0, Math.min(requestedOffset, mapping.visibleToSource.length - 1));
@@ -808,6 +863,57 @@ function visibleOffsetForSourceOffset(source, requestedOffset) {
   const mapping = markdownPositionMap(source);
   const sourceOffset = Math.max(0, Math.min(requestedOffset, source.length));
   return mapping.sourceToVisible[sourceOffset] ?? mapping.visibleToSource.length - 1;
+}
+function visibleLength(node, root, raw = false) {
+  if (isHiddenText(node, root, raw)) return 0;
+  if (node.nodeType === Node.TEXT_NODE) return visibleTextLength(node.textContent ?? "", raw);
+  return [...node.childNodes || []].reduce((sum, child) => sum + visibleLength(child, root, raw), 0);
+}
+function countsRawNewlines(root) {
+  let element = root.nodeType === Node.ELEMENT_NODE ? root : root.parentElement ?? null;
+  while (element) {
+    if (element.classList?.contains("editor-math-active") || element.hasAttribute?.("data-editor-math-active")) return true;
+    element = element.parentElement;
+  }
+  return false;
+}
+function isHiddenText(node, root, raw = false) {
+  if (node === root) return false;
+  if (!raw && node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent ?? "";
+    if (text.trim() === "" && /[\r\n]/.test(text)) return true;
+    if (node.parentNode === root && text.trim() === "") return true;
+  }
+  let element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+  while (element && element !== root) {
+    if (element.getAttribute("contenteditable") === "false" || element.getAttribute("aria-hidden") === "true" || element.classList?.contains("katex-mathml")) return true;
+    element = element.parentElement;
+  }
+  return false;
+}
+function visibleTextLength(nodeText, raw = false) {
+  if (raw) return nodeText.length;
+  let length = 0;
+  for (const char of nodeText) {
+    if (char !== "\n" && char !== "\r") length += 1;
+  }
+  return length;
+}
+function visibleSubOffset(nodeText, domOffset, raw = false) {
+  return visibleTextLength(nodeText.slice(0, Math.max(0, Math.min(domOffset, nodeText.length))), raw);
+}
+function domSubOffset(nodeText, visibleOffset, raw = false) {
+  if (raw) return Math.max(0, Math.min(visibleOffset, nodeText.length));
+  if (visibleOffset <= 0) return 0;
+  let seen = 0;
+  for (let index = 0; index < nodeText.length; index += 1) {
+    const char = nodeText[index];
+    if (char !== "\n" && char !== "\r") {
+      seen += 1;
+      if (seen >= visibleOffset) return index + 1;
+    }
+  }
+  return nodeText.length;
 }
 function markdownPositionMap(source) {
   const sourceToVisible = new Array(source.length + 1).fill(0);
@@ -1181,6 +1287,7 @@ export {
   metadataQueryAt,
   mountEditorHosts,
   percentile95,
+  pointAtVisibleOffset,
   prepareWorkOpen,
   presentConflictDialog,
   rankMetadataCandidates,
@@ -1191,6 +1298,7 @@ export {
   startClientMounts,
   translateClientMounts,
   translateElementMounts,
+  visibleOffsetAtPoint,
   visibleOffsetForSourceOffset,
   waitForEditorController
 };

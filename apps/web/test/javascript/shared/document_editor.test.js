@@ -170,6 +170,7 @@ function stubSelectionBridge(t, { editable = true, collapsed = true, focusOffset
     value: "x".repeat(20),
     selectionStart: engineSelection[0],
     selectionEnd: engineSelection[1],
+    selectionRangeCount: 1,
     setSelectionRange: (anchor, head) => calls.push([anchor, head]),
     replaceRange: (text, from, to) => replaced.push({ text, from, to }),
     replaceRanges: () => {},
@@ -180,6 +181,7 @@ function stubSelectionBridge(t, { editable = true, collapsed = true, focusOffset
       syncActiveMath: () => {},
       visibleOffsetAtPoint: (block, node, offset) => offset,
       sourceOffsetForVisibleOffset: (source, offset) => offset,
+      visibleOffsetForSourceOffset: (source) => source.length,
       markdownForVisibleText: (source, text) => `${text}!`,
       renderInlineMath: () => {},
     },
@@ -249,6 +251,22 @@ test("typing commits a precise source transaction without pending", (t) => {
   assert.deepEqual(replaced, [{ text: "X", from: 11, to: 11 }])
   assert.equal(editor.pendingProjectionEdits, undefined)
   assert.deepEqual(editor.map.editable_regions[0].content_range, { start: 9, end: 15 })
+})
+
+test("concealed-boundary and model-mismatch intents stay on reconstruction", (t) => {
+  const mismatched = stubSelectionBridge(t)
+  mismatched.editor.deps.visibleOffsetForSourceOffset = () => 999
+
+  mismatched.editor.projectionBeforeinput({ target: mismatched.block, inputType: "insertText", data: "X" })
+
+  assert.deepEqual(mismatched.replaced, [])
+
+  const bounded = stubSelectionBridge(t)
+  bounded.editor.deps.sourceOffsetForVisibleOffset = (source, offset) => (offset >= 2 ? offset + 2 : offset)
+
+  bounded.editor.projectionBeforeinput({ target: bounded.block, inputType: "insertText", data: "X" })
+
+  assert.deepEqual(bounded.replaced, [])
 })
 
 test("backward deletion removes one visible grapheme precisely", (t) => {
@@ -436,6 +454,33 @@ test("projection keydown wires shortcuts through the shared keymap", (t) => {
   editor.projectionKeydown(keyEvent("z", { metaKey: true }))
 
   assert.deepEqual(keymapCalls, ["z"])
+})
+
+test("engine-routed keys run while the projection is refreshing", (t) => {
+  const { editor, block, keymapCalls, keyEvent } = stubVimRouting(t, { vimEnabled: false })
+  editor.kind = "document"
+  editor.element = { dataset: { editorMode: "visual" }, previewController: { projectionFresh: false } }
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, "document")
+  Object.defineProperty(globalThis, "document", { configurable: true, writable: true, value: { activeElement: null } })
+  t.after(() => {
+    if (descriptor) Object.defineProperty(globalThis, "document", descriptor)
+    else delete globalThis.document
+  })
+  assert.equal(editor.canEditBlock(block), false)
+
+  editor.projectionKeydown(keyEvent("z", { metaKey: true }))
+
+  assert.deepEqual(keymapCalls, ["z"])
+})
+
+test("suppressed projection input clears the flag without reconciling", (t) => {
+  const { editor, block } = stubVimRouting(t)
+  editor.suppressProjectionInput = true
+
+  editor.projectionInput({ target: block })
+
+  assert.equal(editor.suppressProjectionInput, false)
+  assert.equal(editor.pendingProjectionEdits, undefined)
 })
 
 test("visual Vim routing skips composing and readonly input", (t) => {

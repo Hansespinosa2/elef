@@ -25,7 +25,7 @@ import {
   parseAlignment,
   removeBlock as removeBlockFromSource
 } from "@elef/work-model/document-transforms"
-import { translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
+import { touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 
 export interface EditorSourceRange {
@@ -86,6 +86,7 @@ export interface PresentationEditorSeam {
   selectionStart: number
   selectionEnd: number
   selectionHead: number
+  selectionRangeCount: number
   vimEnabled: boolean
   insertMode: boolean
   inputTarget?: unknown
@@ -174,6 +175,8 @@ interface ProjectionEdit {
 }
 
 interface ShiftableRanges {
+  id?: string | null
+  block_id?: string | null
   range?: EditorSourceRange | undefined
   source_range?: EditorSourceRange | undefined
   content_range?: EditorSourceRange | undefined
@@ -226,6 +229,7 @@ export class PresentationEditor {
   activeProjectionBlock: Element | null | undefined
   lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
   pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null } | null | undefined
+  suppressProjectionInput = false
 
   constructor(form: PresentationEditorHost, options: MountPresentationEditorOptions = {}) {
     this.element = form
@@ -389,24 +393,42 @@ export class PresentationEditor {
         transferText = null
       }
     }
+    const visibleText = visibleBlockText(block)
     const edit = translateProjectionInput({
       inputType: event.inputType,
       data: event.data ?? null,
       transferText,
       transferHasHtml: transferTypes.includes("text/html"),
       anchorVisible,
-      focusVisible
-    }, visibleBlockText(block))
+      focusVisible,
+      kind: region.kind ?? "paragraph"
+    }, visibleText)
     if (!edit) return
     const slice = editor.value.slice(region.content_range.start, region.content_range.end)
+    // The precise path is an optimization over a correct legacy: it runs
+    // only when the DOM and the source model agree exactly on the
+    // block's visible text. Revealed source (image/link syntax),
+    // collapsed directives, and rendered math all widen or narrow one
+    // side; those blocks stay on the structure-aware legacy path.
+    const modelLength = this.deps.visibleOffsetForSourceOffset(slice, slice.length)
+    if (visibleText.length !== modelLength) return
+    if (touchesConcealedBoundary(this.deps.sourceOffsetForVisibleOffset, slice, edit.fromVisible, edit.toVisible)) return
     const from = region.content_range.start + this.deps.sourceOffsetForVisibleOffset(slice, edit.fromVisible)
     const to = region.content_range.start + this.deps.sourceOffsetForVisibleOffset(slice, edit.toVisible)
     if (region.kind !== "code") this.deps.renderInlineMath(block)
-    this.shiftMapAfterEdit(from, to, edit.insert.length)
+    this.shiftMapAfterEdit(from, to, edit.insert.length, region.block_id)
     editor.replaceRange(edit.insert, from, to)
   }
 
   blockInput(event: ProjectionEvent): void {
+    // Engine-routed keys dispatch input to refresh the preview while the
+    // block DOM still shows the old text; reconciling it would write stale
+    // content back over the engine. Consumed first so a suppressed event
+    // never arms the flag for the next real input.
+    if (this.suppressProjectionInput) {
+      this.suppressProjectionInput = false
+      return
+    }
     if (!this.editorController || this.updatingSource) return
     const blockElement = (event.target as Element).closest?.("[data-editor-block-id]")
     if (!blockElement || !this.canEditBlock(blockElement)) return
@@ -487,12 +509,19 @@ export class PresentationEditor {
     this.pendingProjectionFrame = undefined
     if (!this.pendingProjectionEdits?.size || !this.editorController) return
 
-    const edits = [...this.pendingProjectionEdits.values()].map((edit) => ({
+    const pending = [...this.pendingProjectionEdits.values()]
+    const edits = pending.map((edit) => ({
       ...edit,
       replacement: this.deps.markdownForVisibleText(edit.source, this.editableText(edit.blockElement), edit.kind, edit.blockElement)
     })).filter((edit) => edit.replacement !== edit.source)
     this.pendingProjectionEdits.clear()
     if (edits.length === 0) {
+      // Precise translator commits reconcile here: the engine already
+      // matches, but post-mutation math still needs its live render
+      // (the beforeinput render saw pre-mutation text).
+      pending.forEach((edit) => {
+        if (edit.kind !== "code") this.deps.renderInlineMath(edit.blockElement)
+      })
       if (this.operationPending && this.isProjectionFresh() !== false) {
         this.operationPending = false
         this.setControlsDisabled(false)
@@ -508,7 +537,7 @@ export class PresentationEditor {
     const changes = edits.map((edit) => ({ from: edit.from, to: edit.to, insert: edit.replacement }))
       .sort((left, right) => left.from - right.from)
     edits.sort((left, right) => right.from - left.from).forEach((edit) => {
-      this.shiftMapAfterEdit(edit.from, edit.to, edit.replacement.length)
+      this.shiftMapAfterEdit(edit.from, edit.to, edit.replacement.length, edit.blockId)
     })
     this.editorController.replaceRanges(changes)
     this.syncEngineSelectionFromCaret()
@@ -895,26 +924,36 @@ export class PresentationEditor {
     this.setControlsDisabled(true)
   }
 
-  shiftMapAfterEdit(from: number, to: number, replacementLength: number): void {
+  shiftMapAfterEdit(from: number, to: number, replacementLength: number, editedBlockId: string | null = null): void {
     if (!this.map) return
 
     const delta = replacementLength - (to - from)
-    const shiftRange = (range: EditorSourceRange | null | undefined): void => {
+    const shiftRange = (range: EditorSourceRange | null | undefined, editedBlock: boolean): void => {
       if (!range) return
-      const shiftPosition = (position: number): number => {
+      const shiftStart = (position: number): number => {
+        if (position === from && editedBlock) return position
         if (position <= from) return position
         if (position >= to) return position + delta
-        return from + replacementLength
+        return from
       }
-      range.start = shiftPosition(range.start)
-      range.end = Math.max(range.start, shiftPosition(range.end))
+      const shiftEnd = (position: number): number => {
+        if (from === to && position === from) return editedBlock ? from + replacementLength : position
+        if (position <= from) return position
+        if (position >= to) return position + delta
+        return editedBlock ? from + replacementLength : from
+      }
+      range.start = shiftStart(range.start)
+      range.end = Math.max(range.start, shiftEnd(range.end))
     }
+    const shifted = new Set<object>()
     const shiftObject = (object: ShiftableRanges | null | undefined): void => {
-      if (!object) return
-      shiftRange(object.range)
-      shiftRange(object.source_range)
-      shiftRange(object.content_range)
-      shiftRange(object.delimiter_range)
+      if (!object || shifted.has(object)) return
+      shifted.add(object)
+      const editedBlock = object.id === editedBlockId || object.block_id === editedBlockId
+      shiftRange(object.range, editedBlock)
+      shiftRange(object.source_range, editedBlock)
+      shiftRange(object.content_range, editedBlock)
+      shiftRange(object.delimiter_range, editedBlock)
     }
 
     this.map.source_length = Number(this.map.source_length || 0) + delta

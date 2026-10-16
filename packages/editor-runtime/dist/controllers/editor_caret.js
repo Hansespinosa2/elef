@@ -2,20 +2,21 @@ const MARKDOWN_MATH = /^\$\$[\s\S]+?\$\$|^\$(?!\$)[^$\r\n]+?\$(?!\$)/;
 function visibleOffsetAtPoint(root, target, offset) {
   let visibleOffset = 0;
   let result = null;
+  const raw = countsRawNewlines(root);
   const visit = (node) => {
-    if (result !== null || isHiddenText(node, root)) return;
+    if (result !== null || isHiddenText(node, root, raw)) return;
     if (node === target) {
       if (node.nodeType === Node.TEXT_NODE) {
-        result = visibleOffset + Math.max(0, Math.min(offset, (node.textContent ?? "").length));
+        result = visibleOffset + visibleSubOffset(node.textContent ?? "", offset, raw);
       } else {
         const childOffset = Math.max(0, Math.min(offset, node.childNodes.length));
-        for (let index = 0; index < childOffset; index += 1) visibleOffset += visibleLength(node.childNodes[index], root);
+        for (let index = 0; index < childOffset; index += 1) visibleOffset += visibleLength(node.childNodes[index], root, raw);
         result = visibleOffset;
       }
       return;
     }
     if (node.nodeType === Node.TEXT_NODE) {
-      visibleOffset += (node.textContent ?? "").length;
+      visibleOffset += visibleTextLength(node.textContent ?? "", raw);
       return;
     }
     for (const child of node.childNodes || []) visit(child);
@@ -28,13 +29,15 @@ function pointAtVisibleOffset(root, requestedOffset) {
   let visibleOffset = 0;
   let lastText = null;
   let result = null;
+  const raw = countsRawNewlines(root);
   const visit = (node) => {
-    if (result || isHiddenText(node, root)) return;
+    if (result || isHiddenText(node, root, raw)) return;
     if (node.nodeType === Node.TEXT_NODE) {
       lastText = node;
-      const end = visibleOffset + (node.textContent ?? "").length;
+      const text = node.textContent ?? "";
+      const end = visibleOffset + visibleTextLength(text, raw);
       if (target <= end) {
-        result = [node, Math.max(0, target - visibleOffset)];
+        result = [node, domSubOffset(text, target - visibleOffset, raw)];
         return;
       }
       visibleOffset = end;
@@ -150,20 +153,56 @@ function textRects(element) {
   }
   return rects.sort((left, right) => left.top - right.top || left.left - right.left);
 }
-function visibleLength(node, root) {
-  if (isHiddenText(node, root)) return 0;
-  if (node.nodeType === Node.TEXT_NODE) return (node.textContent ?? "").length;
-  return [...node.childNodes || []].reduce((sum, child) => sum + visibleLength(child, root), 0);
+function visibleLength(node, root, raw = false) {
+  if (isHiddenText(node, root, raw)) return 0;
+  if (node.nodeType === Node.TEXT_NODE) return visibleTextLength(node.textContent ?? "", raw);
+  return [...node.childNodes || []].reduce((sum, child) => sum + visibleLength(child, root, raw), 0);
 }
-function isHiddenText(node, root) {
+function countsRawNewlines(root) {
+  let element = root.nodeType === Node.ELEMENT_NODE ? root : root.parentElement ?? null;
+  while (element) {
+    if (element.classList?.contains("editor-math-active") || element.hasAttribute?.("data-editor-math-active")) return true;
+    element = element.parentElement;
+  }
+  return false;
+}
+function isHiddenText(node, root, raw = false) {
   if (node === root) return false;
-  if (node.nodeType === Node.TEXT_NODE && node.parentNode === root && (node.textContent ?? "").trim() === "") return true;
+  if (!raw && node.nodeType === Node.TEXT_NODE) {
+    const text = node.textContent ?? "";
+    if (text.trim() === "" && /[\r\n]/.test(text)) return true;
+    if (node.parentNode === root && text.trim() === "") return true;
+  }
   let element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
   while (element && element !== root) {
     if (element.getAttribute("contenteditable") === "false" || element.getAttribute("aria-hidden") === "true" || element.classList?.contains("katex-mathml")) return true;
     element = element.parentElement;
   }
   return false;
+}
+function visibleTextLength(nodeText, raw = false) {
+  if (raw) return nodeText.length;
+  let length = 0;
+  for (const char of nodeText) {
+    if (char !== "\n" && char !== "\r") length += 1;
+  }
+  return length;
+}
+function visibleSubOffset(nodeText, domOffset, raw = false) {
+  return visibleTextLength(nodeText.slice(0, Math.max(0, Math.min(domOffset, nodeText.length))), raw);
+}
+function domSubOffset(nodeText, visibleOffset, raw = false) {
+  if (raw) return Math.max(0, Math.min(visibleOffset, nodeText.length));
+  if (visibleOffset <= 0) return 0;
+  let seen = 0;
+  for (let index = 0; index < nodeText.length; index += 1) {
+    const char = nodeText[index];
+    if (char !== "\n" && char !== "\r") {
+      seen += 1;
+      if (seen >= visibleOffset) return index + 1;
+    }
+  }
+  return nodeText.length;
 }
 function markdownPositionMap(source) {
   const sourceToVisible = new Array(source.length + 1).fill(0);
