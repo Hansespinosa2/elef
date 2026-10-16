@@ -36,10 +36,11 @@ export interface EditTriggerAction {
   readonly id: string;
   readonly label: string;
   readonly trigger: string;
-  // Palette elements render only where their controller is registered, so a
-  // row appears only when its palette can actually open (Stable-profile
-  // shells simply offer fewer rows).
-  readonly paletteTarget: string;
+  // The palette's Stimulus controller must be bound on the field: palette
+  // elements render unconditionally, but the controller list varies (the
+  // document-link palette binds on documents only), so a row appears only
+  // when its palette can actually open.
+  readonly controller: string;
 }
 
 export const EDIT_TRIGGER_ACTIONS: readonly EditTriggerAction[] = Object.freeze([
@@ -47,25 +48,25 @@ export const EDIT_TRIGGER_ACTIONS: readonly EditTriggerAction[] = Object.freeze(
     id: "snippet",
     label: "Insert snippet or directive",
     trigger: "/",
-    paletteTarget: '[data-snippet-palette-target="palette"]',
+    controller: "snippet-palette",
   }),
   Object.freeze({
     id: "link",
     label: "Insert document link",
     trigger: "[[",
-    paletteTarget: '[data-document-link-palette-target="palette"]',
+    controller: "document-link-palette",
   }),
   Object.freeze({
     id: "math",
     label: "Insert math shortcut",
     trigger: "@",
-    paletteTarget: '[data-math-shortcut-palette-target="palette"]',
+    controller: "math-shortcut-palette",
   }),
   Object.freeze({
     id: "diagram",
     label: "Insert diagram",
     trigger: "/diagram",
-    paletteTarget: '[data-mermaid-assist-target="palette"]',
+    controller: "mermaid-assist",
   }),
 ]);
 
@@ -102,7 +103,8 @@ export function mountEditActions({ field, getEditor, host = null, renderReferenc
   const owner = field.ownerDocument ?? document;
   const root = owner.createElement("div");
   root.className = "edit-actions";
-  const available = EDIT_TRIGGER_ACTIONS.filter((action) => field.querySelector(action.paletteTarget));
+  const bound = new Set((field.getAttribute("data-controller") ?? "").split(/\s+/).filter(Boolean));
+  const available = EDIT_TRIGGER_ACTIONS.filter((action) => bound.has(action.controller));
   const mediaButton = field.querySelector<HTMLElement>('[data-editor-view-target="mediaButton"]');
   const mediaOffered = mediaButton && !(mediaButton as HTMLButtonElement).disabled && !((mediaButton as HTMLElement).hidden);
   const rows = available.map((action) =>

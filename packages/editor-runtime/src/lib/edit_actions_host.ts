@@ -11,5 +11,12 @@ export function mountHostEditActions(
 ): EditActionsMount | null {
   const field = form.querySelector(".source-field") as HTMLElement | null
   if (!field) return null
+  // Presentation forms run both the document and presentation adapters;
+  // either may connect first, so the menu mount is idempotent (the loser
+  // returns a no-op mount whose dispose must not remove the shared root).
+  const existing = field.querySelector(".edit-actions") as HTMLElement | null
+  if (existing) {
+    return { root: existing, dispose() {} }
+  }
   return mountEditActions({ field, getEditor, host, renderReference: renderKeyboardReference })
 }

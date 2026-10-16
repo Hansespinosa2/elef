@@ -10,20 +10,11 @@ import {
 import { renderKeyboardReference } from "../src/features/shortcuts/keyboard_reference.js";
 import { SHORTCUT_ACTIONS } from "../src/features/shortcuts/shortcuts.js";
 
-function shell({ palettes = ["snippet", "link", "math", "diagram"], media = true } = {}) {
-  const paletteTargets: Record<string, string> = {
-    snippet: "snippet-palette",
-    link: "document-link-palette",
-    math: "math-shortcut-palette",
-    diagram: "mermaid-assist",
-  };
-  const paletteDivs = palettes
-    .map((id) => `<div data-${paletteTargets[id]}-target="palette" hidden></div>`)
-    .join("");
+function shell({ controllers = ["snippet-palette", "document-link-palette", "math-shortcut-palette", "mermaid-assist"], media = true } = {}) {
   const { document } = parseHTML(
-    `<form><div class="source-field"><div class="editor-toolbar"></div>` +
+    `<form><div class="source-field" data-controller="editor ${controllers.join(" ")}"><div class="editor-toolbar"></div>` +
       `<button type="button" data-editor-view-target="mediaButton"${media ? "" : " disabled"}>Add image</button>` +
-      `${paletteDivs}</div></form>`,
+      `</div></form>`,
   );
   return document.querySelector(".source-field") as HTMLElement;
 }
@@ -112,8 +103,8 @@ test("the menu lists every available trigger with its keyboard chip", () => {
   assert.equal(field.querySelector(".edit-actions"), null);
 });
 
-test("rows without a palette element stay out of the menu", () => {
-  const field = shell({ palettes: ["snippet"], media: false });
+test("rows without a bound controller stay out of the menu", () => {
+  const field = shell({ controllers: ["snippet-palette"], media: false });
   const { editor } = fakeEditor();
   const mounted = mountEditActions({ field, getEditor: () => editor, renderReference: renderKeyboardReference });
   assert.ok(mounted);
