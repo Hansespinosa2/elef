@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-
-echo "scripts/elef-agent is retired; run agents natively on Omarchy." >&2
-exit 64

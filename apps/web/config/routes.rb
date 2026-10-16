@@ -1,0 +1,72 @@
+Rails.application.routes.draw do
+  root "library#index"
+
+  post "bug_reports", to: "bug_reports#create", as: :bug_reports
+
+  resource :settings, only: %i[show update], controller: "workspace_settings"
+  get "search", to: "library#search", as: :search
+
+  namespace :api do
+    namespace :host do
+      resources :works, only: %i[index create show update destroy], controller: "/host_api" do
+        member do
+          patch :rename, to: "/host_api#rename"
+          get :media, to: "/host_api#media_index"
+          delete "media/:digest", to: "/host_api#media_destroy", as: :media_item
+        end
+      end
+      get :settings, to: "/host_api#settings_show"
+      patch :settings, to: "/host_api#settings_update"
+      post :imports, to: "/host_api#imports_create"
+    end
+  end
+
+  resources :snippets, except: :show
+  resources :math_shortcuts, except: :show
+
+  resources :presentations do
+    collection do
+      post :load_samples
+      post :start
+      post :preview
+      post :import
+      post :pptx, defaults: { format: :json }
+    end
+    member do
+      get :present
+      get :print
+      match :pptx, via: %i[get post], defaults: { format: :json }
+      post :upload_asset, path: "assets"
+      get "assets/*digest", action: :media_asset, as: :media_asset, format: false
+      get "pptx_assets/*digest", action: :pptx_asset, as: :pptx_asset, format: false
+      post :publish
+      post :restore
+      get :history
+      get :export
+      match :preview, via: %i[get post]
+      patch :rename
+      post :fork
+    end
+  end
+
+  resources :documents do
+    collection do
+      post :load_samples
+      post :start
+      post :preview
+      post :import
+    end
+    member do
+      post :upload_asset, path: "assets"
+      get "assets/*digest", action: :media_asset, as: :media_asset, format: false
+      get :print
+      post :restore
+      get :history
+      get :export
+      match :preview, via: %i[get post]
+      patch :rename
+    end
+  end
+
+  get "up" => "rails/health#show", as: :rails_health_check
+end

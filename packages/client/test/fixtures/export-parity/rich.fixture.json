@@ -1,0 +1,1 @@
+{"id":"rich","title":"Parity Probe","source":":::align{top right}\n# Compare\n\n## Left\n\nOne side.\n\n## Right\n\nThe other side.\n\n---\n\n# Data “Q3”\n\n| Name | Value |\n| ---- | ----- |\n| Alpha | 1 |\n\n```js\nconst x = 1;\n```\n\nMath: $\\bar{x}$ and $E = mc^2$.\n"}

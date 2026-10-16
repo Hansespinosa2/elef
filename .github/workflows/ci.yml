@@ -10,7 +10,54 @@ on:
 permissions:
   contents: read
 
+# A newer push supersedes older runs on the same PR branch: cancel the stale
+# run so rapid gate iteration does not stack multiple ~20 min desktop suites.
+# Pushes to dev/main never cancel (deployment authorization consumes them).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
+  plan:
+    name: CI plan (shadow)
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      affected: ${{ steps.plan.outputs.affected }}
+      suggested_skips: ${{ steps.plan.outputs.suggested_skips }}
+      enforced: ${{ steps.plan.outputs.enforced }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Compute the affected-job plan (shadow only, nothing is skipped)
+        id: plan
+        env:
+          ELEF_CI_PLAN_ENFORCE: "0"
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_ref="${{ github.base_ref }}"
+          else
+            base_ref="dev"
+          fi
+          git diff --name-only "origin/$base_ref...HEAD" > /tmp/elef-ci-diff.txt
+          python3 tooling/ci_affected.py --diff-file /tmp/elef-ci-diff.txt --format json --out plan.json
+          python3 tooling/ci_affected.py --diff-file /tmp/elef-ci-diff.txt --format table >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "affected=$(jq -c '.affected' plan.json)"
+            echo "suggested_skips=$(jq -c '.suggested_skips' plan.json)"
+            echo "enforced=false"
+          } >> "$GITHUB_OUTPUT"
+      - name: Preserve the CI plan
+        uses: actions/upload-artifact@v7
+        with:
+          name: ci-plan-run${{ github.run_id }}-attempt${{ github.run_attempt }}
+          path: plan.json
+          if-no-files-found: error
+          retention-days: 14
+
   desktop-fast:
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -24,27 +71,56 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            desktop/frontend/package-lock.json
+            apps/desktop/frontend/package-lock.json
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: desktop -> target
+          workspaces: . -> target
       - name: Install frontend dependencies
-        run: npm ci --prefix desktop/frontend
+        run: npm ci --prefix apps/desktop/frontend
       - name: Install Rails-owned frontend dependencies
         run: npm ci
       - name: Run the fast desktop unit tier
         run: |
+          # Three in-job lanes, longest-first: the Rust compile starts before
+          # the Node suites and the checker lane. Every command below keeps
+          # its exact string so the single-run test still matches each once.
           started=$SECONDS
-          npm run test:javascript
-          npm test --prefix desktop/frontend
-          npm run test:unit --prefix desktop/e2e
-          python3 script/check_frontend_ownership.py
-          python3 script/check_art_static.py
-          python3 script/check_art_traceability.py
-          cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked
+          lanes_dir="$(mktemp -d)"
+          trap 'rm -rf "$lanes_dir"' EXIT
+          run_lane() {
+            lane_name="$1"
+            lane_command="$2"
+            lane_started=$SECONDS
+            if bash -c "$lane_command" >"$lanes_dir/$lane_name.log" 2>&1; then
+              echo "lane $lane_name: OK in $((SECONDS - lane_started))s"
+            else
+              lane_status=$?
+              echo "lane $lane_name: FAILED (exit $lane_status) in $((SECONDS - lane_started))s"
+              return 1
+            fi
+          }
+          run_lane rust 'cargo test --manifest-path Cargo.toml -p local-store --locked' &
+          rust_pid=$!
+          run_lane node 'node --test tests/host-conformance/conformance-fake.test.js && npm run test:javascript && npm test --prefix apps/desktop/frontend && npm run test:unit --prefix apps/desktop/e2e && npm run test:arch-package' &
+          node_pid=$!
+          run_lane checkers './node_modules/.bin/tsc -p packages/contracts/tsconfig.test.json && npm run check:release-ci && python3 apps/web/script/check_frontend_ownership.py && python3 tooling/check_boundaries.py && python3 tooling/check_boundaries.py --self-test && python3 tooling/ci_affected.py --self-test && python3 tooling/ci_report.py --self-test' &
+          checkers_pid=$!
+          lane_failed=0
+          wait "$rust_pid" || lane_failed=1
+          wait "$node_pid" || lane_failed=1
+          wait "$checkers_pid" || lane_failed=1
+          if [[ "$lane_failed" != 0 ]]; then
+            for lane_log in "$lanes_dir"/*.log; do
+              echo "--- $lane_log (last 60 lines)"
+              tail -n 60 "$lane_log"
+              echo "--- $lane_log failing lines (TAP not-ok, cargo failures, error lines)"
+              grep -a -E "^[[:space:]]*not ok |^test .* FAILED|^test result: FAILED|^failures:$| FAILED |^Traceback|^.*Error: | error TS|npm error" "$lane_log" | head -n 40 || true
+            done
+          fi
+          test "$lane_failed" -eq 0
           elapsed=$((SECONDS - started))
           echo "Fast desktop test tier: ${elapsed}s (budget: 300s)"
           test "$elapsed" -lt 300
@@ -58,8 +134,10 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          working-directory: apps/web
           bundler-cache: true
       - name: Scan for known security vulnerabilities in gems used
+        working-directory: apps/web
         run: bin/bundler-audit
 
   scan_js:
@@ -71,8 +149,10 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          working-directory: apps/web
           bundler-cache: true
       - name: Scan for security vulnerabilities in JavaScript dependencies
+        working-directory: apps/web
         run: bin/importmap audit
 
   test:
@@ -93,11 +173,13 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          working-directory: apps/web
           bundler-cache: true
       - name: Build Tailwind CSS
+        working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Verify the shared Tailwind artifact is current
-        run: git diff --exit-code -- app/assets/builds/tailwind.css
+        run: git diff --exit-code -- apps/web/app/assets/builds/tailwind.css
       - name: Run tests
         env:
           RAILS_ENV: test
@@ -105,19 +187,16 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
+        working-directory: apps/web
         run: bin/rails db:test:prepare test
-      - name: Run deterministic JavaScript unit tests
-        run: |
-          node test/javascript/bug_report_events.test.mjs
-          node --test test/javascript/document_link_palette.test.mjs test/javascript/editor_markdown_math.test.mjs test/javascript/math_shorthand.test.mjs test/javascript/mermaid_syntax.test.mjs test/javascript/mermaid_runtime.test.mjs test/javascript/media_transfer.test.mjs test/javascript/pptx_export.test.mjs
       - name: Check repository launchers and deployment files
         run: |
-          bash test/scripts/elef-agent_test.sh
-          bash test/scripts/personal_instance_test.sh
-          bash test/scripts/development_instance_test.sh
-          bash test/scripts/deployment_ref_monotonicity_test.sh
-          bash test/scripts/deployment_authorization_test.sh
-          ruby test/scripts/ci_single_run_test.rb
+          bash apps/web/test/scripts/personal_instance_test.sh
+          bash apps/web/test/scripts/development_instance_test.sh
+          bash apps/web/test/scripts/deployment_ref_monotonicity_test.sh
+          bash apps/web/test/scripts/deployment_authorization_test.sh
+          bash apps/web/test/scripts/promote_dev_to_main_test.sh
+          ruby apps/web/test/scripts/ci_single_run_test.rb
 
   sqlite-test:
     if: github.event_name != 'push'
@@ -128,14 +207,19 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          working-directory: apps/web
           bundler-cache: true
       - name: Build Tailwind CSS
+        working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Run SQLite compatibility tests
         env:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
-        run: bin/rails db:test:prepare test
+        working-directory: apps/web
+        run: |
+          bin/rails db:test:prepare
+          bin/rails test test/sqlite_compatibility_test.rb
 
   system-test:
     if: github.event_name != 'push'
@@ -155,9 +239,19 @@ jobs:
       - name: Set up Ruby
         uses: ruby/setup-ruby@v1
         with:
+          working-directory: apps/web
           bundler-cache: true
       - name: Build Tailwind CSS
+        working-directory: apps/web
         run: bin/rails tailwindcss:build
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
       - name: Run System Tests
         env:
           RAILS_ENV: test
@@ -166,20 +260,40 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
+        working-directory: apps/web
         run: |
           bin/rails db:test:prepare
           bin/rails test test/system
+      - name: Run rails-backed contract conformance
+        env:
+          RAILS_ENV: test
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGTESTDATABASE: elef_test
+          ELEF_CONFORMANCE_RAILS_URL: http://127.0.0.1:3101
+        run: |
+          apps/web/bin/rails server -e test -p 3101 -b 127.0.0.1 -P tmp/pids/conformance-server.pid &
+          for attempt in $(seq 1 60); do
+            curl --silent --output /dev/null http://127.0.0.1:3101/ && break
+            sleep 2
+          done
+          curl --silent --output /dev/null http://127.0.0.1:3101/
+          node tests/host-conformance/run-node.js rails
+          kill "$(cat apps/web/tmp/pids/conformance-server.pid)"
       - name: Keep screenshots from failed system tests
         uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: screenshots
-          path: ${{ github.workspace }}/tmp/screenshots
+          path: ${{ github.workspace }}/apps/web/tmp/screenshots
           if-no-files-found: ignore
 
   desktop:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # The Stable and identity smokes added full binary builds to this job;
+    # 60 matches the arch-package job's budget for the longer suite.
+    timeout-minutes: 60
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -190,8 +304,8 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            desktop/frontend/package-lock.json
-            desktop/e2e/package-lock.json
+            apps/desktop/frontend/package-lock.json
+            apps/desktop/e2e/package-lock.json
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -200,99 +314,150 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: .ruby-version
+          working-directory: apps/web
           bundler-cache: true
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: desktop -> target
+          workspaces: . -> target
       - name: Install Linux desktop build dependencies
+        # Fail fast on a sick package mirror: a wedged apt must not burn the
+        # whole job budget silently (each runner is ephemeral, so a killed apt
+        # leaves nothing behind for the retry).
         run: |
-          sudo apt-get update
-          sudo apt-get install --yes build-essential curl dbus-daemon file iptables libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf unzip webkit2gtk-driver wget xdotool xvfb zip
+          timeout 600 sudo apt-get update
+          timeout 900 sudo apt-get install --yes build-essential curl dbus-daemon file iproute2 iptables libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev openbox patchelf unzip webkit2gtk-driver wget xdotool xvfb zip
       - name: Install frontend dependencies
-        run: npm ci --prefix desktop/frontend
+        run: npm ci --prefix apps/desktop/frontend
       - name: Install Rails-owned frontend dependencies
         run: npm ci
       - name: Install shared scenario dependencies
-        run: npm ci --prefix desktop/e2e
+        run: npm ci --prefix apps/desktop/e2e
       - name: Audit desktop JavaScript dependencies
         run: |
           npm audit --audit-level=high
-          npm audit --prefix desktop/frontend --audit-level=high
-          npm audit --prefix desktop/e2e --audit-level=high
+          npm audit --prefix apps/desktop/frontend --audit-level=high
+          npm audit --prefix apps/desktop/e2e --audit-level=high
+      - name: Cache the pinned Cargo audit binary
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-audit
+          key: cargo-audit-0.22.2-${{ runner.os }}
       - name: Install pinned Cargo audit tool
-        run: cargo install cargo-audit --version 0.22.2 --locked
+        run: |
+          if cargo-audit --version 2>/dev/null | grep -q '0\.22\.2'; then
+            echo "Reusing cached cargo-audit 0.22.2"
+          else
+            cargo install cargo-audit --version 0.22.2 --locked
+          fi
       - name: Audit desktop Rust dependencies
         # R13 (Andres; review/expiry 2026-12-01): fxhash via Tauri selector (RUSTSEC-2025-0057),
         # proc-macro-error and glib via GTK 0.18 (RUSTSEC-2024-0370, RUSTSEC-2024-0429),
         # and rand via Tauri selector (RUSTSEC-2026-0097). Remove each ignore when updated.
-        run: cargo audit --file desktop/Cargo.lock --deny warnings --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2024-0429 --ignore RUSTSEC-2026-0097
+        run: cargo audit --file Cargo.lock --deny warnings --ignore RUSTSEC-2025-0057 --ignore RUSTSEC-2024-0370 --ignore RUSTSEC-2024-0429 --ignore RUSTSEC-2026-0097
       - name: Build Rails Tailwind stylesheet
+        working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Verify the Rails Tailwind artifact is current
-        run: git diff --exit-code -- app/assets/builds/tailwind.css
-      - name: Build the Rails-owned renderer
+        run: git diff --exit-code -- apps/web/app/assets/builds/tailwind.css
+      - name: Build the shared renderer
         run: npm run renderer:build
-      - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
-      - name: Test Rails-owned frontend modules
-        run: npm run test:javascript
-      - name: Test desktop frontend adapters
-        run: npm test --prefix desktop/frontend
+      - name: Verify the shared renderer bundles are current
+        run: git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js
+      - name: Build the profile-split shared packages
+        # Freshness of the tracked bundles is enforced by the affected job's
+        # bin/check run; these builds regenerate the ignored metafiles the
+        # Stable/Dev profile gate reads.
+        run: |
+          npm run build --prefix packages/client
+          npm run build --prefix packages/work-model
+          npm run build --prefix packages/editor-runtime
       - name: Bundle the desktop frontend
-        run: npm run build --prefix desktop/frontend
+        run: npm run build --prefix apps/desktop/frontend
+      - name: Bundle the Dev desktop frontend
+        run: npm run build --prefix apps/desktop/frontend -- --profile=dev
       - name: Check command allowlist and CSP
         run: |
-          python3 desktop/scripts/check_architecture.py
-          python3 script/check_frontend_ownership.py
+          python3 apps/desktop/scripts/check_architecture.py
+          python3 apps/web/script/check_frontend_ownership.py
+      - name: Check release profiles and fixtures
+        run: |
+          npm run check:desktop-profiles
+          npm run check:release-fixtures
       - name: Check Rust formatting
-        run: cargo fmt --manifest-path desktop/Cargo.toml --all -- --check
+        run: cargo fmt --manifest-path Cargo.toml --all -- --check
       - name: Lint desktop Rust workspace
-        run: cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings
+        run: cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
       - name: Test desktop Rust workspace
-        run: cargo test --manifest-path desktop/Cargo.toml --workspace
+        run: cargo test --manifest-path Cargo.toml --workspace --locked
       - name: Prepare the isolated Rails E2E database
         env:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
+        working-directory: apps/web
         run: bin/rails db:test:prepare
-      - name: Install headless browser and system dependencies
-        run: npx --prefix desktop/e2e playwright install --with-deps chromium
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          # Playwright browsers are pinned by @playwright/test in
+          # apps/desktop/e2e/package-lock.json; the lockfile hash is the key.
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/desktop/e2e/package-lock.json') }}
+      - name: Install browser operating-system dependencies
+        run: npx --prefix apps/desktop/e2e playwright install-deps chromium
+      - name: Install headless browser
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx --prefix apps/desktop/e2e playwright install chromium
       - name: Build test-only N-1 and N desktop updater packages
-        run: node desktop/e2e/build-update-fixtures.mjs
+        run: node apps/desktop/e2e/build-update-fixtures.mjs
       - name: Run shared scenarios with external network blocked
+        # No ELEF_E2E_PACKAGED_UPDATES: Linux upgrades through its package
+        # manager and never self-installs, and its e2e binary builds without
+        # install fixtures; packaged-update coverage is macOS-only.
         env:
-          ELEF_E2E_PACKAGED_UPDATES: "1"
           CI: "true"
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
         # Tauri's Linux single-instance plugin uses a user D-Bus name.
+        # The offline block lives in a network namespace around ONLY the test
+        # process tree: a runner-wide iptables REJECT also blinds the Actions
+        # runner agent's own control plane, and GitHub reaps jobs whose runner
+        # goes dark. The agent stays connected; the suite stays provably
+        # offline behind the same curl proof, with loopback up for the
+        # in-namespace WebDriver traffic. Privileges drop back to the job user
+        # before the suite runs so every file stays job-user-owned
+        # (supplementary groups are cleared; the suite uses none).
         run: |
-          restore_firewall() {
-            sudo iptables -D OUTPUT -o lo -j ACCEPT 2>/dev/null || true
-            sudo iptables -D OUTPUT ! -o lo -j REJECT 2>/dev/null || true
-            sudo ip6tables -D OUTPUT -o lo -j ACCEPT 2>/dev/null || true
-            sudo ip6tables -D OUTPUT ! -o lo -j REJECT 2>/dev/null || true
-          }
-          trap restore_firewall EXIT
-          sudo iptables -I OUTPUT 1 -o lo -j ACCEPT
-          sudo iptables -I OUTPUT 2 ! -o lo -j REJECT
-          sudo ip6tables -I OUTPUT 1 -o lo -j ACCEPT
-          sudo ip6tables -I OUTPUT 2 ! -o lo -j REJECT
-          if curl --noproxy '*' --silent --fail --max-time 3 https://example.com >/dev/null; then
-            echo "External network remained reachable during the offline desktop scenario run"
-            exit 1
-          fi
-          dbus-run-session -- xvfb-run --auto-servernum bash -c 'set -o pipefail; openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix desktop/e2e 2>&1 | tee desktop/e2e/native-scenarios.log'
+          export E2E_UID E2E_GID
+          E2E_UID=$(id -u)
+          E2E_GID=$(id -g)
+          env -0 > /tmp/elef-e2e-step-env
+          sudo unshare --net bash -c '
+            ip link set lo up || exit 1
+            while IFS= read -r -d "" entry; do export "$entry"; done < /tmp/elef-e2e-step-env
+            if curl --noproxy "*" --silent --fail --max-time 3 https://example.com >/dev/null; then
+              echo "External network remained reachable during the offline desktop scenario run"
+              exit 1
+            fi
+            if ! python3 -c "import socket; listener = socket.socket(); listener.bind((\"127.0.0.1\", 0)); listener.listen(1); socket.create_connection(listener.getsockname(), timeout=3)"; then
+              echo "Loopback is unavailable inside the offline network namespace"
+              exit 1
+            fi
+            exec setpriv --reuid "$E2E_UID" --regid "$E2E_GID" --clear-groups \
+              dbus-run-session -- xvfb-run --auto-servernum bash -c "set -o pipefail; openbox --sm-disable >/tmp/elef-e2e-openbox.log 2>&1 & sleep 1; npm test --prefix apps/desktop/e2e 2>&1 | tee apps/desktop/e2e/native-scenarios.log"
+          '
       - name: Summarize failed Linux desktop scenarios
         if: failure()
         shell: bash
         run: |
-          if [[ -f desktop/e2e/native-scenarios.log ]]; then
+          if [[ -f apps/desktop/e2e/native-scenarios.log ]]; then
             {
               echo "### Linux desktop scenario output (last 120 lines)"
               echo '```text'
-              tail -n 120 desktop/e2e/native-scenarios.log
+              tail -n 120 apps/desktop/e2e/native-scenarios.log
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -302,26 +467,99 @@ jobs:
         with:
           name: desktop-e2e-linux-diagnostics
           path: |
-            desktop/e2e/native-scenarios.log
-            desktop/e2e/logs
-            desktop/e2e/test-results
-            desktop/e2e/playwright-report
+            apps/desktop/e2e/native-scenarios.log
+            apps/desktop/e2e/logs
+            apps/desktop/e2e/test-results
+            apps/desktop/e2e/playwright-report
           if-no-files-found: ignore
-      - name: Build the release binary for native performance measurements
+      - name: Build Linux desktop package
+        run: npm run tauri:build --prefix apps/desktop/frontend
+
+  affected:
+    if: github.event_name != 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
         env:
-          ELEF_E2E_BUILD: "1"
-        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
-      - name: Record hosted Linux release performance over 20 fresh processes
-        run: dbus-run-session -- xvfb-run --auto-servernum bash -c 'openbox --sm-disable >/tmp/elef-performance-openbox.log 2>&1 & sleep 1; node desktop/e2e/benchmark-native.mjs --binary "$PWD/desktop/target/release/elef-desktop" --report-runner'
-      - name: Preserve native Linux performance samples
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: elef_test
+        ports:
+          - 5432:5432
+        options: --health-cmd "pg_isready -U postgres -d elef_test" --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            apps/desktop/frontend/package-lock.json
+            apps/desktop/e2e/package-lock.json
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: .ruby-version
+          working-directory: apps/web
+          bundler-cache: true
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: . -> target
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes build-essential curl file libayatana-appindicator3-dev libdbus-1-dev libgtk-3-dev librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev patchelf unzip wget zip
+      - name: Install frontend dependencies
+        run: |
+          npm ci
+          npm ci --prefix apps/desktop/frontend
+          npm ci --prefix apps/desktop/e2e
+      - name: Run the affected tier with its time ceiling
+        env:
+          RAILS_ENV: test
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          PGPASSWORD: postgres
+          PGTESTDATABASE: elef_test
+        run: bin/check affected
+
+  arch-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Build and validate the Arch package in an official Arch container
+        env:
+          ELEF_BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          mkdir -p target
+          docker run --rm --pull=always \
+            --platform linux/amd64 \
+            --volume "$GITHUB_WORKSPACE:/workspace" \
+            --workdir /workspace \
+            --env ELEF_BUILD_SHA \
+            ghcr.io/archlinux/archlinux@sha256:c556b483a8e653aa6389bb66263e1d96cd6e17c67ca5968c87495d313c4a2e93 \
+            bash apps/desktop/scripts/arch_package_ci.sh 2>&1 | tee target/arch-package-gate.log
+      - name: Preserve Arch package evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: native-performance-linux
-          path: desktop/target/native-performance-linux.json
-          if-no-files-found: warn
-      - name: Build Linux desktop package
-        run: npm run tauri:build --prefix desktop/frontend
+          name: arch-package-gate
+          path: |
+            target/arch-release/*
+            target/arch-package-gate.log
+          if-no-files-found: ignore
 
   desktop-macos:
     runs-on: macos-15
@@ -336,8 +574,8 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            desktop/frontend/package-lock.json
-            desktop/e2e/package-lock.json
+            apps/desktop/frontend/package-lock.json
+            apps/desktop/e2e/package-lock.json
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -346,74 +584,99 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: .ruby-version
+          working-directory: apps/web
           bundler-cache: true
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: desktop -> target
+          workspaces: . -> target
       - name: Install frontend dependencies
-        run: npm ci --prefix desktop/frontend
+        run: npm ci --prefix apps/desktop/frontend
       - name: Install Rails-owned frontend dependencies
         run: npm ci
       - name: Install shared scenario dependencies
-        run: npm ci --prefix desktop/e2e
+        run: npm ci --prefix apps/desktop/e2e
       - name: Audit desktop JavaScript dependencies
         run: |
           npm audit --audit-level=high
-          npm audit --prefix desktop/frontend --audit-level=high
-          npm audit --prefix desktop/e2e --audit-level=high
+          npm audit --prefix apps/desktop/frontend --audit-level=high
+          npm audit --prefix apps/desktop/e2e --audit-level=high
       - name: Build Rails Tailwind stylesheet
+        working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Verify the Rails Tailwind artifact is current
-        run: git diff --exit-code -- app/assets/builds/tailwind.css
-      - name: Build the Rails-owned renderer
+        run: git diff --exit-code -- apps/web/app/assets/builds/tailwind.css
+      - name: Build the shared renderer
         run: npm run renderer:build
-      - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
-      - name: Test Rails-owned frontend modules
-        run: npm run test:javascript
-      - name: Test desktop frontend adapters
-        run: npm test --prefix desktop/frontend
+      - name: Verify the shared renderer bundles are current
+        run: git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js
+      - name: Build the profile-split shared packages
+        # Freshness of the tracked bundles is enforced by the affected job's
+        # bin/check run; these builds regenerate the ignored metafiles the
+        # Stable/Dev profile gate reads.
+        run: |
+          npm run build --prefix packages/client
+          npm run build --prefix packages/work-model
+          npm run build --prefix packages/editor-runtime
       - name: Bundle the desktop frontend
-        run: npm run build --prefix desktop/frontend
+        run: npm run build --prefix apps/desktop/frontend
+      - name: Bundle the Dev desktop frontend
+        run: npm run build --prefix apps/desktop/frontend -- --profile=dev
       - name: Check command allowlist and CSP
         run: |
-          python3 desktop/scripts/check_architecture.py
-          python3 script/check_frontend_ownership.py
+          python3 apps/desktop/scripts/check_architecture.py
+          python3 apps/web/script/check_frontend_ownership.py
+      - name: Check release profiles and fixtures
+        run: |
+          npm run check:desktop-profiles
+          npm run check:release-fixtures
       - name: Check Rust formatting
-        run: cargo fmt --manifest-path desktop/Cargo.toml --all -- --check
+        run: cargo fmt --manifest-path Cargo.toml --all -- --check
       - name: Lint desktop Rust workspace
-        run: cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings
+        run: cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
       - name: Test desktop Rust workspace
-        run: cargo test --manifest-path desktop/Cargo.toml --workspace
+        run: cargo test --manifest-path Cargo.toml --workspace
       - name: Prepare the isolated Rails E2E database
         env:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
+        working-directory: apps/web
         run: bin/rails db:test:prepare
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          # Playwright browsers are pinned by @playwright/test in
+          # apps/desktop/e2e/package-lock.json; the lockfile hash is the key.
+          path: |
+            ~/.cache/ms-playwright
+            ~/Library/Caches/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('apps/desktop/e2e/package-lock.json') }}
       - name: Install headless web browser
-        run: npx --prefix desktop/e2e playwright install chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx --prefix apps/desktop/e2e playwright install chromium
       - name: Build test-only N-1 and N desktop updater packages
-        run: node desktop/e2e/build-update-fixtures.mjs
-      - name: Run shared web and desktop scenarios
+        run: node apps/desktop/e2e/build-update-fixtures.mjs
+      - name: Run macOS native and updater scenarios after shared web parity
         env:
           ELEF_E2E_PACKAGED_UPDATES: "1"
           CI: "true"
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
           ELEF_E2E_OFFLINE: "1"
+          ELEF_E2E_SKIP_WEB: "1"
         run: |
           set -o pipefail
-          npm test --prefix desktop/e2e 2>&1 | tee desktop/e2e/native-scenarios.log
+          npm test --prefix apps/desktop/e2e 2>&1 | tee apps/desktop/e2e/native-scenarios.log
       - name: Summarize failed macOS desktop scenarios
         if: failure()
         shell: bash
         run: |
-          if [[ -f desktop/e2e/native-scenarios.log ]]; then
+          if [[ -f apps/desktop/e2e/native-scenarios.log ]]; then
             {
               echo "### macOS desktop scenario output (last 120 lines)"
               echo '```text'
-              tail -n 120 desktop/e2e/native-scenarios.log
+              tail -n 120 apps/desktop/e2e/native-scenarios.log
               echo '```'
             } >> "$GITHUB_STEP_SUMMARY"
           fi
@@ -423,28 +686,13 @@ jobs:
         with:
           name: desktop-e2e-macos-diagnostics
           path: |
-            desktop/e2e/native-scenarios.log
-            desktop/e2e/logs
-            desktop/e2e/test-results
-            desktop/e2e/playwright-report
+            apps/desktop/e2e/native-scenarios.log
+            apps/desktop/e2e/logs
+            apps/desktop/e2e/test-results
+            apps/desktop/e2e/playwright-report
           if-no-files-found: ignore
-      - name: Build the release binary for native performance measurements
-        env:
-          ELEF_E2E_BUILD: "1"
-        run: npm run tauri:build --prefix desktop/frontend -- --features webdriver --no-bundle --config src-tauri/tauri.e2e.conf.json --config src-tauri/tauri.performance.conf.json
-      - name: Record hosted macOS release performance over 20 fresh processes
-        env:
-          ELEF_E2E_OFFLINE: "1"
-        run: node desktop/e2e/benchmark-native.mjs --binary "$PWD/desktop/target/release/elef-desktop" --report-runner
-      - name: Preserve native macOS performance samples
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: native-performance-darwin
-          path: desktop/target/native-performance-darwin.json
-          if-no-files-found: warn
       - name: Build Apple Silicon desktop package
-        run: npm run tauri:build --prefix desktop/frontend -- --bundles app,dmg
+        run: npm run tauri:build --prefix apps/desktop/frontend -- --bundles app,dmg
 
   renderer-macos:
     runs-on: macos-15
@@ -456,6 +704,7 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: .ruby-version
+          working-directory: apps/web
           bundler-cache: true
       - name: Set up Node
         uses: actions/setup-node@v7
@@ -468,12 +717,13 @@ jobs:
       - name: Build the shared renderer bundle
         run: |
           npm run renderer:build
-      - name: Verify the Rails renderer bundle is current
-        run: git diff --exit-code -- vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
+      - name: Verify the shared renderer bundles are current
+        run: git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js
       - name: Exercise Rails rendering on Apple Silicon macOS
         env:
           RAILS_ENV: test
           ELEF_USE_SQLITE: "1"
+        working-directory: apps/web
         run: |
           bin/rails db:test:prepare
           bin/rails test test/lib/source/renderer_test.rb test/lib/source/javascript_renderer_test.rb test/lib/authoring_registry_test.rb test/models/presentation_test.rb test/services/presentations/pptx_export_test.rb
@@ -487,13 +737,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
       - name: Validate production Compose configuration
-        run: docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml config --quiet
+        run: docker compose --project-name elef-ci --env-file ops/.env.personal.example --file ops/compose.personal.yml config --quiet
       - name: Build production image
-        run: docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml build web
+        run: docker compose --project-name elef-ci --env-file ops/.env.personal.example --file ops/compose.personal.yml build web
       - name: Boot and smoke-test production stack
         run: |
           set -euo pipefail
-          compose=(docker compose --project-name elef-ci --env-file .env.personal.example --file compose.personal.yml)
+          compose=(docker compose --project-name elef-ci --env-file ops/.env.personal.example --file ops/compose.personal.yml)
           cleanup() {
             "${compose[@]}" down -v --remove-orphans
           }
@@ -520,13 +770,13 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
       - name: Validate development Compose configuration
-        run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml config --quiet
+        run: docker compose --project-name elef-development-ci --env-file ops/.env.development.example --file ops/compose.development.yml config --quiet
       - name: Build development image
-        run: docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml build web
+        run: docker compose --project-name elef-development-ci --env-file ops/.env.development.example --file ops/compose.development.yml build web
       - name: Prepare and smoke-test development stack
         run: |
           set -euo pipefail
-          compose=(docker compose --project-name elef-development-ci --env-file .env.development.example --file compose.development.yml)
+          compose=(docker compose --project-name elef-development-ci --env-file ops/.env.development.example --file ops/compose.development.yml)
           cleanup() {
             "${compose[@]}" down -v --remove-orphans
           }
@@ -535,9 +785,69 @@ jobs:
           "${compose[@]}" run --rm --no-deps web bin/rails db:prepare
           "${compose[@]}" run --rm --no-deps web bin/rails runner 'abort "wrong Rails environment" unless Rails.env.development?; abort "wrong database adapter" unless ActiveRecord::Base.connection.adapter_name == "PostgreSQL"; storage = Rails.root.join("storage"); probe = storage.join(".write-check"); File.write(probe, "ok"); File.delete(probe); puts "development smoke ok"'
 
+  ci-gate:
+    name: CI result matrix (informational)
+    needs: [ plan, desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, affected, desktop, arch-package, desktop-macos, renderer-macos, production-smoke, development-smoke ]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Publish the ran/skipped matrix to the run summary
+        run: |
+          {
+            echo "## CI result matrix"
+            echo ""
+            echo "| Job | Result | Shadow suggested skip? |"
+            echo "|---|---|---|"
+            echo "| plan | ${{ needs.plan.result }} | - |"
+            echo "| desktop-fast | ${{ needs.desktop-fast.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"desktop-fast"') }} |"
+            echo "| scan_ruby | ${{ needs.scan_ruby.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"scan_ruby"') }} |"
+            echo "| scan_js | ${{ needs.scan_js.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"scan_js"') }} |"
+            echo "| test | ${{ needs.test.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"test"') }} |"
+            echo "| sqlite-test | ${{ needs.sqlite-test.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"sqlite-test"') }} |"
+            echo "| system-test | ${{ needs.system-test.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"system-test"') }} |"
+            echo "| affected | ${{ needs.affected.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"affected"') }} |"
+            echo "| desktop | ${{ needs.desktop.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"desktop"') }} |"
+            echo "| arch-package | ${{ needs.arch-package.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"arch-package"') }} |"
+            echo "| desktop-macos | ${{ needs.desktop-macos.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"desktop-macos"') }} |"
+            echo "| renderer-macos | ${{ needs.renderer-macos.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"renderer-macos"') }} |"
+            echo "| production-smoke | ${{ needs.production-smoke.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"production-smoke"') }} |"
+            echo "| development-smoke | ${{ needs.development-smoke.result }} | ${{ contains(needs.plan.outputs.suggested_skips, '"development-smoke"') }} |"
+            echo ""
+            echo "Plan enforcement: ${{ needs.plan.outputs.enforced || 'n/a (push event)' }} (v0 shadow: nothing is skipped)"
+            echo "Run: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  release-gate:
+    name: Desktop release Gate A
+    needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, affected, desktop, arch-package, desktop-macos, renderer-macos, production-smoke, development-smoke ]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out the exact gated test candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Re-verify the Gate A wiring and record the source SHA
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        run: |
+          node apps/desktop/scripts/check_release_ci.mjs
+          echo "Gate A passed for SHA ${SOURCE_SHA}."
+          {
+            echo "## Desktop release Gate A"
+            echo "- Source SHA: \`${SOURCE_SHA}\`"
+            echo "- All required Rails, desktop, renderer, Arch package, and deployment smoke jobs passed on this run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
   record-ci-attestation:
     if: github.event_name == 'pull_request'
-    needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, desktop, desktop-macos, renderer-macos, production-smoke, development-smoke ]
+    needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, affected, desktop, desktop-macos, renderer-macos, production-smoke, development-smoke ]
     runs-on: ubuntu-latest
     steps:
       - name: Check out the exact pull request test candidate
@@ -550,13 +860,19 @@ jobs:
           WORKFLOW_RUN_ID: ${{ github.run_id }}
           WORKFLOW_RUN_ATTEMPT: ${{ github.run_attempt }}
         run: |
+          required_jobs='["desktop-fast","scan_ruby","scan_js","test","sqlite-test","system-test","desktop","desktop-macos","renderer-macos","production-smoke","development-smoke"]'
+          plan='{"mode":"shadow","enforced":false,"planner":"tooling/ci_affected.py"}'
           jq -n \
+            --argjson schema_version 3 \
             --argjson pr_number "$PR_NUMBER" \
             --argjson workflow_run_id "$WORKFLOW_RUN_ID" \
             --argjson run_attempt "$WORKFLOW_RUN_ATTEMPT" \
+            --argjson required_jobs "$required_jobs" \
+            --argjson non_gating_measurements '["native-performance"]' \
+            --argjson plan "$plan" \
             --arg tested_sha "$GITHUB_SHA" \
             --arg tested_tree "$(git rev-parse "$GITHUB_SHA^{tree}")" \
-            '{pr_number: $pr_number, workflow_run_id: $workflow_run_id, run_attempt: $run_attempt, tested_sha: $tested_sha, tested_tree: $tested_tree}' \
+            '{schema_version: $schema_version, pr_number: $pr_number, workflow_run_id: $workflow_run_id, run_attempt: $run_attempt, required_jobs: $required_jobs, non_gating_measurements: $non_gating_measurements, plan: $plan, tested_sha: $tested_sha, tested_tree: $tested_tree}' \
             > deployment-attestation.json
       - name: Upload the deployment attestation
         uses: actions/upload-artifact@v7
@@ -585,11 +901,11 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: true
-      - name: Verify the merged PR's seven CI checks and tested tree
+      - name: Verify the merged PR's eleven CI checks and tested tree
         env:
           DEPLOYMENT_REMOTE: origin
-        run: scripts/verify-deployment-authorization
+        run: tooling/release/verify-deployment-authorization
       - name: Publish the CI-approved deployment ref
         env:
           DEPLOYMENT_REMOTE: origin
-        run: scripts/publish-deployment-ref
+        run: tooling/release/publish-deployment-ref

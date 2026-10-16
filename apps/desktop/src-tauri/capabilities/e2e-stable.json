@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "e2e-stable-webdriver",
+  "description": "Capabilities for the Stable end-to-end WebDriver binary.",
+  "windows": [
+    "main"
+  ],
+  "platforms": [
+    "linux",
+    "windows",
+    "macOS"
+  ],
+  "permissions": [
+    "core:default",
+    "core:window:allow-set-fullscreen",
+    "core:app:allow-version",
+    "allow-export-diagnostics-fixture"
+  ]
+}

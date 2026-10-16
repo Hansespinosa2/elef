@@ -1,0 +1,71 @@
+{
+  "dependencies": {
+    "@elef/contracts": "0.1.0",
+    "@elef/renderer": "0.1.0",
+    "@elef/work-model": "0.1.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "description": "Complete host-neutral interactive Elef application: application shell, feature workflows, session coordination, UI primitives. Reaches environments only through @elef/contracts ports. No Rails/Tauri/filesystem/ActiveRecord knowledge, no host-name branching.",
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./dist/elef-client.js"
+    },
+    "./preview-core": {
+      "types": "./src/features/library/preview-core.ts",
+      "default": "./dist/preview-core.js"
+    },
+    "./vim-preferences": {
+      "types": "./src/features/settings/vimPreferences.ts",
+      "default": "./dist/vim-preferences.js"
+    },
+    "./shortcuts": {
+      "types": "./src/features/shortcuts/shortcuts.ts",
+      "default": "./dist/shortcuts.js"
+    },
+    "./sanitize": {
+      "types": "./src/ui/sanitize.ts",
+      "default": "./dist/sanitize.js"
+    },
+    "./port-session": {
+      "types": "./src/session/port_session.ts",
+      "default": "./dist/port-session.js"
+    },
+    "./presentation-chrome": {
+      "types": "./src/features/presentation/chrome.ts",
+      "default": "./dist/presentation-chrome.js"
+    },
+    "./pptx-test-internals": {
+      "types": "./src/pptx-test-internals.ts",
+      "default": "./dist/pptx-test-internals.js"
+    },
+    "./pptx-model": {
+      "types": "./src/features/export/pptx_model.ts",
+      "default": "./dist/pptx-model.js"
+    },
+    "./pptx-engine": {
+      "types": "./src/features/export/pptx_engine.ts",
+      "default": "./dist/pptx-engine.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "name": "@elef/client",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node run-tests.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.test.json"
+  },
+  "type": "module",
+  "types": "./src/index.ts",
+  "version": "0.1.0"
+}
