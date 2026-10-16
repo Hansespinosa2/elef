@@ -1,9 +1,11 @@
 import { Controller } from "@hotwired/stimulus"
 import { syntaxTree } from "@codemirror/language"
 import { editorFor } from "../lib/editor_controller_lookup.js"
+import { editorPopupOpen } from "../lib/vim_escape.js"
 
 export interface MathShorthandKeyEvent extends KeyboardEvent {
   elefMathShorthandHandled?: boolean;
+  elefEscapeForwarded?: boolean;
 }
 
 export interface MathShorthandInvalid {
@@ -888,9 +890,18 @@ export default class extends Controller<HTMLElement> {
 
     if (event.key === "Escape" && collapsed) {
       const chain = mathShorthandAtEditor(editor, caret)
-      if (chain?.status === "valid") {
+      const valid = chain?.status === "valid" ? chain : null
+      if (event.elefEscapeForwarded || (valid && editorPopupOpen(editor))) {
+        // A fuzzy popup is open on this same keypress: its handler closes the
+        // popup and forwards one Escape to Vim. Drop the pending transform
+        // without swallowing the event so a single Escape still reaches
+        // Normal mode.
+        if (valid) this.cancelChain(valid)
+        return
+      }
+      if (valid) {
         event.preventDefault()
-        this.cancelChain(chain)
+        this.cancelChain(valid)
       }
       return
     }

@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { editorFor } from "../lib/editor_controller_lookup.js";
+import { forwardEscapeToVim } from "../lib/vim_escape.js";
 import { editorInsideCode, editorInsideMath } from "./math_shorthand_controller.js";
 import { authoringRegistryFor } from "./authoring_registry.js";
 import { snippetStopsEffect } from "./snippet_stops.js";
@@ -139,6 +140,7 @@ class snippet_palette_controller_default extends Controller {
       event.preventDefault();
       this.close();
       if (this.stops.length) this.endStops();
+      forwardEscapeToVim(editor, event);
     } else {
       queueMicrotask(() => this.refresh());
     }

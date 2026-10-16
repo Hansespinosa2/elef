@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { editorFor } from "../lib/editor_controller_lookup.js";
+import { forwardEscapeToVim } from "../lib/vim_escape.js";
 import { diagramTemplate, mermaidCompletion, mermaidEnterEdit, mermaidTabEdit, MERMAID_DIAGRAMS, slashDiagramQuery } from "./mermaid_syntax.js";
 class mermaid_assist_controller_default extends Controller {
   static targets = ["palette"];
@@ -132,6 +133,7 @@ class mermaid_assist_controller_default extends Controller {
         event.preventDefault();
         event.stopPropagation();
         this.close();
+        forwardEscapeToVim(editor, event);
       } else {
         this.scheduleRefresh();
       }

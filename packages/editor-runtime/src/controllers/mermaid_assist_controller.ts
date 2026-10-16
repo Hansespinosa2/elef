@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
+import { forwardEscapeToVim } from "../lib/vim_escape.js"
 import { diagramTemplate, mermaidCompletion, mermaidEnterEdit, mermaidTabEdit, MERMAID_DIAGRAMS, slashDiagramQuery } from "./mermaid_syntax.js"
 import type { DiagramTemplate, MermaidEdit } from "./mermaid_syntax.js"
 
@@ -146,6 +147,7 @@ export default class extends Controller<HTMLElement> {
         event.preventDefault()
         event.stopPropagation()
         this.close()
+        forwardEscapeToVim(editor, event)
       } else {
         this.scheduleRefresh()
       }
