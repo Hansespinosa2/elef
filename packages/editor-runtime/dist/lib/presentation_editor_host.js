@@ -13,6 +13,7 @@ import { markdownForVisibleText, renderInlineMath } from "../controllers/editor_
 import { handleMathClick, handleMathKeydown, syncActiveMath } from "../controllers/editor_math.js";
 import { setProjectionBlockEditable } from "./projection_editability.js";
 import { mountPresentationEditor } from "@elef/client";
+import { mountHostEditActions } from "./edit_actions_host.js";
 function presentationEditorDeps() {
   return {
     moveCaretBetweenBlocks,
@@ -44,11 +45,20 @@ function documentEditorDeps() {
 }
 function mountHostPresentationEditor(form) {
   const sourceField = () => form.querySelector(".source-field");
-  return mountPresentationEditor(form, {
+  const getEditor = () => asEditorSeam(editorFor(sourceField()));
+  const mounted = mountPresentationEditor(form, {
     sourceElement: sourceField(),
-    getEditor: () => asEditorSeam(editorFor(sourceField())),
+    getEditor,
     deps: presentationEditorDeps()
   });
+  const editActions = mountHostEditActions(form, getEditor, mounted.editor);
+  return {
+    editor: mounted.editor,
+    destroy() {
+      editActions?.dispose();
+      mounted.destroy();
+    }
+  };
 }
 export {
   documentEditorDeps,

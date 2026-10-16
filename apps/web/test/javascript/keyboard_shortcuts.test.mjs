@@ -331,3 +331,35 @@ test("runCommand handles every registry palette action without throwing", () => 
   // throwing when their target is absent; nothing threw above.
   assert.ok(statuses.length >= 0)
 })
+
+test("keyboard-shortcuts palette action clicks the Edit-actions reference row", () => {
+  const row = fakeElement("button")
+  const restoreDocument = replaceGlobal("document", {
+    createElement: (tag) => fakeElement(tag),
+    querySelector: (selector) => selector === '[data-edit-actions-row="keyboard-shortcuts"]' ? row : null,
+  })
+  const controller = baseController()
+  try {
+    controller.runCommand("keyboard-shortcuts")
+  } finally {
+    restoreDocument()
+  }
+  assert.equal(row.clicked, 1)
+  assert.equal(controller.closeCalled, 1)
+})
+
+test("keyboard-shortcuts without an editor degrades to a status note", () => {
+  const restoreDocument = replaceGlobal("document", {
+    createElement: (tag) => fakeElement(tag),
+    querySelector: () => null,
+  })
+  const statuses = []
+  const controller = baseController({ setStatus(value) { statuses.push(value) } })
+  try {
+    controller.runCommand("keyboard-shortcuts")
+  } finally {
+    restoreDocument()
+  }
+  assert.deepEqual(statuses, ["Keyboard shortcuts need an editor on this page."])
+  assert.equal(controller.closeCalled, 0)
+})

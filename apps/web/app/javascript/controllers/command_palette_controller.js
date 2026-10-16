@@ -362,6 +362,17 @@ export default class extends Controller {
       const editor = document.querySelector(".source-field")?.editorController
       editor?.toggleMetadataVisibility()
       this.close()
+    } else if (id === "keyboard-shortcuts") {
+      // Like the slide actions riding the overview buttons, the reference
+      // rides the shared Edit-actions menu row (programmatic click works on
+      // the closed menu's hidden row).
+      const reference = document.querySelector('[data-edit-actions-row="keyboard-shortcuts"]')
+      if (reference) {
+        reference.click()
+        this.close()
+      } else {
+        this.setStatus("Keyboard shortcuts need an editor on this page.")
+      }
     }
   }
 

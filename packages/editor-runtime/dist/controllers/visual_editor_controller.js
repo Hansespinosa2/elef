@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import { DocumentEditor } from "@elef/client";
 import { asEditorSeam, editorFor } from "../lib/editor_controller_lookup.js";
+import { mountHostEditActions } from "../lib/edit_actions_host.js";
 import { enableVisualModeAfterPreview, enableVisualModeFromInstalledPreview } from "../lib/editor_view.js";
 import { documentEditorDeps } from "../lib/presentation_editor_host.js";
 class visual_editor_controller_default extends Controller {
@@ -19,8 +20,11 @@ class visual_editor_controller_default extends Controller {
     });
     this.element.visualEditorController = this;
     this.editor.connect();
+    this.editActions = mountHostEditActions(this.element, () => this.editor?.editorController ?? null, this.editor);
   }
   disconnect() {
+    this.editActions?.dispose();
+    this.editActions = null;
     this.editor?.disconnect();
     if (this.element.visualEditorController === this) delete this.element.visualEditorController;
   }

@@ -6,8 +6,8 @@ import {
   EDIT_TRIGGER_ACTIONS,
   clickFollowsPointer,
   mountEditActions,
-  renderKeyboardReference,
-} from "../src/features/editor/edit_actions.js";
+} from "../src/session/edit_actions.js";
+import { renderKeyboardReference } from "../src/features/shortcuts/keyboard_reference.js";
 import { SHORTCUT_ACTIONS } from "../src/features/shortcuts/shortcuts.js";
 
 function shell({ palettes = ["snippet", "link", "math", "diagram"], media = true } = {}) {
@@ -91,7 +91,7 @@ function activeRow(mount: { root: HTMLElement }, row: string): HTMLElement {
 test("the menu lists every available trigger with its keyboard chip", () => {
   const field = shell({});
   const { editor } = fakeEditor();
-  const mounted = mountEditActions({ field, getEditor: () => editor });
+  const mounted = mountEditActions({ field, getEditor: () => editor, renderReference: renderKeyboardReference });
   assert.ok(mounted);
 
   const rows = [...mounted.root.querySelectorAll("[data-edit-actions-row]")];
@@ -115,7 +115,7 @@ test("the menu lists every available trigger with its keyboard chip", () => {
 test("rows without a palette element stay out of the menu", () => {
   const field = shell({ palettes: ["snippet"], media: false });
   const { editor } = fakeEditor();
-  const mounted = mountEditActions({ field, getEditor: () => editor });
+  const mounted = mountEditActions({ field, getEditor: () => editor, renderReference: renderKeyboardReference });
   assert.ok(mounted);
 
   const rows = [...mounted.root.querySelectorAll("[data-edit-actions-row]")].map((row) =>
@@ -130,7 +130,7 @@ test("a source trigger insert commits, focuses the engine, and refreshes palette
   const { editor, calls } = fakeEditor({ mode: "source", value: "Hello", caret: 5 });
   const { calls: hostCalls, host } = fakeHost();
   const emitted = captureDispatched(field);
-  const mounted = mountEditActions({ field, getEditor: () => editor, host });
+  const mounted = mountEditActions({ field, getEditor: () => editor, host, renderReference: renderKeyboardReference });
   assert.ok(mounted);
 
   activeRow(mounted, "trigger:snippet").dispatchEvent(
@@ -152,7 +152,7 @@ test("a visual trigger insert pipelines through the host without focusing the en
   const { editor, calls } = fakeEditor({ mode: "visual", value: "Hello", caret: 5 });
   const { calls: hostCalls, host } = fakeHost();
   captureDispatched(field);
-  const mounted = mountEditActions({ field, getEditor: () => editor, host });
+  const mounted = mountEditActions({ field, getEditor: () => editor, host, renderReference: renderKeyboardReference });
   assert.ok(mounted);
 
   activeRow(mounted, "trigger:link").dispatchEvent(
@@ -169,7 +169,7 @@ test("keyboard activation runs through the click path", () => {
   const field = shell({});
   const { editor, calls } = fakeEditor({ mode: "source", value: "Hi", caret: 2 });
   captureDispatched(field);
-  const mounted = mountEditActions({ field, getEditor: () => editor });
+  const mounted = mountEditActions({ field, getEditor: () => editor, renderReference: renderKeyboardReference });
   assert.ok(mounted);
 
   activeRow(mounted, "trigger:math").dispatchEvent(mouseEvent(field.ownerDocument, "click"));
@@ -193,7 +193,7 @@ test("the media row clicks the shell media button", () => {
   field.querySelector('[data-editor-view-target="mediaButton"]')?.addEventListener("click", () => {
     clicked += 1;
   });
-  const mounted = mountEditActions({ field, getEditor: () => editor });
+  const mounted = mountEditActions({ field, getEditor: () => editor, renderReference: renderKeyboardReference });
   assert.ok(mounted);
 
   activeRow(mounted, "media").dispatchEvent(mouseEvent(field.ownerDocument, "mousedown"));
@@ -204,7 +204,7 @@ test("the media row clicks the shell media button", () => {
 test("the reference row opens the keyboard reference dialog", () => {
   const field = shell({});
   const { editor } = fakeEditor();
-  const mounted = mountEditActions({ field, getEditor: () => editor, platform: "mac" });
+  const mounted = mountEditActions({ field, getEditor: () => editor, platform: "mac", renderReference: renderKeyboardReference });
   assert.ok(mounted);
 
   activeRow(mounted, "keyboard-shortcuts").dispatchEvent(

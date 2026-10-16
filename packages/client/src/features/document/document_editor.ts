@@ -8,7 +8,6 @@ import { blockOperationRange, directiveLineSpan, exciseRange, insertAlignDirecti
 import { touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
-import { mountEditActions, type EditActionsMount } from "../editor/edit_actions.js"
 
 export interface DocumentEditorRange {
   start: number
@@ -194,7 +193,6 @@ export class DocumentEditor {
   updatingProjection: boolean | undefined
   initialTitleFocusSettled: boolean | undefined
   initialTitleFocused: boolean | undefined
-  editActions: EditActionsMount | null | undefined
 
   constructor({ element, projection = null, kind = undefined, focusTitle = false, lookupEditor = null, afterPreview = null, restorePreviewToggle = null, deps = {} as DocumentEditorDeps } = {} as DocumentEditorOptions) {
     this.element = element as DocumentEditorHost
@@ -281,17 +279,11 @@ export class DocumentEditor {
       this.selectionChangeHandler = () => this.rememberProjectionCaret()
       document.addEventListener("selectionchange", this.selectionChangeHandler)
     }
-    const sourceField = this.element.querySelector(".source-field") as HTMLElement | null
-    this.editActions = sourceField
-      ? mountEditActions({ field: sourceField, getEditor: () => this.editorController, host: this })
-      : null
     this.applyMode(this.element.getAttribute("data-editor-mode") || "visual")
     this.focusNewDocumentTitle()
   }
 
   disconnect(): void {
-    this.editActions?.dispose()
-    this.editActions = null
     this.element.removeEventListener("elef:editor-ready", this.editorReady as EventListener)
     this.element.removeEventListener("elef:editor-mode-change", this.modeChangedHandler as EventListener)
     this.element.removeEventListener("elef:preview-updated", this.previewHandler as EventListener)

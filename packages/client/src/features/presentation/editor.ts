@@ -28,7 +28,6 @@ import {
 import { touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
-import { mountEditActions } from "../editor/edit_actions.js"
 
 export interface EditorSourceRange {
   start: number
@@ -302,11 +301,6 @@ export class PresentationEditor {
     on(doc, "selectionchange", () => this.rememberProjectionCaret())
 
     this.editorController = this.getEditor()
-    const sourceField = form.querySelector(".source-field") as HTMLElement | null
-    const editActions = sourceField
-      ? mountEditActions({ field: sourceField, getEditor: () => this.getEditor(), host: this })
-      : null
-    if (editActions) this.disposers.push(() => editActions.dispose())
     this.applyMode(form.getAttribute("data-editor-mode") || "visual")
     this.updateBlockBoundaries()
   }

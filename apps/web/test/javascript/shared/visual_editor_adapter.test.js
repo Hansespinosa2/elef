@@ -23,10 +23,12 @@ export class DocumentEditor {
   restoreCaret() { this.calls.push("restoreCaret"); return true }
 }
 `).toString("base64")}`
+globalThis.__editActionsMounts = []
 const source = (await readFile(path.join(root, "packages/editor-runtime/dist/controllers/visual_editor_controller.js"), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { DocumentEditor } from "@elef/client"', `import { DocumentEditor } from "${clientStubUrl}"`)
   .replace(/^import \{[^}]*\} from "..\/lib\/editor_controller_lookup.js";?$/m, "const editorFor = () => null")
+  .replace(/^import \{[^}]*\} from "..\/lib\/edit_actions_host.js";?$/m, "const mountHostEditActions = (form, getEditor, host) => { const mount = { form, getEditor, host, disposed: 0, dispose() { mount.disposed += 1 } }; globalThis.__editActionsMounts.push(mount); return mount }")
   .replace(/^import \{[^}]*\} from "..\/lib\/editor_view.js";?$/m, "const enableVisualModeAfterPreview = () => ({}); const enableVisualModeFromInstalledPreview = () => ({})")
   .replace(/^import \{[^}]*\} from "..\/lib\/presentation_editor_host.js";?$/m, 'const documentEditorDeps = () => ({ marker: "deps" })')
 const adapter = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
@@ -56,6 +58,10 @@ test("the visual-editor adapter wires the shared feature with host seams", () =>
     assert.equal(typeof options[seam], "function")
   }
   assert.deepEqual(controller.editor.calls, ["connect"])
+  assert.equal(globalThis.__editActionsMounts.length, 1)
+  assert.equal(globalThis.__editActionsMounts[0].form, form)
+  assert.equal(globalThis.__editActionsMounts[0].host, controller.editor)
+  assert.equal(typeof globalThis.__editActionsMounts[0].getEditor, "function")
 
   for (const action of ["blockFocus", "blockBlur", "projectionInput", "projectionKeydown", "alignmentChanged", "positionControlOpened", "positionControlKeydown", "flushPendingProjectionEdits"]) {
     controller[action]({})
@@ -68,5 +74,6 @@ test("the visual-editor adapter wires the shared feature with host seams", () =>
 
   controller.disconnect()
   assert.ok(controller.editor.calls.includes("disconnect"))
+  assert.equal(globalThis.__editActionsMounts[0].disposed, 1)
   assert.equal(form.visualEditorController, undefined)
 })

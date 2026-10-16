@@ -52,6 +52,7 @@ falls back to its native menu bar.
 | Load sample works | — (palette) | n/a (no desktop control) | yes |
 | Toggle Vim mode | — (palette) | — (menu/settings, no chord) | yes |
 | Toggle source metadata | — (palette) | — (no chord) | yes |
+| Keyboard shortcuts | — (palette; opens the reference dialog) | — (Edit-actions menu, no chord) | yes |
 | New snippet, appearance, settings pages, library views, Vim settings | — (palette) | n/a or menu | yes |
 
 Nothing is mouse-only: every on-screen control is reachable by direct chord,

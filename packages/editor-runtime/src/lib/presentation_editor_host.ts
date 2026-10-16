@@ -14,6 +14,7 @@ import { handleMathClick, handleMathKeydown, syncActiveMath } from "../controlle
 import { setProjectionBlockEditable } from "./projection_editability.js"
 import { mountPresentationEditor } from "@elef/client"
 import type { DocumentEditorDeps, PresentationEditorDeps, PresentationEditorHost } from "@elef/client"
+import { mountHostEditActions } from "./edit_actions_host.js"
 
 // Shared host seam for the client presentation editor. Both hosts (Rails
 // editor forms via the presentation host adapter, desktop via
@@ -55,9 +56,18 @@ export function mountHostPresentationEditor(form: PresentationEditorHost) {
   // configureEditorKind marks the source field as the editor source target;
   // the CodeMirror editor host publishes itself there too.
   const sourceField = () => form.querySelector(".source-field")
-  return mountPresentationEditor(form, {
+  const getEditor = () => asEditorSeam(editorFor(sourceField()))
+  const mounted = mountPresentationEditor(form, {
     sourceElement: sourceField(),
-    getEditor: () => asEditorSeam(editorFor(sourceField())),
+    getEditor,
     deps: presentationEditorDeps()
   })
+  const editActions = mountHostEditActions(form, getEditor, mounted.editor)
+  return {
+    editor: mounted.editor,
+    destroy() {
+      editActions?.dispose()
+      mounted.destroy()
+    }
+  }
 }
