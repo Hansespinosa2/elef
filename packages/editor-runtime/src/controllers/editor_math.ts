@@ -93,7 +93,7 @@ export function reRenderMath(activeSpan: Element | null, { caret = null }: { car
     if (katex?.renderToString && expression.trim().length > 0) {
       try {
         const wrapper = document.createElement("span")
-        wrapper.innerHTML = katex.renderToString(expression, { displayMode: isDisplay, throwOnError: true })
+        wrapper.innerHTML = katex.renderToString(expression, { displayMode: isDisplay, throwOnError: true, output: "mathml" })
         const math = wrapper.firstElementChild as HTMLElement | null
         if (!math) throw new Error("KaTeX produced no output")
         math.dataset.editorMathSource = expression

@@ -3,7 +3,7 @@ import { pointAtVisibleOffset, visibleOffsetAtPoint } from "./editor_caret.js";
 import { markStage } from "../lib/stage_marks.js";
 const DESIGN_WIDTH = 794;
 const FLOW_TEXT_SELECTOR = "p, h1, h2, h3, h4, h5, h6, pre, li, td, th";
-const HIDDEN_TEXT_SELECTOR = ".katex-mathml, [aria-hidden='true'], [contenteditable='false']";
+const HIDDEN_TEXT_SELECTOR = ".katex, .katex-mathml, [aria-hidden='true'], [contenteditable='false']";
 const ART_ITEM_TOO_TALL = "ART_ITEM_TOO_TALL";
 class document_pages_controller_default extends Controller {
   static targets = ["surface"];

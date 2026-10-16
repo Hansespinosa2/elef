@@ -222,7 +222,7 @@ function isHiddenText(node: Node, root: Node, raw = false): boolean {
   }
   let element: Element | null = node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement
   while (element && element !== root) {
-    if (element.getAttribute("contenteditable") === "false" || element.getAttribute("aria-hidden") === "true" || element.classList?.contains("katex-mathml")) return true
+    if (element.getAttribute("contenteditable") === "false" || element.getAttribute("aria-hidden") === "true" || element.classList?.contains("katex-mathml") || element.classList?.contains("katex")) return true
     element = element.parentElement
   }
   return false

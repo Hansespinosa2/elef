@@ -93,7 +93,7 @@ function renderInlineMath(element) {
       }
       const rendered = document.createElement("span");
       try {
-        rendered.innerHTML = katex.renderToString(expression, { displayMode, throwOnError: true });
+        rendered.innerHTML = katex.renderToString(expression, { displayMode, throwOnError: true, output: "mathml" });
         const math = rendered.firstElementChild;
         if (!math) throw new Error("KaTeX produced no output");
         math.dataset.editorMathSource = expression;

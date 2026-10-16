@@ -1389,7 +1389,7 @@ export class DocumentEditor {
     let length = 0
     while (walker.nextNode()) {
       const node = walker.currentNode
-      if (node.parentElement?.closest(".katex-mathml, [aria-hidden='true']")) continue
+      if (node.parentElement?.closest(".katex, .katex-mathml, [aria-hidden='true']")) continue
       // Mirror: editor_caret.ts and visibleBlockText skip the same
       // newlines; the source map never models newlines as visible.
       const content = node.textContent ?? ""

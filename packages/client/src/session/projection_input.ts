@@ -75,7 +75,9 @@ export function visibleBlockText(block: Element): string {
   let text = ""
   while (walker.nextNode()) {
     const node = walker.currentNode as unknown as { parentElement?: Element | null; textContent?: string | null }
-    if (node.parentElement?.closest?.(".katex-mathml, [aria-hidden='true']")) continue
+    // Skip whole KaTeX subtrees: math renders as one atom (mathml output
+    // has no hidden duplicate to key on, so the wrapper is excluded).
+    if (node.parentElement?.closest?.(".katex, .katex-mathml, [aria-hidden='true']")) continue
     const content = node.textContent ?? ""
     if (content.trim() === "" && /[\r\n]/.test(content)) continue
     text += content.replace(/[\r\n]/g, "")

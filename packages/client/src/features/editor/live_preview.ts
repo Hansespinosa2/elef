@@ -83,7 +83,8 @@ class PreviewWidget extends WidgetType {
       try {
         element.innerHTML = katex.renderToString(this.value, {
           displayMode: this.kind === "math-display",
-          throwOnError: true
+          throwOnError: true,
+          output: "mathml"
         })
         element.setAttribute("aria-label", this.value)
       } catch (_error) {

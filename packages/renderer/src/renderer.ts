@@ -674,14 +674,19 @@ function resolveAssetSource(source: string, env: RenderEnv): ResolvedAsset | nul
 }
 
 function renderMath(expression: string, display: boolean, openDelimiter: string, closeDelimiter: string, chrome: RendererChrome = bareChrome, sourceExpression: string = expression): string {
-  let rendered: string
   try {
-    rendered = katex.renderToString(expression, { displayMode: display, throwOnError: true, trust: false, strict: "ignore" })
+    const rendered = katex.renderToString(expression, { displayMode: display, throwOnError: true, trust: false, strict: "ignore", output: "mathml" })
+    // MathML output drops KaTeX's katex-display wrapper span; restore it
+    // so display equations keep their block layout, margins, centering,
+    // and every existing selector, style rule, and test keeps working.
+    const wrapped = display ? `<span class="katex-display">${rendered}</span>` : rendered
+    const attributes = chrome.mathAttributes({ source: sourceExpression, open: openDelimiter, close: closeDelimiter })
+    return wrapped.replace(/^<span\b/, (opening) => `${opening}${attributes}`)
   } catch (_error) {
-    rendered = `<span class="math-error" title="Invalid TeX">${escapeHtml(expression)}</span>`
+    const fallback = `<span class="math-error" title="Invalid TeX">${escapeHtml(expression)}</span>`
+    const attributes = chrome.mathAttributes({ source: sourceExpression, open: openDelimiter, close: closeDelimiter })
+    return fallback.replace(/^<span\b/, (opening) => `${opening}${attributes}`)
   }
-  const attributes = chrome.mathAttributes({ source: sourceExpression, open: openDelimiter, close: closeDelimiter })
-  return rendered.replace(/^<span\b/, (opening) => `${opening}${attributes}`)
 }
 
 function stripUnsafeMarkdownLinks(text: string): string {

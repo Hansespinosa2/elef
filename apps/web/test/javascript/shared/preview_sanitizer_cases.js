@@ -126,6 +126,37 @@ export const CASES = [
     checks: [
       { select: ".katex-display[data-editor-math-source]", exists: true },
       { select: ".katex-display[data-editor-math-source]", attribute: "contenteditable", equals: "false" },
+      { select: ".katex-display math", attribute: "xmlns", equals: "http://www.w3.org/1998/Math/MathML" },
+      { select: ".katex-display math", attribute: "display", equals: "block" },
+      { select: ".katex-display munderover mo", text: "∑" },
+      { select: ".katex-display mi", count: 3 },
+      { select: ".katex-display annotation", attribute: "encoding", equals: "application/x-tex" },
+      { select: ".katex-display annotation", text: "\\sum_{i=1}^{n} i" },
+    ],
+  },
+  {
+    name: "sanitized math keeps inert MathML attributes but drops remote fetches and unknown elements",
+    installs: [
+      {
+        html: `
+    <span class="katex" data-editor-math-source="x" data-editor-math-open="$" data-editor-math-close="$" contenteditable="false"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="true" minsize="1.2em">(</mo><mspace linebreak="newline"></mspace><menclose notation="box"><mi>x</mi></menclose><mpadded height="0em" voffset="0em" depth="0em"><mspace mathbackground="black" width="2em" height="0.431em"></mspace></mpadded><mglyph src="https://evil.example/x.png" alt="glyph" height="1em" valign="0em" onclick="invoke('x')"></mglyph><mscript>evil()</mscript></mrow></semantics></math></span>`,
+        options: {},
+      },
+    ],
+    checks: [
+      { select: ".katex[data-editor-math-source]", exists: true },
+      { select: "mo", attribute: "stretchy", equals: "true" },
+      { select: "mo", attribute: "minsize", equals: "1.2em" },
+      { select: "mspace", attribute: "linebreak", equals: "newline" },
+      { select: "menclose", attribute: "notation", equals: "box" },
+      { select: "mpadded", attribute: "voffset", equals: "0em" },
+      { select: "mpadded", attribute: "depth", equals: "0em" },
+      { select: "mglyph", exists: true },
+      { select: "mglyph", attribute: "src", absent: true },
+      { select: "mglyph", attribute: "alt", equals: "glyph" },
+      { select: "mglyph", attribute: "onclick", absent: true },
+      { select: "mscript", exists: false },
+      { textAbsent: ["evil()"] },
     ],
   },
   {
