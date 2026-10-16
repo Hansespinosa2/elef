@@ -241,7 +241,10 @@ class VisualPagesTest < ApplicationSystemTestCase
   def measure_sample(install_script)
     page.evaluate_script(install_script)
     yield
-    raw = page.evaluate_async_script("window.__perfSample.then(arguments[arguments.length - 1]);")
+    # Native async call: Capybara's wrapper clamps the session script
+    # timeout to default_max_wait_time (2s) on every call, which would
+    # behead the probe's 25s watchdog. install_perf_probes sets 30s.
+    raw = page.driver.browser.execute_async_script("window.__perfSample.then(arguments[arguments.length - 1]);")
     ms_str, flags = raw.to_s.split("|", 2)
     trace = page.evaluate_script("JSON.stringify(window.__perfTrace || null)")
     [ms_str.to_f, flags || "", trace]
@@ -277,7 +280,10 @@ class VisualPagesTest < ApplicationSystemTestCase
       const after = stageMarks();
       return (before.starts > before.ends || after.starts > before.starts) ? "overlap" : "clean";
     };
-    return new Promise((resolve) => {
+    // Assign, never return: a sync evaluate_script awaits a returned
+    // promise, so returning it would stall the install until the 25s
+    // watchdog and poison every sample. Installs are bare IIFEs.
+    window.__perfSample = new Promise((resolve) => {
       const watchdog = setTimeout(() => resolve("-1|watchdog"), 25000);
       let completion = 0;
       const finish = (ms) => {
@@ -298,7 +304,7 @@ class VisualPagesTest < ApplicationSystemTestCase
   JAVASCRIPT
 
   KEY_PAINT_INSTALL = <<~JAVASCRIPT.freeze
-    window.__perfSample = (() => {
+    (() => {
       #{PROBE_SCAFFOLD}
         const onKey = (event) => {
           if (event.type !== "keydown") return;
@@ -318,7 +324,7 @@ class VisualPagesTest < ApplicationSystemTestCase
   JAVASCRIPT
 
   MOTION_PAINT_INSTALL = <<~JAVASCRIPT.freeze
-    window.__perfSample = (() => {
+    (() => {
       #{PROBE_SCAFFOLD}
         const onKey = (event) => {
           if (event.type !== "keydown") return;
@@ -338,7 +344,7 @@ class VisualPagesTest < ApplicationSystemTestCase
   JAVASCRIPT
 
   REVEAL_PAINT_INSTALL = <<~JAVASCRIPT.freeze
-    window.__perfSample = (() => {
+    (() => {
       #{PROBE_SCAFFOLD}
         const onClick = () => {
           const t0 = arm();
@@ -358,7 +364,7 @@ class VisualPagesTest < ApplicationSystemTestCase
   JAVASCRIPT
 
   SUGGEST_PAINT_INSTALL = <<~JAVASCRIPT.freeze
-    window.__perfSample = (() => {
+    (() => {
       const seen = new Set();
       document.querySelectorAll(".snippet-option").forEach((node) => seen.add(node));
       #{PROBE_SCAFFOLD}
@@ -427,12 +433,14 @@ class VisualPagesTest < ApplicationSystemTestCase
       result[:first_breakdown] = first_breakdowns.first
     end
 
-    if only.nil? || only.include?("input")
+    input_categories = %w[typing motion revelation suggestion]
+    if only.nil? || only.include?("input") || input_categories.any? { |category| only.include?(category) }
       result[:inputs] = {}
-      result[:inputs][:typing] = benchmark_typing(name, source, smoke ? 4 : 20, stalls, overlaps)
-      result[:inputs][:motion] = benchmark_motion(name, source, smoke ? 4 : 20, stalls, overlaps)
-      result[:inputs][:revelation] = benchmark_revelation(name, source, smoke ? 2 : 10, stalls, overlaps)
-      result[:inputs][:suggestion_source] = benchmark_suggestion(name, source, smoke ? 2 : 10, stalls, overlaps)
+      wants = ->(category) { only.nil? || only.include?("input") || only.include?(category) }
+      result[:inputs][:typing] = benchmark_typing(name, source, smoke ? 4 : 20, stalls, overlaps) if wants.call("typing")
+      result[:inputs][:motion] = benchmark_motion(name, source, smoke ? 4 : 20, stalls, overlaps) if wants.call("motion")
+      result[:inputs][:revelation] = benchmark_revelation(name, source, smoke ? 2 : 10, stalls, overlaps) if wants.call("revelation")
+      result[:inputs][:suggestion] = benchmark_suggestion(name, source, smoke ? 2 : 10, stalls, overlaps) if wants.call("suggestion")
     end
     result[:stalls_over_100ms] = stalls
     result[:stage_overlaps] = overlaps
@@ -572,28 +580,54 @@ class VisualPagesTest < ApplicationSystemTestCase
   end
 
   def benchmark_suggestion(name, source, count, stalls, overlaps)
-    # Source-mode baseline: visual suggestion UI is not implemented yet, so
-    # suggestion latency is measured where the palette exists today.
+    # Visual suggestion latency: the snippet palette is shared by both
+    # modes, so triggers run in the visual editor (the default). One
+    # trigger per spread prose block: trigger chars accumulate, and
+    # switching blocks blurs (installing the pending projection and
+    # repaginating), so settle after every switch like typing does.
     document = create_perf_document("Perf #{name} suggest", source)
     visit edit_document_path(document)
     wait_for_full_settle
-    click_on "Source"
-    editor = find(".cm-content")
-    lines = source.lines.count
+    targets = page.evaluate_script(
+      "(() => { const blocks = [...document.querySelectorAll('.document-surface [data-editor-block-id]')];" \
+      " const prose = blocks.map((block, i) => [i, block.textContent.length])" \
+      ".filter(([i, len]) => len > 100).map(([i]) => i);" \
+      " return prose.filter((_, k) => k % Math.max(1, Math.floor(prose.length / #{count})) === 0).slice(0, #{count}); })()"
+    )
+    raise "no prose blocks for suggestion benchmark" unless targets.is_a?(Array) && targets.length == count
     samples = []
     count.times do |index|
-      # Source-mode commits refresh the preview after each sample; settle
-      # first so the previous cycle never pollutes this sample. Trigger
-      # chars accumulate (3 per earlier sample, all on earlier ascending
-      # lines), so shift the offset exactly instead of cleaning up.
-      wait_for_full_settle(quiet_ms: QUIET_MS)
-      line_no = 2 + (index * (lines - 4) / count)
-      offset = source.lines[0...line_no].join.length + (index * 3)
-      page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(arguments[0])", offset)
-      page.execute_script("document.querySelector('.source-field').editorController.focus()")
-      ms, flags, trace = measure_sample(SUGGEST_PAINT_INSTALL) { editor.send_keys(" /i") }
-      record_input_sample(samples, stalls, overlaps, "suggestion_source", name, index, ms, flags, trace)
-      editor.send_keys(:escape)
+      target = targets[index]
+      # Re-query before every interaction (typing-benchmark pattern): the
+      # click blurs the previous block, installing a pending projection
+      # that replaces block nodes mid-sample.
+      page.execute_script("document.querySelectorAll('.document-surface [data-editor-block-id]')[#{target}].scrollIntoView({block:'center'})")
+      all(".document-surface [data-editor-block-id]")[target].click
+      wait_for_fresh_quiet
+      # True block end via the caret bridge: :end stops at the visual
+      # line (mid-block on wrapped prose), and a trigger typed beside
+      # existing whitespace collapses in legacy flushes, shifting the
+      # caret off the query.
+      caret = page.evaluate_script(
+        "(() => { const form = document.querySelector('form.visual-editor-form');" \
+        " const adapter = form ? form.visualEditorController : null;" \
+        " const block = document.querySelectorAll('.document-surface [data-editor-block-id]')[#{target}];" \
+        " const id = block ? block.dataset.editorBlockId : null;" \
+        " const map = adapter ? adapter.editor.map : null;" \
+        " const regions = map ? (map.editable_regions || map.slides.flatMap((s) => s.editable_regions || [])) : [];" \
+        " const region = regions.find((r) => r.block_id === id);" \
+        " if (!adapter || !region) return 'no-region';" \
+        " return 'caret:' + adapter.restoreCaret(region.content_range.end, id); })()"
+      )
+      raise "suggestion caret placement failed: #{caret}" unless caret == "caret:true"
+      wait_for_quiet
+      ms, flags, trace = measure_sample(SUGGEST_PAINT_INSTALL) do
+        all(".document-surface [data-editor-block-id]")[target].send_keys(" /i")
+      end
+      record_input_sample(samples, stalls, overlaps, "suggestion", name, index, ms, flags, trace)
+      # Browser-level Escape: a projection reinstall between the trigger
+      # and dismissal would stale any block handle.
+      page.driver.browser.action.send_keys(:escape).perform
     end
     input_stats(samples)
   end
@@ -631,7 +665,7 @@ class VisualPagesTest < ApplicationSystemTestCase
         "typing_p95=#{result.dig(:inputs, :typing, :ms, :p95_ms)} " \
         "motion_p95=#{result.dig(:inputs, :motion, :ms, :p95_ms)} " \
         "revelation_p95=#{result.dig(:inputs, :revelation, :ms, :p95_ms)} " \
-        "suggestion_p95=#{result.dig(:inputs, :suggestion_source, :ms, :p95_ms)} " \
+        "suggestion_p95=#{result.dig(:inputs, :suggestion, :ms, :p95_ms)} " \
         "stalls=#{result[:stalls_over_100ms]&.length}"
     end
 
