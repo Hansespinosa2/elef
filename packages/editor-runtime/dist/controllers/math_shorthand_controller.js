@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import { syntaxTree } from "@codemirror/language";
 import { editorFor } from "../lib/editor_controller_lookup.js";
+import { assistsInMode, projectionHostFor } from "../lib/visual_assist.js";
 const GREEK_OPERAND = /^\\(?:alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega)$/;
 const ATOMIC_MATH_SHORTCUTS = Object.freeze({ "@a": "\\alpha", "@b": "\\beta", "@g": "\\gamma", "@m": "\\mu", "@n": "\\nu", "@q": "\\theta", "@r": "\\rho", "@D": "\\Delta" });
 const ATOMIC_LATEX_COMMANDS = /* @__PURE__ */ new Set(["nabla", "partial", "infty", "ell", "hbar", "Re", "Im", "wp"]);
@@ -719,6 +720,26 @@ class math_shorthand_controller_default extends Controller {
   connect() {
     this.lastExpansion = null;
     this.editorController = editorFor(this.element);
+    this.visualKeydown = (event) => {
+      if (this.editorController?.editingMode !== "visual") return;
+      this.keydown(event);
+    };
+    this.visualKeyup = (event) => {
+      if (this.editorController?.editingMode !== "visual") return;
+      this.handleEditorKeyup?.(event);
+    };
+    this.visualMousedown = (event) => {
+      if (this.editorController?.editingMode !== "visual") return;
+      this.handleEditorMousedown?.(event);
+    };
+    this.visualClick = (event) => {
+      if (this.editorController?.editingMode !== "visual") return;
+      this.handleEditorClick?.(event);
+    };
+    document.addEventListener("keydown", this.visualKeydown, true);
+    document.addEventListener("keyup", this.visualKeyup, true);
+    document.addEventListener("mousedown", this.visualMousedown, true);
+    document.addEventListener("click", this.visualClick, true);
     this.editorReady = () => {
       this.editorController ||= editorFor(this.element);
       this.setupEditor();
@@ -735,6 +756,10 @@ class math_shorthand_controller_default extends Controller {
       this.editorController.dom.removeEventListener("focusout", this.handleEditorFocusout, true);
       this.editorController.form?.removeEventListener("submit", this.handleFormSubmit, true);
     }
+    document.removeEventListener("keydown", this.visualKeydown, true);
+    document.removeEventListener("keyup", this.visualKeyup, true);
+    document.removeEventListener("mousedown", this.visualMousedown, true);
+    document.removeEventListener("click", this.visualClick, true);
     this.element.removeEventListener("elef:editor-ready", this.editorReady);
   }
   setupEditor() {
@@ -766,7 +791,7 @@ class math_shorthand_controller_default extends Controller {
   keydown(event) {
     if (event.defaultPrevented || event.elefMathShorthandHandled) return;
     const editor = this.editorController;
-    if (!editor || editor.editingMode !== "source" || !editor.insertMode) return;
+    if (!editor || !assistsInMode(editor) || !editor.insertMode) return;
     const caret = editor.selectionStart;
     const collapsed = editor.selectionStart === editor.selectionEnd;
     if (event.key === "Escape" && collapsed) {
@@ -787,15 +812,13 @@ class math_shorthand_controller_default extends Controller {
       if (line?.text === "$$$$" && caret - line.from === 2 && editorMathContextAt(editor, caret) === "display_math") {
         event.preventDefault();
         const separator = editor.lineSeparator || "\n";
-        editor.replaceRange(separator + separator, caret, caret);
-        editor.setSelectionRange(caret + editor.normalizeLineEndings(separator).length);
+        this.commitVisualEdit(editor, caret, caret, separator + separator, caret + editor.normalizeLineEndings(separator).length);
         return;
       }
     }
     if (event.key === "Backspace" && collapsed && editor.value[caret - 1] === "$" && editor.value[caret] === "$" && !editorInsideCode(editor, caret) && !escapedAt(editor.value, caret - 1)) {
       event.preventDefault();
-      editor.replaceRange("", caret - 1, caret + 1);
-      editor.setSelectionRange(caret - 1);
+      this.commitVisualEdit(editor, caret - 1, caret + 1, "", caret - 1);
       this.pendingChain = mathShorthandAtEditor(editor, caret - 1);
       return;
     }
@@ -817,8 +840,7 @@ class math_shorthand_controller_default extends Controller {
       const action = mathDollarActionAtEditor(editor, dollarCaret);
       if (action === "promote") {
         event.preventDefault();
-        editor.replaceRange("$$$$", dollarCaret - 1, dollarCaret + 1);
-        editor.setSelectionRange(dollarCaret + 1, dollarCaret + 1);
+        this.commitVisualEdit(editor, dollarCaret - 1, dollarCaret + 1, "$$$$", dollarCaret + 1);
         return;
       } else if (action === "skip") {
         event.preventDefault();
@@ -826,8 +848,7 @@ class math_shorthand_controller_default extends Controller {
         return;
       } else if (action === "pair") {
         event.preventDefault();
-        editor.replaceRange("$$", dollarCaret, dollarCaret);
-        editor.setSelectionRange(dollarCaret + 1, dollarCaret + 1);
+        this.commitVisualEdit(editor, dollarCaret, dollarCaret, "$$", dollarCaret + 1);
         return;
       }
     }
@@ -857,7 +878,7 @@ class math_shorthand_controller_default extends Controller {
     if (!match || !expansion) return false;
     const start = localCaret - (match[1] ?? "").length;
     if (start > 0 && /[A-Za-z0-9@\\\\]/.test(line.text[start - 1] ?? "")) return false;
-    editor.replaceRange(expansion + ".", line.from + start, caret);
+    this.commitVisualEdit(editor, line.from + start, caret, expansion + ".");
     return true;
   }
   cancelChain(chain) {
@@ -876,9 +897,24 @@ class math_shorthand_controller_default extends Controller {
     if (event.ctrlKey || event.metaKey || event.altKey) return false;
     return event.key?.length === 1 || ["Backspace", "Delete"].includes(event.key);
   }
+  // Every shorthand mutation flows through here. Source behavior is
+  // unchanged (explicit caret placements kept, natural collapses untouched);
+  // in visual mode the same source transaction additionally shifts the
+  // projection mapping and patches the native caret's text via the shared
+  // assist pipeline. commitAll deliberately bypasses this: it runs on blur,
+  // where the pending projection install discards the mapping anyway.
+  commitVisualEdit(editor, from, to, insert, caret) {
+    editor.replaceRange(insert, from, to);
+    const placed = caret ?? editor.selectionStart;
+    if (editor.editingMode === "visual") {
+      projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from, to, insert, caret: placed });
+    } else if (caret !== void 0) {
+      editor.setSelectionRange(caret);
+    }
+  }
   commit(chain, suffix = "") {
     if (!chain || chain.status !== "valid") return false;
-    this.editorController.replaceRange(`${chain.expansion}${suffix}`, chain.start, chain.end);
+    this.commitVisualEdit(this.editorController, chain.start, chain.end, `${chain.expansion}${suffix}`);
     this.pendingChain = null;
     return true;
   }

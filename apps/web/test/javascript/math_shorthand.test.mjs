@@ -24,15 +24,18 @@ const codemirrorState = await importVendoredModule("@codemirror--state.js", {
   "@marijn/find-cluster-break": findClusterBreak.url
 })
 
+const visualAssistSource = await readFile(new URL("../../../../packages/editor-runtime/dist/lib/visual_assist.js", import.meta.url), "utf8")
 const source = (await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/math_shorthand_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { syntaxTree } from "@codemirror/language"', "const syntaxTree = (state) => state.tree")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
+  .replace('import { assistsInMode, projectionHostFor } from "../lib/visual_assist.js"', () => visualAssistSource)
 const math = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 globalThis.__mathTestHelpers = math
 const paletteSource = (await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/math_shortcut_palette_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
+  .replace('import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"', () => visualAssistSource)
   .replace('import { application } from "./application.js"', "const application = { getControllerForElementAndIdentifier: () => null }")
   .replace('import { editorInsideMath, expandMathShorthand, innermostMathChainWindow, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js"', "const { editorInsideMath, expandMathShorthand, innermostMathChainWindow, mathShorthandAtEditor, parseMathShorthand } = globalThis.__mathTestHelpers")
   .replace('import { authoringRegistryFor } from "./authoring_registry.js"', "const authoringRegistryFor = () => []")

@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { syntaxTree } from "@codemirror/language"
 import { editorFor } from "../lib/editor_controller_lookup.js"
+import { assistsInMode, projectionHostFor } from "../lib/visual_assist.js"
 
 export interface MathShorthandKeyEvent extends KeyboardEvent {
   elefMathShorthandHandled?: boolean;
@@ -837,6 +838,33 @@ export default class extends Controller<HTMLElement> {
   connect() {
     this.lastExpansion = null
     this.editorController = editorFor(this.element)
+    // In visual mode the native caret lives in the projection, outside
+    // editor.dom, so mirror the source bindings at document capture. Each
+    // wrapper guards on visual mode: source keys keep flowing through the
+    // editor.dom bindings only, and visual keys through these only.
+    // focusout/submit stay source-only: commitAll on blur needs no visual
+    // pipeline because the blur-triggered projection install discards the
+    // mapping wholesale.
+    this.visualKeydown = (event: Event) => {
+      if (this.editorController?.editingMode !== "visual") return
+      this.keydown(event as MathShorthandKeyEvent)
+    }
+    this.visualKeyup = (event: Event) => {
+      if (this.editorController?.editingMode !== "visual") return
+      this.handleEditorKeyup?.(event)
+    }
+    this.visualMousedown = (event: Event) => {
+      if (this.editorController?.editingMode !== "visual") return
+      this.handleEditorMousedown?.(event)
+    }
+    this.visualClick = (event: Event) => {
+      if (this.editorController?.editingMode !== "visual") return
+      this.handleEditorClick?.(event)
+    }
+    document.addEventListener("keydown", this.visualKeydown, true)
+    document.addEventListener("keyup", this.visualKeyup, true)
+    document.addEventListener("mousedown", this.visualMousedown, true)
+    document.addEventListener("click", this.visualClick, true)
     this.editorReady = () => { this.editorController ||= editorFor(this.element); this.setupEditor() }
     this.element.addEventListener("elef:editor-ready", this.editorReady)
     this.setupEditor()
@@ -851,6 +879,10 @@ export default class extends Controller<HTMLElement> {
       this.editorController.dom.removeEventListener("focusout", this.handleEditorFocusout, true)
       this.editorController.form?.removeEventListener("submit", this.handleFormSubmit, true)
     }
+    document.removeEventListener("keydown", this.visualKeydown, true)
+    document.removeEventListener("keyup", this.visualKeyup, true)
+    document.removeEventListener("mousedown", this.visualMousedown, true)
+    document.removeEventListener("click", this.visualClick, true)
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
   }
 
@@ -882,7 +914,7 @@ export default class extends Controller<HTMLElement> {
   keydown(event: MathShorthandKeyEvent): void {
     if (event.defaultPrevented || event.elefMathShorthandHandled) return
     const editor = this.editorController
-    if (!editor || editor.editingMode !== "source" || !editor.insertMode) return
+    if (!editor || !assistsInMode(editor) || !editor.insertMode) return
     const caret = editor.selectionStart
     const collapsed = editor.selectionStart === editor.selectionEnd
 
@@ -906,8 +938,7 @@ export default class extends Controller<HTMLElement> {
       if (line?.text === "$$$$" && caret - line.from === 2 && editorMathContextAt(editor, caret) === "display_math") {
         event.preventDefault()
         const separator = editor.lineSeparator || "\n"
-        editor.replaceRange(separator + separator, caret, caret)
-        editor.setSelectionRange(caret + editor.normalizeLineEndings(separator).length)
+        this.commitVisualEdit(editor, caret, caret, separator + separator, caret + editor.normalizeLineEndings(separator).length)
         return
       }
     }
@@ -921,8 +952,7 @@ export default class extends Controller<HTMLElement> {
       !escapedAt(editor.value, caret - 1)
     ) {
       event.preventDefault()
-      editor.replaceRange("", caret - 1, caret + 1)
-      editor.setSelectionRange(caret - 1)
+      this.commitVisualEdit(editor, caret - 1, caret + 1, "", caret - 1)
       this.pendingChain = mathShorthandAtEditor(editor, caret - 1)
       return
     }
@@ -946,8 +976,7 @@ export default class extends Controller<HTMLElement> {
       const action = mathDollarActionAtEditor(editor, dollarCaret)
       if (action === "promote") {
         event.preventDefault()
-        editor.replaceRange("$$$$", dollarCaret - 1, dollarCaret + 1)
-        editor.setSelectionRange(dollarCaret + 1, dollarCaret + 1)
+        this.commitVisualEdit(editor, dollarCaret - 1, dollarCaret + 1, "$$$$", dollarCaret + 1)
         return
       } else if (action === "skip") {
         event.preventDefault()
@@ -955,8 +984,7 @@ export default class extends Controller<HTMLElement> {
         return
       } else if (action === "pair") {
         event.preventDefault()
-        editor.replaceRange("$$", dollarCaret, dollarCaret)
-        editor.setSelectionRange(dollarCaret + 1, dollarCaret + 1)
+        this.commitVisualEdit(editor, dollarCaret, dollarCaret, "$$", dollarCaret + 1)
         return
       }
     }
@@ -991,7 +1019,7 @@ export default class extends Controller<HTMLElement> {
     if (!match || !expansion) return false
     const start = localCaret - (match[1] ?? "").length
     if (start > 0 && /[A-Za-z0-9@\\\\]/.test(line.text[start - 1] ?? "")) return false
-    editor.replaceRange(expansion + ".", line.from + start, caret)
+    this.commitVisualEdit(editor, line.from + start, caret, expansion + ".")
     return true
   }
 
@@ -1013,9 +1041,25 @@ export default class extends Controller<HTMLElement> {
     return event.key?.length === 1 || ["Backspace", "Delete"].includes(event.key)
   }
 
+  // Every shorthand mutation flows through here. Source behavior is
+  // unchanged (explicit caret placements kept, natural collapses untouched);
+  // in visual mode the same source transaction additionally shifts the
+  // projection mapping and patches the native caret's text via the shared
+  // assist pipeline. commitAll deliberately bypasses this: it runs on blur,
+  // where the pending projection install discards the mapping anyway.
+  commitVisualEdit(editor: any, from: number, to: number, insert: string, caret?: number): void {
+    editor.replaceRange(insert, from, to)
+    const placed = caret ?? editor.selectionStart
+    if (editor.editingMode === "visual") {
+      projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from, to, insert, caret: placed })
+    } else if (caret !== undefined) {
+      editor.setSelectionRange(caret)
+    }
+  }
+
   commit(chain: MathShorthandMatch | null, suffix = ""): boolean {
     if (!chain || chain.status !== "valid") return false
-    this.editorController.replaceRange(`${chain.expansion}${suffix}`, chain.start, chain.end)
+    this.commitVisualEdit(this.editorController, chain.start, chain.end, `${chain.expansion}${suffix}`)
     this.pendingChain = null
     return true
   }

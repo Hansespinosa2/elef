@@ -1212,3 +1212,169 @@ test("visual mermaid routing binds on document capture and ignores idle keys", (
   assertVisualRouting(t, MermaidAssistController)
 })
 
+// --- Visual-mode math shorthand ---
+
+const MathShorthandController = await loadController("math_shorthand", {
+  base: sharedControllerPath,
+  overrides: {
+    "../lib/editor_controller_lookup.js": "const editorFor = element => element.currentEditor\n",
+    "../lib/visual_assist.js": visualAssistSource,
+    "@codemirror/language": "const syntaxTree = (state) => state.tree\n"
+  }
+})
+
+// The chain parser reads the line through editor.view.state.doc while the
+// math-context scan only needs the buffer text; an empty syntax tree keeps
+// both paths on real prose (never code).
+function stubShorthandEngine({ mode = "visual", value = "See $x.b$ done", caret = 7 } = {}) {
+  const stubbed = stubAssistEngine({ mode, value, caret })
+  stubbed.engine.view.state.doc.sliceString = (from, to) => stubbed.engine.value.slice(from, to)
+  stubbed.engine.view.state.tree = { resolveInner: () => null }
+  return stubbed
+}
+
+function mountShorthand({ mode = "visual", value = "See $x.b$ done", caret = 7, host = null } = {}) {
+  const { document } = parseHTML(`<form><div class="field"><div class="editor-projection"><div class="block" contenteditable="true"></div></div></div></form>`)
+  const form = document.querySelector("form")
+  const field = document.querySelector(".field")
+  if (host) form.visualEditorController = host
+  const { engine, calls } = stubShorthandEngine({ mode, value, caret })
+  const controller = new MathShorthandController()
+  Object.assign(controller, { element: field, editorController: engine, pendingChain: null })
+  return { controller, engine, calls, field, form, document }
+}
+
+function shorthandKey(key, extra = {}) {
+  const event = {
+    key,
+    code: key === " " ? "Space" : key,
+    defaultPrevented: false,
+    isComposing: false,
+    shiftKey: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    preventDefault: () => { event.defaultPrevented = true },
+    ...extra
+  }
+  return event
+}
+
+test("visual shorthand Space commits the chain through the projection host", () => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountShorthand({ host })
+
+  const event = shorthandKey(" ")
+  mounted.controller.keydown(event)
+
+  assert.equal(event.defaultPrevented, true)
+  assert.equal(mounted.engine.value, "See $\\mathbf{x} $ done")
+  assert.deepEqual(mounted.calls.replaceRange, [["\\mathbf{x} ", 5, 8]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 5, to: 8, insert: "\\mathbf{x} ", caret: 16 }])
+  assert.equal(mounted.calls.focus, 0, "the engine is never focused for a visual commit")
+  assert.equal(mounted.controller.pendingChain, null)
+})
+
+test("source shorthand commit skips the projection pipeline", () => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountShorthand({ mode: "source", host })
+
+  const committed = mounted.controller.commit({ status: "valid", start: 5, end: 8, expansion: "\\mathbf{x}" }, " ")
+
+  assert.equal(committed, true)
+  assert.equal(mounted.engine.value, "See $\\mathbf{x} $ done")
+  assert.deepEqual(mounted.calls.replaceRange, [["\\mathbf{x} ", 5, 8]])
+  assert.deepEqual(hostCalls.inserts, [])
+  assert.deepEqual(mounted.calls.setSelectionRange, [], "natural collapse keeps its source placement")
+  assert.equal(mounted.controller.pendingChain, null)
+})
+
+test("visual shorthand Escape cancels the chain without editing", () => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountShorthand({ host })
+
+  const event = shorthandKey("Escape")
+  mounted.controller.keydown(event)
+
+  assert.equal(event.defaultPrevented, true)
+  assert.equal(mounted.engine.value, "See $x.b$ done")
+  assert.deepEqual(mounted.calls.replaceRange, [])
+  assert.deepEqual(hostCalls.inserts, [])
+  assert.equal(mounted.controller.pendingChain, null)
+})
+
+test("visual shorthand Backspace deletes a dollar pair through the host", () => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountShorthand({ value: "See $$ done", caret: 5, host })
+
+  const event = shorthandKey("Backspace")
+  mounted.controller.keydown(event)
+
+  assert.equal(event.defaultPrevented, true)
+  assert.equal(mounted.engine.value, "See  done")
+  assert.deepEqual(mounted.calls.replaceRange, [["", 4, 6]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 4, to: 6, insert: "", caret: 4 }])
+})
+
+test("visual shorthand routing mirrors every source binding on document capture", (t) => {
+  const saved = new Map()
+  const setGlobal = (name, value) => {
+    saved.set(name, Object.getOwnPropertyDescriptor(globalThis, name))
+    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value })
+  }
+  t.after(() => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+      else delete globalThis[name]
+    }
+  })
+  const added = []
+  const removed = []
+  setGlobal("document", {
+    activeElement: null,
+    addEventListener: (type, listener, capture) => added.push([type, listener, capture]),
+    removeEventListener: (type, listener, capture) => removed.push([type, listener, capture])
+  })
+
+  const { engine } = stubShorthandEngine({})
+  const elementDouble = {
+    currentEditor: engine,
+    closest: () => null,
+    addEventListener: () => {},
+    removeEventListener: () => {}
+  }
+  const controller = new MathShorthandController()
+  Object.assign(controller, { element: elementDouble, pendingChain: null })
+  controller.connect()
+
+  for (const type of ["keydown", "keyup", "mousedown", "click"]) {
+    const binding = added.find(([bound]) => bound === type)
+    assert.ok(binding, `${type} is bound on document capture`)
+    assert.equal(binding[2], true)
+  }
+  // focusout/submit stay source-only: blur commits need no visual pipeline
+  // because the blur-triggered projection install discards the mapping.
+  assert.equal(added.some(([bound]) => bound === "focusout"), false)
+
+  let routed = 0
+  controller.keydown = () => { routed += 1 }
+  const keydownBinding = added.find(([bound]) => bound === "keydown")
+  keydownBinding[1]({ key: " " })
+  assert.equal(routed, 1, "visual keys reach the shared keydown")
+  engine.editingMode = "source"
+  keydownBinding[1]({ key: " " })
+  assert.equal(routed, 1, "source keys keep flowing through the editor.dom binding only")
+
+  engine.editingMode = "visual"
+  const keyupBinding = added.find(([bound]) => bound === "keyup")
+  keyupBinding[1]({ key: "b", ctrlKey: false, metaKey: false, altKey: false })
+  assert.equal(controller.pendingChain?.start, 5, "visual keyup refreshes the pending chain")
+  assert.equal(controller.pendingChain?.end, 8)
+
+  controller.disconnect()
+  for (const type of ["keydown", "keyup", "mousedown", "click"]) {
+    const binding = added.find(([bound]) => bound === type)
+    assert.ok(removed.some(([bound, listener, capture]) => bound === type && listener === binding[1] && capture === true))
+  }
+})
+
