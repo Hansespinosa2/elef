@@ -15,7 +15,9 @@ export const config = {
       ? ["./stable-exclusions.spec.js"]
       : process.env.ELEF_E2E_PROFILE === "stable-packaged"
         ? ["./stable-packaged.spec.js"]
-        : [process.env.ELEF_E2E_VERIFY_UPGRADED === "1" ? "./specs/upgraded.spec.js" : "./specs/desktop.spec.js", "./specs/contract-conformance.spec.js", "./specs/quiet-save.spec.js", "./specs/renderer-worker-corpus.spec.js"],
+        : process.env.ELEF_E2E_PROFILE === "print-evidence"
+          ? ["./specs/print-evidence.spec.js"]
+          : [process.env.ELEF_E2E_VERIFY_UPGRADED === "1" ? "./specs/upgraded.spec.js" : "./specs/desktop.spec.js", "./specs/contract-conformance.spec.js", "./specs/quiet-save.spec.js", "./specs/renderer-worker-corpus.spec.js"],
   maxInstances: 1,
   capabilities: [{
     browserName: "tauri",
