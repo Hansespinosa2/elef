@@ -242,8 +242,10 @@ AFFECTED_RAILS_TESTS = (
     "apps/web/test/controllers/host_api_controller_test.rb"
 )
 AFFECTED_COMMANDS_1 = (
-    *QUICK_COMMANDS_1,
+    # dist/ is built, never committed, and the quick commands below consume
+    # it: the bootstrap runs first so JS tests resolve every bundle.
     "npm run build:packages",
+    *QUICK_COMMANDS_1,
     "apps/web/bin/rails tailwindcss:build",
     "git diff --exit-code -- apps/web/app/assets/builds/tailwind.css",
     "apps/web/bin/rails db:test:prepare",

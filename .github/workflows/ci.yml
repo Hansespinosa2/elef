@@ -82,6 +82,11 @@ jobs:
         run: npm ci --prefix apps/desktop/frontend
       - name: Install Rails-owned frontend dependencies
         run: npm ci
+      - name: Build the shared packages
+        # dist/ is built, never committed: every lane builds before consuming.
+        # client/renderer/editor-runtime form a build-time cycle, so the exact
+        # bootstrap order inside `npm run build:packages` matters; call it whole.
+        run: npm run build:packages
       - name: Run the fast desktop unit tier
         run: |
           # Three in-job lanes, longest-first: the Rust compile starts before
@@ -790,6 +795,18 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
+      - name: Build the shared packages
+        # dist/ is built, never committed, and development compose mounts the
+        # source tree over the image, so the checkout itself must carry dist.
+        run: npm run build:packages
       - name: Validate development Compose configuration
         run: docker compose --project-name elef-development-ci --env-file ops/.env.development.example --file ops/compose.development.yml config --quiet
       - name: Build development image

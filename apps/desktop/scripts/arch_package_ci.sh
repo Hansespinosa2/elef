@@ -68,6 +68,11 @@ mkdir -p target/arch-release
   pacman -Q | sort
 } > target/arch-release/build-inputs.txt
 npm ci --prefix apps/desktop/frontend
+# dist/ is built, never committed: bootstrap the shared packages before the
+# frontend bundle resolves them (see `npm run build:packages` for the order
+# the client/renderer/editor-runtime build cycle requires).
+npm ci
+npm run build:packages
 npm run build --prefix apps/desktop/frontend
 version="${DESKTOP_RELEASE_VERSION:-$(node -e 'process.stdout.write(JSON.parse(require("node:fs").readFileSync("apps/desktop/src-tauri/tauri.conf.json", "utf8")).version)')}"
 output_directory="${repo_root}/target/arch-release"
