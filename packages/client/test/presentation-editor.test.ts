@@ -120,6 +120,7 @@ function stubDeps() {
     handleMathClick: () => false,
     handleMathKeydown: () => false,
     syncActiveMath: (_element: unknown, flush: () => void) => flush(),
+    syncActiveInline: () => {},
     setProjectionBlockEditable: () => {},
   };
 }
@@ -368,6 +369,7 @@ function syncFixture({ editable = true, collapsed = true }: { editable?: boolean
     deps: {
       ...stubDeps(),
       syncActiveMath: () => {},
+      syncActiveInline: () => {},
       visibleOffsetAtPoint: () => 2,
       sourceOffsetForVisibleOffset: (_source: string, offset: number) => offset,
       visibleOffsetForSourceOffset: (source: string) => source.length,

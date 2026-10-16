@@ -111,6 +111,7 @@ export interface DocumentProjectionKeyEvent {
 
 export interface DocumentEditorDeps {
   syncActiveMath(target: Element | null, flush: () => void): void
+  syncActiveInline(target: Element | null, getSource: (block: Element) => string | null, flush: () => void): void
   handleMathClick(event: DocumentProjectionEvent, target: Element | null): boolean
   handleMathKeydown(event: DocumentProjectionKeyEvent, target: Element | null, flush: () => void): boolean
   moveCaretBetweenBlocks(event: DocumentProjectionKeyEvent, target: Element | null): boolean
@@ -317,6 +318,7 @@ export class DocumentEditor {
 
   blockBlur(): void {
     this.deps.syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.projectionTarget, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     this.flushPendingProjectionEdits()
     delete this.element.dataset.editorProjectionActive
     this.syncProjectionEditability()
@@ -325,6 +327,7 @@ export class DocumentEditor {
   projectionLinkClicked(event: DocumentProjectionEvent): void {
     if (this.deps.handleMathClick(event, this.projectionTarget)) return
     this.deps.syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.projectionTarget, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     const link = (event.target as Element).closest?.(".editor-projection [contenteditable='true'] a")
     if (!link) return
 
@@ -579,6 +582,7 @@ export class DocumentEditor {
 
   rememberProjectionCaret(): void {
     this.deps.syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.projectionTarget, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     const selection = window.getSelection()
     if (!selection?.focusNode) return
     const focusNode = selection.focusNode
@@ -671,6 +675,15 @@ export class DocumentEditor {
 
   regionForBlock(blockId: string | undefined): DocumentEditorRegion | null {
     return this.allRegions().find((region) => region.block_id === blockId) || null
+  }
+
+  inlineRevealSource(block: Element): string | null {
+    const region = this.regionForBlock((block as HTMLElement).dataset.editorBlockId)
+    if (!region || !this.editorController) return null
+    // Table, image, and fenced-code blocks route to dedicated differs
+    // without inline-reveal projection; never activate inside them.
+    if (["table", "image", "code"].includes(region.kind ?? "")) return null
+    return this.editorController.value.slice(region.content_range.start, region.content_range.end)
   }
 
   blockSourceRange(block: DocumentEditorBlock): { from: number; to: number } {

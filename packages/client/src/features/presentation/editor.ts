@@ -129,6 +129,7 @@ export interface ProjectionBeforeinputEvent {
 
 export interface PresentationEditorDeps {
   syncActiveMath(element: Element | null, flush: () => void): void
+  syncActiveInline(target: Element | null, getSource: (block: Element) => string | null, flush: () => void): void
   handleMathClick(event: ProjectionEvent, target: Element | null): boolean
   handleMathKeydown(event: ProjectionKeyEvent, canvas: Element | null, flush: () => void): boolean
   moveCaretBetweenBlocks(event: ProjectionKeyEvent, canvas: Element | null): boolean
@@ -347,6 +348,7 @@ export class PresentationEditor {
 
   blockBlur(_event: ProjectionEvent): void {
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     this.flushPendingProjectionEdits()
     this.activeProjectionBlock = null
     delete this.element.dataset.editorProjectionActive
@@ -356,6 +358,7 @@ export class PresentationEditor {
   projectionLinkClicked(event: ProjectionEvent): void {
     if (this.deps.handleMathClick(event, this.canvas())) return
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     const link = (event.target as Element).closest?.(".editor-projection [contenteditable='true'] a")
     if (!link) return
 
@@ -599,6 +602,7 @@ export class PresentationEditor {
 
   rememberProjectionCaret(): void {
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     const selection = this.getSelection()
     if (!selection?.focusNode) return
     const focusNode = selection.focusNode
@@ -694,6 +698,7 @@ export class PresentationEditor {
     if (!this.editorController || !this.map) return
 
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     this.flushPendingProjectionEdits()
 
     const source = this.sourceValue()
@@ -1051,6 +1056,16 @@ export class PresentationEditor {
 
   regionForBlock(blockId: string | undefined): PresentationEditorRegion | null {
     return this.allRegions().find((region) => region.block_id === blockId) || null
+  }
+
+  inlineRevealSource(block: Element): string | null {
+    const region = this.regionForBlock((block as HTMLElement).dataset.editorBlockId)
+    const editor = this.editorController
+    if (!region?.content_range || !editor) return null
+    // Table, image, and fenced-code blocks route to dedicated differs
+    // without inline-reveal projection; never activate inside them.
+    if (["table", "image", "code"].includes(region.kind ?? "")) return null
+    return editor.value.slice(region.content_range.start, region.content_range.end)
   }
 
   restorePendingCaret(): void {

@@ -1,0 +1,309 @@
+// Visual inline revelation (slice 1: emphasis, strong, strikethrough,
+// code; links follow in slice 2). Rendered inline constructs conceal
+// their delimiters; when the caret enters one, the element swaps for an
+// editable source-text span (mirroring the math-active pattern), and the
+// differ projects the revealed source slice instead of the concealed
+// content. Structural markers (heading/list/quote/fence) reveal through
+// CSS pseudo-elements instead (slice 3) so they never enter text.
+//
+// Pairing between source tokens and DOM elements is positional
+// (document order against token order) plus verification (element kind
+// matches token kind, active delimiters match token delimiters). No
+// offsets are persisted: pairing is stateless per call, so precise
+// commits between activation and flush cannot strand stale positions.
+// A mismatch with active spans present refuses the flush (the batch
+// stays in the DOM and the next flush recovers it); the legacy
+// concealed path never refuses.
+
+export interface RevealToken {
+  kind: "format" | "code";
+  formatType?: "strong" | "emphasis" | "strike";
+  start: number;
+  end: number;
+  open: string;
+  close: string;
+}
+
+export interface RevealPair {
+  token: RevealToken;
+  element: Element;
+  activeSpan: HTMLElement | null;
+}
+
+// Verified token-start -> active-span map for the differ. The differ
+// stays dependency-free (its node harness inlines it dependency-free),
+// so hosts resolve this and inject it through options.
+export type RevealActives = Map<number, { span: HTMLElement; token: RevealToken }>
+
+interface ActiveStash {
+  original: Element;
+  baseline: string;
+}
+
+const stashes = new WeakMap<HTMLElement, ActiveStash>()
+
+const REVEALABLE_SELECTOR = "em, strong, del, s, code"
+const ACTIVE_SELECTOR = "[data-editor-inline-active='true']"
+const ATOM_SELECTOR = "[data-editor-math-source], [data-editor-math-active], img, [data-editor-image-source]"
+// DOM Node nodeType for elements (avoids the Node global so this module
+// stays dependency-free and runnable wherever Elements exist).
+const ELEMENT_NODE = 1
+
+function elementKind(element: Element): RevealToken["kind"] | null {
+  const tag = element.tagName.toUpperCase()
+  if (tag === "EM" || tag === "STRONG" || tag === "DEL" || tag === "S") return "format"
+  if (tag === "CODE" && !element.closest("pre")) return "code"
+  return null
+}
+
+function tokenizeRevealables(source: string): RevealToken[] {
+  const tokens: RevealToken[] = []
+  let index = 0
+  while (index < source.length) {
+    const token = revealTokenAt(source, index)
+    if (!token) {
+      index += 1
+      continue
+    }
+    tokens.push(token)
+    index = token.end
+  }
+  return tokens
+}
+
+// Minimal tokenizer for revealable inline constructs. It must agree
+// with inlineTokenAt on boundaries for well-formed input; malformed
+// input yields no token and the construct simply never activates.
+function revealTokenAt(source: string, index: number): RevealToken | null {
+  const rest = source.slice(index)
+  // Inline code: backtick runs (content is literal, may contain markers).
+  // Mirrors inlineTokenAt exactly (non-empty, same-length close).
+  const code = rest.match(/^(`+)([^`\r\n]+?)\1/)
+  if (code?.[1] !== undefined) {
+    return { kind: "code", start: index, end: index + code[0].length, open: code[1], close: code[1] }
+  }
+  // Strong / strikethrough before emphasis (longest delimiter wins, and
+  // the choice must match the renderer's nesting for pairing to hold).
+  for (const delimiter of ["**", "__", "~~"]) {
+    if (!rest.startsWith(delimiter)) continue
+    const end = rest.indexOf(delimiter, delimiter.length)
+    if (end < 0) continue
+    const content = rest.slice(delimiter.length, end)
+    if (!content || /^\s|\s$/.test(content) || content.includes("\n")) continue
+    const formatType = delimiter === "~~" ? "strike" as const : "strong" as const
+    return { kind: "format", formatType, start: index, end: index + end + delimiter.length, open: delimiter, close: delimiter }
+  }
+  for (const delimiter of ["*", "_"]) {
+    if (!rest.startsWith(delimiter)) continue
+    if (rest[1] === delimiter) continue
+    const end = rest.indexOf(delimiter, 1)
+    if (end < 0) continue
+    const content = rest.slice(1, end)
+    if (!content || /^\s|\s$/.test(content) || content.includes("\n")) continue
+    return { kind: "format", formatType: "emphasis", start: index, end: index + end + 1, open: delimiter, close: delimiter }
+  }
+  return null
+}
+
+function outermostRevealables(root: Element): Element[] {
+  // querySelectorAll returns document order without TreeWalker globals.
+  const candidates = [...root.querySelectorAll(`${REVEALABLE_SELECTOR}, ${ACTIVE_SELECTOR}`)]
+  const found: Element[] = []
+  for (const element of candidates) {
+    if (element.closest?.(ATOM_SELECTOR)) continue
+    if (element.matches?.(ACTIVE_SELECTOR)) {
+      found.push(element)
+      continue
+    }
+    if (elementKind(element) === null) continue
+    if (element.closest?.(ACTIVE_SELECTOR)) continue
+    // Outermost only: a construct nested in another revealable is
+    // covered by its ancestor's source slice when that activates.
+    const ancestor = element.parentElement?.closest?.(REVEALABLE_SELECTOR)
+    if (ancestor && root.contains(ancestor)) continue
+    found.push(element)
+  }
+  return found
+}
+
+// Pair source tokens with DOM elements in order, verifying kinds.
+// Returns null on any mismatch (caller refuses active projection).
+export function pairRevealables(source: string, root: Element): RevealPair[] | null {
+  const tokens = tokenizeRevealables(source)
+  const elements = outermostRevealables(root)
+  if (tokens.length !== elements.length) return null
+  const pairs: RevealPair[] = []
+  for (let i = 0; i < tokens.length; i += 1) {
+    const token = tokens[i] as RevealToken
+    const element = elements[i] as Element
+    const activeSpan = (element.matches?.(ACTIVE_SELECTOR) ? element : null) as HTMLElement | null
+    const kind = activeSpan ? (activeSpan.dataset.editorInlineKind as RevealToken["kind"]) : elementKind(element)
+    if (!kind || kind !== token.kind) return null
+    if (kind === "format" && activeSpan) {
+      const formatType = activeSpan.dataset.editorInlineFormat as RevealToken["formatType"]
+      if (formatType && formatType !== token.formatType) return null
+    }
+    pairs.push({ token, element, activeSpan })
+  }
+  return pairs
+}
+
+function delimitersMatch(token: RevealToken, text: string): boolean {
+  return text.startsWith(token.open) && text.endsWith(token.close) &&
+    text.length >= token.open.length + token.close.length
+}
+
+// Offset of a DOM point within an element's text (null when outside).
+function offsetInElement(element: Element, node: Node, offset: number): number | null {
+  let seen = 0
+  let found: number | null = null
+  const visit = (current: Node): void => {
+    if (found !== null) return
+    if (current === node) {
+      if (current.nodeType === ELEMENT_NODE) {
+        // Element endpoint: offset counts child nodes.
+        let sum = 0
+        const kids = [...(current.childNodes ?? [])]
+        for (let i = 0; i < Math.min(offset, kids.length); i += 1) sum += ((kids[i] as Node).textContent ?? "").length
+        found = seen + sum
+      } else {
+        found = seen + Math.min(offset, (current.textContent ?? "").length)
+      }
+      return
+    }
+    if (current.nodeType !== ELEMENT_NODE) {
+      seen += (current.textContent ?? "").length
+      return
+    }
+    for (const child of [...(current.childNodes ?? [])]) visit(child)
+  }
+  visit(element)
+  return found
+}
+
+function touchedPair(pairs: RevealPair[], root: Element, node: Node | null): RevealPair | null {
+  if (!node) return null
+  const element = node.nodeType === ELEMENT_NODE ? (node as Element) : node.parentElement
+  const active = element?.closest?.(ACTIVE_SELECTOR) as HTMLElement | null
+  if (active && root.contains(active)) {
+    return pairs.find((pair) => pair.activeSpan === active) ?? null
+  }
+  const revealable = element?.closest?.(REVEALABLE_SELECTOR) as Element | null
+  if (!revealable || !root.contains(revealable)) return null
+  if (revealable.closest?.(ACTIVE_SELECTOR)) return null
+  return pairs.find((pair) => pair.element === revealable || pair.element.contains(revealable)) ?? null
+}
+
+function activatePair(pair: RevealPair, source: string, selection: Selection | null): HTMLElement | null {
+  const { token, element } = pair
+  if (element.matches?.(ACTIVE_SELECTOR)) return element as HTMLElement
+  // Atom-guard safety: an inline construct containing math or an image
+  // would strand atoms the differ counts, so it never activates.
+  if (element.querySelector?.(ATOM_SELECTOR)) return null
+  const slice = source.slice(token.start, token.end)
+  if (!delimitersMatch(token, slice)) return null
+  // Remap selection endpoints inside the element across the swap: the
+  // new span prefixes the opening delimiter before the old content.
+  const doc = element.ownerDocument
+  const remap = (node: Node | null, offset: number): number | null => {
+    if (!node) return null
+    const inner = offsetInElement(element, node, offset)
+    return inner === null ? null : inner + token.open.length
+  }
+  const anchor = selection && selection.rangeCount > 0 ? remap(selection.anchorNode, selection.anchorOffset) : null
+  const focus = selection && selection.rangeCount > 0 ? remap(selection.focusNode, selection.focusOffset) : null
+  const span = doc.createElement("span")
+  span.className = "editor-inline-active"
+  span.dataset.editorInlineActive = "true"
+  span.dataset.editorInlineKind = token.kind
+  if (token.formatType) span.dataset.editorInlineFormat = token.formatType
+  span.dataset.editorInlineSource = slice
+  span.spellcheck = false
+  const textNode = doc.createTextNode(slice)
+  span.appendChild(textNode)
+  stashes.set(span, { original: element, baseline: slice })
+  element.parentNode?.replaceChild(span, element)
+  if (selection && (anchor !== null || focus !== null)) {
+    const end = textNode.textContent?.length ?? 0
+    const clamp = (value: number | null): number => Math.max(0, Math.min(value ?? end, end))
+    selection.setBaseAndExtent(textNode, clamp(anchor), textNode, clamp(focus))
+  }
+  return span
+}
+
+function deactivateSpan(span: HTMLElement, onFlush: (() => void) | null): void {
+  const stash = stashes.get(span)
+  const current = span.textContent ?? ""
+  if (typeof onFlush === "function") onFlush()
+  // Unedited exit restores the stashed render instantly (the selection
+  // already left, so no caret work is needed). Edited text stays
+  // visible (it is current source, never a stale render) until the
+  // projection refresh replaces the block with canonical output.
+  if (stash && current === stash.baseline && span.parentNode) {
+    span.parentNode.replaceChild(stash.original, span)
+  }
+  stashes.delete(span)
+}
+
+// Selection-driven sync over one projection root. Activation needs
+// each touched block's source slice (getSource); deactivation sweeps
+// the whole root so no span stays active behind the selection. Pure
+// sync: inline content is transparent text, so native caret motion
+// needs no key or click interception (unlike opaque math atoms).
+export function syncActiveInline(
+  root: Element | null,
+  getSource: ((block: Element) => string | null) | null,
+  onFlush: (() => void) | null = null
+): void {
+  if (!root) return
+  const selection = root.ownerDocument.getSelection?.() ?? null
+  const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+  const endpoints = range ? [range.startContainer, range.endContainer] : []
+  const blocks = new Map<Element, string>()
+  for (const endpoint of endpoints) {
+    const element = endpoint.nodeType === ELEMENT_NODE ? (endpoint as Element) : (endpoint as ChildNode).parentElement
+    const block = element?.closest?.("[data-editor-block-id]") as Element | null
+    if (!block || !root.contains(block) || blocks.has(block)) continue
+    const source = getSource?.(block) ?? null
+    if (source !== null) blocks.set(block, source)
+  }
+  for (const [block, source] of blocks) {
+    const pairs = pairRevealables(source, block)
+    if (!pairs) continue
+    for (const endpoint of endpoints) {
+      if (!block.contains(endpoint)) continue
+      const pair = touchedPair(pairs, block, endpoint)
+      if (pair && !pair.activeSpan) activatePair(pair, source, selection)
+    }
+  }
+  // Activation swaps the DOM and moves the live selection into the new
+  // spans, so the range captured above points at detached nodes. The
+  // sweep must test the live selection or it deactivates instantly (and
+  // the browser then collapses the stranded caret to the removal point).
+  const liveRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+  const actives = [...root.querySelectorAll(ACTIVE_SELECTOR)] as HTMLElement[]
+  for (const span of actives) {
+    if (liveRange && (span.contains(liveRange.startContainer) || span.contains(liveRange.endContainer))) continue
+    deactivateSpan(span, onFlush)
+  }
+}
+
+// Differ support: map token starts to their verified active spans.
+// Null when pairing fails (caller refuses the flush) or no actives.
+//
+// Paired actives always map, even when the span text lost its
+// delimiters: the projection holds the base slice so the diff reads
+// delimiter deletions as source deletions (un-formatting commits).
+export function activeInlineMap(source: string, root: Element | null): RevealActives | null {
+  if (!root) return new Map()
+  const pairs = pairRevealables(source, root)
+  if (!pairs) {
+    return root.querySelector(ACTIVE_SELECTOR) ? null : new Map()
+  }
+  const map = new Map<number, { span: HTMLElement; token: RevealToken }>()
+  for (const pair of pairs) {
+    if (!pair.activeSpan) continue
+    map.set(pair.token.start, { span: pair.activeSpan, token: pair.token })
+  }
+  return map
+}

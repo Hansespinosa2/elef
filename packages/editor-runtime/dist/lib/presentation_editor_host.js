@@ -11,6 +11,7 @@ import {
 } from "../controllers/editor_caret.js";
 import { markdownForVisibleText, renderInlineMath } from "../controllers/editor_markdown.js";
 import { handleMathClick, handleMathKeydown, syncActiveMath } from "../controllers/editor_math.js";
+import { activeInlineMap, syncActiveInline } from "../controllers/editor_reveal.js";
 import { setProjectionBlockEditable } from "./projection_editability.js";
 import { mountPresentationEditor } from "@elef/client";
 import { mountHostEditActions } from "./edit_actions_host.js";
@@ -22,11 +23,14 @@ function presentationEditorDeps() {
     sourceOffsetForVisibleOffset,
     visibleOffsetAtPoint,
     visibleOffsetForSourceOffset,
-    markdownForVisibleText,
+    // The differ stays dependency-free, so the host resolves the
+    // verified reveal map and injects it (null refuses the flush).
+    markdownForVisibleText: (source, text, kind, element, options) => markdownForVisibleText(source, text, kind, element, { ...options, revealActives: activeInlineMap(source, element) }),
     renderInlineMath,
     handleMathClick,
     handleMathKeydown,
     syncActiveMath,
+    syncActiveInline,
     setProjectionBlockEditable
   };
 }
@@ -40,7 +44,7 @@ function documentEditorDeps() {
     // runtime semantics the untyped JavaScript relied on.
     deRenderMath: (element, options) => deRenderMath(element, options) !== null,
     finishMathBeforeEnter,
-    sourceOffsetForVisiblePosition
+    sourceOffsetForVisiblePosition: (source, element, position) => sourceOffsetForVisiblePosition(source, element, position, activeInlineMap(source, element))
   };
 }
 function mountHostPresentationEditor(form) {

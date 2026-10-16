@@ -179,6 +179,7 @@ function stubSelectionBridge(t, { editable = true, collapsed = true, focusOffset
     projection,
     deps: {
       syncActiveMath: () => {},
+      syncActiveInline: () => {},
       visibleOffsetAtPoint: (block, node, offset) => offset,
       sourceOffsetForVisibleOffset: (source, offset) => offset,
       visibleOffsetForSourceOffset: (source) => source.length,

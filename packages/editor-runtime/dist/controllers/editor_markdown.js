@@ -1,6 +1,6 @@
 import katex from "katex";
 const INLINE_MATH = /(?<!\\)\\\[([\s\S]+?)\\\]|(?<!\\)\$\$([\s\S]+?)\$\$(?!\$)|(?<!\\)\\\(([^\r\n]+?)\\\)|(?<![\\$])\$(?!\$|\s)([^$\r\n]+?)(?<!\s)\$(?!\$)/g;
-function markdownForVisibleText(markdown, text, kind, element = null, { documentMode = false } = {}) {
+function markdownForVisibleText(markdown, text, kind, element = null, { documentMode = false, revealActives = void 0 } = {}) {
   const source = markdown || "";
   const rawValue = rawVisibleText(text);
   if (kind === "table") return markdownForTable(source, element);
@@ -14,6 +14,8 @@ function markdownForVisibleText(markdown, text, kind, element = null, { document
   const sourceAtoms = sourceAtomCounts(source);
   const expectedAtoms = protectedElements.length + activeCount;
   if (element?.querySelectorAll && sourceAtoms.total !== expectedAtoms && !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms.total, protectedElements.length, expectedAtoms)) return source;
+  if (revealActives === null) return source;
+  const actives = revealActives ?? /* @__PURE__ */ new Map();
   const structured = kind === "list" || kind === "quote";
   const sourceText = documentMode && structured ? String(text || "") : rawValue;
   const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element, protectedElements.length) : sourceText;
@@ -23,24 +25,29 @@ function markdownForVisibleText(markdown, text, kind, element = null, { document
   const trailingExtra = valueTrimmed ? normalizedText.match(/[ \t\u00a0]*$/)?.[0] ?? "" : "";
   const value = structured ? renderedText : normalizeInlineRenderedText(renderedText);
   const formatBudget = inlineFormatBudget(element);
+  if (actives.size > 0 && !revealTokensAgree(source, actives, formatBudget)) return source;
   if (kind === "list" || kind === "quote") {
-    const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget, { preserveEmptyLines: documentMode }, allMathElements);
+    const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget, { preserveEmptyLines: documentMode }, allMathElements, actives);
     const structuredValue = documentMode ? addStructuredMarkers(source, value, kind) : value;
     const preserved2 = preserveProjectedMarkdown(source, structuredValue, projection, { preserveLineBreaks: documentMode, trailingExtra });
     if (preserved2 !== null) return preserved2;
   }
   if (source === "" && documentMode) return value.replace(/\u00a0/g, " ");
-  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements, trailingExtra);
+  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements, trailingExtra, actives);
   return preserved === null ? source : preserved;
 }
-function sourceOffsetForVisiblePosition(source, element, visiblePosition) {
+function sourceOffsetForVisiblePosition(source, element, visiblePosition, revealActives) {
   const protectedElements = protectedElementsFor(element);
   const allMathElements = allMathElementsFor(element);
   const activeCount = allMathElements.filter((candidate) => candidate.dataset.editorMathActive === "true").length;
   const sourceAtoms = sourceAtomCounts(source).total;
   const expectedAtoms = protectedElements.length + activeCount;
   if (sourceAtoms !== expectedAtoms && !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms, protectedElements.length, expectedAtoms)) return null;
-  const projection = inlineProjection(source, 0, protectedElements, 0, inlineFormatBudget(element), allMathElements);
+  if (revealActives === null) return null;
+  const actives = revealActives ?? /* @__PURE__ */ new Map();
+  const formatBudget = inlineFormatBudget(element);
+  if (actives.size > 0 && !revealTokensAgree(source, actives, formatBudget)) return null;
+  const projection = inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements, actives);
   return projection.boundaries[visiblePosition] ?? null;
 }
 function renderInlineMath(element) {
@@ -269,8 +276,8 @@ function activeDisplayMathBlock(source, allMathElements) {
   if (!/^[ \t]{0,3}$/.test(before) || !/^[ \t]*$/.test(after)) return null;
   return before + fullText + after;
 }
-function preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements = [], trailingExtra = "") {
-  return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements), { trailingExtra });
+function preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements = [], trailingExtra = "", revealActives = /* @__PURE__ */ new Map()) {
+  return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements, revealActives), { trailingExtra });
 }
 function preserveProjectedMarkdown(source, value, projection, { preserveLineBreaks = false, trailingExtra = "" } = {}) {
   const normalizedValue = value.replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ");
@@ -343,7 +350,7 @@ function commonEditBounds(previous, next) {
   while (suffix < previous.length - prefix && suffix < next.length - prefix && previous[previous.length - suffix - 1] === next[next.length - suffix - 1]) suffix += 1;
   return { prefix, suffix };
 }
-function inlineProjection(source, sourceOffset = 0, protectedElements = [], protectedStartIndex = 0, formatBudget = null, allMathElements = []) {
+function inlineProjection(source, sourceOffset = 0, protectedElements = [], protectedStartIndex = 0, formatBudget = null, allMathElements = [], revealActives = /* @__PURE__ */ new Map()) {
   let text = "";
   const boundaries = [];
   let hasSyntax = false;
@@ -415,16 +422,30 @@ function inlineProjection(source, sourceOffset = 0, protectedElements = [], prot
       const protectedElement = protectedElements[protectedIndex];
       appendProtected(protectedElement ? atomMarker(protectedStartIndex + protectedIndex) : token.content, sourceOffset + index, sourceOffset + index + token.length);
       protectedIndex += 1;
-    } else if (["code", "document_link", "escape"].includes(token.kind)) {
+    } else if (token.kind === "code") {
+      const revealed = revealActives.get(sourceOffset + index);
+      if (revealed) {
+        appendPlain(source.slice(index, index + token.length), sourceOffset + index);
+      } else {
+        appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0));
+      }
+    } else if (["document_link", "escape"].includes(token.kind)) {
       appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0));
     } else {
+      const revealed = token.kind === "format" ? revealActives.get(sourceOffset + index) : void 0;
+      if (revealed) {
+        appendPlain(source.slice(index, index + token.length), sourceOffset + index);
+        index += token.length;
+        continue;
+      }
       const content = inlineProjection(
         token.content,
         sourceOffset + index + (token.contentOffset ?? 0),
         protectedElements.slice(protectedIndex),
         protectedStartIndex + protectedIndex,
         formatBudget,
-        allMathElements.slice(mathIndex)
+        allMathElements.slice(mathIndex),
+        revealActives
       );
       appendProjection(content);
       protectedIndex += content.atomCount;
@@ -434,7 +455,7 @@ function inlineProjection(source, sourceOffset = 0, protectedElements = [], prot
   }
   return { text, boundaries, hasSyntax, atomCount: protectedIndex, mathCount: mathIndex };
 }
-function structuredBlockProjection(source, kind, protectedElements, formatBudget = null, { preserveEmptyLines = false } = {}, allMathElements = []) {
+function structuredBlockProjection(source, kind, protectedElements, formatBudget = null, { preserveEmptyLines = false } = {}, allMathElements = [], revealActives = /* @__PURE__ */ new Map()) {
   const lines = source.split("\n");
   const boundaries = [];
   let text = "";
@@ -453,7 +474,8 @@ function structuredBlockProjection(source, kind, protectedElements, formatBudget
       protectedElements.slice(protectedIndex),
       protectedIndex,
       formatBudget,
-      allMathElements.slice(mathIndex)
+      allMathElements.slice(mathIndex),
+      revealActives
     );
     protectedIndex += projection.atomCount;
     mathIndex += projection.mathCount || 0;
@@ -540,10 +562,34 @@ function inlineTokenAt(source, formatBudget = null, previousCharacter = "") {
 function inlineFormatBudget(element) {
   if (!element?.querySelectorAll) return null;
   return {
-    strong: element.querySelectorAll("strong, b").length,
-    emphasis: element.querySelectorAll("em, i").length,
-    strike: element.querySelectorAll("del, s, strike").length
+    strong: element.querySelectorAll("strong, b, [data-editor-inline-format='strong']").length,
+    emphasis: element.querySelectorAll("em, i, [data-editor-inline-format='emphasis']").length,
+    strike: element.querySelectorAll("del, s, strike, [data-editor-inline-format='strike']").length
   };
+}
+function revealTokensAgree(source, actives, budget) {
+  const seen = /* @__PURE__ */ new Map();
+  const walk = budget ? { ...budget } : null;
+  let index = 0;
+  while (index < source.length) {
+    const token = inlineTokenAt(source.slice(index), walk, source[index - 1] ?? "");
+    if (!token) {
+      index += 1;
+      continue;
+    }
+    if (token.formatType && walk) walk[token.formatType] -= 1;
+    if (token.kind === "format" || token.kind === "code") {
+      seen.set(index, { length: token.length, kind: token.kind, formatType: token.formatType });
+    }
+    index += token.length;
+  }
+  for (const [start, entry] of actives) {
+    const found = seen.get(start);
+    if (!found || found.length !== entry.token.end - entry.token.start) return false;
+    if (entry.token.kind === "code" && found.kind !== "code") return false;
+    if (entry.token.kind === "format" && (found.kind !== "format" || found.formatType !== entry.token.formatType)) return false;
+  }
+  return true;
 }
 function protectedElementsFor(element) {
   return [...element?.querySelectorAll("[data-editor-math-source]:not([data-editor-math-active]), [data-editor-image-source]") || []];

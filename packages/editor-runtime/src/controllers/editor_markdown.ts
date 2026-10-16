@@ -1,4 +1,5 @@
 import katex from "katex"
+import type { RevealActives, RevealToken } from "./editor_reveal.js"
 
 const INLINE_MATH = /(?<!\\)\\\[([\s\S]+?)\\\]|(?<!\\)\$\$([\s\S]+?)\$\$(?!\$)|(?<!\\)\\\(([^\r\n]+?)\\\)|(?<![\\$])\$(?!\$|\s)([^$\r\n]+?)(?<!\s)\$(?!\$)/g
 
@@ -24,7 +25,7 @@ export interface FormatBudget {
   strike: number;
 }
 
-export function markdownForVisibleText(markdown: string, text: string, kind: string, element: Element | null = null, { documentMode = false }: { documentMode?: boolean } = {}): string {
+export function markdownForVisibleText(markdown: string, text: string, kind: string, element: Element | null = null, { documentMode = false, revealActives = undefined }: { documentMode?: boolean; revealActives?: RevealActives | null } = {}): string {
   const source = markdown || ""
   const rawValue = rawVisibleText(text)
 
@@ -41,6 +42,11 @@ export function markdownForVisibleText(markdown: string, text: string, kind: str
   const expectedAtoms = protectedElements.length + activeCount
   if (element?.querySelectorAll && sourceAtoms.total !== expectedAtoms &&
     !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms.total, protectedElements.length, expectedAtoms)) return source
+  // Revealed inline constructs project their source slices; a pairing
+  // mismatch (null map from the host) refuses, the batch staying in the
+  // DOM for the next flush. Absent maps are the legacy concealed path.
+  if (revealActives === null) return source
+  const actives: RevealActives = revealActives ?? new Map()
   const structured = kind === "list" || kind === "quote"
   const sourceText = documentMode && structured ? String(text || "") : rawValue
   const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element as Element, protectedElements.length) : sourceText
@@ -57,9 +63,10 @@ export function markdownForVisibleText(markdown: string, text: string, kind: str
   const trailingExtra = valueTrimmed ? (normalizedText.match(/[ \t\u00a0]*$/)?.[0] ?? "") : ""
   const value = structured ? renderedText : normalizeInlineRenderedText(renderedText)
   const formatBudget = inlineFormatBudget(element)
+  if (actives.size > 0 && !revealTokensAgree(source, actives, formatBudget)) return source
 
   if (kind === "list" || kind === "quote") {
-    const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget, { preserveEmptyLines: documentMode }, allMathElements)
+    const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget, { preserveEmptyLines: documentMode }, allMathElements, actives)
     const structuredValue = documentMode ? addStructuredMarkers(source, value, kind) : value
     const preserved = preserveProjectedMarkdown(source, structuredValue, projection, { preserveLineBreaks: documentMode, trailingExtra })
     if (preserved !== null) return preserved
@@ -67,13 +74,13 @@ export function markdownForVisibleText(markdown: string, text: string, kind: str
 
   if (source === "" && documentMode) return value.replace(/\u00a0/g, " ")
 
-  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements, trailingExtra)
+  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements, trailingExtra, actives)
   // A failed source projection must never serialize display-only atoms or
   // lossy rendered text into canonical Markdown.
   return preserved === null ? source : preserved
 }
 
-export function sourceOffsetForVisiblePosition(source: string, element: Element | null, visiblePosition: number): number | null {
+export function sourceOffsetForVisiblePosition(source: string, element: Element | null, visiblePosition: number, revealActives?: RevealActives | null): number | null {
   const protectedElements = protectedElementsFor(element)
   const allMathElements = allMathElementsFor(element)
   const activeCount = allMathElements.filter((candidate) => candidate.dataset.editorMathActive === "true").length
@@ -82,7 +89,11 @@ export function sourceOffsetForVisiblePosition(source: string, element: Element 
   if (sourceAtoms !== expectedAtoms &&
     !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms, protectedElements.length, expectedAtoms)) return null
 
-  const projection = inlineProjection(source, 0, protectedElements, 0, inlineFormatBudget(element), allMathElements)
+  if (revealActives === null) return null
+  const actives: RevealActives = revealActives ?? new Map()
+  const formatBudget = inlineFormatBudget(element)
+  if (actives.size > 0 && !revealTokensAgree(source, actives, formatBudget)) return null
+  const projection = inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements, actives)
   return projection.boundaries[visiblePosition] ?? null
 }
 
@@ -380,8 +391,8 @@ function activeDisplayMathBlock(source: string, allMathElements: HTMLElement[]):
   return before + fullText + after
 }
 
-function preserveInlineMarkdown(source: string, value: string, protectedElements: HTMLElement[], formatBudget: FormatBudget | null, allMathElements: HTMLElement[] = [], trailingExtra = ""): string | null {
-  return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements), { trailingExtra })
+function preserveInlineMarkdown(source: string, value: string, protectedElements: HTMLElement[], formatBudget: FormatBudget | null, allMathElements: HTMLElement[] = [], trailingExtra = "", revealActives: RevealActives = new Map()): string | null {
+  return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements, revealActives), { trailingExtra })
 }
 
 function preserveProjectedMarkdown(source: string, value: string, projection: InlineProjection, { preserveLineBreaks = false, trailingExtra = "" }: { preserveLineBreaks?: boolean; trailingExtra?: string } = {}): string | null {
@@ -509,7 +520,7 @@ function commonEditBounds(previous: string, next: string): { prefix: number; suf
   return { prefix, suffix }
 }
 
-function inlineProjection(source: string, sourceOffset = 0, protectedElements: HTMLElement[] = [], protectedStartIndex = 0, formatBudget: FormatBudget | null = null, allMathElements: HTMLElement[] = []): InlineProjection {
+function inlineProjection(source: string, sourceOffset = 0, protectedElements: HTMLElement[] = [], protectedStartIndex = 0, formatBudget: FormatBudget | null = null, allMathElements: HTMLElement[] = [], revealActives: RevealActives = new Map()): InlineProjection {
   let text = ""
   const boundaries: number[] = []
   let hasSyntax = false
@@ -587,16 +598,34 @@ function inlineProjection(source: string, sourceOffset = 0, protectedElements: H
       const protectedElement = protectedElements[protectedIndex]
       appendProtected(protectedElement ? atomMarker(protectedStartIndex + protectedIndex) : token.content, sourceOffset + index, sourceOffset + index + token.length)
       protectedIndex += 1
-    } else if (["code", "document_link", "escape"].includes(token.kind)) {
+    } else if (token.kind === "code") {
+      // Revealed code projects its source slice (delimiters included);
+      // concealed code projects content only.
+      const revealed = revealActives.get(sourceOffset + index)
+      if (revealed) {
+        appendPlain(source.slice(index, index + token.length), sourceOffset + index)
+      } else {
+        appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0))
+      }
+    } else if (["document_link", "escape"].includes(token.kind)) {
       appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0))
     } else {
+      // Revealed formats bypass recursion: the full slice (with nested
+      // delimiters as plain text) is already visible in the DOM.
+      const revealed = token.kind === "format" ? revealActives.get(sourceOffset + index) : undefined
+      if (revealed) {
+        appendPlain(source.slice(index, index + token.length), sourceOffset + index)
+        index += token.length
+        continue
+      }
       const content = inlineProjection(
         token.content,
         sourceOffset + index + (token.contentOffset ?? 0),
         protectedElements.slice(protectedIndex),
         protectedStartIndex + protectedIndex,
         formatBudget,
-        allMathElements.slice(mathIndex)
+        allMathElements.slice(mathIndex),
+        revealActives
       )
       appendProjection(content)
       protectedIndex += content.atomCount
@@ -608,7 +637,7 @@ function inlineProjection(source: string, sourceOffset = 0, protectedElements: H
   return { text, boundaries, hasSyntax, atomCount: protectedIndex, mathCount: mathIndex }
 }
 
-function structuredBlockProjection(source: string, kind: string, protectedElements: HTMLElement[], formatBudget: FormatBudget | null = null, { preserveEmptyLines = false }: { preserveEmptyLines?: boolean } = {}, allMathElements: HTMLElement[] = []): InlineProjection {
+function structuredBlockProjection(source: string, kind: string, protectedElements: HTMLElement[], formatBudget: FormatBudget | null = null, { preserveEmptyLines = false }: { preserveEmptyLines?: boolean } = {}, allMathElements: HTMLElement[] = [], revealActives: RevealActives = new Map()): InlineProjection {
   const lines = source.split("\n")
   const boundaries: number[] = []
   let text = ""
@@ -634,7 +663,8 @@ function structuredBlockProjection(source: string, kind: string, protectedElemen
       protectedElements.slice(protectedIndex),
       protectedIndex,
       formatBudget,
-      allMathElements.slice(mathIndex)
+      allMathElements.slice(mathIndex),
+      revealActives
     )
     protectedIndex += projection.atomCount
     mathIndex += projection.mathCount || 0
@@ -751,11 +781,43 @@ function inlineTokenAt(source: string, formatBudget: FormatBudget | null = null,
 function inlineFormatBudget(element: Element | null): FormatBudget | null {
   if (!element?.querySelectorAll) return null
 
+  // Revealed spans replaced their elements; count them by dataset so
+  // the tokenizer budget still matches the source constructs.
   return {
-    strong: element.querySelectorAll("strong, b").length,
-    emphasis: element.querySelectorAll("em, i").length,
-    strike: element.querySelectorAll("del, s, strike").length
+    strong: element.querySelectorAll("strong, b, [data-editor-inline-format='strong']").length,
+    emphasis: element.querySelectorAll("em, i, [data-editor-inline-format='emphasis']").length,
+    strike: element.querySelectorAll("del, s, strike, [data-editor-inline-format='strike']").length
   }
+}
+
+// The reveal tokenizer must agree with inlineTokenAt on every mapped
+// token boundary; any divergence refuses (safe direction: recover).
+// Walk top-level tokens with a throwaway budget clone: mapped starts
+// are always top-level (pairing is outermost-only), so each must
+// appear here with equal length and kind.
+function revealTokensAgree(source: string, actives: RevealActives, budget: FormatBudget | null): boolean {
+  const seen = new Map<number, { length: number; kind: string; formatType: string | undefined }>()
+  const walk = budget ? { ...budget } : null
+  let index = 0
+  while (index < source.length) {
+    const token = inlineTokenAt(source.slice(index), walk, source[index - 1] ?? "")
+    if (!token) {
+      index += 1
+      continue
+    }
+    if (token.formatType && walk) walk[token.formatType] -= 1
+    if (token.kind === "format" || token.kind === "code") {
+      seen.set(index, { length: token.length, kind: token.kind, formatType: token.formatType })
+    }
+    index += token.length
+  }
+  for (const [start, entry] of actives) {
+    const found = seen.get(start)
+    if (!found || found.length !== entry.token.end - entry.token.start) return false
+    if (entry.token.kind === "code" && found.kind !== "code") return false
+    if (entry.token.kind === "format" && (found.kind !== "format" || found.formatType !== entry.token.formatType)) return false
+  }
+  return true
 }
 
 export function protectedElementsFor(element: Element | null): HTMLElement[] {
