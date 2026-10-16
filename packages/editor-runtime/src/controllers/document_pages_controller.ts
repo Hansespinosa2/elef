@@ -204,6 +204,11 @@ export default class extends Controller<HTMLElement> {
     this.resizeFrames()
     this.mutationObserver?.takeRecords()
     this.paginatedOnce = true
+    // Perf Q2: quiet settled frames so off-screen pages skip rendering
+    // (style, layout, paint) until near the viewport. Measuring is done
+    // by now (resizeFrames ran unquiet); the next pass rebuilds bare
+    // frames, so its measurements stay exact.
+    pages.forEach(({ frame }) => frame.classList.add("is-quiet"))
     requestAnimationFrame(() => {
       if (!this.active || generation !== this.paginationGeneration) return
       markStage("paginate-end")

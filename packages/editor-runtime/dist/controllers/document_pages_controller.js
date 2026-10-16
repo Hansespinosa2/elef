@@ -146,6 +146,7 @@ class document_pages_controller_default extends Controller {
     this.resizeFrames();
     this.mutationObserver?.takeRecords();
     this.paginatedOnce = true;
+    pages.forEach(({ frame }) => frame.classList.add("is-quiet"));
     requestAnimationFrame(() => {
       if (!this.active || generation !== this.paginationGeneration) return;
       markStage("paginate-end");
