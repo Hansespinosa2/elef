@@ -350,6 +350,15 @@ function markdownPositionMap(source: string): { sourceToVisible: number[]; visib
       continue
     }
 
+    // Trailing whitespace runs never reach the DOM (block-end trimming),
+    // so the map skips them and end-of-block carets land at end-of-source.
+    // All-whitespace slices keep identity mapping so their single caret
+    // position stays at the start.
+    if (visibleIndex > 0 && rest.trim() === "") {
+      skip(source.length)
+      continue
+    }
+
     emit(sourceIndex, sourceIndex + 1)
   }
 

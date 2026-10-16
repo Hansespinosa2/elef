@@ -18,17 +18,19 @@ function markdownForVisibleText(markdown, text, kind, element = null, { document
   const sourceText = documentMode && structured ? String(text || "").replace(/\u00a0/g, " ") : rawValue;
   const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element, protectedElements.length) : sourceText;
   const normalizedText = atomText.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ");
-  const renderedText = documentMode && structured ? normalizedText : visibleText(normalizedText);
+  const valueTrimmed = !(documentMode && structured);
+  const renderedText = valueTrimmed ? visibleText(normalizedText) : normalizedText;
+  const trailingExtra = valueTrimmed ? normalizedText.match(/[ \t]*$/)?.[0] ?? "" : "";
   const value = structured ? renderedText : normalizeInlineRenderedText(renderedText);
   const formatBudget = inlineFormatBudget(element);
   if (kind === "list" || kind === "quote") {
     const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget, { preserveEmptyLines: documentMode }, allMathElements);
     const structuredValue = documentMode ? addStructuredMarkers(source, value, kind) : value;
-    const preserved2 = preserveProjectedMarkdown(source, structuredValue, projection, { preserveLineBreaks: documentMode });
+    const preserved2 = preserveProjectedMarkdown(source, structuredValue, projection, { preserveLineBreaks: documentMode, trailingExtra });
     if (preserved2 !== null) return preserved2;
   }
   if (source === "" && documentMode) return value;
-  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements);
+  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements, trailingExtra);
   return preserved === null ? source : preserved;
 }
 function sourceOffsetForVisiblePosition(source, element, visiblePosition) {
@@ -266,25 +268,71 @@ function activeDisplayMathBlock(source, allMathElements) {
   if (!/^[ \t]{0,3}$/.test(before) || !/^[ \t]*$/.test(after)) return null;
   return before + fullText + after;
 }
-function preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements = []) {
-  return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements));
+function preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements = [], trailingExtra = "") {
+  return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements), { trailingExtra });
 }
-function preserveProjectedMarkdown(source, value, projection, { preserveLineBreaks = false } = {}) {
+function preserveProjectedMarkdown(source, value, projection, { preserveLineBreaks = false, trailingExtra = "" } = {}) {
   const normalizedValue = value.replace(/\r\n?/g, "\n");
   const leading = preserveLineBreaks ? 0 : projection.text.match(/^\s*/)?.[0]?.length || 0;
   const trailing = preserveLineBreaks ? 0 : projection.text.match(/\s*$/)?.[0]?.length || 0;
   const end = projection.text.length - trailing;
   const previous = projection.text.slice(leading, end);
   const boundaries = projection.boundaries.slice(leading, end + 1);
+  const endBoundary = trailing > 0 ? projection.boundaries[projection.text.length] : void 0;
   if (previous === normalizedValue) return source;
-  const { prefix, suffix } = commonEditBounds(previous, normalizedValue);
-  const from = boundaries[prefix];
-  const to = boundaries[previous.length - suffix];
+  const aligned = alignedEditBounds(previous, normalizedValue, trailingExtra);
+  const fallback = aligned === null;
+  const { prefix, suffix, prefixValue, suffixValue } = fallback ? { ...commonEditBounds(previous, normalizedValue), prefixValue: 0, suffixValue: 0 } : aligned;
+  const valuePrefix = fallback ? prefix : prefixValue;
+  const valueSuffix = fallback ? suffix : suffixValue;
+  const endInsertion = prefix === previous.length && endBoundary !== void 0;
+  const from = endInsertion ? endBoundary : boundaries[prefix];
+  const to = endInsertion ? endBoundary : boundaries[previous.length - suffix];
   if (from === void 0 || to === void 0 || from > to) return null;
   const lineEnding = source.includes("\r\n") ? "\r\n" : "\n";
-  const insertion = normalizedValue.slice(prefix, normalizedValue.length - suffix).replace(/\n/g, lineEnding);
+  let insertion = normalizedValue.slice(valuePrefix, normalizedValue.length - valueSuffix).replace(/\n/g, lineEnding);
+  if (trailingExtra) {
+    if (suffix === 0 && valueSuffix === 0) insertion += trailingExtra;
+    else return `${source.slice(0, from)}${insertion}${source.slice(to)}${trailingExtra}`;
+  }
   const result = `${source.slice(0, from)}${insertion}${source.slice(to)}`;
   return result;
+}
+function isLagWhitespace(char) {
+  return char === " " || char === "	";
+}
+function alignedEditBounds(previous, next, trailingExtra = "") {
+  let prefix = 0;
+  let prefixValue = 0;
+  let skipped = 0;
+  while (prefixValue < next.length) {
+    if (prefix >= previous.length) break;
+    if (previous[prefix] === next[prefixValue]) {
+      prefix += 1;
+      prefixValue += 1;
+      continue;
+    }
+    if (!isLagWhitespace(previous[prefix])) break;
+    prefix += 1;
+    skipped += 1;
+  }
+  let suffix = 0;
+  let suffixValue = 0;
+  while (suffixValue < next.length - prefixValue) {
+    const prevIndex = previous.length - suffix - 1;
+    if (prevIndex < prefix) break;
+    if (previous[prevIndex] === next[next.length - suffixValue - 1]) {
+      suffix += 1;
+      suffixValue += 1;
+      continue;
+    }
+    if (!isLagWhitespace(previous[prevIndex])) break;
+    suffix += 1;
+    skipped += 1;
+  }
+  const empty = prefix + suffix >= previous.length && prefixValue + suffixValue >= next.length;
+  if (empty && skipped > 0 && !trailingExtra) return null;
+  return { prefix, suffix, prefixValue, suffixValue };
 }
 function commonEditBounds(previous, next) {
   let prefix = 0;

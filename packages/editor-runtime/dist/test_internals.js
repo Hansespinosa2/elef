@@ -1006,6 +1006,10 @@ function markdownPositionMap(source) {
       skip(sourceIndex + (delimiter[0] ?? "").length);
       continue;
     }
+    if (visibleIndex > 0 && rest.trim() === "") {
+      skip(source.length);
+      continue;
+    }
     emit(sourceIndex, sourceIndex + 1);
   }
   sourceToVisible[source.length] = visibleIndex;

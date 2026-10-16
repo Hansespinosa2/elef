@@ -112,3 +112,30 @@ test("active math roots count raw newlines for identity mapping", () => {
   assert.equal(node, text)
   assert.equal(offset, 3)
 })
+
+test("trailing spaces map end-of-block carets to end-of-source", () => {
+  // The renderer trims "See " to "See", so visible 3 is ambiguous: the map
+  // gives end-of-block carets end-of-source affinity.
+  assert.equal(sourceOffsetForVisibleOffset("See ", 3), 4)
+  assert.equal(sourceOffsetForVisibleOffset("See ", 2), 2)
+  assert.equal(visibleOffsetForSourceOffset("See ", 4), 3)
+  assert.equal(visibleOffsetForSourceOffset("See ", 3), 3)
+  assert.equal(sourceOffsetForVisibleOffset("See  \n", 3), 6)
+})
+
+test("all-whitespace slices keep identity mapping", () => {
+  assert.equal(sourceOffsetForVisibleOffset("   ", 0), 0)
+  assert.equal(visibleOffsetForSourceOffset("   ", 0), 0)
+})
+
+test("trimmed trailing space round-trips through the DOM", () => {
+  const { document } = parseHTML(`<div data-editor-block-id="b1"><p>See</p></div>`)
+  const block = document.querySelector("[data-editor-block-id]")
+  const text = block.querySelector("p").firstChild
+
+  assert.equal(visibleOffsetAtPoint(block, text, 3), 3)
+  assert.equal(sourceOffsetForVisibleOffset("See ", visibleOffsetAtPoint(block, text, 3)), 4)
+  const [node, offset] = pointAtVisibleOffset(block, visibleOffsetForSourceOffset("See ", 4))
+  assert.equal(node, text)
+  assert.equal(offset, 3)
+})

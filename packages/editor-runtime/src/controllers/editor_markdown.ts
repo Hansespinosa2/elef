@@ -45,20 +45,26 @@ export function markdownForVisibleText(markdown: string, text: string, kind: str
   const sourceText = documentMode && structured ? String(text || "").replace(/\u00a0/g, " ") : rawValue
   const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element as Element, protectedElements.length) : sourceText
   const normalizedText = atomText.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ")
-  const renderedText = documentMode && structured ? normalizedText : visibleText(normalizedText)
+  const valueTrimmed = !(documentMode && structured)
+  const renderedText = valueTrimmed ? visibleText(normalizedText) : normalizedText
+  // The trim hides just-typed trailing whitespace from the differ (a flush
+  // can re-read the DOM while the typed space is still trailing); keep the
+  // trimmed run as evidence so the alignment cannot mistake a hidden
+  // insertion for a whitespace deletion.
+  const trailingExtra = valueTrimmed ? (normalizedText.match(/[ \t]*$/)?.[0] ?? "") : ""
   const value = structured ? renderedText : normalizeInlineRenderedText(renderedText)
   const formatBudget = inlineFormatBudget(element)
 
   if (kind === "list" || kind === "quote") {
     const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget, { preserveEmptyLines: documentMode }, allMathElements)
     const structuredValue = documentMode ? addStructuredMarkers(source, value, kind) : value
-    const preserved = preserveProjectedMarkdown(source, structuredValue, projection, { preserveLineBreaks: documentMode })
+    const preserved = preserveProjectedMarkdown(source, structuredValue, projection, { preserveLineBreaks: documentMode, trailingExtra })
     if (preserved !== null) return preserved
   }
 
   if (source === "" && documentMode) return value
 
-  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements)
+  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements, trailingExtra)
   // A failed source projection must never serialize display-only atoms or
   // lossy rendered text into canonical Markdown.
   return preserved === null ? source : preserved
@@ -365,11 +371,11 @@ function activeDisplayMathBlock(source: string, allMathElements: HTMLElement[]):
   return before + fullText + after
 }
 
-function preserveInlineMarkdown(source: string, value: string, protectedElements: HTMLElement[], formatBudget: FormatBudget | null, allMathElements: HTMLElement[] = []): string | null {
-  return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements))
+function preserveInlineMarkdown(source: string, value: string, protectedElements: HTMLElement[], formatBudget: FormatBudget | null, allMathElements: HTMLElement[] = [], trailingExtra = ""): string | null {
+  return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements), { trailingExtra })
 }
 
-function preserveProjectedMarkdown(source: string, value: string, projection: InlineProjection, { preserveLineBreaks = false }: { preserveLineBreaks?: boolean } = {}): string | null {
+function preserveProjectedMarkdown(source: string, value: string, projection: InlineProjection, { preserveLineBreaks = false, trailingExtra = "" }: { preserveLineBreaks?: boolean; trailingExtra?: string } = {}): string | null {
   // Projections never contain carriage returns (structured lines are stripped
   // before projection; inline whitespace is collapsed), so normalize the
   // edited value the same way before diffing — otherwise every CRLF line
@@ -380,19 +386,100 @@ function preserveProjectedMarkdown(source: string, value: string, projection: In
   const end = projection.text.length - trailing
   const previous = projection.text.slice(leading, end)
   const boundaries = projection.boundaries.slice(leading, end + 1)
+  // The trimmed trailing run is invisible in the DOM; its true end boundary
+  // sits past it at end-of-source.
+  const endBoundary = trailing > 0 ? projection.boundaries[projection.text.length] : undefined
   if (previous === normalizedValue) return source
 
-  const { prefix, suffix } = commonEditBounds(previous, normalizedValue)
-  const from = boundaries[prefix]
-  const to = boundaries[previous.length - suffix]
+  // The DOM can lag the engine by whitespace it never rendered: the
+  // projection strips trailing runs, and precise commits preserve source
+  // whitespace the editable DOM never contained. Once such a space sits
+  // inside the base (e.g. "See [[Research" typed after "See "), a naive
+  // diff against the lagging DOM ("See[[Research ta") reads the inherited
+  // gap as a user deletion. Align first, skipping previous-whitespace the
+  // value lacks; the walks stop at real divergence, so skipped runs always
+  // sit outside the edit and are preserved. Only an empty diff with skips
+  // (a genuine whitespace deletion) falls back to the unaligned diff so
+  // user deletions are still honored.
+  const aligned = alignedEditBounds(previous, normalizedValue, trailingExtra)
+  const fallback = aligned === null
+  const { prefix, suffix, prefixValue, suffixValue } = fallback
+    ? { ...commonEditBounds(previous, normalizedValue), prefixValue: 0, suffixValue: 0 }
+    : aligned
+  const valuePrefix = fallback ? prefix : prefixValue
+  const valueSuffix = fallback ? suffix : suffixValue
+  // Pure end-insertions land past the invisible trailing run (matching the
+  // caret map's end affinity); every other edit keeps the original
+  // boundaries so range operations never swallow unselected whitespace.
+  const endInsertion = prefix === previous.length && endBoundary !== undefined
+  const from = endInsertion ? endBoundary : boundaries[prefix]
+  const to = endInsertion ? endBoundary : boundaries[previous.length - suffix]
   if (from === undefined || to === undefined || from > to) return null
 
   // New line breaks introduced by the edit adopt the block's own convention
   // so a CRLF block is never silently rewritten to mixed endings.
   const lineEnding = source.includes("\r\n") ? "\r\n" : "\n"
-  const insertion = normalizedValue.slice(prefix, normalizedValue.length - suffix).replace(/\n/g, lineEnding)
+  let insertion = normalizedValue.slice(valuePrefix, normalizedValue.length - valueSuffix).replace(/\n/g, lineEnding)
+  // A trimmed trailing run is user-typed content, not round-trip noise:
+  // fold it into end-site insertions (end-insertions always land here),
+  // or re-append it after middle-site edits. Round-trips early-return
+  // before reaching here, and deletions fall back (which implies no
+  // trailing run), so any run seen here was typed during this batch.
+  if (trailingExtra) {
+    if (suffix === 0 && valueSuffix === 0) insertion += trailingExtra
+    else return `${source.slice(0, from)}${insertion}${source.slice(to)}${trailingExtra}`
+  }
   const result = `${source.slice(0, from)}${insertion}${source.slice(to)}`
   return result
+}
+
+function isLagWhitespace(char: string | undefined): boolean {
+  return char === " " || char === "\t"
+}
+
+// Aligns previous (projection) against next (DOM), skipping horizontal
+// whitespace the DOM lacks. Returns null when the skipped runs intersect
+// the edit (or the diff is empty with skips), signalling the caller to
+// use the unaligned diff instead. Separate previous/value cursors track
+// both sides across skips.
+function alignedEditBounds(previous: string, next: string, trailingExtra = ""): { prefix: number; suffix: number; prefixValue: number; suffixValue: number } | null {
+  let prefix = 0
+  let prefixValue = 0
+  let skipped = 0
+  while (prefixValue < next.length) {
+    if (prefix >= previous.length) break
+    if (previous[prefix] === next[prefixValue]) {
+      prefix += 1
+      prefixValue += 1
+      continue
+    }
+    if (!isLagWhitespace(previous[prefix])) break
+    prefix += 1
+    skipped += 1
+  }
+  let suffix = 0
+  let suffixValue = 0
+  while (suffixValue < next.length - prefixValue) {
+    const prevIndex = previous.length - suffix - 1
+    if (prevIndex < prefix) break
+    if (previous[prevIndex] === next[next.length - suffixValue - 1]) {
+      suffix += 1
+      suffixValue += 1
+      continue
+    }
+    if (!isLagWhitespace(previous[prevIndex])) break
+    suffix += 1
+    skipped += 1
+  }
+  // The loops bound both cursors so ranges cannot overlap; the only
+  // fallback is an empty diff with skips (a genuine whitespace deletion),
+  // which the unaligned diff owns. A trimmed trailing run proves the
+  // "empty" verdict is an artifact of the trim (the user typed trailing
+  // whitespace the trimmed value hides), so it stays aligned and the
+  // caller folds the run into the end-site insertion.
+  const empty = prefix + suffix >= previous.length && prefixValue + suffixValue >= next.length
+  if (empty && skipped > 0 && !trailingExtra) return null
+  return { prefix, suffix, prefixValue, suffixValue }
 }
 
 function commonEditBounds(previous: string, next: string): { prefix: number; suffix: number } {
