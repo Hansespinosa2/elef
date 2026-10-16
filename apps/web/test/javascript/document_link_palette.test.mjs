@@ -2,9 +2,11 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
+const visualAssistSource = await readFile(new URL("../../../../packages/editor-runtime/dist/lib/visual_assist.js", import.meta.url), "utf8")
 const source = (await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/document_link_palette_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
+  .replace('import { mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"', () => visualAssistSource)
   .replace('import { forwardEscapeToVim } from "../lib/vim_escape.js"', "const forwardEscapeToVim = () => false")
 const palette = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
@@ -86,6 +88,13 @@ globalThis.window = {
 }
 globalThis.document = {
   body: node("body"),
+  listeners: new Map(),
+  added: [],
+  addEventListener(name, listener) {
+    this.added.push(name)
+    this.listeners.set(name, listener)
+  },
+  removeEventListener(name) { this.listeners.delete(name) },
   createElement(tagName) { return node(tagName) },
   createTextNode(text) { return node("#text", { text }) }
 }
@@ -310,13 +319,16 @@ test("connect announces the palette and binds resize plus the textarea scroll li
   controller.connect()
 
   assert.equal(paletteTarget.getAttribute("aria-live"), "polite")
-  assert.deepEqual(globalThis.window.added, ["resize"])
+  assert.deepEqual(globalThis.window.added, ["resize", "scroll"])
+  assert.deepEqual(globalThis.document.added, ["keydown"])
   assert.deepEqual(editorTarget.added, ["scroll"])
   assert.equal(controller.nativeScrollBound, true)
 
   controller.disconnect()
 
   assert.equal(globalThis.window.listeners.has("resize"), false)
+  assert.equal(globalThis.window.listeners.has("scroll"), false)
+  assert.equal(globalThis.document.listeners.has("keydown"), false)
   assert.equal(editorTarget.listeners.size, 0)
 })
 

@@ -94,6 +94,15 @@ test("new document is palette-only with no direct chord", () => {
   assert.equal(action?.palette, true);
 });
 
+test("keyboard shortcuts is palette-only and needs an editor", () => {
+  const action = shortcutById("keyboard-shortcuts");
+  assert.notEqual(action, null);
+  assert.equal(action?.webChord, null);
+  assert.equal(action?.desktopChord, null);
+  assert.equal(action?.palette, true);
+  assert.equal(action?.requiresEditor, true);
+});
+
 test("Cmd+S matches save and Cmd+Enter matches present", () => {
   assert.equal(eventMatchesChord(cmdEvent("s"), "cmdOrCtrl+s"), true);
   assert.equal(eventMatchesChord(cmdEvent("S"), "cmdOrCtrl+s"), true);

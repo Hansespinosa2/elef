@@ -40,6 +40,7 @@ pin "@elef/client/preview-core", to: "client/dist/preview-core.js" # deferred ca
 pin "@elef/client/sanitize", to: "client/dist/sanitize.js"
 pin "@elef/client/presentation-chrome", to: "client/dist/presentation-chrome.js"
 pin "@elef/client/vim-preferences", to: "client/dist/vim-preferences.js"
+pin "@elef/client/editor", to: "client/dist/editor.js" # CodeMirror editing engine shared by the editor shell
 pin "host/rails-http-host", to: "host/rails-http-host.js"
 pin "host/rails-authoring-settings-transport", to: "host/rails-authoring-settings-transport.js"
 pin "bug_report_response", to: "bug_report_response.js"

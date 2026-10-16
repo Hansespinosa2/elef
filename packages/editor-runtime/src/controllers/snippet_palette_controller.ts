@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
 import { forwardEscapeToVim } from "../lib/vim_escape.js"
+import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
 import { editorInsideCode, editorInsideMath } from "./math_shorthand_controller.js"
 import { authoringRegistryFor } from "./authoring_registry.js"
 import { snippetStopsEffect } from "./snippet_stops.js"
@@ -19,22 +20,42 @@ export default class extends Controller<HTMLElement> {
     this.editorReady = () => this.setupEditor()
     this.editorSelectionChange = () => this.scheduleStopPrune()
     this.editorModeChange = () => this.endStops()
+    this.visualKeydown = (event: Event) => {
+      if (this.editorController?.editingMode !== "visual") return
+      if (this.paletteTarget.hidden && !this.stops.length) return
+      this.keydown(event as KeyboardEvent)
+    }
+    this.visualScroll = () => {
+      if (this.editorController?.editingMode === "visual") this.positionPalette()
+    }
     this.element.addEventListener("elef:editor-ready", this.editorReady)
     this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange)
+    // The shared Edit-actions menu inserts triggers programmatically, then
+    // dispatches this so palettes re-refresh against the restored caret.
+    this.assistTriggerInserted = () => this.refresh()
+    this.element.addEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted)
     this.editorForm = this.element.closest("form")
     this.editorForm?.addEventListener("elef:editor-mode-change", this.editorModeChange)
     this.positionPalette = this.positionPalette.bind(this)
     this.paletteTarget.setAttribute("aria-live", "polite")
     this.setupEditor()
     window.addEventListener("resize", this.positionPalette)
+    // Document capture precedes the form-level projection router
+    // deterministically, so open-palette keys never reach block handling;
+    // with no palette or stops the handler returns before touching the event.
+    document.addEventListener("keydown", this.visualKeydown, true)
+    window.addEventListener("scroll", this.visualScroll, { capture: true, passive: true })
   }
 
   disconnect() {
     window.removeEventListener("resize", this.positionPalette)
+    document.removeEventListener("keydown", this.visualKeydown, true)
+    window.removeEventListener("scroll", this.visualScroll, { capture: true })
     if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette)
     if (this.keydownBound) this.editorController?.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
     this.element.removeEventListener("elef:editor-selection-change", this.editorSelectionChange)
+    this.element.removeEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted)
     this.editorForm?.removeEventListener("elef:editor-mode-change", this.editorModeChange)
     this.endStops()
   }
@@ -82,6 +103,14 @@ export default class extends Controller<HTMLElement> {
     const selected = openPalette?.querySelector('[aria-selected="true"]')
     if (selected) editor.setAttribute("aria-activedescendant", selected.id)
     else editor.removeAttribute("aria-activedescendant")
+    // In visual mode the native caret lives in the projection block, so
+    // mirror the popup state there for assistive technology.
+    if (this.editorController?.editingMode !== "visual") return
+    mirrorPopupAccessibility(this.element, { open: Boolean(openPalette), selectedId: selected?.id ?? null })
+  }
+
+  projectionHost() {
+    return projectionHostFor(this.element)
   }
 
   input() {
@@ -106,7 +135,7 @@ export default class extends Controller<HTMLElement> {
   pruneStops() {
     if (!this.stops.length) return
     const editor = this.editorController
-    if (!editor || editor.destroyed || editor.editingMode !== "source") return this.endStops()
+    if (!assistsInMode(editor) || editor?.destroyed) return this.endStops()
     const active = this.activeStop
     if (!active) return this.endStops()
     const from = editor.selectionStart
@@ -118,7 +147,7 @@ export default class extends Controller<HTMLElement> {
   keydown(event: KeyboardEvent) {
     if (event.defaultPrevented) return
     const editor = this.editorController
-    if (!editor || editor.editingMode !== "source") {
+    if (!assistsInMode(editor)) {
       this.close()
       if (this.stops.length) this.endStops()
       return
@@ -164,7 +193,7 @@ export default class extends Controller<HTMLElement> {
 
   refresh() {
     const editor = this.editorController
-    if (!editor || editor.editingMode !== "source") return this.close()
+    if (!assistsInMode(editor)) return this.close()
     const directiveQuery = this.directiveQueryAtCaret()
     const query = directiveQuery || this.queryAtCaret()
     if (!query) return this.close()
@@ -343,17 +372,17 @@ export default class extends Controller<HTMLElement> {
 
     const editor = this.editorController
     if (!editor) return
+    // The engine surface hides in visual mode, so its coordinates are
+    // meaningless there: anchor to the native projection caret instead.
+    if (editor.editingMode === "visual") {
+      const rect = visualCaretRect()
+      if (!rect) return
+      placePaletteBelow(this.paletteTarget, rect)
+      return
+    }
     const editorRect = editor.dom.getBoundingClientRect()
     const markerRect = editor.view.coordsAtPos(editor.selectionStart) || editorRect
-
-    const paletteRect = this.paletteTarget.getBoundingClientRect()
-    const left = Math.max(8, Math.min(markerRect.left, window.innerWidth - paletteRect.width - 8))
-    const maxTop = window.innerHeight - paletteRect.height - 8
-    const belowTop = markerRect.bottom + 4
-    const aboveTop = markerRect.top - paletteRect.height - 4
-    const top = belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop))
-    this.paletteTarget.style.left = `${left}px`
-    this.paletteTarget.style.top = `${top}px`
+    placePaletteBelow(this.paletteTarget, markerRect)
   }
 
   insertSelected() {
@@ -362,11 +391,15 @@ export default class extends Controller<HTMLElement> {
 
     const editor = this.editorController
     if (!editor) return this.close()
+    const visual = editor.editingMode === "visual"
+    const host = visual ? this.projectionHost() : null
     if (this.argumentQuery) {
       this.endStops()
-      editor.replaceRange(snippet.trigger, this.queryStart, editor.selectionStart)
+      const queryEnd = editor.selectionStart
+      editor.replaceRange(snippet.trigger, this.queryStart, queryEnd)
+      if (visual) host?.applyVisualAssistInsert?.({ from: this.queryStart, to: queryEnd, insert: snippet.trigger, caret: this.queryStart + snippet.trigger.length })
       this.close()
-      editor.focus()
+      if (!visual) editor.focus()
       return
     }
     const before = editor.value.slice(0, this.queryStart)
@@ -379,8 +412,13 @@ export default class extends Controller<HTMLElement> {
     }))
     this.close()
     this.ignoreNextInput = true
-    editor.replaceRange(expansion.text, this.queryStart, editor.selectionStart)
-    editor.focus()
+    const queryEnd = editor.selectionStart
+    editor.replaceRange(expansion.text, this.queryStart, queryEnd)
+    // Visual focus already sits in the patched block; the engine surface
+    // stays hidden and the projection pipeline shifts the map, patches the
+    // caret text, and stages caret restoration for the deferred reinstall.
+    if (!visual) editor.focus()
+    else host?.applyVisualAssistInsert?.({ from: this.queryStart, to: queryEnd, insert: expansion.text, caret: this.queryStart + expansion.text.length })
     this.selectStop(this.stops[0])
     queueMicrotask(() => this.refresh())
   }
@@ -396,6 +434,7 @@ export default class extends Controller<HTMLElement> {
     if (!editor) return this.endStops()
     const exit = editor.value[current.end] === "}" ? current.end + 1 : current.end
     editor.setSelectionRange(exit, exit)
+    if (editor.editingMode === "visual") placeVisualCaret(this.element, exit)
     this.endStops()
   }
 
@@ -420,14 +459,19 @@ export default class extends Controller<HTMLElement> {
   selectStop(stop: any) {
     const editor = this.editorController
     if (!editor) return
+    const visual = editor.editingMode === "visual"
     if (!stop) {
       this.activeStop = null
       this.updateStopDecorations()
       editor.setSelectionRange(editor.selectionStart, editor.selectionStart)
+      if (visual) placeVisualCaret(this.element, editor.selectionStart)
       return
     }
     this.activeStop = stop
     editor.setSelectionRange(stop.start, stop.end)
+    // The projection shows a single caret: walk it to the stop start while
+    // the engine holds the ranged stop selection.
+    if (visual) placeVisualCaret(this.element, stop.start)
     this.updateStopDecorations()
   }
 

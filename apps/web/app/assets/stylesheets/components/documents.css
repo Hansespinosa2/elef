@@ -50,6 +50,18 @@
   position: relative;
   width: 794px;
 }
+/* Off-screen page skipping (perf Q2): after pagination settles, frames
+   skip rendering until near the viewport. The intrinsic size matches
+   the A4 frame so scrollbars never jump; auto (not hidden) keeps
+   focus, find-in-page, and caret placement working. Applied only after
+   measuring finishes: pagination rebuilds bare frames every pass. */
+.document-page-frame.is-quiet {
+  content-visibility: auto;
+  contain-intrinsic-size: 794px 1123px;
+}
+@media print {
+  .document-page-frame.is-quiet { content-visibility: visible; }
+}
 .document-page-frame > .document-page {
   bottom: auto;
   left: 0;

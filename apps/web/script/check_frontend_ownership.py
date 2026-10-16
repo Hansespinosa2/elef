@@ -149,7 +149,7 @@ renderer_sources = (
 )
 editor_runtime = (ROOT / "packages/editor-runtime/src/lib/editor_runtime.ts").read_text()
 math_modules = (
-    ROOT / "packages/editor-runtime/src/controllers/live_preview.ts",
+    ROOT / "packages/client/src/features/editor/live_preview.ts",
     ROOT / "packages/editor-runtime/src/controllers/editor_math.ts",
     ROOT / "packages/editor-runtime/src/controllers/editor_markdown.ts",
 )

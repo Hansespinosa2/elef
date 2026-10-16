@@ -1,14 +1,14 @@
-import type { Controller } from "@hotwired/stimulus";
+import type { EditorHandle } from "@elef/client/editor";
 
 export function waitForEditorController(
   field: Element,
-  findController: (field: Element) => Controller | null | undefined,
+  findController: (field: Element) => EditorHandle | null | undefined,
   { timeoutMs = 5_000 }: { timeoutMs?: number } = {}
-): Promise<Controller> {
+): Promise<EditorHandle> {
   const available = findController(field)
   if (available?.editorReady === true) return Promise.resolve(available)
 
-  return new Promise<Controller>((resolve, reject) => {
+  return new Promise<EditorHandle>((resolve, reject) => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const cleanup = () => {
       clearTimeout(timer)

@@ -152,3 +152,65 @@ test("bare ::: alone is typed as unknown directive and warns without affecting p
   assert.equal(slide.blocks[1]?.position, null)
   assert.deepEqual(structure.warnings, ["Unknown or malformed presentation directive was removed."])
 })
+
+test("display math with trailing closers does not swallow following blocks", () => {
+  const source = [
+    "### D1",
+    "",
+    "Lead paragraph.",
+    "",
+    "$$\\begin{aligned}",
+    "x &= 1 \\\\",
+    "y &= 2",
+    "\\end{aligned}$$",
+    "",
+    "### D2",
+    "",
+    "Tail paragraph.",
+    ""
+  ].join("\n")
+  const { editorMap } = buildEditorStructure(source, { mode: "document" })
+  const slide = editorMap.slides[0]
+  assert.ok(slide)
+  const blocks = slide.blocks.filter(block => !block.empty_placeholder)
+  const markdowns = blocks.map(block => block.markdown)
+  assert.ok(markdowns.some(markdown => markdown.startsWith("### D1")))
+  assert.ok(markdowns.some(markdown => markdown.startsWith("### D2")))
+  assert.ok(markdowns.some(markdown => markdown.startsWith("Tail paragraph.")))
+  assert.ok(blocks.every(block => block.range.end - block.range.start < source.length))
+})
+
+test("escaped dollars do not close display math fences", () => {
+  const source = [
+    "$$",
+    "x = 1 \\$$",
+    "y = 2",
+    "$$",
+    "",
+    "Tail.",
+    ""
+  ].join("\n")
+  const { editorMap } = buildEditorStructure(source, { mode: "document" })
+  const slide = editorMap.slides[0]
+  assert.ok(slide)
+  const blocks = slide.blocks.filter(block => !block.empty_placeholder)
+  assert.ok(blocks.some(block => block.markdown.startsWith("Tail.")))
+  assert.equal(blocks.filter(block => block.markdown.includes("Tail.")).length, 1)
+})
+
+test("display math fences do not swallow presentation slide delimiters", () => {
+  const source = [
+    "# One",
+    "",
+    "$$\\begin{aligned}",
+    "x &= 1",
+    "\\end{aligned}$$",
+    "",
+    "---",
+    "",
+    "# Two",
+    ""
+  ].join("\n")
+  const { slides } = buildEditorStructure(source, { mode: "presentation" })
+  assert.equal(slides.length, 2)
+})

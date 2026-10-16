@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
 import { forwardEscapeToVim } from "../lib/vim_escape.js"
+import { mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
 
 // Prefix matches score 0, later substring matches score their index, and titles
 // that miss the query entirely drop out. Ties fall back to the title so the
@@ -83,17 +84,36 @@ export default class extends Controller {
     this.matches = []
     this.selectedIndex = 0
     this.positionPalette = this.positionPalette.bind(this)
+    this.visualKeydown = (event: Event) => {
+      if (this.editorController?.editingMode !== "visual") return
+      if (this.paletteTarget.hidden) return
+      this.keydown(event as KeyboardEvent)
+    }
+    this.visualScroll = () => {
+      if (this.editorController?.editingMode === "visual") this.positionPalette()
+    }
     this.paletteTarget.setAttribute("aria-live", "polite")
     this.editorController = editorFor(this.element)
     this.editorReady = () => this.setupEditor()
     this.element.addEventListener("elef:editor-ready", this.editorReady)
+    // The shared Edit-actions menu inserts triggers programmatically, then
+    // dispatches this so palettes re-refresh against the restored caret.
+    this.assistTriggerInserted = () => this.refresh()
+    this.element.addEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted)
     window.addEventListener("resize", this.positionPalette)
+    // Document capture precedes the form-level projection router
+    // deterministically; idle visual keys never reach the palette.
+    document.addEventListener("keydown", this.visualKeydown, true)
+    window.addEventListener("scroll", this.visualScroll, { capture: true, passive: true })
     this.setupEditor()
   }
 
   disconnect() {
     window.removeEventListener("resize", this.positionPalette)
+    document.removeEventListener("keydown", this.visualKeydown, true)
+    window.removeEventListener("scroll", this.visualScroll, { capture: true })
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
+    this.element.removeEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted)
     if (this.nativeScrollBound) this.editorTarget.removeEventListener("scroll", this.positionPalette)
     if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette)
     if (this.keydownBound) this.editorController?.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
@@ -142,6 +162,8 @@ export default class extends Controller {
     const selected = openPalette?.querySelector('[aria-selected="true"]')
     if (selected) editor.setAttribute("aria-activedescendant", selected.id)
     else editor.removeAttribute("aria-activedescendant")
+    if (this.editorController?.editingMode !== "visual") return
+    mirrorPopupAccessibility(this.element, { open: Boolean(openPalette), selectedId: selected?.id ?? null })
   }
 
   input() {
@@ -209,6 +231,15 @@ export default class extends Controller {
   positionPalette() {
     if (this.paletteTarget.hidden) return
 
+    // The engine surface hides in visual mode: anchor to the native
+    // projection caret instead of engine coordinates.
+    if (this.editorController?.editingMode === "visual") {
+      const rect = visualCaretRect()
+      if (!rect) return
+      placePaletteBelow(this.paletteTarget, rect)
+      return
+    }
+
     if (this.editorController) {
       const editorRect = this.editorController.dom.getBoundingClientRect()
       const markerRect = this.editorController.view.coordsAtPos(this.editorController.selectionStart) || editorRect
@@ -267,9 +298,15 @@ export default class extends Controller {
     const insertion = `[[${title}]]`
     const caret = before.length + insertion.length
     if (this.editorController) {
+      const visual = this.editorController.editingMode === "visual"
       this.editorController.replaceRange(insertion, this.queryStart, end)
-      this.editorController.focus()
-      this.editorController.setSelectionRange(caret, caret)
+      if (visual) {
+        projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from: this.queryStart, to: end, insert: insertion, caret })
+        placeVisualCaret(this.element, caret)
+      } else {
+        this.editorController.focus()
+        this.editorController.setSelectionRange(caret, caret)
+      }
     } else {
       editor.value = before + insertion + after
       editor.focus()

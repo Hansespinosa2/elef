@@ -93,7 +93,7 @@ export function reRenderMath(activeSpan: Element | null, { caret = null }: { car
     if (katex?.renderToString && expression.trim().length > 0) {
       try {
         const wrapper = document.createElement("span")
-        wrapper.innerHTML = katex.renderToString(expression, { displayMode: isDisplay, throwOnError: true })
+        wrapper.innerHTML = katex.renderToString(expression, { displayMode: isDisplay, throwOnError: true, output: "mathml" })
         const math = wrapper.firstElementChild as HTMLElement | null
         if (!math) throw new Error("KaTeX produced no output")
         math.dataset.editorMathSource = expression
@@ -221,11 +221,43 @@ export function finishMathBeforeEnter(event: KeyboardEvent, rootElement: Element
   return true
 }
 
+interface PendingMathPress {
+  math: Element;
+  x: number;
+  y: number;
+}
+
+let pendingMathPress: PendingMathPress | null = null
+
+// Clicks retarget when a focus-triggered reflow moves the math between
+// mousedown and click (the press lands in math, the release lands on
+// an ancestor). Recording the press lets the click fall back to the
+// math the user actually pressed. Drags are excluded by movement, so
+// press-and-drag selection across math never derenders.
+const CLICK_DRAG_PX = 6
+
+export function recordMathMousedown(event: MouseEvent, rootElement: Element | null): void {
+  pendingMathPress = null
+  const math = (event.target as Element | null)?.closest?.("[data-editor-math-source]:not([data-editor-math-active])")
+  if (math && rootElement?.contains(math)) {
+    pendingMathPress = { math, x: event.clientX, y: event.clientY }
+  }
+}
+
 export function handleMathClick(event: MouseEvent, rootElement: Element | null): boolean {
   const math = (event.target as Element | null)?.closest?.("[data-editor-math-source]:not([data-editor-math-active])")
   if (math && rootElement?.contains(math)) {
+    pendingMathPress = null
     event.preventDefault()
     deRenderMath(math, { caret: "click", clickEvent: event })
+    return true
+  }
+  const pending = pendingMathPress
+  pendingMathPress = null
+  if (pending && rootElement?.contains(pending.math) &&
+    Math.hypot(event.clientX - pending.x, event.clientY - pending.y) < CLICK_DRAG_PX) {
+    event.preventDefault()
+    deRenderMath(pending.math, { caret: "click", clickEvent: event })
     return true
   }
   return false

@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
 
@@ -6,6 +6,16 @@ import {
   mountPresentationEditor,
   PresentationEditor,
 } from "../src/features/presentation/editor.js";
+
+// The assist-insert patch reads Node.TEXT_NODE (linkedom provides nodeType
+// values but no global Node).
+const nodeDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Node");
+Object.defineProperty(globalThis, "Node", { configurable: true, writable: true, value: { ELEMENT_NODE: 1, TEXT_NODE: 3 } });
+after(() => {
+  if (nodeDescriptor) Object.defineProperty(globalThis, "Node", nodeDescriptor);
+  else delete (globalThis as Record<string, unknown>).Node;
+});
+
 
 const SOURCE = "# Alpha\n\nFirst\n\n---\n\n# Beta\n\nSecond\n";
 
@@ -50,7 +60,34 @@ function fakeEditor() {
   const state = {
     value: SOURCE,
     commits: [] as string[],
+    ranges: [] as Array<[number, number]>,
+    selectionStart: 0,
+    selectionEnd: 0,
+    selectionHead: 0,
+    selectionRangeCount: 1,
+    vimEnabled: false,
+    insertMode: true,
+    editingMode: "visual",
+    focusCalls: 0,
+    focus() {
+      state.focusCalls += 1;
+    },
+    vimKeys: [] as string[],
     inputTarget: null,
+    setSelectionRange(anchor: number, head: number = anchor) {
+      state.selectionStart = anchor;
+      state.selectionEnd = head;
+      state.ranges.push([anchor, head]);
+    },
+    handleVimKey(event: { key: string }) {
+      state.vimKeys.push(event.key);
+      return false;
+    },
+    keymapCalls: [] as string[],
+    runKeymap(event: { key: string }) {
+      state.keymapCalls.push(event.key);
+      return false;
+    },
     commitSource(text: string) {
       state.commits.push(text);
       state.value = text;
@@ -81,8 +118,10 @@ function stubDeps() {
     markdownForVisibleText: (source: string) => source,
     renderInlineMath: () => {},
     handleMathClick: () => false,
+    recordMathMousedown: () => {},
     handleMathKeydown: () => false,
     syncActiveMath: (_element: unknown, flush: () => void) => flush(),
+    syncActiveInline: () => {},
     setProjectionBlockEditable: () => {},
   };
 }
@@ -305,4 +344,394 @@ test("client presentation editor publishes itself for the code editor host", () 
   assert.ok(mount.editor instanceof PresentationEditor);
   mount.destroy();
   assert.equal((form as unknown as Record<string, unknown>).presentationEditorController, undefined);
+});
+
+// Input-bridge selection leg, shared with the document editor: a collapsed
+// native caret inside an editable block drives the engine selection.
+function syncFixture({ editable = true, collapsed = true }: { editable?: boolean; collapsed?: boolean } = {}) {
+  const { document } = parseHTML(
+    `<form data-editor-mode="visual"><div data-presentation-editor-target="canvas"><div data-editor-block-id="b1">First</div></div><output data-presentation-editor-target="status"></output></form>`,
+  );
+  const form = document.querySelector("form") as unknown as HTMLFormElement;
+  const block = document.querySelector('[data-editor-block-id="b1"]') as unknown as HTMLElement;
+  // Browsers reflect contenteditable as "true"/"false"; linkedom coerces to
+  // boolean, so shadow the property with the browser string value.
+  Object.defineProperty(block, "contentEditable", { configurable: true, value: editable ? "true" : "false" });
+  const textNode = block.firstChild as unknown as Text;
+  const editor = fakeEditor();
+  const mount = mountPresentationEditor(form as unknown as Parameters<typeof mountPresentationEditor>[0], {
+    editorMap: {
+      source_length: SOURCE.length,
+      slides: [],
+      directives: [],
+      editable_regions: [{ id: "r1", block_id: "b1", kind: "paragraph", editable: true, content_range: { start: 9, end: 14 } }],
+    },
+    getEditor: () => editor,
+    deps: {
+      ...stubDeps(),
+      syncActiveMath: () => {},
+      syncActiveInline: () => {},
+      visibleOffsetAtPoint: () => 2,
+      sourceOffsetForVisibleOffset: (_source: string, offset: number) => offset,
+      visibleOffsetForSourceOffset: (source: string) => source.length,
+      markdownForVisibleText: (_source: string, text: string) => `${text}!`,
+    },
+    env: {
+      ...stubEnv(),
+      getSelection: () =>
+        ({
+          isCollapsed: collapsed,
+          anchorNode: textNode,
+          anchorOffset: 2,
+          focusNode: textNode,
+          focusOffset: 2,
+          setPosition: () => {},
+        }) as unknown as Selection,
+    },
+  });
+  mount.editor.editorController = editor;
+  return { mount, editor, block };
+}
+
+test("presentation caret in an editable block drives the engine selection", () => {
+  const { mount, editor } = syncFixture();
+
+  mount.editor.rememberProjectionCaret();
+
+  assert.deepEqual(mount.editor.lastProjectionCaret, { blockId: "b1", visibleOffset: 2 });
+  assert.deepEqual(editor.ranges, [[11, 11]]);
+  mount.destroy();
+});
+
+test("presentation readonly blocks never move the engine selection", () => {
+  const { mount, editor } = syncFixture({ editable: false });
+
+  mount.editor.rememberProjectionCaret();
+
+  assert.deepEqual(mount.editor.lastProjectionCaret, { blockId: "b1", visibleOffset: 2 });
+  assert.deepEqual(editor.ranges, []);
+  mount.destroy();
+});
+
+test("presentation ranged selections stay projection-side", () => {
+  const { mount, editor } = syncFixture({ collapsed: false });
+
+  mount.editor.rememberProjectionCaret();
+
+  assert.deepEqual(editor.ranges, []);
+  mount.destroy();
+});
+
+test("presentation flush commits then syncs the engine selection", () => {
+  const { mount, editor, block } = syncFixture();
+  mount.editor.pendingProjectionEdits = new Map([
+    ["r1", { id: "r1", blockId: "b1", from: 9, to: 14, source: "First", kind: "paragraph", blockElement: block as unknown as Element }],
+  ]);
+
+  mount.editor.rememberProjectionCaret();
+  assert.deepEqual(editor.ranges, []);
+
+  mount.editor.flushPendingProjectionEdits();
+  assert.equal(editor.value.slice(9, 15), "First!");
+  assert.deepEqual(editor.ranges, [[11, 11]]);
+  mount.destroy();
+});
+
+test("presentation flush discards pending edits whose base no longer matches", () => {
+  const { mount, editor, block } = syncFixture();
+  editor.value = `${"x".repeat(9)}First!${"x".repeat(5)}`;
+  mount.editor.map!.editable_regions![0]!.content_range = { start: 9, end: 15 };
+  mount.editor.pendingProjectionEdits = new Map([
+    ["r1", { id: "r1", blockId: "b1", from: 9, to: 14, source: "First", kind: "paragraph", blockElement: block as unknown as Element }],
+  ]);
+
+  mount.editor.flushPendingProjectionEdits();
+
+  assert.equal(editor.value, `${"x".repeat(9)}First!${"x".repeat(5)}`);
+  assert.equal(mount.editor.pendingProjectionEdits!.size, 0);
+  mount.destroy();
+});
+
+test("presentation typing commits a precise source transaction without pending", () => {
+  const { mount, editor, block } = syncFixture();
+  const replaced: Array<{ text: string; from: number; to: number }> = [];
+  const double = editor as unknown as Record<string, unknown>;
+  double.replaceRange = (text: string, from: number, to: number) => {
+    replaced.push({ text, from, to });
+  };
+
+  mount.editor.projectionBeforeinput({
+    target: block as unknown as EventTarget,
+    inputType: "insertText",
+    data: "X",
+  });
+
+  assert.deepEqual(replaced, [{ text: "X", from: 11, to: 11 }]);
+  assert.equal(mount.editor.pendingProjectionEdits, undefined);
+  mount.destroy();
+});
+
+test("presentation precise commit suppresses only the following input event", () => {
+  const { mount, editor, block } = syncFixture();
+  (mount.editor.map as unknown as { slides: Array<{ blocks: Array<{ id: string }> }> }).slides = [{ blocks: [{ id: "b1" }] }];
+  mount.editor.canEditBlock = () => true;
+  mount.editor.scheduleProjectionFlush = () => {};
+  const replaced: Array<{ text: string; from: number; to: number }> = [];
+  (editor as unknown as Record<string, unknown>).replaceRange = (text: string, from: number, to: number) => {
+    replaced.push({ text, from, to });
+  };
+
+  mount.editor.projectionBeforeinput({
+    target: block as unknown as EventTarget,
+    inputType: "insertText",
+    data: "X",
+  });
+
+  assert.deepEqual(replaced, [{ text: "X", from: 11, to: 11 }]);
+  assert.equal(mount.editor.suppressProjectionInput, true);
+
+  mount.editor.blockInput({ target: block, preventDefault: () => {} } as unknown as Parameters<typeof mount.editor.blockInput>[0]);
+  assert.equal(mount.editor.pendingProjectionEdits, undefined);
+  assert.equal(mount.editor.suppressProjectionInput, false);
+
+  mount.editor.blockInput({ target: block, preventDefault: () => {} } as unknown as Parameters<typeof mount.editor.blockInput>[0]);
+  assert.equal(mount.editor.pendingProjectionEdits!.size, 1);
+  mount.destroy();
+});
+
+test("presentation structural intents stay on the reconstruction path", () => {
+  const { mount, editor, block } = syncFixture();
+  const before = editor.value;
+
+  for (const inputType of ["insertParagraph", "insertCompositionText", "historyUndo"]) {
+    mount.editor.projectionBeforeinput({
+      target: block as unknown as EventTarget,
+      inputType,
+      data: "x",
+    });
+  }
+
+  assert.equal(editor.value, before);
+  assert.equal(mount.editor.pendingProjectionEdits, undefined);
+  mount.destroy();
+});
+
+function vimKeyEvent(block: Element, key: string, overrides: Record<string, unknown> = {}) {
+  const event = {
+    key,
+    target: block as unknown as EventTarget,
+    isComposing: false,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    defaultPrevented: false,
+    preventDefault: () => {
+      event.defaultPrevented = true;
+    },
+    ...overrides,
+  };
+  return event;
+}
+
+test("presentation Vim routes normal keys and follows with the caret", () => {
+  const { mount, editor, block } = syncFixture();
+  editor.vimEnabled = true;
+  editor.insertMode = false;
+  editor.selectionHead = 13;
+  editor.handleVimKey = (event: { key: string }) => {
+    editor.vimKeys.push(event.key);
+    return true;
+  };
+  const inputEvents: string[] = [];
+  (block as unknown as { dispatchEvent: unknown }).dispatchEvent = (event: { type: string }) => {
+    inputEvents.push(event.type);
+  };
+  const event = vimKeyEvent(block as unknown as Element, "l");
+
+  assert.equal(mount.editor.routeVimKey(event, block as unknown as Element), true);
+  assert.deepEqual(editor.vimKeys, ["l"]);
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(mount.editor.lastProjectionCaret?.blockId, "b1");
+  assert.deepEqual(inputEvents.filter((type) => type === "input"), []);
+  assert.equal(mount.editor.pendingCaretRestore, undefined);
+  mount.destroy();
+});
+
+test("presentation Vim edits schedule a refresh with caret restoration", () => {
+  const { mount, editor, block } = syncFixture();
+  editor.vimEnabled = true;
+  editor.insertMode = false;
+  editor.handleVimKey = () => {
+    editor.value = `${editor.value}!`;
+    editor.selectionHead = 12;
+    return true;
+  };
+  const inputEvents: string[] = [];
+  (block as unknown as { dispatchEvent: unknown }).dispatchEvent = (event: { type: string }) => {
+    inputEvents.push(event.type);
+  };
+
+  assert.equal(mount.editor.routeVimKey(vimKeyEvent(block as unknown as Element, "x"), block as unknown as Element), true);
+  assert.deepEqual(mount.editor.pendingCaretRestore, { sourceOffset: 12, preferredBlockId: "b1" });
+  assert.deepEqual(inputEvents.filter((type) => type === "input"), ["input"]);
+  mount.destroy();
+});
+
+test("presentation modified keys reach Vim first and fall through when declined", () => {
+  // Source precedence (verified in the vendor bundle): the Vim plugin sees
+  // every keydown before the keymaps. Visual routing mirrors it, so e.g.
+  // Ctrl-r redoes through Vim rather than through history.
+  const modified = syncFixture();
+  modified.editor.vimEnabled = true;
+  modified.editor.insertMode = false;
+  assert.equal(
+    modified.mount.editor.routeVimKey(vimKeyEvent(modified.block as unknown as Element, "j", { ctrlKey: true }), modified.block as unknown as Element),
+    false,
+  );
+  assert.deepEqual(modified.editor.vimKeys, ["j"]);
+  modified.mount.destroy();
+});
+
+test("presentation Vim bypasses disabled, insert, and navigation input", () => {
+  const disabled = syncFixture();
+  assert.equal(disabled.mount.editor.routeVimKey(vimKeyEvent(disabled.block as unknown as Element, "j"), disabled.block as unknown as Element), false);
+  assert.deepEqual(disabled.editor.vimKeys, []);
+  disabled.mount.destroy();
+
+  const insert = syncFixture();
+  insert.editor.vimEnabled = true;
+  insert.editor.insertMode = true;
+  assert.equal(insert.mount.editor.routeVimKey(vimKeyEvent(insert.block as unknown as Element, "j"), insert.block as unknown as Element), false);
+  assert.deepEqual(insert.editor.vimKeys, []);
+  insert.mount.destroy();
+
+  const arrow = syncFixture();
+  arrow.editor.vimEnabled = true;
+  arrow.editor.insertMode = false;
+  const arrowEvent = vimKeyEvent(arrow.block as unknown as Element, "ArrowLeft");
+  assert.equal(arrow.mount.editor.routeVimKey(arrowEvent, arrow.block as unknown as Element), false);
+  assert.equal(arrowEvent.defaultPrevented, false);
+  arrow.mount.destroy();
+});
+
+test("presentation shortcuts run through the shared keymap", () => {
+  const { mount, editor, block } = syncFixture();
+  editor.runKeymap = (event: { key: string }) => {
+    editor.keymapCalls.push(event.key);
+    editor.value = `${editor.value}!`;
+    editor.selectionHead = 12;
+    return true;
+  };
+  const inputEvents: string[] = [];
+  (block as unknown as { dispatchEvent: unknown }).dispatchEvent = (event: { type: string }) => {
+    inputEvents.push(event.type);
+  };
+  const event = vimKeyEvent(block as unknown as Element, "z", { metaKey: true });
+
+  assert.equal(mount.editor.routeKeymapKey(event, block as unknown as Element), true);
+  assert.deepEqual(editor.keymapCalls, ["z"]);
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(mount.editor.pendingCaretRestore, { sourceOffset: 12, preferredBlockId: "b1" });
+  assert.deepEqual(inputEvents.filter((type) => type === "input"), ["input"]);
+  mount.destroy();
+});
+
+test("presentation blockKeydown wires shortcuts after Vim", () => {
+  const { mount, editor, block } = syncFixture();
+  mount.editor.blockKeydown(vimKeyEvent(block as unknown as Element, "z", { metaKey: true }));
+  assert.deepEqual(editor.keymapCalls, ["z"]);
+
+  mount.editor.blockKeydown(vimKeyEvent(block as unknown as Element, "a"));
+  assert.deepEqual(editor.keymapCalls, ["z"]);
+  mount.destroy();
+});
+
+test("presentation suppressed block input clears the flag without reconciling", () => {
+  const { mount, block } = syncFixture();
+  mount.editor.suppressProjectionInput = true;
+
+  mount.editor.blockInput({ target: block } as never);
+
+  assert.equal(mount.editor.suppressProjectionInput, false);
+  assert.equal(mount.editor.pendingProjectionEdits, undefined);
+  mount.destroy();
+});
+
+test("presentation Vim visual ranges survive projection caret sync", () => {
+  const { mount, editor } = syncFixture();
+  editor.vimEnabled = true;
+  editor.insertMode = false;
+  editor.selectionStart = 5;
+  editor.selectionEnd = 9;
+
+  mount.editor.rememberProjectionCaret();
+
+  assert.deepEqual(editor.ranges, []);
+  mount.destroy();
+});
+
+test("presentation map shifting grows the edited block end on appends", () => {
+  const edited = { id: "b2", block_id: "b2", range: { start: 9, end: 14 }, content_range: { start: 9, end: 14 } };
+  const after = { id: "b3", block_id: "b3", range: { start: 14, end: 20 }, content_range: { start: 14, end: 20 } };
+  const { form } = mountForm();
+  const mount = mountEditor(form, {
+    source_length: 20,
+    slides: [{ blocks: [edited, after] }],
+    editable_regions: [edited, after],
+  } as unknown as Parameters<typeof mountEditor>[1]);
+  const editor = mount.editor;
+
+  // Pure insert at the edited end (appending one char): the edited end
+  // must advance or later offsets clamp and prepend (reversed ghost).
+  editor.shiftMapAfterEdit(14, 14, 1, "b2");
+
+  assert.equal(editor.map?.source_length, 21);
+  assert.deepEqual(edited.content_range, { start: 9, end: 15 });
+  assert.deepEqual(after.content_range, { start: 14, end: 21 });
+});
+
+test("presentation map shifting pins the edited block start on replacement", () => {
+  const edited = { id: "b2", block_id: "b2", range: { start: 9, end: 14 }, content_range: { start: 9, end: 14 } };
+  const { form } = mountForm();
+  const mount = mountEditor(form, {
+    source_length: 20,
+    slides: [{ blocks: [edited] }],
+    editable_regions: [edited],
+  } as unknown as Parameters<typeof mountEditor>[1]);
+  const editor = mount.editor;
+
+  editor.shiftMapAfterEdit(9, 14, 2, "b2");
+
+  assert.deepEqual(edited.content_range, { start: 9, end: 11 });
+  assert.equal(editor.map?.source_length, 17);
+});
+
+test("presentation assist insert shifts the map and patches the canvas block", () => {
+  const edited = { id: "b2", block_id: "b2", range: { start: 9, end: 14 }, content_range: { start: 9, end: 14 } };
+  const { document, form } = mountForm();
+  const mount = mountEditor(form, {
+    source_length: 20,
+    slides: [{ blocks: [edited] }],
+    editable_regions: [edited],
+  } as unknown as Parameters<typeof mountEditor>[1]);
+  const editor = mount.editor;
+
+  const canvas = document.createElement("div");
+  canvas.innerHTML = `<div data-editor-block-id="b2"><p>First /q</p></div>`;
+  editor.canvasElement = canvas as unknown as Element;
+  const text = canvas.querySelector("p")?.firstChild as unknown as Text;
+  const positions: Array<[Node, number]> = [];
+  editor.getSelection = () => ({ focusNode: text, focusOffset: 8, setPosition: (node: Node, offset: number) => { positions.push([node, offset]); } } as unknown as Selection);
+
+  const patched = editor.applyVisualAssistInsert({ from: 12, to: 14, insert: "xy!", caret: 15 });
+
+  assert.equal(patched, true);
+  assert.equal(text.data, "First xy!");
+  assert.equal(positions.length, 1);
+  assert.equal(positions[0]?.[0], text);
+  assert.equal(positions[0]?.[1], 9);
+  assert.deepEqual(edited.content_range, { start: 9, end: 15 });
+  assert.equal(editor.map?.source_length, 21);
+  assert.deepEqual(editor.pendingCaretRestore, { sourceOffset: 15, preferredBlockId: "b2" });
 });

@@ -539,7 +539,7 @@ function slideSourceRanges(source: string, bodyStart: number): SlideSourceRange[
       continue
     }
     if (mathFence) {
-      if (displayMathFenceMarker(line.text) === mathFence) mathFence = null
+      if (displayMathFenceCloser(line.text, mathFence)) mathFence = null
       continue
     }
     const openingMathFence = displayMathFenceOpener(line.text)
@@ -647,7 +647,7 @@ function editorBlocks(
     }
     if (mathFence) {
       current.push(line)
-      if (displayMathFenceMarker(line.text) === mathFence) {
+      if (displayMathFenceCloser(line.text, mathFence)) {
         mathFence = null
         if (boundaryMap.blockEnds.has(lineIndex + 1)) flush()
       }
@@ -1011,7 +1011,7 @@ function parseMarginDirectives(markdown: string, context: MarginContext, sourceB
       return
     }
     if (mathFence) {
-      if (displayMathFenceMarker(line) === mathFence) mathFence = null
+      if (displayMathFenceCloser(line, mathFence)) mathFence = null
       content.push(line)
       return
     }
@@ -1327,7 +1327,7 @@ function markdownBlocks(markdown: string, artResolution: ArtBindings, sourceBoun
     else if (incoming) fence = incoming
     if (!fence && mathFence) {
       current.push(line)
-      if (displayMathFenceMarker(line) === mathFence) {
+      if (displayMathFenceCloser(line, mathFence)) {
         mathFence = null
         if (boundaryMap.blockEnds.has(index + 1)) flush()
       }
@@ -1467,10 +1467,26 @@ function displayMathFenceOpener(line: string): string | null {
   return inlineDisplayOpener && !inlineDisplayOpener[1]?.includes("$$") ? "$$" : null
 }
 
+// Mirror the renderer's inline display-math rule: once a fence is open, the
+// first unescaped closing delimiter ends the span, so `\end{aligned}$$`
+// closers (and any trailing content before `$$`) close the fence instead of
+// swallowing the rest of the document into one block.
+function displayMathFenceCloser(line: string, fence: string): boolean {
+  if (displayMathFenceMarker(line) === fence) return true
+  let index = line.indexOf(fence)
+  while (index >= 0) {
+    let slashes = 0
+    for (let cursor = index - 1; cursor >= 0 && line[cursor] === "\\"; cursor -= 1) slashes += 1
+    if (slashes % 2 === 0) return true
+    index = line.indexOf(fence, index + fence.length)
+  }
+  return false
+}
+
 function displayMathFenceSource(markdown: string): boolean {
   const lines = markdown.split(/\r\n|\r|\n/)
   const opener = displayMathFenceOpener(lines[0] ?? "")
-  return Boolean(opener && (lines.length === 1 || displayMathFenceMarker(lines.at(-1) ?? "") === opener))
+  return Boolean(opener && (lines.length === 1 || displayMathFenceCloser(lines.at(-1) ?? "", opener)))
 }
 
 function fenceMarker(line: string): FenceState | null {

@@ -238,4 +238,59 @@ class SourceBlockRendererTest < ActiveSupport::TestCase
       assert_equal "true", ruby_block["contenteditable"]
     end
   end
+
+  test "editable projection preserves reader-identical block content and position" do
+    source = File.read(Rails.root.join("test/fixtures/files/visual_fidelity.md"))
+    editor_map = Source::Document.editor_map(source, mode: :document)
+    reader_html = Source::BlockRenderer.render(source, documents: [], workspace: Workspace.default)
+    editor_html = Source::BlockRenderer.render(
+      source,
+      editable: true,
+      editor_map: editor_map,
+      documents: [],
+      workspace: Workspace.default
+    )
+
+    reader_blocks = reader_block_contents(reader_html)
+    editor_blocks = editor_block_contents(editor_html)
+
+    assert_operator reader_blocks.length, :>=, 8, "fidelity fixture must stay rich"
+    assert_equal reader_blocks.length, editor_blocks.length, "reader and editor must expose the same blocks"
+    assert_not_includes editor_html, "data-editor-empty-block"
+    reader_blocks.zip(editor_blocks).each_with_index do |(reader, editor), index|
+      assert_equal reader[:html], editor[:html], "block #{index} content differs between reader and editor"
+      assert_equal reader[:position], editor[:position], "block #{index} position classes differ between reader and editor"
+    end
+  end
+
+  private
+
+  # Reader block content: the flat path emits bare blocks with anchor spans,
+  # the positioned path wraps blocks in .document-block divs. Both normalize
+  # to bare content plus position classes.
+  def reader_block_contents(html)
+    fragment = Nokogiri::HTML.fragment(html)
+    fragment.css(".document-source-anchor").remove
+    fragment.children.select(&:element?).map do |element|
+      if element.matches?(".document-block")
+        { html: element.inner_html, position: element["class"].to_s.split - %w[document-block] }
+      else
+        { html: element.to_html, position: [] }
+      end
+    end
+  end
+
+  # Editor block content: unwrap shells and editing-only media figures so the
+  # shared inner render can be compared with the reader byte for byte.
+  def editor_block_contents(html)
+    fragment = Nokogiri::HTML.fragment(html)
+    fragment.css(".document-editor-block").map do |block|
+      inner = Nokogiri::HTML.fragment(block.inner_html)
+      inner.css("figure.editor-media").each do |figure|
+        figure.css("figcaption.editor-media-caption").remove
+        figure.replace(figure.inner_html)
+      end
+      { html: inner.to_html, position: block["class"].to_s.split - %w[document-editor-block] }
+    end
+  end
 end

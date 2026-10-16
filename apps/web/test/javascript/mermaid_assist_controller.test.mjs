@@ -4,9 +4,11 @@ import { readFile } from "node:fs/promises"
 
 const distControllers = new URL("../../../../packages/editor-runtime/dist/controllers/", import.meta.url)
 const syntaxUrl = new URL("mermaid_syntax.js", distControllers).href
+const visualAssistSource = await readFile(new URL("../../../../packages/editor-runtime/dist/lib/visual_assist.js", import.meta.url), "utf8")
 const controllerSource = (await readFile(new URL("mermaid_assist_controller.js", distControllers), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus";', "class Controller {}")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js";', "const editorFor = () => null")
+  .replace('import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";', () => visualAssistSource)
   .replace('import { forwardEscapeToVim } from "../lib/vim_escape.js";', "const forwardEscapeToVim = () => false")
   .replace(
     'import { diagramTemplate, mermaidCompletion, mermaidEnterEdit, mermaidTabEdit, MERMAID_DIAGRAMS, slashDiagramQuery } from "./mermaid_syntax.js";',

@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "description": "Frozen 100-page acceptance fixtures for the visual-editor revamp: complete rendering and editability within three seconds (p95). Regenerate byte-identically with the generator command below; page counts were established under the reference layout and verified stable across runs.",
+  "generator": {
+    "script": "generate.mjs",
+    "command": "node generate.mjs --out <dir> --seed 7 --mixed-units 105 --math-units 158",
+    "seed": 7,
+    "mixed_units": 105,
+    "math_units": 158,
+    "validation": "every emitted equation renders with KaTeX using the renderer's exact options (throwOnError); the generator exits nonzero otherwise"
+  },
+  "reference_layout": {
+    "surface": "web visual document editor (edit page, visual mode default)",
+    "viewport": [
+      1400,
+      1000
+    ],
+    "device_scale_factor": 1,
+    "browser": "Chromium 152.0.7977.82 (Arch Linux build), headless",
+    "theme": "light",
+    "typography": "modern",
+    "fonts": "document.fonts.status settled to loaded; KaTeX webfonts served locally",
+    "images": "attached blobs (web, matched by basename) or work-folder images/ (desktop)",
+    "line_endings": "LF"
+  },
+  "fixtures": {
+    "mixed": {
+      "file": "elef-visual-100-mixed.md",
+      "sha256": "2a2ef60c9d6d8d0c9d5aa065ca7c50430979d1f9093ae8f095195d011060da26",
+      "source_bytes": 107065,
+      "source_lines": 2259,
+      "words": 17310,
+      "units": 105,
+      "inline_equations": 105,
+      "display_equations": 105,
+      "code_blocks": 53,
+      "tables": 35,
+      "images": 26,
+      "lists": 105,
+      "headings": 106,
+      "rendered_pages": 98,
+      "rendered_dom_nodes": 14361,
+      "rendered_katex": 210,
+      "rendered_math_errors": 0
+    },
+    "math_heavy": {
+      "file": "elef-visual-100-math.md",
+      "sha256": "8a65d84b9b0761435866c2eb52267c5fcbdca33c243b01887235f0bf086b5c8a",
+      "source_bytes": 112956,
+      "source_lines": 2537,
+      "words": 16815,
+      "units": 158,
+      "inline_equations": 790,
+      "display_equations": 474,
+      "code_blocks": 0,
+      "tables": 0,
+      "images": 0,
+      "lists": 0,
+      "headings": 159,
+      "rendered_pages": 86,
+      "rendered_dom_nodes": 45870,
+      "rendered_katex": 1264,
+      "rendered_math_errors": 0
+    }
+  },
+  "assets": {
+    "assets/perf-1.svg": "6d6c56ea36c72205d7e682dfeba19881e319a9623fe952a677b3500c72ff60b4",
+    "assets/perf-2.svg": "ae8b90e1bb95fd9fdf0bf8cb8e727c693f97dbc0f8f5ed4b5521c57a7620e9f8",
+    "assets/perf-3.svg": "7c585df0f4eb47cdc7112072546bb827fa0a08cb37edf576d009a0015993f9bc",
+    "assets/perf-4.svg": "6f2c6ea0909c240a741a5134ffa1d46bf04a08f160179b6c3a9d9ed8676d9e4e"
+  },
+  "recalibration": {
+    "reason": "S1 KaTeX output switched html -> mathml: fewer DOM nodes per equation with different metrics, so identical frozen sources paginate to 98/86 under the reference layout. Source sha256 pins unchanged; counts re-measured via ELEF_PERF_MODE=calibrate (stable across runs; every measure sample must reproduce them exactly).",
+    "renderer": "katex output mathml, throwOnError, locally served webfonts"
+  }
+}

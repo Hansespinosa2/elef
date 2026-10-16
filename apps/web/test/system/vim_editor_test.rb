@@ -361,42 +361,38 @@ class VimEditorTest < ApplicationSystemTestCase
       ```
     MARKDOWN
     visit edit_document_path(document)
-    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(document.querySelector('.source-field').editorController.value.length)")
 
+    # Invisible directives collapse until entered (reveal-in-place), so each
+    # marker line is entered in turn; revealed syntax keeps its active mark
+    # and true token colors instead of the dimmed inactive-marker color.
     styles = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
+        const editor = document.querySelector('.source-field').editorController;
         const find = (text) => [...document.querySelectorAll(".cm-line span")].find((node) => node.textContent.trim() === text)
-        const describe = (node) => node && ({
-          className: node.className,
-          color: getComputedStyle(node).color,
-          opacity: getComputedStyle(node).opacity,
-          fontStyle: getComputedStyle(node).fontStyle
-        })
+        const reveal = (text) => {
+          editor.setSelectionRange(editor.value.indexOf(text));
+          return find(text);
+        }
 
-        const metadata = find(":::align{center}")
-        const heading = find("#")
-        const quote = find(">")
-        const strong = find("**")
+        const metadata = reveal(":::align{center}")
+        const heading = reveal("#")
+        const quote = reveal(">")
+        const strong = reveal("**")
         const metadataClasses = metadata ? [...metadata.classList] : []
         const sharedClass = metadataClasses.find((className) => [heading, quote, strong].every((node) => node?.classList.contains(className)))
 
         return {
-          metadata: describe(metadata),
-          heading: describe(heading),
-          quote: describe(quote),
-          strong: describe(strong),
+          metadata: metadata?.className,
+          heading: heading?.className,
+          quote: quote?.className,
+          strong: strong?.className,
           sharedClass,
-          fenced: describe(find(":::not-metadata"))
+          fenced: find(":::not-metadata")?.className ?? null
         }
       })()
     JAVASCRIPT
 
-    refute_nil styles["sharedClass"]
-    %w[color opacity fontStyle].each do |property|
-      assert_equal styles["metadata"][property], styles["heading"][property]
-      assert_equal styles["metadata"][property], styles["quote"][property]
-      assert_equal styles["metadata"][property], styles["strong"][property]
-    end
+    assert_equal "cm-live-active-syntax", styles["sharedClass"]
     assert_nil styles["fenced"]
   end
 
@@ -667,6 +663,49 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_operator selection_state["width"], :>, 0
     assert_equal "rgb(34, 51, 51)", selection_state["selectionBg"]
     assert_equal "rgba(255, 255, 255, 0.035)", selection_state["activeLineBg"]
+  ensure
+    page.execute_script("localStorage.clear()")
+  end
+
+  test "Vim normal-mode keys edit the source through the visual projection" do
+    document = Document.create!(title: "Vim visual editing", source: "# Vim visual\n\nFirst paragraph.\n")
+    visit edit_document_path(document)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+
+    block = find(".document-editor-block", text: "First paragraph.")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p").firstChild, 0);
+    JAVASCRIPT
+
+    # Normal-mode "x" deletes under the caret; plain typing would insert it.
+    block.send_keys("x")
+    assert_equal "# Vim visual\n\nirst paragraph.\n",
+      page.evaluate_script("document.querySelector('.source-field').editorController.value")
+
+    # The refresh holds while the block is focused, so the same node
+    # persists; re-seat the caret and compose a motion plus an operator.
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p").firstChild, 0);
+    JAVASCRIPT
+    block.send_keys("lx")
+    assert_field "Markdown source", with: "# Vim visual\n\nist paragraph.\n", wait: 5
+
+    caret = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selection = window.getSelection();
+        return { collapsed: selection.isCollapsed, focusOffset: selection.focusOffset };
+      })()
+    JAVASCRIPT
+    assert_equal true, caret["collapsed"]
+    assert_equal 1, caret["focusOffset"]
+
+    page.execute_script("document.activeElement.blur()")
+    assert_selector ".document-editor-block", text: "ist paragraph.", wait: 10
   ensure
     page.execute_script("localStorage.clear()")
   end

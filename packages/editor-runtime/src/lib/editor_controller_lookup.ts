@@ -5,18 +5,28 @@ export function editorFor(element: Element | null | undefined) {
 }
 
 // Narrows a looked-up Stimulus controller to the document-editor seam the
-// client consumes. The editor controller implements all five members, so a
-// passing candidate is returned as-is (identity preserved); anything else —
-// a missing controller or one without the seam — yields null instead of a
+// client consumes. The editor engine implements every member, so a passing
+// candidate is returned as-is (identity preserved); anything else — a
+// missing controller or one without the seam — yields null instead of a
 // lie. DocumentEditorSeam also satisfies PresentationEditorSeam, so this one
 // guard serves both client editors.
 export function asEditorSeam(candidate: unknown): DocumentEditorSeam | null {
   if (typeof candidate !== "object" || candidate === null) return null
   const seam = candidate as Record<string, unknown>
   if (typeof seam.value !== "string") return null
+  if (typeof seam.selectionStart !== "number") return null
+  if (typeof seam.selectionEnd !== "number") return null
+  if (typeof seam.selectionHead !== "number") return null
+  if (typeof seam.selectionRangeCount !== "number") return null
+  if (typeof seam.vimEnabled !== "boolean") return null
+  if (typeof seam.insertMode !== "boolean") return null
+  if (typeof seam.editingMode !== "string") return null
+  if (typeof seam.focus !== "function") return null
   if (typeof seam.commitSource !== "function") return null
   if (typeof seam.replaceRange !== "function") return null
   if (typeof seam.replaceRanges !== "function") return null
   if (typeof seam.setSelectionRange !== "function") return null
+  if (typeof seam.handleVimKey !== "function") return null
+  if (typeof seam.runKeymap !== "function") return null
   return candidate as DocumentEditorSeam
 }

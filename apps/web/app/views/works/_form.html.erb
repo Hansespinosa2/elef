@@ -1,5 +1,11 @@
 <% persisted = work.persisted? %>
 <% type_label = work_type_label(work) %>
+<% content_for :head do %>
+  <%# Pagination waits for fonts (a pre-fonts pass is thrown away), and the
+      math font is otherwise discovered late during render: preload it so the
+      fetch starts with the document instead of after first paint. %>
+  <%= preload_link_tag "katex/fonts/KaTeX_Main-Regular.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" %>
+<% end %>
 <% editor_projection = shared_editor_projection(
   work,
   source: work.source.to_s.gsub(/\r\n?/, "\n"),

@@ -319,7 +319,7 @@ function displayMathRanges(lines: Array<string>, codeProtectedLines: Uint8Array)
     const line = lines[index] as string
     if (codeProtectedLines[index]) continue
     if (mathFence) {
-      if (mathFenceMarker(line) === mathFence.marker) {
+      if (mathFenceCloser(line, mathFence.marker)) {
         ranges.push({ type: "display_math", startLine: mathFence.startLine, endLine: index + 1 })
         mathFence = null
       }
@@ -593,4 +593,19 @@ function mathFenceOpener(line: string): string | null {
   if (marker === "\\[") return "\\]"
   const inlineDisplayOpener = /^[ \t]{0,3}\$\$[ \t]*(\S.*)$/.exec(line)
   return inlineDisplayOpener && !inlineDisplayOpener[1]?.includes("$$") ? "$$" : null
+}
+
+// Mirror the renderer's inline display-math rule: once a fence is open, the
+// first unescaped closing delimiter ends the span, so `\end{aligned}$$`
+// closers close the fence instead of swallowing the rest of the document.
+function mathFenceCloser(line: string, fence: string): boolean {
+  if (mathFenceMarker(line) === fence) return true
+  let index = line.indexOf(fence)
+  while (index >= 0) {
+    let slashes = 0
+    for (let cursor = index - 1; cursor >= 0 && line[cursor] === "\\"; cursor -= 1) slashes += 1
+    if (slashes % 2 === 0) return true
+    index = line.indexOf(fence, index + fence.length)
+  }
+  return false
 }

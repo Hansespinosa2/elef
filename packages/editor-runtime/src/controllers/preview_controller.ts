@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { installPreviewHtml } from "../lib/editor_view.js"
 import { buildPreviewRequestBody } from "../lib/preview_request_body.js"
+import { markStage } from "../lib/stage_marks.js"
 import { attachCanvasScaling } from "@elef/client"
 
 const ART_WARNING_MESSAGES: Record<string, string> = Object.freeze({
@@ -132,6 +133,7 @@ export default class extends Controller<HTMLElement> {
     const requestedSource = sourceFieldName ? body.get(sourceFieldName)?.toString() ?? "" : ""
 
     try {
+      markStage("preview-fetch-start")
       const request = fetch(this.urlValue, {
         method: "POST",
         headers: {
@@ -151,6 +153,7 @@ export default class extends Controller<HTMLElement> {
         }, this.timeoutValue)
       })
       const { response, payload } = await Promise.race([request, timeoutFailure])
+      markStage("preview-fetch-end")
       if (!this.active || requestId !== this.requestId) return false
 
       this.renderWarnings(payload.warnings || [])
@@ -159,7 +162,9 @@ export default class extends Controller<HTMLElement> {
         // installed. Keep the previous map paired with the last-good HTML.
         const unavailablePayload = { ...payload, editor_map: null }
         this.containerTarget.setAttribute("aria-busy", "false")
+        markStage("preview-updated-start")
         this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: unavailablePayload, response } }))
+        markStage("preview-updated-end")
         this.showRetry()
         this.setStatus("Preview unavailable")
         return false
@@ -188,7 +193,9 @@ export default class extends Controller<HTMLElement> {
         : "Preview could not be reached. Your source is still safe; try again shortly."
       this.renderWarnings([warning])
       this.containerTarget.setAttribute("aria-busy", "false")
+      markStage("preview-updated-start")
       this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload: null, response: null, error } }))
+      markStage("preview-updated-end")
       this.showRetry()
       this.setStatus("Preview unavailable")
       return false
@@ -274,7 +281,9 @@ export default class extends Controller<HTMLElement> {
     this.projectionFresh = true
     delete this.element.dataset.previewProjectionStale
     this.containerTarget.removeAttribute("aria-busy")
+    markStage("preview-updated-start")
     this.element.dispatchEvent(new CustomEvent("elef:preview-updated", { bubbles: true, detail: { payload, response, source } }))
+    markStage("preview-updated-end")
     recordPreviewTrace("preview-events-ready")
     this.containerTarget.dispatchEvent(new CustomEvent("preview:updated", { bubbles: true }))
     this.hideRetry()
@@ -285,10 +294,12 @@ export default class extends Controller<HTMLElement> {
     this.projectionFresh = false
     this.element.dataset.previewProjectionStale = "true"
     this.containerTarget.setAttribute("aria-busy", "true")
+    markStage("preview-stale-start")
     this.element.dispatchEvent(new CustomEvent("elef:preview-stale", {
       bubbles: true,
       detail: { preserveActive: Boolean(preserveActive) }
     }))
+    markStage("preview-stale-end")
   }
 
   currentSource() {
