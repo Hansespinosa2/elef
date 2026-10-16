@@ -104,6 +104,7 @@ export default class extends Controller<HTMLElement> {
 
   resizeFrames(): void {
     if (!this.surfaceTarget) return
+    markStage("resize-frames-start")
     const preview = this.element.closest(".library-preview") || this.sourceModePreview()
     const previewStyle = preview && getComputedStyle(preview)
     const fittedWidth = previewStyle
@@ -118,8 +119,17 @@ export default class extends Controller<HTMLElement> {
     frames.forEach((frame: HTMLElement) => {
       if (fittedWidth === null) frame.style.removeProperty("width")
       else frame.style.width = `${fittedWidth}px`
-      frame.style.setProperty("--document-page-scale", String(frame.clientWidth / DESIGN_WIDTH))
     })
+    // Every frame shares the same CSS width, so one layout read serves
+    // all of them: reading clientWidth per frame costs a full-document
+    // layout each (frames are bare mid-pagination, before content-visibility
+    // skipping applies). The scale feeds a transform (compositor only).
+    const firstWidth = frames[0]?.clientWidth
+    const scale = firstWidth === undefined ? "1" : String(firstWidth / DESIGN_WIDTH)
+    frames.forEach((frame: HTMLElement) => {
+      frame.style.setProperty("--document-page-scale", scale)
+    })
+    markStage("resize-frames-end")
   }
 
   sourceModePreview(): Element | null {
@@ -534,22 +544,33 @@ export default class extends Controller<HTMLElement> {
   }
 
   largestFittingChildCount(block: HTMLElement, target: Element, children: Element[], page: DocumentPage): number {
+    // Clone-once probing: one probe shell per split, with each child
+    // cloned once and moved between probes (replaceChildren moves nodes,
+    // never copies). Every probe measures byte-identical content to a
+    // fresh clone per probe; only redundant deep clones are skipped.
+    const clone = block.cloneNode(true) as HTMLElement
+    const cloneTarget = this.nodeAtPath(clone, this.nodePath(block, target))
+    cloneTarget.dataset.documentPageFlowContent = "true"
+    const childClones = children.map((child) => child.cloneNode(true))
+    page.content.append(clone)
     let low = 1
     let high = children.length - 1
     let best = 0
 
-    while (low <= high) {
-      const count = Math.floor((low + high) / 2)
-      const candidate = this.childFragment(block, target, children.slice(0, count))
-      page.content.append(candidate)
-      const fits = !this.overflows(page)
-      page.content.removeChild(candidate)
-      if (fits) {
-        best = count
-        low = count + 1
-      } else {
-        high = count - 1
+    try {
+      while (low <= high) {
+        const count = Math.floor((low + high) / 2)
+        cloneTarget.replaceChildren(...childClones.slice(0, count))
+        const fits = !this.overflows(page)
+        if (fits) {
+          best = count
+          low = count + 1
+        } else {
+          high = count - 1
+        }
       }
+    } finally {
+      page.content.removeChild(clone)
     }
 
     return best
@@ -567,33 +588,114 @@ export default class extends Controller<HTMLElement> {
     const selector = FLOW_TEXT_SELECTOR
     if (block.matches(selector)) return block
 
-    const candidates = [...block.querySelectorAll(selector)].filter((element) => this.textMap(element).text.length > 1)
-    return candidates.length === 1 ? candidates[0] ?? null : null
+    // Only a unique long-text descendant qualifies: stop mapping text
+    // once a second one appears (each text map walks the subtree).
+    let found: Element | null = null
+    for (const element of block.querySelectorAll(selector)) {
+      if (this.textMap(element).text.length <= 1) continue
+      if (found) return null
+      found = element
+    }
+    return found
   }
 
   largestFittingBoundary(block: HTMLElement, target: Element, textMap: TextMap, boundaries: number[], page: DocumentPage): number {
+    // Clone-once probing: one probe shell per split; each probe only
+    // swaps the clone target's ranged children. Byte-identical to a
+    // fresh clone per probe (the rest of the clone copies the same
+    // untouched original); only redundant deep clones are skipped.
+    const clone = block.cloneNode(true) as HTMLElement
+    const cloneTarget = this.nodeAtPath(clone, this.nodePath(block, target))
+    cloneTarget.dataset.documentPageFlowContent = "true"
     let low = 0
     let high = boundaries.length - 1
     let best = 0
 
-    while (low <= high) {
-      const index = Math.floor((low + high) / 2)
-      const end = boundaries[index]
-      if (end === undefined || end >= textMap.text.length) {
-        high = index - 1
-        continue
-      }
+    // Interpolated probing: fitting is monotonic in length, so every
+    // probe narrows [low, high] wherever it lands and best-tracking
+    // finds the same maximum as pure binary search. Length-proportional
+    // height estimates land near the answer on large ranges; a probe
+    // that barely narrows abandons interpolation for midpoints, so the
+    // worst case is one wasted probe. Small ranges skip the estimate
+    // (binary search already costs ~4 probes there). The base height is
+    // read before the probe shell goes in (one layout).
+    let interpolate = boundaries.length >= 24
+    let interpolations = 0
+    const baseScroll = interpolate ? page.content.scrollHeight : 0
+    const remaining = interpolate ? page.content.clientHeight - baseScroll : 0
+    if (remaining <= 0) interpolate = false
+    page.content.append(clone)
 
-      const candidate = this.textFragment(block, target, textMap, 0, end)
-      page.content.append(candidate)
+    const probe = (index: number): boolean | null => {
+      const end = boundaries[index]
+      if (end === undefined || end >= textMap.text.length) return null
+      const range = document.createRange()
+      const start = this.pointAtTextOffset(textMap, 0)
+      const stop = this.pointAtTextOffset(textMap, end)
+      range.setStart(start.node, start.offset)
+      range.setEnd(stop.node, stop.offset)
+      cloneTarget.replaceChildren(range.cloneContents())
       const fits = !this.overflows(page)
-      page.content.removeChild(candidate)
       if (fits) {
-        best = end
-        low = index + 1
-      } else {
-        high = index - 1
+        if (end > best) best = end
+        return true
       }
+      return false
+    }
+
+    const indexNearLength = (length: number): number => {
+      let lo = low
+      let hi = high
+      let nearest = low
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1
+        const value = boundaries[mid] ?? 0
+        if (value === length) return mid
+        if (value < length) {
+          nearest = mid
+          lo = mid + 1
+        } else {
+          hi = mid - 1
+        }
+      }
+      return Math.max(low, Math.min(high, nearest))
+    }
+
+    // Density state from the most recent probe: growth px for a
+    // fragment of lastLength chars. The first probe is always the
+    // midpoint (a plain binary probe); its growth seeds the estimate.
+    let lastGrowth = 0
+    let lastLength = 0
+
+    try {
+      while (low <= high) {
+        const span = high - low + 1
+        let index = Math.floor((low + high) / 2)
+        let estimated = false
+        if (interpolate && interpolations < 3 && lastGrowth > 0 && lastLength > 0) {
+          index = indexNearLength((remaining * lastLength) / lastGrowth)
+          estimated = true
+          interpolations += 1
+        }
+        const end = boundaries[index] ?? 0
+        const fits = probe(index)
+        if (fits === null) {
+          high = index - 1
+          continue
+        }
+        // Growth read rides the probe's forced layout (scrollHeight was
+        // just read by overflows), so the density update costs nothing.
+        lastGrowth = page.content.scrollHeight - baseScroll
+        lastLength = end
+        if (fits) {
+          low = index + 1
+        } else {
+          high = index - 1
+        }
+        if (estimated && high - low + 1 > span * 0.875) interpolate = false
+      }
+    } finally {
+      page.content.removeChild(clone)
     }
 
     return best
@@ -630,7 +732,25 @@ export default class extends Controller<HTMLElement> {
   pointAtTextOffset(textMap: TextMap, offset: number): { node: Node; offset: number } {
     if (offset <= 0) return { node: textMap.root, offset: 0 }
     if (offset >= textMap.text.length) return { node: textMap.root, offset: textMap.root.childNodes.length }
-    const entry = textMap.nodes.find(({ start, end }) => offset >= start && offset <= end) || textMap.nodes.at(-1)
+    // Entries are contiguous and sorted by start, so the leftmost entry
+    // with end >= offset is exactly the linear scan's first
+    // start <= offset <= end match (any earlier entry ends before
+    // offset; contiguity guarantees this one's start <= offset).
+    const nodes = textMap.nodes
+    if (!nodes.length) return { node: textMap.root, offset: 0 }
+    let low = 0
+    let high = nodes.length - 1
+    let index = nodes.length - 1
+    while (low <= high) {
+      const mid = (low + high) >> 1
+      if ((nodes[mid]?.end ?? 0) >= offset) {
+        index = mid
+        high = mid - 1
+      } else {
+        low = mid + 1
+      }
+    }
+    const entry = nodes[index] ?? nodes.at(-1)
     if (!entry) return { node: textMap.root, offset: 0 }
     return { node: entry.node, offset: Math.max(0, Math.min(offset - entry.start, (entry.node.textContent ?? "").length)) }
   }

@@ -4,6 +4,7 @@
 // apps/web/test/javascript/shared/preview_sanitizer_cases.js corpus, executed
 // directly against this implementation). mediaBaseUrl is an explicit option;
 // hosts pass their own base URL and keep no sanitizer of their own.
+import { markStage } from "../session/stage_marks.js"
 
 const ALLOWED_ELEMENTS = new Set([
   "A", "ANNOTATION", "BLOCKQUOTE", "BR", "CODE", "DEL", "DIV", "EM", "H1", "H2", "H3", "H4", "H5", "H6",
@@ -56,7 +57,10 @@ export function sanitizePreview(container: Element, html: string, options: Sanit
   const { interactive = true, documentPagination = false, mediaBaseUrl = "" } = options;
   const document = container.ownerDocument;
   const template = document.createElement("template");
+  markStage("sanitize-parse-start");
   template.innerHTML = typeof html === "string" ? html : "";
+  markStage("sanitize-parse-end");
+  markStage("sanitize-scrub-start");
   const showElement = document.defaultView?.NodeFilter?.SHOW_ELEMENT ?? 1;
   const walker = document.createTreeWalker(template.content, showElement);
   const elements: Element[] = [];
@@ -80,7 +84,10 @@ export function sanitizePreview(container: Element, html: string, options: Sanit
       }
     }
   }
+  markStage("sanitize-scrub-end");
+  markStage("sanitize-install-start");
   container.replaceChildren(template.content);
+  markStage("sanitize-install-end");
 }
 
 function safeAttribute(

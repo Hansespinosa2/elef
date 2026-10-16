@@ -8,6 +8,7 @@ import { blockOperationRange, directiveLineSpan, exciseRange, insertAlignDirecti
 import { alignVisibleOffset, touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
+import { markStage } from "../../session/stage_marks.js"
 
 export interface DocumentEditorRange {
   start: number
@@ -990,6 +991,7 @@ export class DocumentEditor {
     const projection = this.projectionTarget
     if (!projection) return
 
+    markStage("editability-sync-start")
     const visual = this.element.dataset.editorMode !== "source"
     const fresh = this.element.previewController?.projectionFresh !== false
     const active = preserveActive ? document.activeElement?.closest?.("[data-editor-block-id]") : null
@@ -1002,6 +1004,7 @@ export class DocumentEditor {
       const disabled = !visual || !this.map
       if (target.disabled !== disabled) target.disabled = disabled
     })
+    markStage("editability-sync-end")
   }
 
   shiftMapAfterEdit(from: number, to: number, replacementLength: number, editedBlockId: string | null = null): void {

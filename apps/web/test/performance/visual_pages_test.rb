@@ -406,14 +406,18 @@ class VisualPagesTest < ApplicationSystemTestCase
       wall, breakdown = measure_open(@perf_document)
       walls << (wall * 1000)
       breakdowns << breakdown
-      puts "PERF_SAMPLE open=#{kind} n=#{index + 1} ms=#{(wall * 1000).round(0)} pages=#{breakdown["pages"]}"
+      server_ms = ((breakdown["responseStart"] || 0) - (breakdown["requestStart"] || 0)).round(0)
+      stages = (breakdown["stages"] || []).map { |s| "#{s["stage"]}=#{s["ms"].round(0)}" }.join(" ")
+      puts "PERF_SAMPLE open=#{kind} n=#{index + 1} ms=#{(wall * 1000).round(0)} pages=#{breakdown["pages"]} " \
+        "server=#{server_ms} dcl=#{(breakdown["domContentLoaded"] || 0).round(0)} #{stages}"
     end
     [walls, breakdowns]
   end
 
   def benchmark_fixture(name, source)
     smoke = ENV["ELEF_PERF_SMOKE"] == "1"
-    open_n = smoke ? 2 : OPEN_SAMPLES
+    open_n = ENV["ELEF_PERF_OPEN_N"].to_i
+    open_n = (smoke ? 2 : OPEN_SAMPLES) if open_n <= 0
     only = ENV["ELEF_PERF_ONLY"]
     result = { source_bytes: source.bytesize }
     stalls = []

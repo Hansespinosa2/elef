@@ -62,6 +62,7 @@ class document_pages_controller_default extends Controller {
   }
   resizeFrames() {
     if (!this.surfaceTarget) return;
+    markStage("resize-frames-start");
     const preview = this.element.closest(".library-preview") || this.sourceModePreview();
     const previewStyle = preview && getComputedStyle(preview);
     const fittedWidth = previewStyle ? Math.max(0, Math.min(
@@ -73,8 +74,13 @@ class document_pages_controller_default extends Controller {
     frames.forEach((frame) => {
       if (fittedWidth === null) frame.style.removeProperty("width");
       else frame.style.width = `${fittedWidth}px`;
-      frame.style.setProperty("--document-page-scale", String(frame.clientWidth / DESIGN_WIDTH));
     });
+    const firstWidth = frames[0]?.clientWidth;
+    const scale = firstWidth === void 0 ? "1" : String(firstWidth / DESIGN_WIDTH);
+    frames.forEach((frame) => {
+      frame.style.setProperty("--document-page-scale", scale);
+    });
+    markStage("resize-frames-end");
   }
   sourceModePreview() {
     if (this.form?.dataset.editorMode !== "source") return null;
@@ -418,21 +424,28 @@ class document_pages_controller_default extends Controller {
     return null;
   }
   largestFittingChildCount(block, target, children, page) {
+    const clone = block.cloneNode(true);
+    const cloneTarget = this.nodeAtPath(clone, this.nodePath(block, target));
+    cloneTarget.dataset.documentPageFlowContent = "true";
+    const childClones = children.map((child) => child.cloneNode(true));
+    page.content.append(clone);
     let low = 1;
     let high = children.length - 1;
     let best = 0;
-    while (low <= high) {
-      const count = Math.floor((low + high) / 2);
-      const candidate = this.childFragment(block, target, children.slice(0, count));
-      page.content.append(candidate);
-      const fits = !this.overflows(page);
-      page.content.removeChild(candidate);
-      if (fits) {
-        best = count;
-        low = count + 1;
-      } else {
-        high = count - 1;
+    try {
+      while (low <= high) {
+        const count = Math.floor((low + high) / 2);
+        cloneTarget.replaceChildren(...childClones.slice(0, count));
+        const fits = !this.overflows(page);
+        if (fits) {
+          best = count;
+          low = count + 1;
+        } else {
+          high = count - 1;
+        }
       }
+    } finally {
+      page.content.removeChild(clone);
     }
     return best;
   }
@@ -446,30 +459,89 @@ class document_pages_controller_default extends Controller {
   splittableTextTarget(block) {
     const selector = FLOW_TEXT_SELECTOR;
     if (block.matches(selector)) return block;
-    const candidates = [...block.querySelectorAll(selector)].filter((element) => this.textMap(element).text.length > 1);
-    return candidates.length === 1 ? candidates[0] ?? null : null;
+    let found = null;
+    for (const element of block.querySelectorAll(selector)) {
+      if (this.textMap(element).text.length <= 1) continue;
+      if (found) return null;
+      found = element;
+    }
+    return found;
   }
   largestFittingBoundary(block, target, textMap, boundaries, page) {
+    const clone = block.cloneNode(true);
+    const cloneTarget = this.nodeAtPath(clone, this.nodePath(block, target));
+    cloneTarget.dataset.documentPageFlowContent = "true";
     let low = 0;
     let high = boundaries.length - 1;
     let best = 0;
-    while (low <= high) {
-      const index = Math.floor((low + high) / 2);
+    let interpolate = boundaries.length >= 24;
+    let interpolations = 0;
+    const baseScroll = interpolate ? page.content.scrollHeight : 0;
+    const remaining = interpolate ? page.content.clientHeight - baseScroll : 0;
+    if (remaining <= 0) interpolate = false;
+    page.content.append(clone);
+    const probe = (index) => {
       const end = boundaries[index];
-      if (end === void 0 || end >= textMap.text.length) {
-        high = index - 1;
-        continue;
-      }
-      const candidate = this.textFragment(block, target, textMap, 0, end);
-      page.content.append(candidate);
+      if (end === void 0 || end >= textMap.text.length) return null;
+      const range = document.createRange();
+      const start = this.pointAtTextOffset(textMap, 0);
+      const stop = this.pointAtTextOffset(textMap, end);
+      range.setStart(start.node, start.offset);
+      range.setEnd(stop.node, stop.offset);
+      cloneTarget.replaceChildren(range.cloneContents());
       const fits = !this.overflows(page);
-      page.content.removeChild(candidate);
       if (fits) {
-        best = end;
-        low = index + 1;
-      } else {
-        high = index - 1;
+        if (end > best) best = end;
+        return true;
       }
+      return false;
+    };
+    const indexNearLength = (length) => {
+      let lo = low;
+      let hi = high;
+      let nearest = low;
+      while (lo <= hi) {
+        const mid = lo + hi >> 1;
+        const value = boundaries[mid] ?? 0;
+        if (value === length) return mid;
+        if (value < length) {
+          nearest = mid;
+          lo = mid + 1;
+        } else {
+          hi = mid - 1;
+        }
+      }
+      return Math.max(low, Math.min(high, nearest));
+    };
+    let lastGrowth = 0;
+    let lastLength = 0;
+    try {
+      while (low <= high) {
+        const span = high - low + 1;
+        let index = Math.floor((low + high) / 2);
+        let estimated = false;
+        if (interpolate && interpolations < 3 && lastGrowth > 0 && lastLength > 0) {
+          index = indexNearLength(remaining * lastLength / lastGrowth);
+          estimated = true;
+          interpolations += 1;
+        }
+        const end = boundaries[index] ?? 0;
+        const fits = probe(index);
+        if (fits === null) {
+          high = index - 1;
+          continue;
+        }
+        lastGrowth = page.content.scrollHeight - baseScroll;
+        lastLength = end;
+        if (fits) {
+          low = index + 1;
+        } else {
+          high = index - 1;
+        }
+        if (estimated && high - low + 1 > span * 0.875) interpolate = false;
+      }
+    } finally {
+      page.content.removeChild(clone);
     }
     return best;
   }
@@ -502,7 +574,21 @@ class document_pages_controller_default extends Controller {
   pointAtTextOffset(textMap, offset) {
     if (offset <= 0) return { node: textMap.root, offset: 0 };
     if (offset >= textMap.text.length) return { node: textMap.root, offset: textMap.root.childNodes.length };
-    const entry = textMap.nodes.find(({ start, end }) => offset >= start && offset <= end) || textMap.nodes.at(-1);
+    const nodes = textMap.nodes;
+    if (!nodes.length) return { node: textMap.root, offset: 0 };
+    let low = 0;
+    let high = nodes.length - 1;
+    let index = nodes.length - 1;
+    while (low <= high) {
+      const mid = low + high >> 1;
+      if ((nodes[mid]?.end ?? 0) >= offset) {
+        index = mid;
+        high = mid - 1;
+      } else {
+        low = mid + 1;
+      }
+    }
+    const entry = nodes[index] ?? nodes.at(-1);
     if (!entry) return { node: textMap.root, offset: 0 };
     return { node: entry.node, offset: Math.max(0, Math.min(offset - entry.start, (entry.node.textContent ?? "").length)) };
   }
