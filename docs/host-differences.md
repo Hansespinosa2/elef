@@ -145,8 +145,14 @@ Capability keys come from the `HostCapabilities` interface
   → `WebviewWindow::print()` → the platform print dialog with its PDF
   destination). Script `window.print()` is only the fallback: it is a
   silent no-op in the desktop webviews on macOS and Linux, so it never
-  reached the platform pipeline there. The native dialog fires no
-  `afterprint` event, so the `printing-work` marker clears when the
+  reached the platform pipeline there. Before printing, `printCurrentWork`
+  prepares through the shared print contract (`packages/client/src/features/
+  export/print.ts`): videos pause (as the web print-view controller does)
+  and a kind marker (`printing-document` / `printing-presentation`) selects
+  the matching web print geometry, so the PDF carries the Work preview only —
+  shell, Export menu, notices, and editor affordances stay out — with fixed
+  13.333 × 7.5 in presentation pages and flowing A4 document pages. The native
+  dialog fires no `afterprint` event, so the markers clear when the
   command resolves; the WebDriver harness resolves the command without
   opening the dialog. The menu closes on activation, outside pointerdown
   or click, and Escape.

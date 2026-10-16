@@ -10,7 +10,7 @@ import { presentConflictDialog } from "./conflict_dialog.js";
 import { createRendererClient } from "./renderer_worker_client.js";
 import { applyDesktopFeatureFlags } from "./feature_flags.js";
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js";
-import { CREATE_WORK_EVENT, exportMenuOptionsFor, mountElef, mountExportMenu, mountPresentation, parseLibraryRoute } from "@elef/client";
+import { CREATE_WORK_EVENT, exportMenuOptionsFor, mountElef, mountExportMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile } from "@elef/client";
 function ensureWorkFolderHash(workFolder) {
   workFolder.content_hash ??= "";
   return workFolder;
@@ -924,20 +924,23 @@ function startFileLibraryApplication(platform) {
       showNotice("Render the Work before printing it.", "error");
       return;
     }
-    document.body.classList.add("printing-work");
+    const printKind = printWorkKindForSourceFile(activeWorkFolder?.source_file);
+    const printMarkers = printMarkerClasses(printKind);
+    pausePrintVideos(preview);
+    document.body.classList.add(...printMarkers);
     await new Promise((resolve) => requestAnimationFrame(resolve));
     try {
       const printViaNative = typeof fileLibrary.printWork === "function";
       if (printViaNative) await fileLibrary.printWork();
       else window.print();
       if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
-        globalThis.__elefPrintResult = { native: printViaNative };
+        globalThis.__elefPrintResult = { native: printViaNative, kind: printKind };
       }
     } catch (error) {
       console.error("[desktop-print]", error);
       showNotice("The print dialog could not be opened.", "error");
     } finally {
-      document.body.classList.remove("printing-work");
+      document.body.classList.remove(...printMarkers);
     }
   }
   let presentationMount = null;
