@@ -191,11 +191,13 @@ function outermostRevealables(root: Element): Element[] {
   return found
 }
 
-// Pair source tokens with DOM elements in order, verifying kinds.
-// Returns null on any mismatch (caller refuses active projection).
-export function pairRevealables(source: string, root: Element): RevealPair[] | null {
+// Pair source tokens with gathered DOM elements in order, verifying
+// kinds. Callers gather across same-block page fragments so split
+// blocks pair; a split inside one construct yields extra elements and
+// refuses (safe: that block stays concealed). Returns null on any
+// mismatch (caller refuses active projection).
+export function pairRevealables(source: string, elements: Element[]): RevealPair[] | null {
   const tokens = tokenizeRevealables(source)
-  const elements = outermostRevealables(root)
   if (tokens.length !== elements.length) return null
   const pairs: RevealPair[] = []
   for (let i = 0; i < tokens.length; i += 1) {
@@ -387,7 +389,10 @@ export function fenceDelimiters(sourceLines: string[]): { open: string; close: s
 }
 
 function blockStructuralKind(block: Element): StructuralKind | null {
-  const first = block.firstElementChild
+  // First structural element in document order: page fragments may
+  // wrap content in flow containers, and nested constructs (code in a
+  // list item) always sort after their ancestor.
+  const first = block.querySelector("h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre")
   if (!first) return null
   if (/^H[1-6]$/.test(first.tagName)) return "heading"
   if (first.tagName === "UL" || first.tagName === "OL") return "list"
@@ -396,7 +401,7 @@ function blockStructuralKind(block: Element): StructuralKind | null {
   return null
 }
 
-function syncStructuralReveal(root: Element, blocks: Map<Element, string>, liveRange: Range | null): void {
+function syncStructuralReveal(root: Element, blocks: Map<Element, string>, liveRange: Range | null, groups: Map<string, Element[]>): void {
   const marked = new Set<Element>()
   if (liveRange) {
     for (const [block, source] of blocks) {
@@ -414,7 +419,11 @@ function syncStructuralReveal(root: Element, blocks: Map<Element, string>, liveR
         marked.add(block)
         continue
       }
-      const lines = [...block.querySelectorAll(lineSelector(kind))]
+      // Lines index globally across same-block page fragments so a
+      // caret in a later fragment still maps to its source line.
+      const id = (block as HTMLElement).dataset?.editorBlockId ?? ""
+      const group = id ? (groups.get(id) ?? [block]) : [block]
+      const lines = group.flatMap((fragment) => [...fragment.querySelectorAll(lineSelector(kind))])
       lines.forEach((line, index) => {
         const touched = line.contains(liveRange.startContainer) ||
           line.contains(liveRange.endContainer) ||
@@ -458,16 +467,41 @@ export function syncActiveInline(
   const selection = root.ownerDocument.getSelection?.() ?? null
   const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
   const endpoints = range ? [range.startContainer, range.endContainer] : []
+  // Fragment groups (document order) keyed by block id, scanned once:
+  // a range covers every block it intersects across blocks and pages,
+  // and pairing gathers across same-block page fragments.
+  const groups = new Map<string, Element[]>()
+  root.querySelectorAll("[data-editor-block-id]").forEach((fragment) => {
+    const id = (fragment as HTMLElement).dataset?.editorBlockId ?? ""
+    if (!id) return
+    const group = groups.get(id)
+    if (group) group.push(fragment as Element)
+    else groups.set(id, [fragment as Element])
+  })
   const blocks = new Map<Element, string>()
-  for (const endpoint of endpoints) {
-    const element = endpoint.nodeType === ELEMENT_NODE ? (endpoint as Element) : (endpoint as ChildNode).parentElement
-    const block = element?.closest?.("[data-editor-block-id]") as Element | null
-    if (!block || !root.contains(block) || blocks.has(block)) continue
+  const consider = (block: Element | null): void => {
+    if (!block || !root.contains(block) || blocks.has(block)) return
     const source = getSource?.(block) ?? null
     if (source !== null) blocks.set(block, source)
   }
+  for (const endpoint of endpoints) {
+    const element = endpoint.nodeType === ELEMENT_NODE ? (endpoint as Element) : (endpoint as ChildNode).parentElement
+    consider(element?.closest?.("[data-editor-block-id]") as Element | null)
+  }
+  if (range && !range.collapsed) {
+    for (const group of groups.values()) {
+      for (const fragment of group) {
+        if (!blocks.has(fragment) && intersects(fragment, range)) consider(fragment)
+      }
+    }
+  }
+  const elementsFor = (block: Element): Element[] => {
+    const id = (block as HTMLElement).dataset?.editorBlockId ?? ""
+    const group = id ? (groups.get(id) ?? [block]) : [block]
+    return group.flatMap((fragment) => outermostRevealables(fragment))
+  }
   for (const [block, source] of blocks) {
-    const pairs = pairRevealables(source, block)
+    const pairs = pairRevealables(source, elementsFor(block))
     if (!pairs) continue
     for (const endpoint of endpoints) {
       if (!block.contains(endpoint)) continue
@@ -491,7 +525,7 @@ export function syncActiveInline(
   // middle constructs); collapsed carets use strict containment so
   // leaving by one position restores the render.
   const liveRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-  syncStructuralReveal(root, blocks, liveRange)
+  syncStructuralReveal(root, blocks, liveRange, groups)
   const actives = [...root.querySelectorAll(ACTIVE_SELECTOR)] as HTMLElement[]
   for (const span of actives) {
     if (liveRange && (span.contains(liveRange.startContainer) || span.contains(liveRange.endContainer))) continue
@@ -508,7 +542,9 @@ export function syncActiveInline(
 // delimiter deletions as source deletions (un-formatting commits).
 export function activeInlineMap(source: string, root: Element | null): RevealActives | null {
   if (!root) return new Map()
-  const pairs = pairRevealables(source, root)
+  // The differ passes the combined block (fragments already merged),
+  // so a single-root gather matches the sync-side cross-fragment one.
+  const pairs = pairRevealables(source, outermostRevealables(root))
   if (!pairs) {
     return root.querySelector(ACTIVE_SELECTOR) ? null : new Map()
   }

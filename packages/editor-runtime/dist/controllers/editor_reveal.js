@@ -111,9 +111,8 @@ function outermostRevealables(root) {
   }
   return found;
 }
-function pairRevealables(source, root) {
+function pairRevealables(source, elements) {
   const tokens = tokenizeRevealables(source);
-  const elements = outermostRevealables(root);
   if (tokens.length !== elements.length) return null;
   const pairs = [];
   for (let i = 0; i < tokens.length; i += 1) {
@@ -268,7 +267,7 @@ function fenceDelimiters(sourceLines) {
   return { open: open[1] ?? "", close };
 }
 function blockStructuralKind(block) {
-  const first = block.firstElementChild;
+  const first = block.querySelector("h1, h2, h3, h4, h5, h6, ul, ol, blockquote, pre");
   if (!first) return null;
   if (/^H[1-6]$/.test(first.tagName)) return "heading";
   if (first.tagName === "UL" || first.tagName === "OL") return "list";
@@ -276,7 +275,7 @@ function blockStructuralKind(block) {
   if (first.tagName === "PRE") return "fence";
   return null;
 }
-function syncStructuralReveal(root, blocks, liveRange) {
+function syncStructuralReveal(root, blocks, liveRange, groups) {
   const marked = /* @__PURE__ */ new Set();
   if (liveRange) {
     for (const [block, source] of blocks) {
@@ -294,7 +293,9 @@ function syncStructuralReveal(root, blocks, liveRange) {
         marked.add(block);
         continue;
       }
-      const lines = [...block.querySelectorAll(lineSelector(kind))];
+      const id = block.dataset?.editorBlockId ?? "";
+      const group = id ? groups.get(id) ?? [block] : [block];
+      const lines = group.flatMap((fragment) => [...fragment.querySelectorAll(lineSelector(kind))]);
       lines.forEach((line, index) => {
         const touched = line.contains(liveRange.startContainer) || line.contains(liveRange.endContainer) || !liveRange.collapsed && intersects(line, liveRange);
         if (!touched) return;
@@ -323,16 +324,38 @@ function syncActiveInline(root, getSource, onFlush = null) {
   const selection = root.ownerDocument.getSelection?.() ?? null;
   const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
   const endpoints = range ? [range.startContainer, range.endContainer] : [];
+  const groups = /* @__PURE__ */ new Map();
+  root.querySelectorAll("[data-editor-block-id]").forEach((fragment) => {
+    const id = fragment.dataset?.editorBlockId ?? "";
+    if (!id) return;
+    const group = groups.get(id);
+    if (group) group.push(fragment);
+    else groups.set(id, [fragment]);
+  });
   const blocks = /* @__PURE__ */ new Map();
-  for (const endpoint of endpoints) {
-    const element = endpoint.nodeType === ELEMENT_NODE ? endpoint : endpoint.parentElement;
-    const block = element?.closest?.("[data-editor-block-id]");
-    if (!block || !root.contains(block) || blocks.has(block)) continue;
+  const consider = (block) => {
+    if (!block || !root.contains(block) || blocks.has(block)) return;
     const source = getSource?.(block) ?? null;
     if (source !== null) blocks.set(block, source);
+  };
+  for (const endpoint of endpoints) {
+    const element = endpoint.nodeType === ELEMENT_NODE ? endpoint : endpoint.parentElement;
+    consider(element?.closest?.("[data-editor-block-id]"));
   }
+  if (range && !range.collapsed) {
+    for (const group of groups.values()) {
+      for (const fragment of group) {
+        if (!blocks.has(fragment) && intersects(fragment, range)) consider(fragment);
+      }
+    }
+  }
+  const elementsFor = (block) => {
+    const id = block.dataset?.editorBlockId ?? "";
+    const group = id ? groups.get(id) ?? [block] : [block];
+    return group.flatMap((fragment) => outermostRevealables(fragment));
+  };
   for (const [block, source] of blocks) {
-    const pairs = pairRevealables(source, block);
+    const pairs = pairRevealables(source, elementsFor(block));
     if (!pairs) continue;
     for (const endpoint of endpoints) {
       if (!block.contains(endpoint)) continue;
@@ -347,7 +370,7 @@ function syncActiveInline(root, getSource, onFlush = null) {
     }
   }
   const liveRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-  syncStructuralReveal(root, blocks, liveRange);
+  syncStructuralReveal(root, blocks, liveRange, groups);
   const actives = [...root.querySelectorAll(ACTIVE_SELECTOR)];
   for (const span of actives) {
     if (liveRange && (span.contains(liveRange.startContainer) || span.contains(liveRange.endContainer))) continue;
@@ -357,7 +380,7 @@ function syncActiveInline(root, getSource, onFlush = null) {
 }
 function activeInlineMap(source, root) {
   if (!root) return /* @__PURE__ */ new Map();
-  const pairs = pairRevealables(source, root);
+  const pairs = pairRevealables(source, outermostRevealables(root));
   if (!pairs) {
     return root.querySelector(ACTIVE_SELECTOR) ? null : /* @__PURE__ */ new Map();
   }

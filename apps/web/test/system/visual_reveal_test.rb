@@ -259,6 +259,105 @@ class VisualRevealTest < ApplicationSystemTestCase
     assert_equal "```js\ncode here\n```\n", engine_source
   end
 
+  test "a range across blocks reveals in each block" do
+    document = Document.create!(title: "Reveal", source: "First *aa* end.\n\nStart *bb* last.\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    page.execute_script(<<~JAVASCRIPT)
+      (() => {
+        const ems = document.querySelectorAll(".document-editor-block em");
+        const range = document.createRange();
+        range.setStart(ems[0].firstChild, 1);
+        range.setEnd(ems[1].firstChild, 1);
+        const selection = window.getSelection();
+        selection.removeAllRanges(); selection.addRange(range);
+      })()
+    JAVASCRIPT
+    assert_selector ".editor-inline-active", count: 2, wait: 5
+    assert_equal "First *aa* end.\n\nStart *bb* last.\n", engine_source
+  end
+
+  test "a range across pages reveals on both pages" do
+    paras = (1..40).map { |i| "Paragraph #{i} with *emphasis* content here." }
+    document = Document.create!(title: "Reveal", source: paras.join("\n\n") + "\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+    assert_selector ".document-page-frame", minimum: 2, wait: 10
+
+    page.execute_script(<<~JAVASCRIPT)
+      (() => {
+        const frames = document.querySelectorAll(".document-page-frame");
+        const first = frames[0].querySelector(".document-editor-block em").firstChild;
+        const last = frames[frames.length - 1].querySelector(".document-editor-block em").firstChild;
+        const range = document.createRange();
+        range.setStart(first, 1);
+        range.setEnd(last, 1);
+        const selection = window.getSelection();
+        selection.removeAllRanges(); selection.addRange(range);
+      })()
+    JAVASCRIPT
+    assert_selector ".document-page-frame:first-child .editor-inline-active", wait: 5
+    assert_selector ".document-page-frame:last-child .editor-inline-active", wait: 5
+  end
+
+  test "cross-block deletion commits faithfully per block" do
+    # Cross-block range deletion rides the pre-existing per-block bridge
+    # (block merging is a known unlanded increment); revelation only
+    # owes faithful per-block commits with no lost block anchors.
+    document = Document.create!(title: "Reveal", source: "First *aa* end.\n\nStart *bb* last.\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    page.execute_script(<<~JAVASCRIPT)
+      (() => {
+        const ems = document.querySelectorAll(".document-editor-block em");
+        const range = document.createRange();
+        range.setStart(ems[0].firstChild, 1);
+        range.setEnd(ems[1].firstChild, 1);
+        const selection = window.getSelection();
+        selection.removeAllRanges(); selection.addRange(range);
+      })()
+    JAVASCRIPT
+    assert_selector ".editor-inline-active", count: 2, wait: 5
+    find(".document-editor-block", text: "First").send_keys(:backspace)
+    sleep 1.0
+    assert_includes engine_source, "First"
+    assert_includes engine_source, "last."
+    assert_includes engine_source, "Start *bb* last."
+  end
+
+  test "blocks bound to alignment directives reveal normally" do
+    document = Document.create!(title: "Reveal", source: ":::align center\n\n## Headed\n\nBody *warm* here.\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    place_caret_in(".document-editor-block em", offset: 2)
+    assert_selector ".editor-inline-active", text: "*warm*", wait: 5
+    place_caret_in(".document-editor-block h2", offset: 2)
+    assert_selector ".document-editor-block h2[data-editor-reveal-prefix='## ']", wait: 5
+    assert_equal ":::align center\n\n## Headed\n\nBody *warm* here.\n", engine_source
+  end
+
+  test "presentation slide emphasis reveals on entry" do
+    presentation = Presentation.create!(title: "Reveal", source: "# Slide *one*\n\n---\n\nBody *two* here.\n")
+    visit edit_presentation_path(presentation)
+    wait_for_fresh_projection
+    assert_no_selector ".editor-inline-active"
+
+    page.execute_script(<<~JAVASCRIPT)
+      (() => {
+        const ems = document.querySelectorAll(".presentation-editor-projection em");
+        const target = ems[ems.length - 1].firstChild;
+        const range = document.createRange();
+        range.setStart(target, 1); range.collapse(true);
+        const selection = window.getSelection();
+        selection.removeAllRanges(); selection.addRange(range);
+      })()
+    JAVASCRIPT
+    assert_selector ".editor-inline-active", text: "*two*", wait: 5
+  end
+
   test "emphasis containing math stays rendered" do
     document = Document.create!(title: "Reveal", source: "A *mix $x$ up* word.\n")
     visit edit_document_path(document)
