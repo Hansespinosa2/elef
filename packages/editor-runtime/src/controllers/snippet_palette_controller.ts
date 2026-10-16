@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
+import { mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
 import { editorInsideCode, editorInsideMath } from "./math_shorthand_controller.js"
 import { authoringRegistryFor } from "./authoring_registry.js"
 import { snippetStopsEffect } from "./snippet_stops.js"
@@ -99,30 +100,15 @@ export default class extends Controller<HTMLElement> {
     // In visual mode the native caret lives in the projection block, so
     // mirror the popup state there for assistive technology.
     if (this.editorController?.editingMode !== "visual") return
-    const active = document.activeElement
-    if (!active || active === document.body || !this.element.closest("form")?.contains(active)) return
-    active.setAttribute("aria-expanded", String(Boolean(openPalette)))
-    if (selected) active.setAttribute("aria-activedescendant", selected.id)
-    else active.removeAttribute("aria-activedescendant")
+    mirrorPopupAccessibility(this.element, { open: Boolean(openPalette), selectedId: selected?.id ?? null })
   }
 
   assistsInMode(editor: { editingMode?: string } | null | undefined): boolean {
     return !!editor && (editor.editingMode === "source" || editor.editingMode === "visual")
   }
 
-  projectionHost(): { applyVisualAssistInsert?: (edit: unknown) => boolean; restoreCaret?: (offset: number, blockId: string | null) => boolean } | null {
-    const form = this.element.closest("form") as unknown as {
-      presentationEditorController?: unknown
-      visualEditorController?: { editor?: unknown } | null
-    } | null
-    return (form?.presentationEditorController || form?.visualEditorController || null) as {
-      applyVisualAssistInsert?: (edit: unknown) => boolean
-      restoreCaret?: (offset: number, blockId: string | null) => boolean
-    } | null
-  }
-
-  placeVisualCaret(sourceOffset: number): void {
-    this.projectionHost()?.restoreCaret?.(sourceOffset, null)
+  projectionHost() {
+    return projectionHostFor(this.element)
   }
 
   input() {
@@ -386,10 +372,8 @@ export default class extends Controller<HTMLElement> {
     // The engine surface hides in visual mode, so its coordinates are
     // meaningless there: anchor to the native projection caret instead.
     if (editor.editingMode === "visual") {
-      const selection = window.getSelection()
-      const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
-      const rect = range?.getBoundingClientRect()
-      if (!rect || (rect.x === 0 && rect.y === 0 && rect.width === 0 && rect.height === 0)) return
+      const rect = visualCaretRect()
+      if (!rect) return
       this.placePalette(rect)
       return
     }
@@ -458,7 +442,7 @@ export default class extends Controller<HTMLElement> {
     if (!editor) return this.endStops()
     const exit = editor.value[current.end] === "}" ? current.end + 1 : current.end
     editor.setSelectionRange(exit, exit)
-    if (editor.editingMode === "visual") this.placeVisualCaret(exit)
+    if (editor.editingMode === "visual") placeVisualCaret(this.element, exit)
     this.endStops()
   }
 
@@ -488,14 +472,14 @@ export default class extends Controller<HTMLElement> {
       this.activeStop = null
       this.updateStopDecorations()
       editor.setSelectionRange(editor.selectionStart, editor.selectionStart)
-      if (visual) this.placeVisualCaret(editor.selectionStart)
+      if (visual) placeVisualCaret(this.element, editor.selectionStart)
       return
     }
     this.activeStop = stop
     editor.setSelectionRange(stop.start, stop.end)
     // The projection shows a single caret: walk it to the stop start while
     // the engine holds the ranged stop selection.
-    if (visual) this.placeVisualCaret(stop.start)
+    if (visual) placeVisualCaret(this.element, stop.start)
     this.updateStopDecorations()
   }
 

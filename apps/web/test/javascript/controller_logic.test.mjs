@@ -31,10 +31,12 @@ function replaceGlobal(name, value) {
 }
 
 const CommandPaletteController = await loadController("command_palette")
+const visualAssistSource = await readFile(new URL("../../../../packages/editor-runtime/dist/lib/visual_assist.js", import.meta.url), "utf8")
 const SnippetPaletteController = await loadController("snippet_palette", {
   base: sharedControllerPath,
   overrides: {
     "../lib/editor_controller_lookup.js": "const editorFor = element => element.currentEditor\n",
+    "../lib/visual_assist.js": visualAssistSource,
     "./math_shorthand_controller.js": "const editorInsideMath = () => false\nconst editorInsideCode = () => false\n",
     "./authoring_registry.js": "const authoringRegistryFor = () => []\n",
     "./snippet_stops.js": "const snippetStopsEffect = { of: (stops) => stops }\n",

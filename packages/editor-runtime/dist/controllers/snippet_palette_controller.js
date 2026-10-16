@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { editorFor } from "../lib/editor_controller_lookup.js";
+import { mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";
 import { editorInsideCode, editorInsideMath } from "./math_shorthand_controller.js";
 import { authoringRegistryFor } from "./authoring_registry.js";
 import { snippetStopsEffect } from "./snippet_stops.js";
@@ -85,21 +86,13 @@ class snippet_palette_controller_default extends Controller {
     if (selected) editor.setAttribute("aria-activedescendant", selected.id);
     else editor.removeAttribute("aria-activedescendant");
     if (this.editorController?.editingMode !== "visual") return;
-    const active = document.activeElement;
-    if (!active || active === document.body || !this.element.closest("form")?.contains(active)) return;
-    active.setAttribute("aria-expanded", String(Boolean(openPalette)));
-    if (selected) active.setAttribute("aria-activedescendant", selected.id);
-    else active.removeAttribute("aria-activedescendant");
+    mirrorPopupAccessibility(this.element, { open: Boolean(openPalette), selectedId: selected?.id ?? null });
   }
   assistsInMode(editor) {
     return !!editor && (editor.editingMode === "source" || editor.editingMode === "visual");
   }
   projectionHost() {
-    const form = this.element.closest("form");
-    return form?.presentationEditorController || form?.visualEditorController || null;
-  }
-  placeVisualCaret(sourceOffset) {
-    this.projectionHost()?.restoreCaret?.(sourceOffset, null);
+    return projectionHostFor(this.element);
   }
   input() {
     if (this.ignoreNextInput) {
@@ -319,10 +312,8 @@ class snippet_palette_controller_default extends Controller {
     const editor = this.editorController;
     if (!editor) return;
     if (editor.editingMode === "visual") {
-      const selection = window.getSelection();
-      const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
-      const rect = range?.getBoundingClientRect();
-      if (!rect || rect.x === 0 && rect.y === 0 && rect.width === 0 && rect.height === 0) return;
+      const rect = visualCaretRect();
+      if (!rect) return;
       this.placePalette(rect);
       return;
     }
@@ -383,7 +374,7 @@ class snippet_palette_controller_default extends Controller {
     if (!editor) return this.endStops();
     const exit = editor.value[current.end] === "}" ? current.end + 1 : current.end;
     editor.setSelectionRange(exit, exit);
-    if (editor.editingMode === "visual") this.placeVisualCaret(exit);
+    if (editor.editingMode === "visual") placeVisualCaret(this.element, exit);
     this.endStops();
   }
   endStops() {
@@ -410,12 +401,12 @@ class snippet_palette_controller_default extends Controller {
       this.activeStop = null;
       this.updateStopDecorations();
       editor.setSelectionRange(editor.selectionStart, editor.selectionStart);
-      if (visual) this.placeVisualCaret(editor.selectionStart);
+      if (visual) placeVisualCaret(this.element, editor.selectionStart);
       return;
     }
     this.activeStop = stop;
     editor.setSelectionRange(stop.start, stop.end);
-    if (visual) this.placeVisualCaret(stop.start);
+    if (visual) placeVisualCaret(this.element, stop.start);
     this.updateStopDecorations();
   }
   adjustStops() {
