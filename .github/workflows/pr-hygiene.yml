@@ -26,7 +26,10 @@ jobs:
         run: ruby scripts/check_pr_description.rb
 
   normalize:
-    if: github.event.pull_request.head.ref != 'main' && github.event.pull_request.head.ref != 'dev'
+    # Dependabot owns its branch names, so the feat|fix|chore convention can
+    # never hold there by design. Bot PRs stay gated on the full functional
+    # CI suite; only the title-normalization step is skipped.
+    if: github.event.pull_request.head.ref != 'main' && github.event.pull_request.head.ref != 'dev' && !startsWith(github.event.pull_request.head.ref, 'dependabot/')
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
