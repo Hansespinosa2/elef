@@ -46,7 +46,20 @@ const SnippetPaletteController = await loadController("snippet_palette", {
 const MathShortcutPaletteController = await loadController("math_shortcut_palette", {
   base: sharedControllerPath,
   overrides: {
-    "../lib/editor_controller_lookup.js": "const editorFor = element => element.currentEditor\n"
+    "../lib/editor_controller_lookup.js": "const editorFor = element => element.currentEditor\n",
+    "../lib/visual_assist.js": visualAssistSource,
+    "./application.js": "const application = { getControllerForElementAndIdentifier: () => null }\n",
+    "./math_shorthand_controller.js": [
+      "const editorInsideMath = () => true",
+      "const editorInsideCode = () => false",
+      "const expandMathShorthand = (source) => source",
+      "const innermostMathChainWindow = () => null",
+      "const mathShorthandAtEditor = () => null",
+      "const parseMathShorthand = () => ({ status: 'valid' })",
+      ""
+    ].join("\n"),
+    "./authoring_registry.js": "const authoringRegistryFor = () => []\n",
+    "./snippet_stops.js": "const snippetStopsEffect = { of: (stops) => stops }\n"
   }
 })
 const DocumentPagesController = await loadController("document_pages", { base: sharedControllerPath })
@@ -394,6 +407,7 @@ function stubAssistEngine({ mode = "visual", value = "Body /ta", caret = 8 } = {
     selectionEnd: caret,
     value,
     destroyed: false,
+    insertMode: true,
     dom: {
       getAttribute: () => "",
       setAttribute: () => {},
@@ -879,5 +893,146 @@ test("visual metadata keydown accepts the match on Enter", (t) => {
 
 test("visual metadata routing binds on document capture and ignores idle keys", (t) => {
   assertVisualRouting(t, MetadataAssistController)
+})
+
+// --- Visual-mode math shortcut palette ---
+
+const MATH_SHORTCUTS = JSON.parse(await readFile(new URL("../../app/javascript/data/default_authoring_registry.json", import.meta.url), "utf8"))
+const ALPHA_SHORTCUT = (Array.isArray(MATH_SHORTCUTS) ? MATH_SHORTCUTS : MATH_SHORTCUTS.entries).find((entry) => entry.id === "default-alpha")
+
+test("visual math refresh opens the palette on an at query", (t) => {
+  const mounted = mountAssistPalette({
+    controllerClass: MathShortcutPaletteController,
+    value: "The $@a",
+    caret: 7,
+    registry: [ALPHA_SHORTCUT]
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+
+  mounted.controller.refresh()
+
+  assert.equal(mounted.palette.hidden, false)
+  assert.deepEqual(mounted.controller.matches, [ALPHA_SHORTCUT])
+  assert.equal(mounted.controller.query.start, 5)
+  assert.equal(mounted.palette.style.left, "100px")
+  assert.equal(mounted.palette.style.top, "222px")
+})
+
+test("visual math insert pipelines the expansion through the host", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MathShortcutPaletteController,
+    value: "The $@a",
+    caret: 7,
+    registry: [ALPHA_SHORTCUT],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.insertSelected()
+
+  assert.deepEqual(mounted.calls.replaceRange, [["\\alpha", 5, 7]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 5, to: 7, insert: "\\alpha", caret: 11 }])
+  assert.equal(mounted.calls.focus, 0)
+  assert.deepEqual(hostCalls.carets, [[11, null]])
+  assert.equal(mounted.palette.hidden, true)
+})
+
+test("source math insert still focuses the engine", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MathShortcutPaletteController,
+    mode: "source",
+    value: "The $@a",
+    caret: 7,
+    registry: [ALPHA_SHORTCUT],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.insertSelected()
+
+  assert.deepEqual(mounted.calls.replaceRange, [["\\alpha", 5, 7]])
+  assert.equal(mounted.calls.focus, 1)
+  assert.deepEqual(hostCalls.inserts, [])
+})
+
+test("visual math keydown accepts the match on Enter", (t) => {
+  const { host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MathShortcutPaletteController,
+    value: "The $@a",
+    caret: 7,
+    registry: [ALPHA_SHORTCUT],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  let prevented = false
+
+  mounted.controller.keydown({ key: "Enter", defaultPrevented: false, preventDefault: () => { prevented = true } })
+
+  assert.equal(prevented, true)
+  assert.deepEqual(mounted.calls.replaceRange, [["\\alpha", 5, 7]])
+})
+
+test("visual math routing binds on document capture and ignores idle keys", (t) => {
+  assertVisualRouting(t, MathShortcutPaletteController)
+})
+
+test("visual math dot operations rewrite the base through the host", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const vector = { namespace: ".", prefix: ".", id: "default-vector", aliases: ["vec"], name: "Vector", description: "", expansion: "", built_in: true, behavior: { operator_class: "math" } }
+  const mounted = mountAssistPalette({
+    controllerClass: MathShortcutPaletteController,
+    value: "The $x.v",
+    caret: 7,
+    registry: [vector],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.insertSelected()
+
+  assert.deepEqual(mounted.calls.replaceRange, [["x.vec", 5, 7]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 5, to: 7, insert: "x.vec", caret: 10 }])
+  assert.deepEqual(hostCalls.carets, [[10, null]])
+})
+
+test("visual math placeholder stops walk the projection caret on Tab", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const sqrt = { namespace: "@", prefix: "@", id: "test-sqrt", aliases: ["sq"], name: "Sq", description: "", expansion: "\\sqrt{${1:x}}", built_in: false }
+  const mounted = mountAssistPalette({
+    controllerClass: MathShortcutPaletteController,
+    value: "The $@sq",
+    caret: 8,
+    registry: [sqrt],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.insertSelected()
+  assert.deepEqual(mounted.calls.setSelectionRange, [[11, 12]])
+  assert.deepEqual(hostCalls.carets, [[11, null]])
+
+  let prevented = false
+  mounted.controller.keydown({ key: "Tab", defaultPrevented: false, preventDefault: () => { prevented = true } })
+  assert.equal(prevented, true)
+  assert.deepEqual(hostCalls.carets, [[11, null], [13, null]])
+  assert.deepEqual(mounted.controller.stops, [])
 })
 

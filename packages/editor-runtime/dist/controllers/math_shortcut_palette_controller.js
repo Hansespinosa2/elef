@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { editorFor } from "../lib/editor_controller_lookup.js";
+import { assistsInMode, mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";
 import { application } from "./application.js";
 import { editorInsideMath, expandMathShorthand, innermostMathChainWindow, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js";
 import { authoringRegistryFor } from "./authoring_registry.js";
@@ -22,11 +23,23 @@ class math_shortcut_palette_controller_default extends Controller {
     this.editorForm = this.element.closest("form");
     this.editorForm?.addEventListener("elef:editor-mode-change", this.editorModeChange);
     this.positionPalette = this.positionPalette.bind(this);
+    this.visualKeydown = (event) => {
+      if (this.editorController?.editingMode !== "visual") return;
+      if (this.paletteTarget.hidden && !this.stops.length) return;
+      this.keydown(event);
+    };
+    this.visualScroll = () => {
+      if (this.editorController?.editingMode === "visual") this.positionPalette();
+    };
     this.setupEditor();
     window.addEventListener("resize", this.positionPalette);
+    document.addEventListener("keydown", this.visualKeydown, true);
+    window.addEventListener("scroll", this.visualScroll, { capture: true, passive: true });
   }
   disconnect() {
     window.removeEventListener("resize", this.positionPalette);
+    document.removeEventListener("keydown", this.visualKeydown, true);
+    window.removeEventListener("scroll", this.visualScroll, { capture: true });
     if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette);
     if (this.editorController && this.keydownBound) {
       this.editorController.dom.removeEventListener("keydown", this.handleEditorKeydown, true);
@@ -76,6 +89,8 @@ class math_shortcut_palette_controller_default extends Controller {
     const selected = openPalette?.querySelector('[aria-selected="true"]');
     if (selected) editor.setAttribute("aria-activedescendant", selected.id);
     else editor.removeAttribute("aria-activedescendant");
+    if (this.editorController?.editingMode !== "visual") return;
+    mirrorPopupAccessibility(this.element, { open: Boolean(openPalette), selectedId: selected?.id ?? null });
   }
   input() {
     this.adjustStops();
@@ -93,7 +108,7 @@ class math_shortcut_palette_controller_default extends Controller {
   pruneStops() {
     if (!this.stops.length) return;
     const editor = this.editorController;
-    if (!editor || editor.destroyed || editor.editingMode !== "source") return this.endStops();
+    if (!assistsInMode(editor) || editor?.destroyed) return this.endStops();
     const active = this.activeStop;
     if (!active) return this.endStops();
     const from = editor.selectionStart;
@@ -110,7 +125,7 @@ class math_shortcut_palette_controller_default extends Controller {
       return;
     }
     const editor = this.editorController;
-    if (!editor || editor.editingMode !== "source" || !editor.insertMode) {
+    if (!assistsInMode(editor) || !editor?.insertMode) {
       this.close();
       if (this.stops.length) this.endStops();
       return;
@@ -165,7 +180,7 @@ class math_shortcut_palette_controller_default extends Controller {
   }
   queryAtCaret() {
     const editor = this.editorController;
-    if (!editor || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return null;
+    if (!assistsInMode(editor) || editor.selectionStart !== editor.selectionEnd) return null;
     const caret = editor.selectionStart;
     const line = editor.view.state.doc.lineAt(caret);
     const before = line.text.slice(0, caret - line.from);
@@ -306,8 +321,17 @@ class math_shortcut_palette_controller_default extends Controller {
   positionPalette() {
     const editor = this.editorController;
     if (!editor) return;
+    if (editor.editingMode === "visual") {
+      const rect = visualCaretRect();
+      if (!rect) return;
+      this.placePalette(rect);
+      return;
+    }
     const editorRect = editor.dom.getBoundingClientRect();
     const marker = editor.view.coordsAtPos(editor.selectionStart) || editorRect;
+    this.placePalette(marker);
+  }
+  placePalette(marker) {
     const paletteRect = this.paletteTarget.getBoundingClientRect();
     this.paletteTarget.style.left = `${Math.max(8, Math.min(marker.left, window.innerWidth - paletteRect.width - 8))}px`;
     const maxTop = window.innerHeight - paletteRect.height - 8;
@@ -330,13 +354,20 @@ class math_shortcut_palette_controller_default extends Controller {
     const shortcut = this.matches?.[this.selectedIndex];
     const query = this.query;
     if (!shortcut || !query || !this.editorController) return this.close();
+    const visual = this.editorController.editingMode === "visual";
     if (shortcut.prefix === ".") {
       const canonical = { "default-bold": "b", "default-blackboard": "bb", "default-vector": "vec", "default-transpose": "t", "default-inverse": "inv" };
       const operation = canonical[shortcut.id] || shortcut.aliases?.[0];
       const source = query.base ? `${query.base}.${operation}` : `.${operation}`;
+      const queryEnd2 = this.editorController.selectionStart;
       this.close();
-      this.editorController.replaceRange(source, query.start, this.editorController.selectionStart);
-      this.editorController.focus();
+      this.editorController.replaceRange(source, query.start, queryEnd2);
+      if (visual) {
+        projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from: query.start, to: queryEnd2, insert: source, caret: query.start + source.length });
+        placeVisualCaret(this.element, query.start + source.length);
+      } else {
+        this.editorController.focus();
+      }
       return;
     }
     const expansion = this.expandShortcut(shortcut, query);
@@ -347,9 +378,14 @@ class math_shortcut_palette_controller_default extends Controller {
       end: base + stop.start + stop.length
     }));
     this.activeStop = null;
+    const queryEnd = this.editorController.selectionStart;
     this.close();
-    this.editorController.replaceRange(expansion.text, query.start, this.editorController.selectionStart);
-    this.editorController.focus();
+    this.editorController.replaceRange(expansion.text, query.start, queryEnd);
+    if (visual) {
+      projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from: query.start, to: queryEnd, insert: expansion.text, caret: query.start + expansion.text.length });
+    } else {
+      this.editorController.focus();
+    }
     this.selectStop(this.stops[0]);
   }
   expandShortcut(shortcut, query) {
@@ -383,14 +419,20 @@ class math_shortcut_palette_controller_default extends Controller {
     if (editor && !editor.destroyed) {
       const exit = editor.value[current.end] === "}" ? current.end + 1 : current.end;
       editor.setSelectionRange(exit, exit);
+      if (editor.editingMode === "visual") placeVisualCaret(this.element, exit);
     }
     this.endStops();
   }
   selectStop(stop) {
     const editor = this.editorController;
-    if (!editor || !stop) return;
+    if (!editor) return;
+    if (!stop) {
+      if (editor.editingMode === "visual") placeVisualCaret(this.element, editor.selectionStart);
+      return;
+    }
     this.activeStop = stop;
     editor.setSelectionRange(stop.start, stop.end);
+    if (editor.editingMode === "visual") placeVisualCaret(this.element, stop.start);
     this.updateStopDecorations();
   }
   adjustStops() {
