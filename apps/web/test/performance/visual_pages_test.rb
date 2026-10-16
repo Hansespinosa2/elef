@@ -27,11 +27,19 @@ class VisualPagesTest < ApplicationSystemTestCase
   SETTLE_TIMEOUT = 180
 
   PROBE_SCRIPT = <<~JAVASCRIPT.freeze
-    window.__elefPerf = { t0: performance.now(), paginatedAt: [], previewTrace: [] };
+    window.__elefPerf = { t0: performance.now(), paginatedAt: [], previewTrace: [], lastLongtaskEnd: 0, longtaskCount: 0 };
     window.__elefPreviewTrace = window.__elefPerf.previewTrace;
     document.addEventListener("elef:document-paginated", () => {
       window.__elefPerf.paginatedAt.push(performance.now());
     });
+    try {
+      new PerformanceObserver((list) => {
+        for (const entry of list.getEntries()) {
+          window.__elefPerf.lastLongtaskEnd = entry.startTime + entry.duration;
+          window.__elefPerf.longtaskCount += 1;
+        }
+      }).observe({ entryTypes: ["longtask"] });
+    } catch (_error) { /* longtask unsupported; quiet gates stay permissive */ }
   JAVASCRIPT
 
   SETTLE_SCRIPT = <<~JAVASCRIPT.freeze
@@ -50,6 +58,8 @@ class VisualPagesTest < ApplicationSystemTestCase
       return {
         settled, fresh, editable, fonts, imagesReady,
         pages: surface.querySelectorAll(".document-page").length,
+        quietMs: performance.now() - (window.__elefPerf?.lastLongtaskEnd || 0),
+        longtasks: window.__elefPerf?.longtaskCount || 0,
         now: performance.now()
       };
     })()
@@ -126,6 +136,11 @@ class VisualPagesTest < ApplicationSystemTestCase
     page.driver.browser.execute_cdp(
       "Page.addScriptToEvaluateOnNewDocument", source: PROBE_SCRIPT
     )
+    # The stock driver script timeout is 2s; in-page probe timers run to 8s
+    # and a 100-page pagination pass blocks the main thread for seconds, so
+    # both install and await scripts need headroom. Failures still surface
+    # loudly via the in-page -1s and the settle-loop deadline.
+    page.driver.browser.manage.timeouts.script = 30
   end
 
   def create_perf_document(name, source)
@@ -210,96 +225,164 @@ class VisualPagesTest < ApplicationSystemTestCase
   # yields to Ruby for the stimulus, then awaits the measured milliseconds
   # (or -1 on timeout). Measurement runs entirely in-page (no webdriver
   # round-trip inside the measured interval).
+  #
+  # HARD RULE (verified empirically on chromedriver 152): sync
+  # evaluate_script/execute_script executes ONLY the first top-level
+  # statement. Every multi-step script MUST be a single-statement IIFE with
+  # an explicit return. (CDP document-start scripts are unaffected.)
+  # Returns [ms, flags, trace]. Flags: "clean", "overlap" (a paginate,
+  # install, or preview-handler stage ran during the sample),
+  # "watchdog"/"completion" (timeouts, ms == -1). The completion timer arms
+  # on the STIMULUS, not on
+  # install: webdriver dispatch plus page busyness routinely take seconds to
+  # deliver the stimulus, and that delivery latency is harness overhead, not
+  # input latency.
   def measure_sample(install_script)
     page.evaluate_script(install_script)
     yield
-    page.evaluate_async_script("const done = arguments[arguments.length - 1]; window.__perfSample.then(done);")
+    raw = page.evaluate_async_script("window.__perfSample.then(arguments[arguments.length - 1]);")
+    ms_str, flags = raw.to_s.split("|", 2)
+    trace = page.evaluate_script("JSON.stringify(window.__perfTrace || null)")
+    [ms_str.to_f, flags || "", trace]
   end
 
-  KEY_PAINT_INSTALL = <<~JAVASCRIPT.freeze
-    window.__perfSample = new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(-1), 8000);
-      const onKey = (event) => {
-        if (event.type !== "keydown") return;
-        const t0 = performance.now();
-        document.removeEventListener("keydown", onKey, true);
-        const onInput = () => {
-          document.removeEventListener("input", onInput, true);
-          requestAnimationFrame(() => requestAnimationFrame(() => {
-            clearTimeout(timer);
-            resolve(performance.now() - t0);
-          }));
-        };
-        document.addEventListener("input", onInput, true);
+  def record_input_sample(samples, stalls, overlaps, category, name, index, ms, flags, trace)
+    puts "PERF_SAMPLE input=#{category} n=#{index + 1} ms=#{ms.round(1)} flags=#{flags}"
+    puts "PERF_TIMEOUT trace=#{trace}" if ms == -1
+    samples << ms
+    stalls << { category: category, fixture: name, index: index, ms: ms.round(1), flags: flags } if ms > 100
+    overlaps << { category: category, fixture: name, index: index, ms: ms.round(1) } if flags.include?("overlap")
+  end
+
+  # Shared probe scaffolding: stimulus-armed completion timer (5s), 25s
+  # watchdog under the 30s driver timeout, and stage overlap detection via
+  # elef: marks (paginate, projection install, preview stale/updated
+  # handler work). Resolves "ms|flags".
+  PROBE_SCAFFOLD = <<~JAVASCRIPT.freeze
+    window.__perfTrace = [`install@${Math.round(performance.now())}:ae=${document.activeElement?.tagName}`];
+    const stageMarks = () => {
+      const marks = performance.getEntriesByType("mark") || [];
+      let starts = 0, ends = 0;
+      marks.forEach((mark) => {
+        if (mark.name === "elef:paginate-start" || mark.name === "elef:projection-install-start" ||
+            mark.name === "elef:preview-stale-start" || mark.name === "elef:preview-updated-start") starts += 1;
+        else if (mark.name === "elef:paginate-end" || mark.name === "elef:projection-install-end" ||
+            mark.name === "elef:preview-stale-end" || mark.name === "elef:preview-updated-end") ends += 1;
+      });
+      return { starts, ends };
+    };
+    const before = stageMarks();
+    const overlapFlag = () => {
+      const after = stageMarks();
+      return (before.starts > before.ends || after.starts > before.starts) ? "overlap" : "clean";
+    };
+    return new Promise((resolve) => {
+      const watchdog = setTimeout(() => resolve("-1|watchdog"), 25000);
+      let completion = 0;
+      const finish = (ms) => {
+        clearTimeout(watchdog);
+        clearTimeout(completion);
+        window.__perfTrace.push(`done@${Math.round(performance.now())}:${overlapFlag()}`);
+        resolve(`${ms}|${overlapFlag()}`);
       };
-      document.addEventListener("keydown", onKey, true);
-    });
+      const arm = () => {
+        const t0 = performance.now();
+        completion = setTimeout(() => {
+          clearTimeout(watchdog);
+          window.__perfTrace.push("completion-timeout");
+          resolve("-1|completion");
+        }, 5000);
+        return t0;
+      };
+  JAVASCRIPT
+
+  KEY_PAINT_INSTALL = <<~JAVASCRIPT.freeze
+    window.__perfSample = (() => {
+      #{PROBE_SCAFFOLD}
+        const onKey = (event) => {
+          if (event.type !== "keydown") return;
+          window.__perfTrace.push(`kd:${event.key}@${Math.round(performance.now())}:ae=${document.activeElement?.tagName}`);
+          const t0 = arm();
+          document.removeEventListener("keydown", onKey, true);
+          const onInput = () => {
+            document.removeEventListener("input", onInput, true);
+            window.__perfTrace.push(`in@${Math.round(performance.now())}`);
+            requestAnimationFrame(() => requestAnimationFrame(() => finish(performance.now() - t0)));
+          };
+          document.addEventListener("input", onInput, true);
+        };
+        document.addEventListener("keydown", onKey, true);
+      });
+    })();
   JAVASCRIPT
 
   MOTION_PAINT_INSTALL = <<~JAVASCRIPT.freeze
-    window.__perfSample = new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(-1), 8000);
-      const onKey = (event) => {
-        if (event.type !== "keydown") return;
-        const t0 = performance.now();
-        document.removeEventListener("keydown", onKey, true);
-        const onSel = () => {
-          document.removeEventListener("selectionchange", onSel);
-          requestAnimationFrame(() => requestAnimationFrame(() => {
-            clearTimeout(timer);
-            resolve(performance.now() - t0);
-          }));
+    window.__perfSample = (() => {
+      #{PROBE_SCAFFOLD}
+        const onKey = (event) => {
+          if (event.type !== "keydown") return;
+          window.__perfTrace.push(`kd:${event.key}@${Math.round(performance.now())}`);
+          const t0 = arm();
+          document.removeEventListener("keydown", onKey, true);
+          const onSel = () => {
+            document.removeEventListener("selectionchange", onSel);
+            window.__perfTrace.push(`sel@${Math.round(performance.now())}`);
+            requestAnimationFrame(() => requestAnimationFrame(() => finish(performance.now() - t0)));
+          };
+          document.addEventListener("selectionchange", onSel);
         };
-        document.addEventListener("selectionchange", onSel);
-      };
-      document.addEventListener("keydown", onKey, true);
-    });
+        document.addEventListener("keydown", onKey, true);
+      });
+    })();
   JAVASCRIPT
 
   REVEAL_PAINT_INSTALL = <<~JAVASCRIPT.freeze
-    window.__perfSample = new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(-1), 8000);
-      const onClick = () => {
-        const t0 = performance.now();
-        document.removeEventListener("click", onClick, true);
-        const observer = new MutationObserver(() => {
-          if (!document.querySelector(".editor-math-active")) return;
-          observer.disconnect();
-          requestAnimationFrame(() => requestAnimationFrame(() => {
-            clearTimeout(timer);
-            resolve(performance.now() - t0);
-          }));
-        });
-        observer.observe(document.querySelector(".document-surface"), { childList: true, subtree: true });
-      };
-      document.addEventListener("click", onClick, true);
-    });
+    window.__perfSample = (() => {
+      #{PROBE_SCAFFOLD}
+        const onClick = () => {
+          const t0 = arm();
+          window.__perfTrace.push(`click@${Math.round(t0)}`);
+          document.removeEventListener("click", onClick, true);
+          const observer = new MutationObserver(() => {
+            if (!document.querySelector(".editor-math-active")) return;
+            observer.disconnect();
+            window.__perfTrace.push(`active@${Math.round(performance.now())}`);
+            requestAnimationFrame(() => requestAnimationFrame(() => finish(performance.now() - t0)));
+          });
+          observer.observe(document.querySelector(".document-surface"), { childList: true, subtree: true });
+        };
+        document.addEventListener("click", onClick, true);
+      });
+    })();
   JAVASCRIPT
 
   SUGGEST_PAINT_INSTALL = <<~JAVASCRIPT.freeze
-    window.__perfSample = new Promise((resolve) => {
-      const timer = setTimeout(() => resolve(-1), 8000);
-      let t0 = 0;
+    window.__perfSample = (() => {
       const seen = new Set();
       document.querySelectorAll(".snippet-option").forEach((node) => seen.add(node));
-      const onKey = (event) => {
-        if (event.type !== "keydown") return;
-        t0 = performance.now();
-      };
-      document.addEventListener("keydown", onKey, true);
-      const observer = new MutationObserver(() => {
-        const option = [...document.querySelectorAll(".snippet-palette:not([hidden]) .snippet-option")]
-          .find((node) => !seen.has(node));
-        if (!option) return;
-        observer.disconnect();
-        document.removeEventListener("keydown", onKey, true);
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          clearTimeout(timer);
-          resolve(performance.now() - t0);
-        }));
+      #{PROBE_SCAFFOLD}
+        window.__perfTrace.push(`seen=${seen.size}`);
+        let t0 = 0;
+        let armed = false;
+        const onKey = (event) => {
+          if (event.type !== "keydown") return;
+          if (!armed) { armed = true; arm(); }
+          t0 = performance.now();
+          window.__perfTrace.push(`kd:${event.key}@${Math.round(t0)}`);
+        };
+        document.addEventListener("keydown", onKey, true);
+        const observer = new MutationObserver(() => {
+          const option = [...document.querySelectorAll(".snippet-palette:not([hidden]) .snippet-option")]
+            .find((node) => !seen.has(node));
+          if (!option) return;
+          observer.disconnect();
+          document.removeEventListener("keydown", onKey, true);
+          window.__perfTrace.push(`opt@${Math.round(performance.now())}`);
+          requestAnimationFrame(() => requestAnimationFrame(() => finish(performance.now() - t0)));
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
       });
-      observer.observe(document.body, { childList: true, subtree: true });
-    });
+    })();
   JAVASCRIPT
 
   def benchmark_open(samples, kind)
@@ -326,6 +409,7 @@ class VisualPagesTest < ApplicationSystemTestCase
     only = ENV["ELEF_PERF_ONLY"]
     result = { source_bytes: source.bytesize }
     stalls = []
+    overlaps = []
 
     if only.nil? || only.include?("open")
       @perf_document = create_perf_document("Perf #{name} open", source)
@@ -344,95 +428,180 @@ class VisualPagesTest < ApplicationSystemTestCase
 
     if only.nil? || only.include?("input")
       result[:inputs] = {}
-      result[:inputs][:typing] = benchmark_typing(name, source, smoke ? 4 : 20, stalls)
-      result[:inputs][:motion] = benchmark_motion(name, source, smoke ? 4 : 20, stalls)
-      result[:inputs][:revelation] = benchmark_revelation(name, source, smoke ? 2 : 10, stalls)
-      result[:inputs][:suggestion_source] = benchmark_suggestion(name, source, smoke ? 2 : 10, stalls)
+      result[:inputs][:typing] = benchmark_typing(name, source, smoke ? 4 : 20, stalls, overlaps)
+      result[:inputs][:motion] = benchmark_motion(name, source, smoke ? 4 : 20, stalls, overlaps)
+      result[:inputs][:revelation] = benchmark_revelation(name, source, smoke ? 2 : 10, stalls, overlaps)
+      result[:inputs][:suggestion_source] = benchmark_suggestion(name, source, smoke ? 2 : 10, stalls, overlaps)
     end
     result[:stalls_over_100ms] = stalls
+    result[:stage_overlaps] = overlaps
     result
   end
 
-  def benchmark_typing(name, source, count, stalls)
-    document = create_perf_document("Perf #{name} typing", source)
-    visit edit_document_path(document)
-    assert_selector ".document-surface[data-document-pages-settled='true']", wait: SETTLE_TIMEOUT
-    samples = []
-    count.times do |index|
-      block_index = (index * 7) % 10
-      page.execute_script("document.querySelectorAll('.document-surface [contenteditable=\"true\"]')[#{block_index}].scrollIntoView({block:'center'})")
-      block = all(".document-surface [contenteditable='true']")[block_index]
-      block.click
-      block.send_keys(:end)
-      ms = measure_sample(KEY_PAINT_INSTALL) { block.send_keys("aeiou"[index % 5]) }
-      samples << ms
-      stalls << { category: "typing", fixture: name, index: index, ms: ms.round(1) } if ms > 100
-      puts "PERF_SAMPLE input=typing n=#{index + 1} ms=#{ms.round(1)}"
+  # Full settle (pages + fresh projection + editable + fonts + images),
+  # not just the settled attribute: a late fonts.ready repagination pass
+  # blocks the main thread for seconds and would swallow interactions.
+  # quiet_ms additionally requires a longtask-free window so input samples
+  # start from a stable baseline.
+  QUIET_MS = 500
+  def wait_for_full_settle(quiet_ms: 0)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + SETTLE_TIMEOUT
+    loop do
+      state = page.evaluate_script(SETTLE_SCRIPT)
+      break if state && state["settled"] && state["fresh"] && state["editable"] &&
+        state["fonts"] && state["imagesReady"] && state["quietMs"] >= quiet_ms
+
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      raise "visual pages never settled: #{state.inspect}" if now > deadline
+
+      sleep 0.2
     end
-    { ms: summarize(samples), samples: samples.map { |s| s.round(1) } }
   end
 
-  def benchmark_motion(name, source, count, stalls)
+  # Fresh gate WITHOUT settled: focusing a block can legitimately unsettle
+  # pagination (revelation mutates while focused, repagination defers), but
+  # a blur installs any pending projection and restores freshness.
+  def wait_for_fresh_quiet
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + SETTLE_TIMEOUT
+    loop do
+      state = page.evaluate_script(SETTLE_SCRIPT)
+      break if state && state["fresh"] && state["editable"] &&
+        state["fonts"] && state["imagesReady"] && state["quietMs"] >= QUIET_MS
+
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      raise "visual pages never fresh: #{state.inspect}" if now > deadline
+
+      sleep 0.2
+    end
+  end
+
+  # Quiet-only gate for per-sample use while focused: typing and revelation
+  # keep the preview stale and pagination deferred BY DESIGN, so only the
+  # longtask-free window is required.
+  def wait_for_quiet
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + SETTLE_TIMEOUT
+    loop do
+      state = page.evaluate_script(SETTLE_SCRIPT)
+      break if state && state["quietMs"] >= QUIET_MS
+
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      raise "visual pages never quiet: #{state.inspect}" if now > deadline
+
+      sleep 0.2
+    end
+  end
+
+  def benchmark_typing(name, source, count, stalls, overlaps)
+    document = create_perf_document("Perf #{name} typing", source)
+    visit edit_document_path(document)
+    wait_for_full_settle
+    # Two spread prose blocks (early + middle). Each keystroke commits and
+    # marks the preview stale (reinstall deferred while focused); switching
+    # blocks blurs, installing the pending projection and repaginating, so
+    # settle after every switch and keep focus within a block's run.
+    targets = page.evaluate_script(
+      "(() => { const blocks = [...document.querySelectorAll('.document-surface [data-editor-block-id]')];" \
+      " const prose = blocks.map((block, i) => [i, block.textContent.length])" \
+      ".filter(([i, len]) => len > 100).map(([i]) => i);" \
+      " return [prose[0], prose[Math.floor(prose.length / 2)]]; })()"
+    )
+    raise "no prose blocks for typing benchmark" unless targets.is_a?(Array) && targets[0]
+    targets = targets.uniq
+    plan = ([targets[0]] * ((count + 1) / 2) + [targets[1] || targets[0]] * (count / 2))
+    samples = []
+    current = nil
+    count.times do |index|
+      target = plan[index]
+      if target != current
+        page.execute_script("document.querySelectorAll('.document-surface [data-editor-block-id]')[#{target}].scrollIntoView({block:'center'})")
+        all(".document-surface [data-editor-block-id]")[target].click
+        wait_for_fresh_quiet
+        all(".document-surface [data-editor-block-id]")[target].send_keys(:end)
+        current = target
+      end
+      wait_for_quiet
+      block = all(".document-surface [data-editor-block-id]")[target]
+      length_before = page.evaluate_script(
+        "document.querySelectorAll('.document-surface [data-editor-block-id]')[#{target}].textContent.length"
+      )
+      char = "aeiou"[index % 5]
+      ms, flags, trace = measure_sample(KEY_PAINT_INSTALL) { block.send_keys(char) }
+      length_after = page.evaluate_script(
+        "document.querySelectorAll('.document-surface [data-editor-block-id]')[#{target}].textContent.length"
+      )
+      raise "typed char did not land in block #{target} (#{length_before} -> #{length_after}): #{trace}" unless length_after == length_before + 1
+      record_input_sample(samples, stalls, overlaps, "typing", name, index, ms, flags, trace)
+    end
+    input_stats(samples)
+  end
+
+  def benchmark_motion(name, source, count, stalls, overlaps)
     document = create_perf_document("Perf #{name} motion", source)
     visit edit_document_path(document)
-    assert_selector ".document-surface[data-document-pages-settled='true']", wait: SETTLE_TIMEOUT
+    wait_for_full_settle
     first(".document-surface [contenteditable='true']").click
     page.evaluate_script("window.scrollTo(0, 0)")
     samples = []
     count.times do |index|
-      ms = measure_sample(MOTION_PAINT_INSTALL) do
+      wait_for_quiet
+      ms, flags, trace = measure_sample(MOTION_PAINT_INSTALL) do
         page.driver.browser.action.send_keys(:arrow_down).perform
       end
-      samples << ms
-      stalls << { category: "motion", fixture: name, index: index, ms: ms.round(1) } if ms > 100
-      puts "PERF_SAMPLE input=motion n=#{index + 1} ms=#{ms.round(1)}"
+      record_input_sample(samples, stalls, overlaps, "motion", name, index, ms, flags, trace)
     end
-    { ms: summarize(samples), samples: samples.map { |s| s.round(1) } }
+    input_stats(samples)
   end
 
-  def benchmark_revelation(name, source, count, stalls)
+  def benchmark_revelation(name, source, count, stalls, overlaps)
     document = create_perf_document("Perf #{name} reveal", source)
     visit edit_document_path(document)
-    assert_selector ".document-surface[data-document-pages-settled='true']", wait: SETTLE_TIMEOUT
+    wait_for_full_settle
     total = page.evaluate_script("document.querySelectorAll('.document-surface .katex').length")
     samples = []
     count.times do |index|
       target = (index * 37) % total
+      wait_for_quiet
       page.execute_script("document.querySelectorAll('.document-surface .katex')[#{target}].scrollIntoView({block:'center'})")
       node = all(".document-surface .katex", minimum: 1)[target]
-      ms = measure_sample(REVEAL_PAINT_INSTALL) { node.click }
-      samples << ms
-      stalls << { category: "revelation", fixture: name, index: index, ms: ms.round(1) } if ms > 100
-      puts "PERF_SAMPLE input=revelation n=#{index + 1} ms=#{ms.round(1)}"
+      ms, flags, trace = measure_sample(REVEAL_PAINT_INSTALL) { node.click }
+      record_input_sample(samples, stalls, overlaps, "revelation", name, index, ms, flags, trace)
       first(".document-surface [contenteditable='true']").click
     end
-    { ms: summarize(samples), samples: samples.map { |s| s.round(1) } }
+    input_stats(samples)
   end
 
-  def benchmark_suggestion(name, source, count, stalls)
+  def benchmark_suggestion(name, source, count, stalls, overlaps)
     # Source-mode baseline: visual suggestion UI is not implemented yet, so
     # suggestion latency is measured where the palette exists today.
     document = create_perf_document("Perf #{name} suggest", source)
     visit edit_document_path(document)
-    assert_selector ".document-surface[data-document-pages-settled='true']", wait: SETTLE_TIMEOUT
+    wait_for_full_settle
     click_on "Source"
     editor = find(".cm-content")
     lines = source.lines.count
     samples = []
     count.times do |index|
+      # Source-mode commits refresh the preview after each sample; settle
+      # first so the previous cycle never pollutes this sample. Trigger
+      # chars accumulate (3 per earlier sample, all on earlier ascending
+      # lines), so shift the offset exactly instead of cleaning up.
+      wait_for_full_settle(quiet_ms: QUIET_MS)
       line_no = 2 + (index * (lines - 4) / count)
-      offset = source.lines[0...line_no].join.length
-      page.execute_script(
-        "document.querySelector('.source-field').editorController.setSelectionRange(arguments[0]);" \
-        "document.querySelector('.source-field').editorController.focus();", offset
-      )
-      ms = measure_sample(SUGGEST_PAINT_INSTALL) { editor.send_keys(" /i") }
-      samples << ms
-      stalls << { category: "suggestion_source", fixture: name, index: index, ms: ms.round(1) } if ms > 100
-      puts "PERF_SAMPLE input=suggestion_source n=#{index + 1} ms=#{ms.round(1)}"
+      offset = source.lines[0...line_no].join.length + (index * 3)
+      page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(arguments[0])", offset)
+      page.execute_script("document.querySelector('.source-field').editorController.focus()")
+      ms, flags, trace = measure_sample(SUGGEST_PAINT_INSTALL) { editor.send_keys(" /i") }
+      record_input_sample(samples, stalls, overlaps, "suggestion_source", name, index, ms, flags, trace)
       editor.send_keys(:escape)
     end
-    { ms: summarize(samples), samples: samples.map { |s| s.round(1) } }
+    input_stats(samples)
+  end
+
+  # Timeouts (-1) are harness/app failures, not slow samples: exclude them
+  # from stats, count them, and fail the run on any (see measure test).
+  def input_stats(samples)
+    valid = samples.reject { |s| s == -1 }
+    { ms: summarize(valid), samples: samples.map { |s| s.round(1) }, timeouts: samples.count(-1) }
   end
 
   test "measure visual page benchmarks" do
@@ -474,6 +643,14 @@ class VisualPagesTest < ApplicationSystemTestCase
       stages = result.dig(:first_breakdown, "stages") || []
       assert stages.any? { |s| s["stage"] == "projection-install" }, "#{name}: install stage instrumented"
       assert stages.any? { |s| s["stage"] == "paginate" }, "#{name}: paginate stage instrumented"
+    end
+
+    report[:fixtures].each do |name, result|
+      next unless result[:inputs]
+
+      result[:inputs].each do |category, stats|
+        assert_equal 0, stats[:timeouts], "#{name}/#{category}: no probe timeouts (#{stats[:samples].inspect})"
+      end
     end
   end
 
