@@ -1835,12 +1835,13 @@ class DesktopLibraryUi {
     if (kind === "document") {
       // A document's library title is its folder name, which only the card
       // rename changes; the editor source carries the H1 separately. Set
-      // the H1 first, then rename the folder to match.
+      // the H1 first, then rename the folder to match. New works seed the
+      // default front matter, so the retitle preserves it.
       const defaultTitle = await browser.execute(
         () => document.querySelector("#work-title")?.textContent.trim()
       )
-      await editor.replaceSource(`# ${title}\n\n`)
-      await editor.waitForSource(`# ${title}\n\n`)
+      await editor.replaceSource(`---\ntheme: match\n---\n# ${title}\n\n`)
+      await editor.waitForSource(`---\ntheme: match\n---\n# ${title}\n\n`)
       await browser.waitUntil(async () => browser.execute(
         () => window.__elefSaveTestHooks?.saveStatus() === "clean"
       ), {

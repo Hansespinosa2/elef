@@ -184,6 +184,10 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
           workspaceId: space.id,
           title: name,
           kind,
+          // New works seed the default front matter, exactly like the
+          // name-first dialog below; without it direct-created works would
+          // skip the default seed.
+          text: buildNewWorkSource({ kind, title: name }),
         });
         options.onLibraryEvent?.({ type: "created", work: created });
         await reload();
