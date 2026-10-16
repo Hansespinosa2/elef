@@ -17,6 +17,7 @@ export {
   ASSIST_TRIGGER_INSERTED_EVENT,
   EDIT_TRIGGER_ACTIONS,
   KEYBOARD_REFERENCE_TRIGGERS,
+  clickFollowsPointer,
   mountEditActions,
   renderKeyboardReference,
 } from "./features/editor/edit_actions.js";

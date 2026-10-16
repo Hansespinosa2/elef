@@ -67,6 +67,11 @@ function fakeEditor() {
     selectionRangeCount: 1,
     vimEnabled: false,
     insertMode: true,
+    editingMode: "visual",
+    focusCalls: 0,
+    focus() {
+      state.focusCalls += 1;
+    },
     vimKeys: [] as string[],
     inputTarget: null,
     setSelectionRange(anchor: number, head: number = anchor) {

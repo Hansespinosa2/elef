@@ -124,6 +124,14 @@ export function renderKeyboardReference(platform: "mac" | "other"): string {
     `<p class="keyboard-reference-lede">Vim motions, operators, and text objects work in both modes; toggle Vim mode from the command palette.</p>`;
 }
 
+// A real pointer click always follows its mousedown with detail >= 1 (the
+// click count); keyboard and assistive-tech activation arrives as a lone
+// click with detail 0. The menu runs pointer rows on mousedown (prevented,
+// so the projection caret never moves) and keyboard rows on click.
+export function clickFollowsPointer(event: { detail?: number | undefined }): boolean {
+  return (event.detail ?? 0) !== 0;
+}
+
 export function mountEditActions({ field, getEditor, host = null, platform = detectPlatform() }: MountEditActionsOptions): EditActionsMount | null {
   const toolbar = field.querySelector(".editor-toolbar");
   if (!toolbar) return null;
@@ -211,7 +219,7 @@ export function mountEditActions({ field, getEditor, host = null, platform = det
     runRow(row.getAttribute("data-edit-actions-row") ?? "");
   };
   const onRowClick = (event: Event) => {
-    if ((event as MouseEvent).detail !== 0) return;
+    if (clickFollowsPointer(event as MouseEvent)) return;
     const row = (event.target as Element | null)?.closest?.("[data-edit-actions-row]");
     if (!row) return;
     runRow(row.getAttribute("data-edit-actions-row") ?? "");
