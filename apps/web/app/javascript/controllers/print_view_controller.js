@@ -8,6 +8,13 @@ export default class extends Controller {
     // --slide-scale in sync per rendered frame instead.
     this.canvasDetachers = [...this.element.querySelectorAll(".slide-frame")]
       .map((frame) => attachCanvasScaling(frame))
+    // Direct arrival from the shared Export menu (PDF hrefs carry
+    // from_export): open the PDF dialog immediately so the flow has no
+    // intermediate in-app step. Every other arrival (show-page links,
+    // bookmarks, tests) keeps the manual button.
+    if (new URLSearchParams(window.location.search).has("from_export")) {
+      requestAnimationFrame(() => this.print())
+    }
   }
 
   disconnect() {

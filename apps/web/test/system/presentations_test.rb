@@ -1707,7 +1707,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit print_presentation_path(presentation, version: "published")
     page.execute_script("window.print = () => { window.printWasRequested = true }")
-    click_on "Print / Save PDF"
+    click_on "Save as PDF"
     assert_equal true, page.evaluate_script("window.printWasRequested")
 
     browser = page.driver.browser
