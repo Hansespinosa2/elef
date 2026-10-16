@@ -419,14 +419,14 @@ function stubAssistEngine({ mode = "visual", value = "Body /ta", caret = 8 } = {
   return { engine, calls }
 }
 
-function mountAssistPalette({ mode = "visual", value = "Body /ta", caret = 8, registry = VISUAL_SNIPPETS, host = null } = {}) {
+function mountAssistPalette({ controllerClass = SnippetPaletteController, mode = "visual", value = "Body /ta", caret = 8, registry = VISUAL_SNIPPETS, host = null, assign = {} } = {}) {
   const { document } = parseHTML(`<form><div class="field"><div id="palette" role="listbox" hidden></div></div></form>`)
   const form = document.querySelector("form")
   const field = document.querySelector(".field")
   const palette = document.querySelector("#palette")
   if (host) form.visualEditorController = host
   const { engine, calls } = stubAssistEngine({ mode, value, caret })
-  const controller = new SnippetPaletteController()
+  const controller = new controllerClass()
   Object.assign(controller, {
     element: field,
     paletteTarget: palette,
@@ -439,7 +439,8 @@ function mountAssistPalette({ mode = "visual", value = "Body /ta", caret = 8, re
     queryPrefix: "",
     queryStart: 0,
     argumentQuery: null,
-    activeStop: null
+    activeStop: null,
+    ...assign
   })
   return { controller, engine, calls, palette, field, form, document }
 }
@@ -576,7 +577,7 @@ test("visual keydown leaves plain keys alone with no palette or stops", (t) => {
   assert.equal(mounted.palette.hidden, true)
 })
 
-test("visual key routing binds on document capture and ignores idle keys", (t) => {
+function assertVisualRouting(t, ControllerClass, { setupEditor = null } = {}) {
   const added = []
   const removed = []
   const saved = new Map()
@@ -606,9 +607,10 @@ test("visual key routing binds on document capture and ignores idle keys", (t) =
     addEventListener: () => {},
     removeEventListener: () => {}
   }
-  const controller = new SnippetPaletteController()
+  const controller = new ControllerClass()
   const paletteDouble = { hidden: true, setAttribute: () => {}, id: "palette" }
   Object.assign(controller, { element: elementDouble, paletteTarget: paletteDouble })
+  if (setupEditor) setupEditor(controller, engine)
   controller.connect()
 
   const keydownBinding = added.find(([type, listener, capture]) => type === "keydown" && capture === true)
@@ -625,5 +627,132 @@ test("visual key routing binds on document capture and ignores idle keys", (t) =
 
   controller.disconnect()
   assert.ok(removed.some(([type, listener, capture]) => type === "keydown" && listener === keydownBinding[1] && capture === true))
+}
+
+test("visual key routing binds on document capture and ignores idle keys", (t) => {
+  assertVisualRouting(t, SnippetPaletteController)
+})
+
+// --- Visual-mode document link palette ---
+
+const DocumentLinkPaletteController = await loadController("document_link_palette", {
+  base: sharedControllerPath,
+  overrides: {
+    "../lib/editor_controller_lookup.js": "const editorFor = element => element.currentEditor\n",
+    "../lib/visual_assist.js": visualAssistSource
+  }
+})
+
+test("visual link refresh opens the palette on a bracket query", (t) => {
+  const mounted = mountAssistPalette({
+    controllerClass: DocumentLinkPaletteController,
+    value: "See [[al",
+    caret: 8,
+    registry: [],
+    assign: { titlesValue: ["Alpha", "Beta"] }
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+
+  mounted.controller.refresh()
+
+  assert.equal(mounted.palette.hidden, false)
+  assert.deepEqual(mounted.controller.matches, ["Alpha"])
+  assert.equal(mounted.controller.queryStart, 4)
+  assert.equal(mounted.palette.style.left, "100px")
+  assert.equal(mounted.palette.style.top, "222px")
+})
+
+test("visual link insert pipelines through the projection host", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: DocumentLinkPaletteController,
+    value: "See [[al",
+    caret: 8,
+    registry: [],
+    host,
+    assign: { titlesValue: ["Alpha", "Beta"] }
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.insertSelected()
+
+  assert.deepEqual(mounted.calls.replaceRange, [["[[Alpha]]", 4, 8]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 4, to: 8, insert: "[[Alpha]]", caret: 13 }])
+  assert.equal(mounted.calls.focus, 0)
+  assert.deepEqual(hostCalls.carets, [[13, null]])
+  assert.equal(mounted.palette.hidden, true)
+})
+
+test("visual link insert swallows a typed closing bracket pair", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: DocumentLinkPaletteController,
+    value: "See [[al]]",
+    caret: 8,
+    registry: [],
+    host,
+    assign: { titlesValue: ["Alpha"] }
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+
+  mounted.controller.insertSelected()
+
+  assert.deepEqual(mounted.calls.replaceRange, [["[[Alpha]]", 4, 10]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 4, to: 10, insert: "[[Alpha]]", caret: 13 }])
+})
+
+test("source link insert still focuses the engine", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: DocumentLinkPaletteController,
+    mode: "source",
+    value: "See [[al",
+    caret: 8,
+    registry: [],
+    host,
+    assign: { titlesValue: ["Alpha"] }
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.insertSelected()
+
+  assert.deepEqual(mounted.calls.replaceRange, [["[[Alpha]]", 4, 8]])
+  assert.equal(mounted.calls.focus, 1)
+  assert.deepEqual(mounted.calls.setSelectionRange, [[13, 13]])
+  assert.deepEqual(hostCalls.inserts, [])
+})
+
+test("visual link keydown accepts the match on Enter", (t) => {
+  const { host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: DocumentLinkPaletteController,
+    value: "See [[al",
+    caret: 8,
+    registry: [],
+    host,
+    assign: { titlesValue: ["Alpha", "Beta"] }
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  let prevented = false
+
+  mounted.controller.keydown({ key: "Enter", currentTarget: null, defaultPrevented: false, preventDefault: () => { prevented = true } })
+
+  assert.equal(prevented, true)
+  assert.deepEqual(mounted.calls.replaceRange, [["[[Alpha]]", 4, 8]])
+})
+
+test("visual link routing binds on document capture and ignores idle keys", (t) => {
+  assertVisualRouting(t, DocumentLinkPaletteController)
 })
 

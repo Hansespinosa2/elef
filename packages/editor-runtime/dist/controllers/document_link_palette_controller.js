@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { editorFor } from "../lib/editor_controller_lookup.js";
+import { mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";
 function scoreLinkTitle(title, query) {
   const value = title.toLowerCase();
   if (!query) return 0;
@@ -56,15 +57,27 @@ class document_link_palette_controller_default extends Controller {
     this.matches = [];
     this.selectedIndex = 0;
     this.positionPalette = this.positionPalette.bind(this);
+    this.visualKeydown = (event) => {
+      if (this.editorController?.editingMode !== "visual") return;
+      if (this.paletteTarget.hidden) return;
+      this.keydown(event);
+    };
+    this.visualScroll = () => {
+      if (this.editorController?.editingMode === "visual") this.positionPalette();
+    };
     this.paletteTarget.setAttribute("aria-live", "polite");
     this.editorController = editorFor(this.element);
     this.editorReady = () => this.setupEditor();
     this.element.addEventListener("elef:editor-ready", this.editorReady);
     window.addEventListener("resize", this.positionPalette);
+    document.addEventListener("keydown", this.visualKeydown, true);
+    window.addEventListener("scroll", this.visualScroll, { capture: true, passive: true });
     this.setupEditor();
   }
   disconnect() {
     window.removeEventListener("resize", this.positionPalette);
+    document.removeEventListener("keydown", this.visualKeydown, true);
+    window.removeEventListener("scroll", this.visualScroll, { capture: true });
     this.element.removeEventListener("elef:editor-ready", this.editorReady);
     if (this.nativeScrollBound) this.editorTarget.removeEventListener("scroll", this.positionPalette);
     if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette);
@@ -109,6 +122,8 @@ class document_link_palette_controller_default extends Controller {
     const selected = openPalette?.querySelector('[aria-selected="true"]');
     if (selected) editor.setAttribute("aria-activedescendant", selected.id);
     else editor.removeAttribute("aria-activedescendant");
+    if (this.editorController?.editingMode !== "visual") return;
+    mirrorPopupAccessibility(this.element, { open: Boolean(openPalette), selectedId: selected?.id ?? null });
   }
   input() {
     this.refresh();
@@ -167,6 +182,19 @@ class document_link_palette_controller_default extends Controller {
   }
   positionPalette() {
     if (this.paletteTarget.hidden) return;
+    if (this.editorController?.editingMode === "visual") {
+      const rect = visualCaretRect();
+      if (!rect) return;
+      const paletteRect2 = this.paletteTarget.getBoundingClientRect();
+      const left2 = Math.max(8, Math.min(rect.left, window.innerWidth - paletteRect2.width - 8));
+      const maxTop = window.innerHeight - paletteRect2.height - 8;
+      const belowTop = rect.bottom + 4;
+      const aboveTop = rect.top - paletteRect2.height - 4;
+      const top2 = belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop));
+      this.paletteTarget.style.left = `${left2}px`;
+      this.paletteTarget.style.top = `${top2}px`;
+      return;
+    }
     if (this.editorController) {
       const editorRect2 = this.editorController.dom.getBoundingClientRect();
       const markerRect2 = this.editorController.view.coordsAtPos(this.editorController.selectionStart) || editorRect2;
@@ -221,9 +249,15 @@ class document_link_palette_controller_default extends Controller {
     const insertion = `[[${title}]]`;
     const caret = before.length + insertion.length;
     if (this.editorController) {
+      const visual = this.editorController.editingMode === "visual";
       this.editorController.replaceRange(insertion, this.queryStart, end);
-      this.editorController.focus();
-      this.editorController.setSelectionRange(caret, caret);
+      if (visual) {
+        projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from: this.queryStart, to: end, insert: insertion, caret });
+        placeVisualCaret(this.element, caret);
+      } else {
+        this.editorController.focus();
+        this.editorController.setSelectionRange(caret, caret);
+      }
     } else {
       editor.value = before + insertion + after;
       editor.focus();
