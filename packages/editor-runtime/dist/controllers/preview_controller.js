@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import { installPreviewHtml } from "../lib/editor_view.js";
 import { buildPreviewRequestBody } from "../lib/preview_request_body.js";
+import { markStage } from "../lib/stage_marks.js";
 import { attachCanvasScaling } from "@elef/client";
 const ART_WARNING_MESSAGES = Object.freeze({
   ART_NO_FIT: "Art does not fit the fixed slide. All authored content remains available.",
@@ -114,6 +115,7 @@ class preview_controller_default extends Controller {
     const sourceFieldName = [...body.keys()].find((name) => name.endsWith("[source]"));
     const requestedSource = sourceFieldName ? body.get(sourceFieldName)?.toString() ?? "" : "";
     try {
+      markStage("preview-fetch-start");
       const request = fetch(this.urlValue, {
         method: "POST",
         headers: {
@@ -133,6 +135,7 @@ class preview_controller_default extends Controller {
         }, this.timeoutValue);
       });
       const { response, payload } = await Promise.race([request, timeoutFailure]);
+      markStage("preview-fetch-end");
       if (!this.active || requestId !== this.requestId) return false;
       this.renderWarnings(payload.warnings || []);
       if (!response.ok || payload.html === null || payload.html === void 0) {

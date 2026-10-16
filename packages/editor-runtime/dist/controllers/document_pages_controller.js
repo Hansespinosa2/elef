@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { pointAtVisibleOffset, visibleOffsetAtPoint } from "./editor_caret.js";
+import { markStage } from "../lib/stage_marks.js";
 const DESIGN_WIDTH = 794;
 const FLOW_TEXT_SELECTOR = "p, h1, h2, h3, h4, h5, h6, pre, li, td, th";
 const HIDDEN_TEXT_SELECTOR = ".katex-mathml, [aria-hidden='true'], [contenteditable='false']";
@@ -86,6 +87,7 @@ class document_pages_controller_default extends Controller {
   }
   paginate() {
     if (!this.surfaceTarget || !this.active) return;
+    markStage("paginate-start");
     const generation = ++this.paginationGeneration;
     const caret = this.captureCaret() || this.pendingCaretRestore;
     this.pendingCaretRestore = caret;
@@ -130,6 +132,7 @@ class document_pages_controller_default extends Controller {
     this.mutationObserver?.takeRecords();
     requestAnimationFrame(() => {
       if (!this.active || generation !== this.paginationGeneration) return;
+      markStage("paginate-end");
       if (caret) this.restoreCaret(caret);
       this.pendingCaretRestore = null;
       this.finishPagination({ paginated: true });

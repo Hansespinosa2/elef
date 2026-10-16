@@ -1,5 +1,6 @@
 import { sanitizePreview as installSanitizedPreview } from "@elef/client/sanitize"
 import { markProjectionBlocksReadOnly } from "./projection_editability.js"
+import { markStage } from "./stage_marks.js"
 
 const EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">
@@ -274,7 +275,9 @@ export function renderEditorView(container: Element | null, config: EditorViewCo
   const projection = root.querySelector("[data-preview-target='container']") as Element
   projection.id = ids.preview || "elef-editor-preview"
   projection.setAttribute("aria-label", mode === "visual" ? "Visual editing surface" : "Rendered preview")
+  markStage("projection-install-start")
   installPreviewHtml(projection, config.previewHtml || "")
+  markStage("projection-install-end")
   renderWarnings(root.querySelector("[data-preview-target='warnings'] ul") as Element, config.warnings || [])
   ;(root.querySelector("[data-preview-target='warnings']") as HTMLElement).hidden = !config.warnings?.length
 

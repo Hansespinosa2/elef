@@ -288,6 +288,14 @@ function removeAttribute(element, name) {
   if (element.hasAttribute(name)) element.removeAttribute(name);
 }
 
+// src/lib/stage_marks.ts
+function markStage(stage) {
+  try {
+    performance?.mark?.(`elef:${stage}`);
+  } catch {
+  }
+}
+
 // src/lib/editor_view.ts
 var EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">
@@ -502,7 +510,9 @@ function renderEditorView(container, config) {
   const projection = root.querySelector("[data-preview-target='container']");
   projection.id = ids.preview || "elef-editor-preview";
   projection.setAttribute("aria-label", mode === "visual" ? "Visual editing surface" : "Rendered preview");
+  markStage("projection-install-start");
   installPreviewHtml(projection, config.previewHtml || "");
+  markStage("projection-install-end");
   renderWarnings(root.querySelector("[data-preview-target='warnings'] ul"), config.warnings || []);
   root.querySelector("[data-preview-target='warnings']").hidden = !config.warnings?.length;
   const saveButton = get("saveButton");

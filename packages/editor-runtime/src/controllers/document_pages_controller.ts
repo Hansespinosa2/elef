@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { pointAtVisibleOffset, visibleOffsetAtPoint } from "./editor_caret.js"
+import { markStage } from "../lib/stage_marks.js"
 
 interface DocumentPage {
   content: HTMLElement;
@@ -128,6 +129,7 @@ export default class extends Controller<HTMLElement> {
   paginate(): void {
     if (!this.surfaceTarget || !this.active) return
 
+    markStage("paginate-start")
     const generation = ++this.paginationGeneration
     const caret = this.captureCaret() || this.pendingCaretRestore
     this.pendingCaretRestore = caret
@@ -178,6 +180,7 @@ export default class extends Controller<HTMLElement> {
     this.mutationObserver?.takeRecords()
     requestAnimationFrame(() => {
       if (!this.active || generation !== this.paginationGeneration) return
+      markStage("paginate-end")
       if (caret) this.restoreCaret(caret)
       this.pendingCaretRestore = null
       this.finishPagination({ paginated: true })
