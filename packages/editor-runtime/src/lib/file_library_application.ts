@@ -874,6 +874,15 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // come. Restore the toggle from the installed preview so the awaited
       // render cannot leave Visual permanently disabled.
       if (visualButton && desktopFeatures.visualEditing) enableVisualModeFromInstalledPreview(elements.editorForm)
+      // Caret-at-0 parity with a fresh open: park the Source caret at
+      // position 0 and move DOM focus into it, so typing and Vim navigation
+      // work immediately without a click. This runs last so no later open
+      // step (preview refresh, toggle restore) can leave a stale caret or
+      // steal focus; same-mode opens otherwise keep the invoking library
+      // surface focused because setEditingMode early-returns above.
+      const openedEditor = editorFor(elements.editorField)
+      openedEditor?.setSelectionRange(0)
+      openedEditor?.focus()
       return true
     } catch (error) {
       showError(error)
