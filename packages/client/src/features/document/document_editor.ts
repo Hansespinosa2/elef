@@ -7,6 +7,7 @@
 import { blockOperationRange, directiveLineSpan, exciseRange, insertAlignDirective } from "@elef/work-model/document-transforms"
 import { touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
+import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
 
 export interface DocumentEditorRange {
   start: number
@@ -652,6 +653,19 @@ export class DocumentEditor {
     if (!pending || this.element.dataset.editorMode !== "visual") return
     this.pendingCaretRestore = null
     requestAnimationFrame(() => this.restoreCaret(pending.sourceOffset, pending.preferredBlockId))
+  }
+
+  // Visual assist pipeline (session/projection_assist): a suggestion accept
+  // committed [from, to) -> insert to the engine while this projection holds
+  // focus. Shift the map, patch the caret text in place, and stage caret
+  // restoration for the deferred reinstall. Returns whether the DOM patch landed.
+  applyVisualAssistInsert(edit: AssistInsertEdit, selection?: Selection | null): boolean {
+    return applyVisualAssistInsert({
+      projectionTarget: this.projectionTarget ?? null,
+      allRegions: () => this.allRegions(),
+      shiftMapAfterEdit: (from, to, length, blockId) => this.shiftMapAfterEdit(from, to, length, blockId),
+      stageCaretRestore: (restore) => { this.pendingCaretRestore = restore }
+    }, edit, selection)
   }
 
   // Shared visual key routing (session/projection_keys); documents and

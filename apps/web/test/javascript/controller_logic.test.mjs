@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
+import { parseHTML } from "linkedom"
 
 // Ported from dev's controller_logic suite: web-host controllers load from
 // the host tree, shared controllers from the editor-runtime dist bundle.
@@ -33,7 +34,11 @@ const CommandPaletteController = await loadController("command_palette")
 const SnippetPaletteController = await loadController("snippet_palette", {
   base: sharedControllerPath,
   overrides: {
-    "../lib/editor_controller_lookup.js": "const editorFor = element => element.currentEditor\n"
+    "../lib/editor_controller_lookup.js": "const editorFor = element => element.currentEditor\n",
+    "./math_shorthand_controller.js": "const editorInsideMath = () => false\nconst editorInsideCode = () => false\n",
+    "./authoring_registry.js": "const authoringRegistryFor = () => []\n",
+    "./snippet_stops.js": "const snippetStopsEffect = { of: (stops) => stops }\n",
+    "@elef/work-model/document-transforms": "const expandSnippet = (body) => ({ text: body, stops: [] })\n"
   }
 })
 const MathShortcutPaletteController = await loadController("math_shortcut_palette", {
@@ -360,5 +365,263 @@ test("Mermaid mutation render requests coalesce into one animation frame", () =>
 
   assert.deepEqual(renders, [element])
   assert.equal(controller.renderFrame, null)
+})
+
+// --- Visual-mode snippet palette ---
+
+const VISUAL_SNIPPETS = [
+  { namespace: "/", trigger: "table", name: "Table", category: "Structure", body: "**T**", behavior: { type: "insert" }, contexts: ["source"] }
+]
+
+function stubAssistEngine({ mode = "visual", value = "Body /ta", caret = 8 } = {}) {
+  const calls = { replaceRange: [], focus: 0, setSelectionRange: [], dispatched: [] }
+  const doc = {
+    get length() { return engine.value.length },
+    lineAt(offset) {
+      let from = 0
+      for (const line of engine.value.split("\n")) {
+        if (offset <= from + line.length) return { text: line, from }
+        from += line.length + 1
+      }
+      return { text: "", from: engine.value.length }
+    }
+  }
+  const engine = {
+    editingMode: mode,
+    selectionStart: caret,
+    selectionEnd: caret,
+    value,
+    destroyed: false,
+    dom: {
+      getAttribute: () => "",
+      setAttribute: () => {},
+      removeAttribute: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      getBoundingClientRect: () => ({ left: 0, top: 0, bottom: 0, right: 0, width: 0, height: 0 })
+    },
+    view: { state: { doc }, dispatch: (transaction) => calls.dispatched.push(transaction), coordsAtPos: () => null },
+    scrollElement: { addEventListener: () => {}, removeEventListener: () => {} },
+    replaceRange(insert, from, to = from) {
+      calls.replaceRange.push([insert, from, to])
+      engine.value = engine.value.slice(0, from) + insert + engine.value.slice(to)
+      engine.selectionStart = engine.selectionEnd = from + insert.length
+    },
+    focus() { calls.focus += 1 },
+    setSelectionRange(anchor, head = anchor) {
+      calls.setSelectionRange.push([anchor, head])
+      engine.selectionStart = anchor
+      engine.selectionEnd = head
+    }
+  }
+  return { engine, calls }
+}
+
+function mountAssistPalette({ mode = "visual", value = "Body /ta", caret = 8, registry = VISUAL_SNIPPETS, host = null } = {}) {
+  const { document } = parseHTML(`<form><div class="field"><div id="palette" role="listbox" hidden></div></div></form>`)
+  const form = document.querySelector("form")
+  const field = document.querySelector(".field")
+  const palette = document.querySelector("#palette")
+  if (host) form.visualEditorController = host
+  const { engine, calls } = stubAssistEngine({ mode, value, caret })
+  const controller = new SnippetPaletteController()
+  Object.assign(controller, {
+    element: field,
+    paletteTarget: palette,
+    editorController: engine,
+    registry,
+    matches: [],
+    selectedIndex: 0,
+    stops: [],
+    query: "",
+    queryPrefix: "",
+    queryStart: 0,
+    argumentQuery: null,
+    activeStop: null
+  })
+  return { controller, engine, calls, palette, field, form, document }
+}
+
+function stubAssistGlobals(t, { selectionRect = null } = {}) {
+  const saved = new Map()
+  const setGlobal = (name, value) => {
+    saved.set(name, Object.getOwnPropertyDescriptor(globalThis, name))
+    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value })
+  }
+  t.after(() => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+      else delete globalThis[name]
+    }
+  })
+  const rect = selectionRect || { x: 100, y: 200, width: 0, height: 18, left: 100, top: 200, bottom: 218, right: 100 }
+  setGlobal("window", {
+    innerWidth: 1400,
+    innerHeight: 1000,
+    getSelection: () => ({ rangeCount: 1, getRangeAt: () => ({ getBoundingClientRect: () => rect }) }),
+    addEventListener: () => {},
+    removeEventListener: () => {}
+  })
+  return { setDocument: (doc) => setGlobal("document", doc) }
+}
+
+function stubHostDouble() {
+  const calls = { inserts: [], carets: [] }
+  return {
+    calls,
+    host: {
+      applyVisualAssistInsert: (edit) => { calls.inserts.push(edit); return true },
+      restoreCaret: (offset, blockId) => { calls.carets.push([offset, blockId]); return true }
+    }
+  }
+}
+
+test("visual refresh opens the snippet palette on a slash query", (t) => {
+  const mounted = mountAssistPalette({})
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+
+  mounted.controller.refresh()
+
+  assert.equal(mounted.palette.hidden, false)
+  assert.equal(mounted.controller.matches.length, 1)
+  assert.equal(mounted.controller.queryStart, 5)
+  assert.equal(mounted.palette.style.left, "100px")
+  assert.equal(mounted.palette.style.top, "222px")
+})
+
+test("visual refresh closes when the caret leaves the trigger", (t) => {
+  const mounted = mountAssistPalette({ value: "Body plain", caret: 10 })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+
+  mounted.controller.refresh()
+
+  assert.equal(mounted.palette.hidden, true)
+  assert.deepEqual(mounted.controller.matches, [])
+})
+
+test("visual position keeps its place on a degenerate caret rect", (t) => {
+  const mounted = mountAssistPalette({})
+  const globals = stubAssistGlobals(t, { selectionRect: { x: 0, y: 0, width: 0, height: 0, left: 0, top: 0, bottom: 0, right: 0 } })
+  globals.setDocument(mounted.document)
+  mounted.palette.hidden = false
+  mounted.palette.style.left = "5px"
+
+  mounted.controller.positionPalette()
+
+  assert.equal(mounted.palette.style.left, "5px")
+})
+
+test("visual insert commits through the projection pipeline without focusing the engine", async (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({ host })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.insertSelected()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.deepEqual(mounted.calls.replaceRange, [["**T**", 5, 8]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 5, to: 8, insert: "**T**", caret: 10 }])
+  assert.equal(mounted.calls.focus, 0)
+  assert.deepEqual(hostCalls.carets, [[10, null]])
+  assert.equal(mounted.palette.hidden, true)
+})
+
+test("source insert still focuses the engine instead of the projection", async (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({ mode: "source", host })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.insertSelected()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.deepEqual(mounted.calls.replaceRange, [["**T**", 5, 8]])
+  assert.equal(mounted.calls.focus, 1)
+  assert.deepEqual(hostCalls.inserts, [])
+  assert.deepEqual(hostCalls.carets, [])
+})
+
+test("visual keydown accepts the match on Enter", (t) => {
+  const { host } = stubHostDouble()
+  const mounted = mountAssistPalette({ host })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  let prevented = false
+
+  mounted.controller.keydown({ key: "Enter", defaultPrevented: false, preventDefault: () => { prevented = true } })
+
+  assert.equal(prevented, true)
+  assert.deepEqual(mounted.calls.replaceRange, [["**T**", 5, 8]])
+})
+
+test("visual keydown leaves plain keys alone with no palette or stops", (t) => {
+  const mounted = mountAssistPalette({})
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  let prevented = false
+
+  mounted.controller.keydown({ key: "a", defaultPrevented: false, preventDefault: () => { prevented = true } })
+
+  assert.equal(prevented, false)
+  assert.equal(mounted.palette.hidden, true)
+})
+
+test("visual key routing binds on document capture and ignores idle keys", (t) => {
+  const added = []
+  const removed = []
+  const saved = new Map()
+  const setGlobal = (name, value) => {
+    saved.set(name, Object.getOwnPropertyDescriptor(globalThis, name))
+    Object.defineProperty(globalThis, name, { configurable: true, writable: true, value })
+  }
+  t.after(() => {
+    for (const [name, descriptor] of saved) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor)
+      else delete globalThis[name]
+    }
+  })
+  setGlobal("document", {
+    activeElement: null,
+    addEventListener: (type, listener, capture) => added.push([type, listener, capture]),
+    removeEventListener: (type, listener, capture) => removed.push([type, listener, capture])
+  })
+  setGlobal("window", { addEventListener: () => {}, removeEventListener: () => {} })
+
+  const { engine } = stubAssistEngine({})
+  const formDouble = { addEventListener: () => {}, removeEventListener: () => {} }
+  const elementDouble = {
+    currentEditor: engine,
+    closest: () => formDouble,
+    querySelectorAll: () => [],
+    addEventListener: () => {},
+    removeEventListener: () => {}
+  }
+  const controller = new SnippetPaletteController()
+  const paletteDouble = { hidden: true, setAttribute: () => {}, id: "palette" }
+  Object.assign(controller, { element: elementDouble, paletteTarget: paletteDouble })
+  controller.connect()
+
+  const keydownBinding = added.find(([type, listener, capture]) => type === "keydown" && capture === true)
+  assert.ok(keydownBinding, "document capture keydown is bound")
+  const scrollBinding = added.find(([type]) => type === "scroll")
+  assert.equal(scrollBinding, undefined, "window scroll binds on window, not document")
+  let routed = 0
+  controller.keydown = () => { routed += 1 }
+  keydownBinding[1]({ key: "a" })
+  assert.equal(routed, 0, "idle visual keys never reach the palette")
+  paletteDouble.hidden = false
+  keydownBinding[1]({ key: "Enter" })
+  assert.equal(routed, 1, "open-palette keys route to the palette")
+
+  controller.disconnect()
+  assert.ok(removed.some(([type, listener, capture]) => type === "keydown" && listener === keydownBinding[1] && capture === true))
 })
 

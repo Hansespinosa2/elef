@@ -1,4 +1,4 @@
-import { test } from "node:test";
+import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
 
@@ -6,6 +6,15 @@ import {
   mountPresentationEditor,
   PresentationEditor,
 } from "../src/features/presentation/editor.js";
+
+// The assist-insert patch reads Node.TEXT_NODE (linkedom provides nodeType
+// values but no global Node).
+const nodeDescriptor = Object.getOwnPropertyDescriptor(globalThis, "Node");
+Object.defineProperty(globalThis, "Node", { configurable: true, writable: true, value: { ELEMENT_NODE: 1, TEXT_NODE: 3 } });
+after(() => {
+  if (nodeDescriptor) Object.defineProperty(globalThis, "Node", nodeDescriptor);
+  else delete (globalThis as Record<string, unknown>).Node;
+});
 
 
 const SOURCE = "# Alpha\n\nFirst\n\n---\n\n# Beta\n\nSecond\n";
@@ -645,4 +654,33 @@ test("presentation map shifting pins the edited block start on replacement", () 
 
   assert.deepEqual(edited.content_range, { start: 9, end: 11 });
   assert.equal(editor.map?.source_length, 17);
+});
+
+test("presentation assist insert shifts the map and patches the canvas block", () => {
+  const edited = { id: "b2", block_id: "b2", range: { start: 9, end: 14 }, content_range: { start: 9, end: 14 } };
+  const { document, form } = mountForm();
+  const mount = mountEditor(form, {
+    source_length: 20,
+    slides: [{ blocks: [edited] }],
+    editable_regions: [edited],
+  } as unknown as Parameters<typeof mountEditor>[1]);
+  const editor = mount.editor;
+
+  const canvas = document.createElement("div");
+  canvas.innerHTML = `<div data-editor-block-id="b2"><p>First /q</p></div>`;
+  editor.canvasElement = canvas as unknown as Element;
+  const text = canvas.querySelector("p")?.firstChild as unknown as Text;
+  const positions: Array<[Node, number]> = [];
+  editor.getSelection = () => ({ focusNode: text, focusOffset: 8, setPosition: (node: Node, offset: number) => { positions.push([node, offset]); } } as unknown as Selection);
+
+  const patched = editor.applyVisualAssistInsert({ from: 12, to: 14, insert: "xy!", caret: 15 });
+
+  assert.equal(patched, true);
+  assert.equal(text.data, "First xy!");
+  assert.equal(positions.length, 1);
+  assert.equal(positions[0]?.[0], text);
+  assert.equal(positions[0]?.[1], 9);
+  assert.deepEqual(edited.content_range, { start: 9, end: 15 });
+  assert.equal(editor.map?.source_length, 21);
+  assert.deepEqual(editor.pendingCaretRestore, { sourceOffset: 15, preferredBlockId: "b2" });
 });

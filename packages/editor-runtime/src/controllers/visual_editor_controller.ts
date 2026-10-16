@@ -78,4 +78,8 @@ export default class extends Controller {
   restoreCaret(sourceOffset: any, preferredBlockId: any) {
     return this.editor.restoreCaret(sourceOffset, preferredBlockId)
   }
+
+  applyVisualAssistInsert(edit: any) {
+    return this.editor.applyVisualAssistInsert(edit)
+  }
 }

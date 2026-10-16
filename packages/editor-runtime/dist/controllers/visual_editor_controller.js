@@ -61,6 +61,9 @@ class visual_editor_controller_default extends Controller {
   restoreCaret(sourceOffset, preferredBlockId) {
     return this.editor.restoreCaret(sourceOffset, preferredBlockId);
   }
+  applyVisualAssistInsert(edit) {
+    return this.editor.applyVisualAssistInsert(edit);
+  }
 }
 export {
   visual_editor_controller_default as default

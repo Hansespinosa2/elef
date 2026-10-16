@@ -27,6 +27,7 @@ import {
 } from "@elef/work-model/document-transforms"
 import { touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
+import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
 
 export interface EditorSourceRange {
   start: number
@@ -502,6 +503,17 @@ export class PresentationEditor {
     this.getSelection()?.setPosition(point[0], point[1])
     this.lastProjectionCaret = { blockId: region.block_id ?? "", visibleOffset }
     return true
+  }
+
+  // Visual assist pipeline (session/projection_assist): shared with the
+  // document editor; the canvas is this projection's root.
+  applyVisualAssistInsert(edit: AssistInsertEdit, selection: Selection | null = this.getSelection()): boolean {
+    return applyVisualAssistInsert({
+      projectionTarget: this.canvas(),
+      allRegions: () => this.allRegions(),
+      shiftMapAfterEdit: (from, to, length, blockId) => this.shiftMapAfterEdit(from, to, length, blockId),
+      stageCaretRestore: (restore) => { this.pendingCaretRestore = restore }
+    }, edit, selection)
   }
 
   flushPendingProjectionEdits(): void {

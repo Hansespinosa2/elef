@@ -19,6 +19,10 @@ const source = (await readFile(path.join(root, "packages/editor-runtime/dist/con
     'import { attachCanvasScaling } from "@elef/client"',
     `import { attachCanvasScaling } from "${import.meta.resolve("@elef/client")}"`
   )
+  .replace(
+    'import { markStage } from "../lib/stage_marks.js"',
+    "const markStage = () => {}"
+  )
 const preview = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 test("preview timeout also bounds reading the JSON response body", async () => {

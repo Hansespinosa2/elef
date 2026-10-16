@@ -503,3 +503,47 @@ test("a Vim visual range survives projection caret sync", (t) => {
   assert.deepEqual(editor.lastProjectionCaret, { blockId: "b1", visibleOffset: 2 })
   assert.deepEqual(calls, [])
 })
+
+test("visual assist insert shifts the real map and patches the caret text", (t) => {
+  const previousNode = Object.getOwnPropertyDescriptor(globalThis, "Node")
+  Object.defineProperty(globalThis, "Node", { configurable: true, writable: true, value: { ELEMENT_NODE: 1, TEXT_NODE: 3 } })
+  t.after(() => {
+    if (previousNode) Object.defineProperty(globalThis, "Node", previousNode)
+    else delete globalThis.Node
+  })
+
+  const source = "# T\n\nBody /tab\n"
+  const block = {
+    dataset: null,
+    closest: (selector) => (selector === "[data-editor-block-id]" ? block : null),
+  }
+  const editor = new DocumentEditor({ projection: { contains: (node) => node === block } })
+  editor.map = buildEditorMap(source)
+  const from = source.indexOf("/tab")
+  const to = from + 4
+  const region = editor.map.editable_regions.find((candidate) => from >= candidate.content_range.start && from <= candidate.content_range.end)
+  assert.ok(region, "query sits inside an editable region")
+  const endBefore = region.content_range.end
+
+  const textNode = {
+    nodeType: 3,
+    data: "Body /tab",
+    parentElement: null,
+    parentNode: null,
+    deleteData(at, length) { this.data = this.data.slice(0, at) + this.data.slice(at + length) },
+    insertData(at, text) { this.data = this.data.slice(0, at) + text + this.data.slice(at) },
+  }
+  block.dataset = { editorBlockId: region.block_id }
+  textNode.parentElement = block
+  textNode.parentNode = block
+  const positions = []
+  const selection = { focusNode: textNode, focusOffset: 9, setPosition: (node, offset) => positions.push([node, offset]) }
+
+  const patched = editor.applyVisualAssistInsert({ from, to, insert: "**bold**", caret: from + 8 }, selection)
+
+  assert.equal(patched, true)
+  assert.equal(textNode.data, "Body **bold**")
+  assert.deepEqual(positions, [[textNode, 13]])
+  assert.equal(region.content_range.end, endBefore + 4)
+  assert.deepEqual(editor.pendingCaretRestore, { sourceOffset: from + 8, preferredBlockId: region.block_id })
+})

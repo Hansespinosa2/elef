@@ -15,6 +15,14 @@ class snippet_palette_controller_default extends Controller {
     this.editorReady = () => this.setupEditor();
     this.editorSelectionChange = () => this.scheduleStopPrune();
     this.editorModeChange = () => this.endStops();
+    this.visualKeydown = (event) => {
+      if (this.editorController?.editingMode !== "visual") return;
+      if (this.paletteTarget.hidden && !this.stops.length) return;
+      this.keydown(event);
+    };
+    this.visualScroll = () => {
+      if (this.editorController?.editingMode === "visual") this.positionPalette();
+    };
     this.element.addEventListener("elef:editor-ready", this.editorReady);
     this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange);
     this.editorForm = this.element.closest("form");
@@ -23,9 +31,13 @@ class snippet_palette_controller_default extends Controller {
     this.paletteTarget.setAttribute("aria-live", "polite");
     this.setupEditor();
     window.addEventListener("resize", this.positionPalette);
+    document.addEventListener("keydown", this.visualKeydown, true);
+    window.addEventListener("scroll", this.visualScroll, { capture: true, passive: true });
   }
   disconnect() {
     window.removeEventListener("resize", this.positionPalette);
+    document.removeEventListener("keydown", this.visualKeydown, true);
+    window.removeEventListener("scroll", this.visualScroll, { capture: true });
     if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette);
     if (this.keydownBound) this.editorController?.dom.removeEventListener("keydown", this.handleEditorKeydown, true);
     this.element.removeEventListener("elef:editor-ready", this.editorReady);
@@ -72,6 +84,22 @@ class snippet_palette_controller_default extends Controller {
     const selected = openPalette?.querySelector('[aria-selected="true"]');
     if (selected) editor.setAttribute("aria-activedescendant", selected.id);
     else editor.removeAttribute("aria-activedescendant");
+    if (this.editorController?.editingMode !== "visual") return;
+    const active = document.activeElement;
+    if (!active || active === document.body || !this.element.closest("form")?.contains(active)) return;
+    active.setAttribute("aria-expanded", String(Boolean(openPalette)));
+    if (selected) active.setAttribute("aria-activedescendant", selected.id);
+    else active.removeAttribute("aria-activedescendant");
+  }
+  assistsInMode(editor) {
+    return !!editor && (editor.editingMode === "source" || editor.editingMode === "visual");
+  }
+  projectionHost() {
+    const form = this.element.closest("form");
+    return form?.presentationEditorController || form?.visualEditorController || null;
+  }
+  placeVisualCaret(sourceOffset) {
+    this.projectionHost()?.restoreCaret?.(sourceOffset, null);
   }
   input() {
     if (this.ignoreNextInput) {
@@ -93,7 +121,7 @@ class snippet_palette_controller_default extends Controller {
   pruneStops() {
     if (!this.stops.length) return;
     const editor = this.editorController;
-    if (!editor || editor.destroyed || editor.editingMode !== "source") return this.endStops();
+    if (!this.assistsInMode(editor) || editor?.destroyed) return this.endStops();
     const active = this.activeStop;
     if (!active) return this.endStops();
     const from = editor.selectionStart;
@@ -104,7 +132,7 @@ class snippet_palette_controller_default extends Controller {
   keydown(event) {
     if (event.defaultPrevented) return;
     const editor = this.editorController;
-    if (!editor || editor.editingMode !== "source") {
+    if (!this.assistsInMode(editor)) {
       this.close();
       if (this.stops.length) this.endStops();
       return;
@@ -145,7 +173,7 @@ class snippet_palette_controller_default extends Controller {
   }
   refresh() {
     const editor = this.editorController;
-    if (!editor || editor.editingMode !== "source") return this.close();
+    if (!this.assistsInMode(editor)) return this.close();
     const directiveQuery = this.directiveQueryAtCaret();
     const query = directiveQuery || this.queryAtCaret();
     if (!query) return this.close();
@@ -290,8 +318,19 @@ class snippet_palette_controller_default extends Controller {
     if (this.paletteTarget.hidden) return;
     const editor = this.editorController;
     if (!editor) return;
+    if (editor.editingMode === "visual") {
+      const selection = window.getSelection();
+      const range = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+      const rect = range?.getBoundingClientRect();
+      if (!rect || rect.x === 0 && rect.y === 0 && rect.width === 0 && rect.height === 0) return;
+      this.placePalette(rect);
+      return;
+    }
     const editorRect = editor.dom.getBoundingClientRect();
     const markerRect = editor.view.coordsAtPos(editor.selectionStart) || editorRect;
+    this.placePalette(markerRect);
+  }
+  placePalette(markerRect) {
     const paletteRect = this.paletteTarget.getBoundingClientRect();
     const left = Math.max(8, Math.min(markerRect.left, window.innerWidth - paletteRect.width - 8));
     const maxTop = window.innerHeight - paletteRect.height - 8;
@@ -306,11 +345,15 @@ class snippet_palette_controller_default extends Controller {
     if (!snippet) return this.close();
     const editor = this.editorController;
     if (!editor) return this.close();
+    const visual = editor.editingMode === "visual";
+    const host = visual ? this.projectionHost() : null;
     if (this.argumentQuery) {
       this.endStops();
-      editor.replaceRange(snippet.trigger, this.queryStart, editor.selectionStart);
+      const queryEnd2 = editor.selectionStart;
+      editor.replaceRange(snippet.trigger, this.queryStart, queryEnd2);
+      if (visual) host?.applyVisualAssistInsert?.({ from: this.queryStart, to: queryEnd2, insert: snippet.trigger, caret: this.queryStart + snippet.trigger.length });
       this.close();
-      editor.focus();
+      if (!visual) editor.focus();
       return;
     }
     const before = editor.value.slice(0, this.queryStart);
@@ -323,8 +366,10 @@ class snippet_palette_controller_default extends Controller {
     }));
     this.close();
     this.ignoreNextInput = true;
-    editor.replaceRange(expansion.text, this.queryStart, editor.selectionStart);
-    editor.focus();
+    const queryEnd = editor.selectionStart;
+    editor.replaceRange(expansion.text, this.queryStart, queryEnd);
+    if (!visual) editor.focus();
+    else host?.applyVisualAssistInsert?.({ from: this.queryStart, to: queryEnd, insert: expansion.text, caret: this.queryStart + expansion.text.length });
     this.selectStop(this.stops[0]);
     queueMicrotask(() => this.refresh());
   }
@@ -338,6 +383,7 @@ class snippet_palette_controller_default extends Controller {
     if (!editor) return this.endStops();
     const exit = editor.value[current.end] === "}" ? current.end + 1 : current.end;
     editor.setSelectionRange(exit, exit);
+    if (editor.editingMode === "visual") this.placeVisualCaret(exit);
     this.endStops();
   }
   endStops() {
@@ -359,14 +405,17 @@ class snippet_palette_controller_default extends Controller {
   selectStop(stop) {
     const editor = this.editorController;
     if (!editor) return;
+    const visual = editor.editingMode === "visual";
     if (!stop) {
       this.activeStop = null;
       this.updateStopDecorations();
       editor.setSelectionRange(editor.selectionStart, editor.selectionStart);
+      if (visual) this.placeVisualCaret(editor.selectionStart);
       return;
     }
     this.activeStop = stop;
     editor.setSelectionRange(stop.start, stop.end);
+    if (visual) this.placeVisualCaret(stop.start);
     this.updateStopDecorations();
   }
   adjustStops() {
