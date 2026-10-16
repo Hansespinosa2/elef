@@ -15,12 +15,12 @@ function markdownForVisibleText(markdown, text, kind, element = null, { document
   const expectedAtoms = protectedElements.length + activeCount;
   if (element?.querySelectorAll && sourceAtoms.total !== expectedAtoms && !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms.total, protectedElements.length, expectedAtoms)) return source;
   const structured = kind === "list" || kind === "quote";
-  const sourceText = documentMode && structured ? String(text || "").replace(/\u00a0/g, " ") : rawValue;
+  const sourceText = documentMode && structured ? String(text || "") : rawValue;
   const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element, protectedElements.length) : sourceText;
-  const normalizedText = atomText.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ");
+  const normalizedText = atomText.replace(/[ \t]+/g, " ");
   const valueTrimmed = !(documentMode && structured);
-  const renderedText = valueTrimmed ? visibleText(normalizedText) : normalizedText;
-  const trailingExtra = valueTrimmed ? normalizedText.match(/[ \t]*$/)?.[0] ?? "" : "";
+  const renderedText = valueTrimmed ? visibleText(normalizedText, true) : normalizedText;
+  const trailingExtra = valueTrimmed ? normalizedText.match(/[ \t\u00a0]*$/)?.[0] ?? "" : "";
   const value = structured ? renderedText : normalizeInlineRenderedText(renderedText);
   const formatBudget = inlineFormatBudget(element);
   if (kind === "list" || kind === "quote") {
@@ -29,7 +29,7 @@ function markdownForVisibleText(markdown, text, kind, element = null, { document
     const preserved2 = preserveProjectedMarkdown(source, structuredValue, projection, { preserveLineBreaks: documentMode, trailingExtra });
     if (preserved2 !== null) return preserved2;
   }
-  if (source === "" && documentMode) return value;
+  if (source === "" && documentMode) return value.replace(/\u00a0/g, " ");
   const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements, trailingExtra);
   return preserved === null ? source : preserved;
 }
@@ -147,11 +147,12 @@ function renderInlineMath(element) {
   });
   return renderedCount;
 }
-function visibleText(text) {
-  return (text || "").replace(/\u00a0/g, " ").replace(/\n+$/, "").trim();
+function visibleText(text, preserveNbsp = false) {
+  const value = preserveNbsp ? text || "" : (text || "").replace(/\u00a0/g, " ");
+  return value.replace(/\n+$/, "").trim();
 }
 function rawVisibleText(text) {
-  return (text || "").replace(/\u00a0/g, " ").replace(/\n+$/, "");
+  return (text || "").replace(/\n+$/, "");
 }
 function normalizeInlineRenderedText(text) {
   return text.replace(/\r\n?/g, "\n").replace(/[ \t]*\n[ \t]*/g, "\n").split(/\n{2,}/).map((paragraph) => paragraph.replace(/\n/g, " ").replace(/[ \t]+/g, " ")).join("\n\n");
@@ -272,7 +273,7 @@ function preserveInlineMarkdown(source, value, protectedElements, formatBudget, 
   return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements), { trailingExtra });
 }
 function preserveProjectedMarkdown(source, value, projection, { preserveLineBreaks = false, trailingExtra = "" } = {}) {
-  const normalizedValue = value.replace(/\r\n?/g, "\n");
+  const normalizedValue = value.replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ");
   const leading = preserveLineBreaks ? 0 : projection.text.match(/^\s*/)?.[0]?.length || 0;
   const trailing = preserveLineBreaks ? 0 : projection.text.match(/\s*$/)?.[0]?.length || 0;
   const end = projection.text.length - trailing;
@@ -292,8 +293,9 @@ function preserveProjectedMarkdown(source, value, projection, { preserveLineBrea
   const lineEnding = source.includes("\r\n") ? "\r\n" : "\n";
   let insertion = normalizedValue.slice(valuePrefix, normalizedValue.length - valueSuffix).replace(/\n/g, lineEnding);
   if (trailingExtra) {
-    if (suffix === 0 && valueSuffix === 0) insertion += trailingExtra;
-    else return `${source.slice(0, from)}${insertion}${source.slice(to)}${trailingExtra}`;
+    const trailingEvidence = trailingExtra.replace(/\u00a0/g, " ");
+    if (suffix === 0 && valueSuffix === 0) insertion += trailingEvidence;
+    else return `${source.slice(0, from)}${insertion}${source.slice(to)}${trailingEvidence}`;
   }
   const result = `${source.slice(0, from)}${insertion}${source.slice(to)}`;
   return result;

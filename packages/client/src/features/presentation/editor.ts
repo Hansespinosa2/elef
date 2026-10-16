@@ -1080,7 +1080,9 @@ export class PresentationEditor {
   }
 
   editableText(element: Element): string {
-    return ((element as HTMLElement).innerText || element.textContent || "").replace(/ /g, " ").replace(/\n+$/, "")
+    // NBSP preserved as just-typed width evidence for the differ (same
+    // contract as the document editor); canonicalized at diff time.
+    return ((element as HTMLElement).innerText || element.textContent || "").replace(/\n+$/, "")
   }
 
   readMap(): PresentationEditorMap | null {

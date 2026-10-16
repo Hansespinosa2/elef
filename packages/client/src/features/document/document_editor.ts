@@ -1025,25 +1025,28 @@ export class DocumentEditor {
   }
 
   editableText(element: Element, kind?: string, source = ""): string {
+    // NBSP is preserved (not canonicalized): the browser mints NBSP for a
+    // typed space beside another space, and the differ reads NBSP runs as
+    // just-typed width evidence. Canonicalization happens at diff time.
     element = this.combinedBlockElement(element)
     let value: string | undefined
     let structuredLines: Array<Element> | null | undefined
     if (kind === "list" && !element.querySelector("li li")) {
       structuredLines = [...element.querySelectorAll("li")]
-      if (structuredLines.length) value = structuredLines.map((item) => ((item as HTMLElement).innerText || item.textContent || "").replace(/\u00a0/g, " ").replace(/\n+$/, "")).join("\n")
+      if (structuredLines.length) value = structuredLines.map((item) => ((item as HTMLElement).innerText || item.textContent || "").replace(/\n+$/, "")).join("\n")
     }
 
     if (value === undefined && kind === "quote") {
       const quote = element.querySelector("blockquote")
       structuredLines = quote && [...quote.children].filter((child) => /^(P|DIV)$/.test(child.tagName))
-      if (structuredLines?.length) value = structuredLines.map((line) => ((line as HTMLElement).innerText || line.textContent || "").replace(/\u00a0/g, " ").replace(/\n+$/, "")).join("\n")
+      if (structuredLines?.length) value = structuredLines.map((line) => ((line as HTMLElement).innerText || line.textContent || "").replace(/\n+$/, "")).join("\n")
     }
 
     if (value === undefined) {
       const blockChildren = [...element.children].filter((child) => /^(P|DIV|H[1-6])$/.test(child.tagName))
       value = blockChildren.length > 1
-        ? blockChildren.map((child) => ((child as HTMLElement).innerText || child.textContent || "").replace(/\u00a0/g, " ").replace(/\n+$/, "")).join("\n\n")
-        : ((element as HTMLElement).innerText || element.textContent || "").replace(/\u00a0/g, " ")
+        ? blockChildren.map((child) => ((child as HTMLElement).innerText || child.textContent || "").replace(/\n+$/, "")).join("\n\n")
+        : ((element as HTMLElement).innerText || element.textContent || "")
     }
 
     const lastLine = source.replace(/\r\n?/g, "\n").split("\n").at(-1) || ""

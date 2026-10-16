@@ -42,16 +42,19 @@ export function markdownForVisibleText(markdown: string, text: string, kind: str
   if (element?.querySelectorAll && sourceAtoms.total !== expectedAtoms &&
     !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms.total, protectedElements.length, expectedAtoms)) return source
   const structured = kind === "list" || kind === "quote"
-  const sourceText = documentMode && structured ? String(text || "").replace(/\u00a0/g, " ") : rawValue
+  const sourceText = documentMode && structured ? String(text || "") : rawValue
   const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element as Element, protectedElements.length) : sourceText
-  const normalizedText = atomText.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ")
+  // Collapse ASCII-only runs: NBSP breaks runs, preserving the width of
+  // just-typed whitespace (see rawVisibleText). Pure-ASCII runs can only
+  // be layout/textContent artifacts (innerText already collapsed them).
+  const normalizedText = atomText.replace(/[ \t]+/g, " ")
   const valueTrimmed = !(documentMode && structured)
-  const renderedText = valueTrimmed ? visibleText(normalizedText) : normalizedText
+  const renderedText = valueTrimmed ? visibleText(normalizedText, true) : normalizedText
   // The trim hides just-typed trailing whitespace from the differ (a flush
   // can re-read the DOM while the typed space is still trailing); keep the
   // trimmed run as evidence so the alignment cannot mistake a hidden
   // insertion for a whitespace deletion.
-  const trailingExtra = valueTrimmed ? (normalizedText.match(/[ \t]*$/)?.[0] ?? "") : ""
+  const trailingExtra = valueTrimmed ? (normalizedText.match(/[ \t\u00a0]*$/)?.[0] ?? "") : ""
   const value = structured ? renderedText : normalizeInlineRenderedText(renderedText)
   const formatBudget = inlineFormatBudget(element)
 
@@ -62,7 +65,7 @@ export function markdownForVisibleText(markdown: string, text: string, kind: str
     if (preserved !== null) return preserved
   }
 
-  if (source === "" && documentMode) return value
+  if (source === "" && documentMode) return value.replace(/\u00a0/g, " ")
 
   const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements, trailingExtra)
   // A failed source projection must never serialize display-only atoms or
@@ -219,12 +222,18 @@ export function renderInlineMath(element: Element | null): number {
   return renderedCount
 }
 
-function visibleText(text: string): string {
-  return (text || "").replace(/\u00a0/g, " ").replace(/\n+$/, "").trim()
+function visibleText(text: string, preserveNbsp = false): string {
+  const value = preserveNbsp ? (text || "") : (text || "").replace(/\u00a0/g, " ")
+  return value.replace(/\n+$/, "").trim()
 }
 
 function rawVisibleText(text: string): string {
-  return (text || "").replace(/\u00a0/g, " ").replace(/\n+$/, "")
+  // NBSPs are never renderer output: the browser mints one when a typed
+  // space lands beside another space, so NBSP marks just-typed
+  // whitespace. Keep it through run collapsing (ASCII-only runs
+  // collapse; NBSP breaks runs) and canonicalize to ASCII only when
+  // diffing, so typed spaces beside existing spaces survive flushes.
+  return (text || "").replace(/\n+$/, "")
 }
 
 function normalizeInlineRenderedText(text: string): string {
@@ -380,7 +389,11 @@ function preserveProjectedMarkdown(source: string, value: string, projection: In
   // before projection; inline whitespace is collapsed), so normalize the
   // edited value the same way before diffing — otherwise every CRLF line
   // break reads as a phantom edit and the splice deletes structure.
-  const normalizedValue = value.replace(/\r\n?/g, "\n")
+  // Canonicalize NBSP here, after run widths were fixed upstream: the
+  // differ is positional, so conversion no longer collapses anything,
+  // and source stays ASCII (a source-literal NBSP canonicalizes once,
+  // then round-trips).
+  const normalizedValue = value.replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ")
   const leading = preserveLineBreaks ? 0 : projection.text.match(/^\s*/)?.[0]?.length || 0
   const trailing = preserveLineBreaks ? 0 : projection.text.match(/\s*$/)?.[0]?.length || 0
   const end = projection.text.length - trailing
@@ -426,8 +439,11 @@ function preserveProjectedMarkdown(source: string, value: string, projection: In
   // before reaching here, and deletions fall back (which implies no
   // trailing run), so any run seen here was typed during this batch.
   if (trailingExtra) {
-    if (suffix === 0 && valueSuffix === 0) insertion += trailingExtra
-    else return `${source.slice(0, from)}${insertion}${source.slice(to)}${trailingExtra}`
+    // Evidence canonicalizes to ASCII: NBSP marked just-typed width, but
+    // source stays ASCII.
+    const trailingEvidence = trailingExtra.replace(/\u00a0/g, " ")
+    if (suffix === 0 && valueSuffix === 0) insertion += trailingEvidence
+    else return `${source.slice(0, from)}${insertion}${source.slice(to)}${trailingEvidence}`
   }
   const result = `${source.slice(0, from)}${insertion}${source.slice(to)}`
   return result

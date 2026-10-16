@@ -67,3 +67,33 @@ test("just-typed trailing whitespace is evidence, not round-trip noise", () => {
 test("trailing whitespace round-trips when nothing was typed", () => {
   assert.equal(editorMarkdown.markdownForVisibleText("See ", "See ", "paragraph", null), "See ")
 })
+
+// The browser mints NBSP when a typed space lands beside another space;
+// an NBSP-bearing run is just-typed width evidence, not collapsed-render
+// noise, so the differ preserves its width and canonicalizes to ASCII.
+const NBSP = String.fromCharCode(160)
+
+test("just-typed medial NBSP runs keep their width", () => {
+  assert.equal(
+    editorMarkdown.markdownForVisibleText("The is", `The${NBSP} is`, "paragraph", null, { documentMode: true }),
+    "The  is"
+  )
+  assert.equal(
+    editorMarkdown.markdownForVisibleText("The is", `The${NBSP} is`, "paragraph", null),
+    "The  is"
+  )
+  assert.equal(editorMarkdown.markdownForVisibleText("ab", `a${NBSP}${NBSP}b`, "paragraph", null), "a  b")
+})
+
+test("pure-ASCII runs still collapse as layout noise", () => {
+  assert.equal(editorMarkdown.markdownForVisibleText("a b", "a  b", "paragraph", null), "a b")
+})
+
+test("trailing NBSP matches ASCII trailing behavior in legacy batches", () => {
+  // Pure-trailing changes early-return the source (the precise translator
+  // owns live trailing insertion; a legacy trailing run usually means the
+  // precise path already committed it, so folding would double-apply).
+  // NBSP trailing must behave identically to ASCII trailing here.
+  assert.equal(editorMarkdown.markdownForVisibleText("See", `See${NBSP}`, "paragraph", null), "See")
+  assert.equal(editorMarkdown.markdownForVisibleText("See", "See ", "paragraph", null), "See")
+})
