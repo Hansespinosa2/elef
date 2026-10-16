@@ -26,6 +26,19 @@ jobs:
       - name: Build Tailwind CSS
         working-directory: apps/web
         run: bin/rails tailwindcss:build
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Install Rails-owned frontend dependencies
+        run: npm ci
+      - name: Build the shared packages
+        # dist/ is built, never committed: every lane builds before consuming.
+        # client/renderer/editor-runtime form a build-time cycle, so the exact
+        # bootstrap order inside `npm run build:packages` matters; call it whole.
+        run: npm run build:packages
       - name: Run the full non-system Ruby suite on SQLite
         working-directory: apps/web
         env:

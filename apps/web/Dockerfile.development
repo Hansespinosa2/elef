@@ -10,6 +10,15 @@ RUN apt-get update \
   && apt-get install --no-install-recommends -y build-essential ca-certificates curl libpq-dev nodejs \
   && rm -rf /var/lib/apt/lists/*
 
+# The shared TypeScript packages ship no committed dist/ output (it is built,
+# never committed). Pinned to the same Node 22 the CI lanes use. (Development
+# compose mounts the source tree over the image, so the checkout must also
+# carry a build; see the development-smoke job.)
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+  && apt-get install --no-install-recommends -y nodejs \
+  && rm -rf /var/lib/apt/lists/* \
+  && node --version
+
 WORKDIR ${APP_HOME}
 
 COPY apps/web/Gemfile apps/web/Gemfile.lock apps/web/
@@ -17,6 +26,8 @@ RUN cd apps/web && bundle install \
   && rm -rf /root/.bundle/cache /usr/local/bundle/cache
 
 COPY . .
+
+RUN npm ci && npm run build:packages
 
 EXPOSE 3000
 

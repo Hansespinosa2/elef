@@ -37,6 +37,15 @@ function bundle(entry, outfile, options = {}) {
   writeFileSync(outfile.replace(/\.js$/, ".metafile.json"), `${JSON.stringify(result.metafile, null, 2)}\n`);
 }
 
+// Build layering: client/preview-core and client/pptx-model need
+// @elef/renderer dist, renderer needs @elef/editor-runtime dist,
+// editor-runtime needs @elef/client dist — a three-package cycle with no
+// topological order. The canonical bootstrap (`npm run build:packages`)
+// builds client with --skip-renderer-deps first so the renderer and
+// editor-runtime passes have their inputs, then builds client whole. Never
+// delete the flag without breaking that cycle first.
+const skipRendererDeps = process.argv.includes("--skip-renderer-deps");
+
 // The preview renderer (KaTeX, highlight.js, markdown-it) stays external to
 // the boot entry: card previews import "@elef/client/preview-core" beside
 // the work snapshot, and hosts serve the entry below as a deferred file.
@@ -47,7 +56,9 @@ bundle(join(here, "src", "index.ts"), join(here, "dist", "elef-client.js"), {
 bundle(join(here, "src", "index.stable.ts"), join(here, "dist", "elef-client.stable.js"), {
   external: [previewCoreSpecifier],
 });
-bundle(join(here, "src", "features", "library", "preview-core.ts"), join(here, "dist", "preview-core.js"));
+if (!skipRendererDeps) {
+  bundle(join(here, "src", "features", "library", "preview-core.ts"), join(here, "dist", "preview-core.js"));
+}
 bundle(join(here, "src", "ui", "sanitize.ts"), join(here, "dist", "sanitize.js"));
 bundle(
   join(here, "src", "features", "presentation", "chrome.ts"),
@@ -71,9 +82,14 @@ bundle(join(here, "src", "pptx-test-internals.ts"), join(here, "dist", "pptx-tes
 // The PPTX model builder (work-model + renderer) ships as a deferred entry
 // beside preview-core: server-less hosts import it on demand while the boot
 // barrel stays free of the projection.
-bundle(join(here, "src", "features", "export", "pptx_model.ts"), join(here, "dist", "pptx-model.js"));
+if (!skipRendererDeps) {
+  bundle(join(here, "src", "features", "export", "pptx_model.ts"), join(here, "dist", "pptx-model.js"));
+}
 // The PPTX engine (model-to-blob orchestration) ships beside the builder:
 // the desktop import must not couple to the client boot barrel, whose bare
 // specifier the Stable profile forbids.
 bundle(join(here, "src", "features", "export", "pptx_engine.ts"), join(here, "dist", "pptx-engine.js"));
-console.log("packages/client: dist/elef-client.js + dist/elef-client.stable.js + dist/preview-core.js + dist/sanitize.js + dist/presentation-chrome.js + dist/vim-preferences.js + dist/shortcuts.js + dist/port-session.js + dist/pptx-test-internals.js + dist/pptx-model.js + dist/pptx-engine.js built");
+console.log(
+  "packages/client built: dist/elef-client.js + dist/elef-client.stable.js + dist/sanitize.js + dist/presentation-chrome.js + dist/vim-preferences.js + dist/shortcuts.js + dist/port-session.js + dist/pptx-test-internals.js + dist/pptx-engine.js" +
+  (skipRendererDeps ? " (preview-core + pptx-model deferred to the post-renderer pass)" : " + dist/preview-core.js + dist/pptx-model.js")
+);
