@@ -33,6 +33,21 @@ def fail(message: str) -> None:
     raise CheckFailure(message)
 
 
+def tree_delta(before_status: str, after_status: str, limit: int = 4000) -> str:
+    import difflib
+
+    delta = "\n".join(
+        difflib.unified_diff(
+            before_status.splitlines(),
+            after_status.splitlines(),
+            fromfile="before",
+            tofile="after",
+            lineterm="",
+        )
+    )
+    return delta[-limit:] if len(delta) > limit else delta
+
+
 def git(*args: str, check: bool = True) -> str:
     result = subprocess.run(
         ["git", "-C", str(ROOT), *args],
@@ -391,7 +406,7 @@ def run_tier_command(tier: str, commands: tuple, ceiling: float) -> int:
         durations = run_tier(commands, ceiling, quiet=False)
         after_status = git("status", "--porcelain", "--untracked-files=all")
         if after_status != before_status:
-            fail(f"bin/check {tier} changed the working tree")
+            fail(f"bin/check {tier} changed the working tree:\n{tree_delta(before_status, after_status)}")
     except (CheckFailure, OSError, ValueError) as error:
         print(f"bin/check {tier}: {error}", file=sys.stderr)
         return 1
@@ -425,7 +440,7 @@ def main(argv: list[str]) -> int:
             run_fresh()
             after_status = git("status", "--porcelain", "--untracked-files=all")
             if after_status != before_status:
-                fail("bin/check fresh changed the working tree")
+                fail(f"bin/check fresh changed the working tree:\n{tree_delta(before_status, after_status)}")
         except (CheckFailure, OSError, ValueError) as error:
             print(f"bin/check fresh: {error}", file=sys.stderr)
             return 1
