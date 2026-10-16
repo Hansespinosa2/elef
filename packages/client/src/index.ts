@@ -13,6 +13,21 @@ export {
   offsetSelection,
   toEditorLineEndings,
 } from "./session/source_ops.js";
+export {
+  ASSIST_TRIGGER_INSERTED_EVENT,
+  EDIT_TRIGGER_ACTIONS,
+  KEYBOARD_REFERENCE_TRIGGERS,
+  mountEditActions,
+  renderKeyboardReference,
+} from "./features/editor/edit_actions.js";
+export type {
+  EditActionsEditor,
+  EditActionsHost,
+  EditActionsMount,
+  EditTriggerAction,
+  KeyboardReferenceTrigger,
+  MountEditActionsOptions,
+} from "./features/editor/edit_actions.js";
 export { mountElef } from "./application/shell.js";
 export { isSettingsRoute, isWorkRoute, parseLibraryRoute, parseSettingsRoute, parseWorkRoute } from "./application/router.js";
 export type { SettingsRoute, WorkRoute, WorkView } from "./application/router.js";
