@@ -29,6 +29,10 @@ export default class extends Controller<HTMLElement> {
     }
     this.element.addEventListener("elef:editor-ready", this.editorReady)
     this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange)
+    // The shared Edit-actions menu inserts triggers programmatically, then
+    // dispatches this so palettes re-refresh against the restored caret.
+    this.assistTriggerInserted = () => this.refresh()
+    this.element.addEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted)
     this.editorForm = this.element.closest("form")
     this.editorForm?.addEventListener("elef:editor-mode-change", this.editorModeChange)
     this.positionPalette = this.positionPalette.bind(this)
@@ -50,6 +54,7 @@ export default class extends Controller<HTMLElement> {
     if (this.keydownBound) this.editorController?.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
     this.element.removeEventListener("elef:editor-selection-change", this.editorSelectionChange)
+    this.element.removeEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted)
     this.editorForm?.removeEventListener("elef:editor-mode-change", this.editorModeChange)
     this.endStops()
   }

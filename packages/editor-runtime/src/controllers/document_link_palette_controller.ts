@@ -95,6 +95,10 @@ export default class extends Controller {
     this.editorController = editorFor(this.element)
     this.editorReady = () => this.setupEditor()
     this.element.addEventListener("elef:editor-ready", this.editorReady)
+    // The shared Edit-actions menu inserts triggers programmatically, then
+    // dispatches this so palettes re-refresh against the restored caret.
+    this.assistTriggerInserted = () => this.refresh()
+    this.element.addEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted)
     window.addEventListener("resize", this.positionPalette)
     // Document capture precedes the form-level projection router
     // deterministically; idle visual keys never reach the palette.
@@ -108,6 +112,7 @@ export default class extends Controller {
     document.removeEventListener("keydown", this.visualKeydown, true)
     window.removeEventListener("scroll", this.visualScroll, { capture: true })
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
+    this.element.removeEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted)
     if (this.nativeScrollBound) this.editorTarget.removeEventListener("scroll", this.positionPalette)
     if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette)
     if (this.keydownBound) this.editorController?.dom.removeEventListener("keydown", this.handleEditorKeydown, true)

@@ -11,6 +11,8 @@ function asEditorSeam(candidate) {
   if (typeof seam.selectionRangeCount !== "number") return null;
   if (typeof seam.vimEnabled !== "boolean") return null;
   if (typeof seam.insertMode !== "boolean") return null;
+  if (typeof seam.editingMode !== "string") return null;
+  if (typeof seam.focus !== "function") return null;
   if (typeof seam.commitSource !== "function") return null;
   if (typeof seam.replaceRange !== "function") return null;
   if (typeof seam.replaceRanges !== "function") return null;

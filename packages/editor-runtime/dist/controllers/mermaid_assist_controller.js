@@ -16,6 +16,8 @@ class mermaid_assist_controller_default extends Controller {
     this.editorSelectionChange = () => this.scheduleRefresh();
     this.element.addEventListener("elef:editor-ready", this.editorReady);
     this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange);
+    this.assistTriggerInserted = () => this.refresh();
+    this.element.addEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted);
     this.positionPalette = this.positionPalette.bind(this);
     this.visualKeydown = (event) => {
       if (this.editorController?.editingMode !== "visual") return;
@@ -39,6 +41,7 @@ class mermaid_assist_controller_default extends Controller {
     window.removeEventListener("scroll", this.visualScroll, { capture: true });
     this.element.removeEventListener("elef:editor-ready", this.editorReady);
     this.element.removeEventListener("elef:editor-selection-change", this.editorSelectionChange);
+    this.element.removeEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted);
     this.detachEditorListeners();
     this.close();
     this.editorController = null;

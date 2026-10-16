@@ -19,6 +19,10 @@ export default class extends Controller<HTMLElement> {
     this.editorSelectionChange = () => this.scheduleRefresh()
     this.element.addEventListener("elef:editor-ready", this.editorReady)
     this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange)
+    // The shared Edit-actions menu inserts triggers programmatically, then
+    // dispatches this so palettes re-refresh against the restored caret.
+    this.assistTriggerInserted = () => this.refresh()
+    this.element.addEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted)
     this.positionPalette = this.positionPalette.bind(this)
     this.visualKeydown = (event: Event) => {
       if (this.editorController?.editingMode !== "visual") return
@@ -47,6 +51,7 @@ export default class extends Controller<HTMLElement> {
     window.removeEventListener("scroll", this.visualScroll, { capture: true })
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
     this.element.removeEventListener("elef:editor-selection-change", this.editorSelectionChange)
+    this.element.removeEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted)
     this.detachEditorListeners()
     this.close()
     this.editorController = null

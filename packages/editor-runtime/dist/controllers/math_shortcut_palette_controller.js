@@ -20,6 +20,8 @@ class math_shortcut_palette_controller_default extends Controller {
     this.editorSelectionChange = () => this.scheduleStopPrune();
     this.editorModeChange = () => this.endStops();
     this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange);
+    this.assistTriggerInserted = () => this.refresh();
+    this.element.addEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted);
     this.editorForm = this.element.closest("form");
     this.editorForm?.addEventListener("elef:editor-mode-change", this.editorModeChange);
     this.positionPalette = this.positionPalette.bind(this);
@@ -46,6 +48,7 @@ class math_shortcut_palette_controller_default extends Controller {
     }
     this.element.removeEventListener("elef:editor-ready", this.editorReady);
     this.element.removeEventListener("elef:editor-selection-change", this.editorSelectionChange);
+    this.element.removeEventListener("elef:assist-trigger-inserted", this.assistTriggerInserted);
     this.editorForm?.removeEventListener("elef:editor-mode-change", this.editorModeChange);
     this.endStops();
   }

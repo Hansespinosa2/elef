@@ -1316,6 +1316,89 @@ test("visual shorthand Backspace deletes a dollar pair through the host", () => 
   assert.deepEqual(hostCalls.inserts, [{ from: 4, to: 6, insert: "", caret: 4 }])
 })
 
+test("visual edit-actions trigger event re-refreshes every assist palette", (t) => {
+  // The shared menu inserts triggers programmatically, then dispatches
+  // elef:assist-trigger-inserted so each palette re-refreshes against the
+  // restored caret. One connected mount per palette proves the bridge.
+  const cases = [
+    {
+      name: "snippet",
+      controllerClass: SnippetPaletteController,
+      value: "Body /ta",
+      caret: 8,
+      registry: VISUAL_SNIPPETS,
+      assertOpen: (mounted) => {
+        assert.equal(mounted.palette.hidden, false)
+        assert.ok(mounted.controller.matches.length > 0)
+      }
+    },
+    {
+      name: "document link",
+      controllerClass: DocumentLinkPaletteController,
+      value: "See [[al",
+      caret: 8,
+      registry: [],
+      assign: { titlesValue: ["Alpha", "Beta"] },
+      assertOpen: (mounted) => {
+        assert.equal(mounted.palette.hidden, false)
+        assert.deepEqual(mounted.controller.matches, ["Alpha"])
+      }
+    },
+    {
+      name: "math shortcut",
+      controllerClass: MathShortcutPaletteController,
+      value: "The $@a",
+      caret: 7,
+      registry: [ALPHA_SHORTCUT],
+      assertOpen: (mounted) => {
+        assert.equal(mounted.palette.hidden, false)
+        assert.deepEqual(mounted.controller.matches, [ALPHA_SHORTCUT])
+      }
+    },
+    {
+      name: "mermaid",
+      controllerClass: MermaidAssistController,
+      value: "See /diag",
+      caret: 9,
+      registry: [],
+      assign: { hasPaletteTarget: true },
+      assertOpen: (mounted) => {
+        assert.equal(mounted.palette.hidden, false)
+        assert.equal(mounted.controller.model.kind, "diagram-command")
+      }
+    }
+  ]
+
+  for (const { name, controllerClass, value, caret, registry, assign = {}, assertOpen } of cases) {
+    const mounted = mountAssistPalette({ controllerClass, value, caret, registry, assign })
+    const globals = stubAssistGlobals(t)
+    globals.setDocument(mounted.document)
+    focusProjectionBlock(mounted.document)
+    mounted.field.currentEditor = mounted.engine
+    mounted.controller.connect()
+    // connect() re-resolves the registry from the element; restore the case rows.
+    mounted.controller.registry = registry
+
+    const event = mounted.document.createEvent("Event")
+    event.initEvent("elef:assist-trigger-inserted", true, false)
+    mounted.field.dispatchEvent(event)
+    assertOpen(mounted)
+
+    // disconnect() unbinds the bridge: re-closing, then re-dispatching,
+    // must not reopen. Mermaid's refresh additionally gates on its
+    // connected flag and editor, so re-arm those to isolate the listener.
+    mounted.controller.close()
+    mounted.controller.disconnect()
+    mounted.controller.connected = true
+    mounted.controller.editorController = mounted.engine
+    mounted.controller.registry = registry
+    const reopen = mounted.document.createEvent("Event")
+    reopen.initEvent("elef:assist-trigger-inserted", true, false)
+    mounted.field.dispatchEvent(reopen)
+    assert.equal(mounted.palette.hidden, true, `${name} stays closed after disconnect`)
+  }
+})
+
 test("visual shorthand routing mirrors every source binding on document capture", (t) => {
   const saved = new Map()
   const setGlobal = (name, value) => {
