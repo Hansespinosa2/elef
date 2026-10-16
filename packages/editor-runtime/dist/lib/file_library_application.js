@@ -744,7 +744,10 @@ function startFileLibraryApplication(platform) {
   }
   function handleLibraryEvent(event) {
     if (event.type === "renamed") {
-      if (activeWorkFolder && activeWorkFolder.id === event.work.id) Object.assign(activeWorkFolder, { name: event.work.title });
+      if (activeWorkFolder && activeWorkFolder.id === event.work.id) {
+        Object.assign(activeWorkFolder, { name: event.work.title });
+        elements.titleInput.value = event.work.title;
+      }
       workFolders = workFolders.map((item) => item.id === event.work.id ? { ...item, name: event.work.title } : item);
     }
     if (event.type === "deleted") {

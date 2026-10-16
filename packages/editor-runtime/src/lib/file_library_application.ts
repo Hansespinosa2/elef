@@ -893,7 +893,13 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   // host only keeps its editor-side caches consistent and reports status.
   function handleLibraryEvent(event: any): void {
     if (event.type === "renamed") {
-      if (activeWorkFolder && activeWorkFolder.id === event.work.id) Object.assign(activeWorkFolder, { name: event.work.title })
+      if (activeWorkFolder && activeWorkFolder.id === event.work.id) {
+        Object.assign(activeWorkFolder, { name: event.work.title })
+        // A card rename is server truth for the active work too: mirror it
+        // into the title input, or the title save flow reads the stale input
+        // as a pending edit and renames the work back on the next open.
+        elements.titleInput.value = event.work.title
+      }
       workFolders = workFolders.map(item => item.id === event.work.id ? { ...item, name: event.work.title } : item)
     }
     if (event.type === "deleted") {
