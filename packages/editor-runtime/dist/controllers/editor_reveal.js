@@ -1,5 +1,5 @@
 const stashes = /* @__PURE__ */ new WeakMap();
-const REVEALABLE_SELECTOR = "em, strong, del, s, code";
+const REVEALABLE_SELECTOR = "em, strong, del, s, code, a, span.document-link.unresolved";
 const ACTIVE_SELECTOR = "[data-editor-inline-active='true']";
 const ATOM_SELECTOR = "[data-editor-math-source], [data-editor-math-active], img, [data-editor-image-source]";
 const ELEMENT_NODE = 1;
@@ -7,12 +7,33 @@ function elementKind(element) {
   const tag = element.tagName.toUpperCase();
   if (tag === "EM" || tag === "STRONG" || tag === "DEL" || tag === "S") return "format";
   if (tag === "CODE" && !element.closest("pre")) return "code";
+  if (tag === "A") {
+    if (element.classList.contains("document-link")) return "document_link";
+    if (isAutolink(element)) return null;
+    return "link";
+  }
+  if (tag === "SPAN" && element.classList.contains("document-link")) return "document_link";
   return null;
+}
+function isAutolink(anchor) {
+  const text = (anchor.textContent ?? "").trim();
+  const href = anchor.getAttribute("href") ?? "";
+  if (!text || !href) return false;
+  return href === text || href === `http://${text}` || href === `https://${text}` || href === `ftp://${text}` || href === `mailto:${text}`;
 }
 function tokenizeRevealables(source) {
   const tokens = [];
   let index = 0;
   while (index < source.length) {
+    if (source[index] === "\\") {
+      index += 2;
+      continue;
+    }
+    const skip = opaqueLengthAt(source, index);
+    if (skip > 0) {
+      index += skip;
+      continue;
+    }
     const token = revealTokenAt(source, index);
     if (!token) {
       index += 1;
@@ -22,6 +43,22 @@ function tokenizeRevealables(source) {
     index = token.end;
   }
   return tokens;
+}
+function opaqueLengthAt(source, index) {
+  const rest = source.slice(index);
+  const image = rest.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/);
+  if (image) return (image[0] ?? "").length;
+  const displayBracket = rest.match(/^\\\[([\s\S]+?)\\\]/);
+  if (displayBracket) return (displayBracket[0] ?? "").length;
+  const inlineParen = rest.match(/^\\\(([^\\\r\n]+?)\\\)/);
+  if (inlineParen) return (inlineParen[0] ?? "").length;
+  const displayDollar = rest.match(/^\$\$([\s\S]+?)\$\$(?!\$)/);
+  if (displayDollar) return (displayDollar[0] ?? "").length;
+  if (source[index - 1] !== "$") {
+    const inlineDollar = rest.match(/^\$(?!\$)(?!\s)([^$\r\n]+?)(?<!\s)\$(?!\$)/);
+    if (inlineDollar) return (inlineDollar[0] ?? "").length;
+  }
+  return 0;
 }
 function revealTokenAt(source, index) {
   const rest = source.slice(index);
@@ -46,6 +83,14 @@ function revealTokenAt(source, index) {
     const content = rest.slice(1, end);
     if (!content || /^\s|\s$/.test(content) || content.includes("\n")) continue;
     return { kind: "format", formatType: "emphasis", start: index, end: index + end + 1, open: delimiter, close: delimiter };
+  }
+  const link = rest.match(/^(\[([^\]]+)\]\(([^\s)]+)(?:\s+["'][^"']*["'])?\))/);
+  if (link) {
+    return { kind: "link", start: index, end: index + (link[0] ?? "").length, open: "[", close: ")" };
+  }
+  const documentLink = rest.match(/^(\[\[([^\]|]+)(?:\|([^\]]*))?\]\])/);
+  if (documentLink) {
+    return { kind: "document_link", start: index, end: index + (documentLink[0] ?? "").length, open: "[[", close: "]]" };
   }
   return null;
 }
@@ -113,6 +158,13 @@ function offsetInElement(element, node, offset) {
   visit(element);
   return found;
 }
+function intersects(element, range) {
+  try {
+    return range.intersectsNode(element);
+  } catch {
+    return false;
+  }
+}
 function touchedPair(pairs, root, node) {
   if (!node) return null;
   const element = node.nodeType === ELEMENT_NODE ? node : node.parentElement;
@@ -128,6 +180,7 @@ function touchedPair(pairs, root, node) {
 function activatePair(pair, source, selection) {
   const { token, element } = pair;
   if (element.matches?.(ACTIVE_SELECTOR)) return element;
+  if ((token.kind === "link" || token.kind === "document_link") && element.tagName.toUpperCase() !== "A") return null;
   if (element.querySelector?.(ATOM_SELECTOR)) return null;
   const slice = source.slice(token.start, token.end);
   if (!delimitersMatch(token, slice)) return null;
@@ -150,10 +203,17 @@ function activatePair(pair, source, selection) {
   span.appendChild(textNode);
   stashes.set(span, { original: element, baseline: slice });
   element.parentNode?.replaceChild(span, element);
-  if (selection && (anchor !== null || focus !== null)) {
+  const liveAnchorNode = selection?.anchorNode ?? null;
+  const liveFocusNode = selection?.focusNode ?? null;
+  if (selection && liveAnchorNode && liveFocusNode && (anchor !== null || focus !== null)) {
     const end = textNode.textContent?.length ?? 0;
-    const clamp = (value) => Math.max(0, Math.min(value ?? end, end));
-    selection.setBaseAndExtent(textNode, clamp(anchor), textNode, clamp(focus));
+    const clamp = (value) => Math.max(0, Math.min(value, end));
+    selection.setBaseAndExtent(
+      anchor !== null ? textNode : liveAnchorNode,
+      anchor !== null ? clamp(anchor) : selection.anchorOffset,
+      focus !== null ? textNode : liveFocusNode,
+      focus !== null ? clamp(focus) : selection.focusOffset
+    );
   }
   return span;
 }
@@ -187,11 +247,18 @@ function syncActiveInline(root, getSource, onFlush = null) {
       const pair = touchedPair(pairs, block, endpoint);
       if (pair && !pair.activeSpan) activatePair(pair, source, selection);
     }
+    if (range && !range.collapsed) {
+      for (const pair of pairs) {
+        if (pair.activeSpan) continue;
+        if (intersects(pair.element, range)) activatePair(pair, source, selection);
+      }
+    }
   }
   const liveRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
   const actives = [...root.querySelectorAll(ACTIVE_SELECTOR)];
   for (const span of actives) {
     if (liveRange && (span.contains(liveRange.startContainer) || span.contains(liveRange.endContainer))) continue;
+    if (liveRange && !liveRange.collapsed && intersects(span, liveRange)) continue;
     deactivateSpan(span, onFlush);
   }
 }

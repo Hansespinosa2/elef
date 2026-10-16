@@ -1,5 +1,5 @@
-// Visual inline revelation (slice 1: emphasis, strong, strikethrough,
-// code; links follow in slice 2). Rendered inline constructs conceal
+// Visual inline revelation (slices 1-2: emphasis, strong,
+// strikethrough, code, links). Rendered inline constructs conceal
 // their delimiters; when the caret enters one, the element swaps for an
 // editable source-text span (mirroring the math-active pattern), and the
 // differ projects the revealed source slice instead of the concealed
@@ -16,7 +16,7 @@
 // concealed path never refuses.
 
 export interface RevealToken {
-  kind: "format" | "code";
+  kind: "format" | "code" | "link" | "document_link";
   formatType?: "strong" | "emphasis" | "strike";
   start: number;
   end: number;
@@ -42,7 +42,7 @@ interface ActiveStash {
 
 const stashes = new WeakMap<HTMLElement, ActiveStash>()
 
-const REVEALABLE_SELECTOR = "em, strong, del, s, code"
+const REVEALABLE_SELECTOR = "em, strong, del, s, code, a, span.document-link.unresolved"
 const ACTIVE_SELECTOR = "[data-editor-inline-active='true']"
 const ATOM_SELECTOR = "[data-editor-math-source], [data-editor-math-active], img, [data-editor-image-source]"
 // DOM Node nodeType for elements (avoids the Node global so this module
@@ -53,13 +53,49 @@ function elementKind(element: Element): RevealToken["kind"] | null {
   const tag = element.tagName.toUpperCase()
   if (tag === "EM" || tag === "STRONG" || tag === "DEL" || tag === "S") return "format"
   if (tag === "CODE" && !element.closest("pre")) return "code"
+  if (tag === "A") {
+    if (element.classList.contains("document-link")) return "document_link"
+    // Autolinks have no explicit source syntax (text approximates the
+    // href); excluding them keeps counts aligned for real links. A
+    // miss or false positive only refuses revelation (never corrupts:
+    // counts are the pairing guard).
+    if (isAutolink(element)) return null
+    return "link"
+  }
+  if (tag === "SPAN" && element.classList.contains("document-link")) return "document_link"
   return null
+}
+
+// Linkified URLs render as anchors with no source token. Their text
+// is the URL itself, modulo the scheme linkify prepends.
+function isAutolink(anchor: Element): boolean {
+  const text = (anchor.textContent ?? "").trim()
+  const href = anchor.getAttribute("href") ?? ""
+  if (!text || !href) return false
+  return href === text ||
+    href === `http://${text}` ||
+    href === `https://${text}` ||
+    href === `ftp://${text}` ||
+    href === `mailto:${text}`
 }
 
 function tokenizeRevealables(source: string): RevealToken[] {
   const tokens: RevealToken[] = []
   let index = 0
   while (index < source.length) {
+    // Escaped characters are literal (an escaped delimiter never opens
+    // a construct); images and math spans are opaque (their markers
+    // never pair with revealable elements). Skip all three so markers
+    // inside them cannot mint spurious tokens.
+    if (source[index] === "\\") {
+      index += 2
+      continue
+    }
+    const skip = opaqueLengthAt(source, index)
+    if (skip > 0) {
+      index += skip
+      continue
+    }
     const token = revealTokenAt(source, index)
     if (!token) {
       index += 1
@@ -69,6 +105,26 @@ function tokenizeRevealables(source: string): RevealToken[] {
     index = token.end
   }
   return tokens
+}
+
+// Length of the image or math construct opening at index (0 when
+// none). Mirrors inlineTokenAt boundaries: images are atoms, math
+// spans are opaque, and neither ever pairs with a revealable.
+function opaqueLengthAt(source: string, index: number): number {
+  const rest = source.slice(index)
+  const image = rest.match(/^!\[([^\]]*)\]\(([^)\s]+)(?:\s+["'][^"']*["'])?\)/)
+  if (image) return (image[0] ?? "").length
+  const displayBracket = rest.match(/^\\\[([\s\S]+?)\\\]/)
+  if (displayBracket) return (displayBracket[0] ?? "").length
+  const inlineParen = rest.match(/^\\\(([^\\\r\n]+?)\\\)/)
+  if (inlineParen) return (inlineParen[0] ?? "").length
+  const displayDollar = rest.match(/^\$\$([\s\S]+?)\$\$(?!\$)/)
+  if (displayDollar) return (displayDollar[0] ?? "").length
+  if (source[index - 1] !== "$") {
+    const inlineDollar = rest.match(/^\$(?!\$)(?!\s)([^$\r\n]+?)(?<!\s)\$(?!\$)/)
+    if (inlineDollar) return (inlineDollar[0] ?? "").length
+  }
+  return 0
 }
 
 // Minimal tokenizer for revealable inline constructs. It must agree
@@ -101,6 +157,15 @@ function revealTokenAt(source: string, index: number): RevealToken | null {
     const content = rest.slice(1, end)
     if (!content || /^\s|\s$/.test(content) || content.includes("\n")) continue
     return { kind: "format", formatType: "emphasis", start: index, end: index + end + 1, open: delimiter, close: delimiter }
+  }
+  // Links mirror inlineTokenAt exactly (link before document link).
+  const link = rest.match(/^(\[([^\]]+)\]\(([^\s)]+)(?:\s+["'][^"']*["'])?\))/)
+  if (link) {
+    return { kind: "link", start: index, end: index + (link[0] ?? "").length, open: "[", close: ")" }
+  }
+  const documentLink = rest.match(/^(\[\[([^\]|]+)(?:\|([^\]]*))?\]\])/)
+  if (documentLink) {
+    return { kind: "document_link", start: index, end: index + (documentLink[0] ?? "").length, open: "[[", close: "]]" }
   }
   return null
 }
@@ -181,6 +246,14 @@ function offsetInElement(element: Element, node: Node, offset: number): number |
   return found
 }
 
+function intersects(element: Element, range: Range): boolean {
+  try {
+    return range.intersectsNode(element)
+  } catch {
+    return false
+  }
+}
+
 function touchedPair(pairs: RevealPair[], root: Element, node: Node | null): RevealPair | null {
   if (!node) return null
   const element = node.nodeType === ELEMENT_NODE ? (node as Element) : node.parentElement
@@ -197,6 +270,9 @@ function touchedPair(pairs: RevealPair[], root: Element, node: Node | null): Rev
 function activatePair(pair: RevealPair, source: string, selection: Selection | null): HTMLElement | null {
   const { token, element } = pair
   if (element.matches?.(ACTIVE_SELECTOR)) return element as HTMLElement
+  // Unresolved document links already show literal [[syntax]]; only
+  // anchors have concealed link syntax worth revealing.
+  if ((token.kind === "link" || token.kind === "document_link") && element.tagName.toUpperCase() !== "A") return null
   // Atom-guard safety: an inline construct containing math or an image
   // would strand atoms the differ counts, so it never activates.
   if (element.querySelector?.(ATOM_SELECTOR)) return null
@@ -223,10 +299,18 @@ function activatePair(pair: RevealPair, source: string, selection: Selection | n
   span.appendChild(textNode)
   stashes.set(span, { original: element, baseline: slice })
   element.parentNode?.replaceChild(span, element)
-  if (selection && (anchor !== null || focus !== null)) {
+  // Only endpoints inside the swapped element remap; outside
+  // endpoints (a range spanning several constructs) stay untouched so
+  // the selection survives multi-activation.
+  const liveAnchorNode = selection?.anchorNode ?? null
+  const liveFocusNode = selection?.focusNode ?? null
+  if (selection && liveAnchorNode && liveFocusNode && (anchor !== null || focus !== null)) {
     const end = textNode.textContent?.length ?? 0
-    const clamp = (value: number | null): number => Math.max(0, Math.min(value ?? end, end))
-    selection.setBaseAndExtent(textNode, clamp(anchor), textNode, clamp(focus))
+    const clamp = (value: number): number => Math.max(0, Math.min(value, end))
+    selection.setBaseAndExtent(
+      anchor !== null ? textNode : liveAnchorNode, anchor !== null ? clamp(anchor) : selection.anchorOffset,
+      focus !== null ? textNode : liveFocusNode, focus !== null ? clamp(focus) : selection.focusOffset
+    )
   }
   return span
 }
@@ -275,15 +359,27 @@ export function syncActiveInline(
       const pair = touchedPair(pairs, block, endpoint)
       if (pair && !pair.activeSpan) activatePair(pair, source, selection)
     }
+    // A range reveals every construct it intersects, not just the ones
+    // its endpoints touch: the selection is edited as source.
+    if (range && !range.collapsed) {
+      for (const pair of pairs) {
+        if (pair.activeSpan) continue
+        if (intersects(pair.element, range)) activatePair(pair, source, selection)
+      }
+    }
   }
   // Activation swaps the DOM and moves the live selection into the new
   // spans, so the range captured above points at detached nodes. The
   // sweep must test the live selection or it deactivates instantly (and
   // the browser then collapses the stranded caret to the removal point).
+  // A range also keeps every span it intersects (endpoints alone miss
+  // middle constructs); collapsed carets use strict containment so
+  // leaving by one position restores the render.
   const liveRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
   const actives = [...root.querySelectorAll(ACTIVE_SELECTOR)] as HTMLElement[]
   for (const span of actives) {
     if (liveRange && (span.contains(liveRange.startContainer) || span.contains(liveRange.endContainer))) continue
+    if (liveRange && !liveRange.collapsed && intersects(span, liveRange)) continue
     deactivateSpan(span, onFlush)
   }
 }

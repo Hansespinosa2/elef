@@ -128,6 +128,62 @@ class VisualRevealTest < ApplicationSystemTestCase
     assert_selector ".editor-inline-active", text: "*b*", wait: 5
   end
 
+  test "entering a link reveals its URL and typing commits" do
+    document = Document.create!(title: "Reveal", source: "See [docs](https://x.test/d) now.\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+    assert_no_selector ".editor-inline-active"
+
+    place_caret_in(".document-editor-block a", offset: 2)
+    assert_selector ".editor-inline-active", text: "[docs](https://x.test/d)", wait: 5
+    assert_equal "See [docs](https://x.test/d) now.\n", engine_source
+
+    find(".editor-inline-active").send_keys("X")
+    assert_field "Markdown source", with: "See [doXcs](https://x.test/d) now.\n", wait: 5
+  end
+
+  test "a range across constructs reveals every one it touches" do
+    document = Document.create!(title: "Reveal", source: "A *warm* and [cool](https://x.test) word.\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    page.execute_script(<<~JAVASCRIPT)
+      (() => {
+        const p = document.querySelector(".document-editor-block p");
+        const range = document.createRange();
+        range.setStart(p.childNodes[0], 0);
+        range.setEnd(p.childNodes[p.childNodes.length - 1], p.childNodes[p.childNodes.length - 1].textContent.length);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+      })()
+    JAVASCRIPT
+    assert_selector ".editor-inline-active", count: 2, wait: 5
+    assert_selector ".editor-inline-active", text: "*warm*"
+    assert_selector ".editor-inline-active", text: "[cool](https://x.test)"
+    assert_equal "A *warm* and [cool](https://x.test) word.\n", engine_source
+  end
+
+  test "unresolved document links never activate" do
+    document = Document.create!(title: "Reveal", source: "Open [[No Such Doc 12345]] please.\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    find(".document-editor-block .document-link.unresolved").click
+    sleep 0.7
+    assert_no_selector ".editor-inline-active"
+  end
+
+  test "autolinks do not block emphasis revelation in the same block" do
+    document = Document.create!(title: "Reveal", source: "Visit https://x.test/a and *warm* word.\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    place_caret_in(".document-editor-block em", offset: 2)
+    assert_selector ".editor-inline-active", text: "*warm*", wait: 5
+    assert_equal "Visit https://x.test/a and *warm* word.\n", engine_source
+  end
+
   test "emphasis containing math stays rendered" do
     document = Document.create!(title: "Reveal", source: "A *mix $x$ up* word.\n")
     visit edit_document_path(document)

@@ -79,3 +79,37 @@ test("tokenizer disagreement refuses instead of corrupting", () => {
   const { element } = block(`<p>${ACTIVE("format", "emphasis", "*x*")}</p>`)
   assert.equal(commit("***x*", "***x*?", element), "***x*")
 })
+
+test("revealed links round-trip and commit positionally", () => {
+  const { element, text } = block(`<p>See ${ACTIVE("link", "", "[docs](https://x.test/d)")} now</p>`)
+  assert.equal(text, "See [docs](https://x.test/d) now")
+  assert.equal(commit("See [docs](https://x.test/d) now", text, element), "See [docs](https://x.test/d) now")
+  assert.equal(
+    commit("See [docs](https://x.test/d) now", "See [docs](https://x.test/dX) now", element),
+    "See [docs](https://x.test/dX) now"
+  )
+})
+
+test("revealed document links commit through the same path", () => {
+  const { element } = block(`<p>Open ${ACTIVE("document_link", "", "[[Guide|start here]]")} please</p>`)
+  assert.equal(
+    commit("Open [[Guide|start here]] please", "Open [[Guide|start here!]] please", element),
+    "Open [[Guide|start here!]] please"
+  )
+})
+
+test("markers inside math, code, images, and escapes mint no tokens", () => {
+  // Opaque spans contribute no tokens, so each block pairs exactly
+  // its genuine constructs and nothing refuses.
+  const cases = [
+    ["$a*b$ and *y*", "<p>$a*b$ and <em>y</em></p>"],
+    ["`[x](y)` plus *y*", "<p><code>[x](y)</code> plus <em>y</em></p>"],
+    ["![a](b) plus *y*", "<p><img alt=\"a\"> plus <em>y</em></p>"],
+    ["\\*x\\* plus *y*", "<p>*x* plus <em>y</em></p>"]
+  ]
+  for (const [source, html] of cases) {
+    const { element } = block(html)
+    const map = reveal.activeInlineMap(source, element)
+    assert.ok(map instanceof Map, `pairs for ${source}`)
+  }
+})

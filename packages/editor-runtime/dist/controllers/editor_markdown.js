@@ -429,10 +429,17 @@ function inlineProjection(source, sourceOffset = 0, protectedElements = [], prot
       } else {
         appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0));
       }
-    } else if (["document_link", "escape"].includes(token.kind)) {
+    } else if (token.kind === "document_link") {
+      const revealed = revealActives.get(sourceOffset + index);
+      if (revealed) {
+        appendPlain(source.slice(index, index + token.length), sourceOffset + index);
+      } else {
+        appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0));
+      }
+    } else if (token.kind === "escape") {
       appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0));
     } else {
-      const revealed = token.kind === "format" ? revealActives.get(sourceOffset + index) : void 0;
+      const revealed = token.kind === "format" || token.kind === "link" ? revealActives.get(sourceOffset + index) : void 0;
       if (revealed) {
         appendPlain(source.slice(index, index + token.length), sourceOffset + index);
         index += token.length;
@@ -578,7 +585,7 @@ function revealTokensAgree(source, actives, budget) {
       continue;
     }
     if (token.formatType && walk) walk[token.formatType] -= 1;
-    if (token.kind === "format" || token.kind === "code") {
+    if (token.kind === "format" || token.kind === "code" || token.kind === "link" || token.kind === "document_link") {
       seen.set(index, { length: token.length, kind: token.kind, formatType: token.formatType });
     }
     index += token.length;
@@ -588,6 +595,8 @@ function revealTokensAgree(source, actives, budget) {
     if (!found || found.length !== entry.token.end - entry.token.start) return false;
     if (entry.token.kind === "code" && found.kind !== "code") return false;
     if (entry.token.kind === "format" && (found.kind !== "format" || found.formatType !== entry.token.formatType)) return false;
+    if (entry.token.kind === "link" && found.kind !== "link") return false;
+    if (entry.token.kind === "document_link" && found.kind !== "document_link") return false;
   }
   return true;
 }

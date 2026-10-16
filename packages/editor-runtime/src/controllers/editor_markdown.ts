@@ -607,12 +607,22 @@ function inlineProjection(source: string, sourceOffset = 0, protectedElements: H
       } else {
         appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0))
       }
-    } else if (["document_link", "escape"].includes(token.kind)) {
+    } else if (token.kind === "document_link") {
+      // Revealed document links project the full [[slice]]; concealed
+      // ones project the label only.
+      const revealed = revealActives.get(sourceOffset + index)
+      if (revealed) {
+        appendPlain(source.slice(index, index + token.length), sourceOffset + index)
+      } else {
+        appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0))
+      }
+    } else if (token.kind === "escape") {
       appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0))
     } else {
-      // Revealed formats bypass recursion: the full slice (with nested
-      // delimiters as plain text) is already visible in the DOM.
-      const revealed = token.kind === "format" ? revealActives.get(sourceOffset + index) : undefined
+      // Revealed formats and links bypass recursion: the full slice
+      // (with nested delimiters as plain text) is already visible in
+      // the DOM.
+      const revealed = token.kind === "format" || token.kind === "link" ? revealActives.get(sourceOffset + index) : undefined
       if (revealed) {
         appendPlain(source.slice(index, index + token.length), sourceOffset + index)
         index += token.length
@@ -806,7 +816,7 @@ function revealTokensAgree(source: string, actives: RevealActives, budget: Forma
       continue
     }
     if (token.formatType && walk) walk[token.formatType] -= 1
-    if (token.kind === "format" || token.kind === "code") {
+    if (token.kind === "format" || token.kind === "code" || token.kind === "link" || token.kind === "document_link") {
       seen.set(index, { length: token.length, kind: token.kind, formatType: token.formatType })
     }
     index += token.length
@@ -816,6 +826,8 @@ function revealTokensAgree(source: string, actives: RevealActives, budget: Forma
     if (!found || found.length !== entry.token.end - entry.token.start) return false
     if (entry.token.kind === "code" && found.kind !== "code") return false
     if (entry.token.kind === "format" && (found.kind !== "format" || found.formatType !== entry.token.formatType)) return false
+    if (entry.token.kind === "link" && found.kind !== "link") return false
+    if (entry.token.kind === "document_link" && found.kind !== "document_link") return false
   }
   return true
 }
