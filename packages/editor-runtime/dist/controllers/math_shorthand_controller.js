@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import { syntaxTree } from "@codemirror/language";
 import { editorFor } from "../lib/editor_controller_lookup.js";
+import { editorPopupOpen } from "../lib/vim_escape.js";
 import { assistsInMode, projectionHostFor } from "../lib/visual_assist.js";
 const GREEK_OPERAND = /^\\(?:alpha|beta|gamma|delta|epsilon|varepsilon|zeta|eta|theta|vartheta|iota|kappa|lambda|mu|nu|xi|pi|varpi|rho|varrho|sigma|varsigma|tau|upsilon|phi|varphi|chi|psi|omega|Gamma|Delta|Theta|Lambda|Xi|Pi|Sigma|Upsilon|Phi|Psi|Omega)$/;
 const ATOMIC_MATH_SHORTCUTS = Object.freeze({ "@a": "\\alpha", "@b": "\\beta", "@g": "\\gamma", "@m": "\\mu", "@n": "\\nu", "@q": "\\theta", "@r": "\\rho", "@D": "\\Delta" });
@@ -796,9 +797,14 @@ class math_shorthand_controller_default extends Controller {
     const collapsed = editor.selectionStart === editor.selectionEnd;
     if (event.key === "Escape" && collapsed) {
       const chain2 = mathShorthandAtEditor(editor, caret);
-      if (chain2?.status === "valid") {
+      const valid = chain2?.status === "valid" ? chain2 : null;
+      if (event.elefEscapeForwarded || valid && editorPopupOpen(editor)) {
+        if (valid) this.cancelChain(valid);
+        return;
+      }
+      if (valid) {
         event.preventDefault();
-        this.cancelChain(chain2);
+        this.cancelChain(valid);
       }
       return;
     }

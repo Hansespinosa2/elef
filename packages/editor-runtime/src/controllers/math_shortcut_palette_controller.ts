@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
+import { forwardEscapeToVim } from "../lib/vim_escape.js"
 import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
 import { application } from "./application.js"
 import { editorInsideMath, expandMathShorthand, innermostMathChainWindow, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js"
@@ -152,6 +153,7 @@ export default class extends Controller<HTMLElement> {
       event.preventDefault()
       this.close()
       if (this.stops.length) this.endStops()
+      forwardEscapeToVim(this.editorController, event)
       return
     }
     const editor = this.editorController

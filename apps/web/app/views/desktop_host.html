@@ -30,7 +30,7 @@
           <button id="refresh-library" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Refresh</button>
           <button id="check-for-updates" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Check for updates</button>
           <button id="import-elef" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" disabled>Import .elef</button>
-          <button id="new-work" class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" disabled>＋ New work</button>
+          <div id="new-work-mount"></div>
         </div>
         <span id="breadcrumb-current" class="sr-only">Works</span>
       </div>
@@ -61,14 +61,10 @@
           <p id="work-notice" class="notice" role="status" hidden></p>
           <button id="start-presentation" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" hidden>Present</button>
           <div class="work-actions flex flex-wrap items-center gap-3">
-            <details id="export-menu" class="export-menu relative">
-              <summary id="export-menu-button" class="button secondary inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border px-4 py-2 font-bold">Export <span aria-hidden="true">▾</span></summary>
-              <div class="export-menu-panel absolute top-full z-10 mt-2 w-56 max-w-[calc(100vw-2rem)] rounded-lg border p-1" role="menu" aria-label="Export options">
-                <button id="print-work" class="export-menu-option block w-full rounded-lg px-3 py-2 text-left text-sm font-bold" role="menuitem" type="button">Print / Save PDF</button>
-                <button id="export-pptx" class="export-menu-option block w-full rounded-lg px-3 py-2 text-left text-sm font-bold" role="menuitem" type="button">Download PPTX</button>
-              </div>
-            </details>
-            <span id="export-pptx-status" class="ml-2 text-sm" role="status" aria-live="polite"></span>
+            <!-- Shared Export menu mount: the client component renders the
+              Export trigger, its kind-scoped options, and the status region
+              with the same ids, labels, and dismissal on both hosts. -->
+            <div id="export-menu-mount" class="flex flex-wrap items-center gap-3"></div>
           </div>
           <p class="desktop-save-note">External edits are checked before every save. A simultaneous write in the final atomic replacement window can still be overwritten; keep version history enabled in your sync tool.</p>
           <form id="desktop-editor-form" class="visual-editor-form file-library-editor-form" data-action="input->preview#schedule change->preview#schedule input->slide-overview#sourceChanged change->slide-overview#sourceChanged preview:updated->slide-overview#previewUpdated paste->media#paste:capture" data-preview-url-value="" data-preview-timeout-value="4000" data-media-enabled-value="false" data-media-work-kind-value="presentation" data-editor-mode="visual">
@@ -83,15 +79,10 @@
     <footer class="statusbar" role="status"><span id="status-text" aria-live="polite">Ready</span><span class="status-right">Folders are the source of truth</span></footer>
 
     <dialog id="settings-dialog" class="app-dialog">
-      <form id="settings-form" method="dialog">
-        <p class="native-eyebrow">LIBRARY SETTINGS</p>
-        <h2>Appearance</h2>
-        <label for="library-theme">Theme</label>
-        <select id="library-theme" name="theme"><option value="system">System</option><option value="light">Light</option><option value="dark">Dark</option></select>
-        <div id="vim-settings-mount"></div>
-        <button id="manage-authoring" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold authoring-settings-link" type="button">Manage snippets and math shortcuts</button>
-        <div class="dialog-actions"><button class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="cancel">Cancel</button><button class="button primary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="save">Save settings</button></div>
-      </form>
+      <p class="native-eyebrow">LIBRARY SETTINGS</p>
+      <div id="settings-page-mount"></div>
+      <button id="manage-authoring" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold authoring-settings-link" type="button">Manage snippets and math shortcuts</button>
+      <form method="dialog" class="dialog-actions"><button id="close-settings" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="close">Close</button></form>
     </dialog>
     <dialog id="authoring-dialog" class="app-dialog">
       <div id="authoring-settings-mount"></div>

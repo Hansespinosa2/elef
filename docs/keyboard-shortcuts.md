@@ -39,9 +39,9 @@ falls back to its native menu bar.
 |---|---|---|---|
 | Save current work | `⌘S` (new; prevents browser save dialog in editor context) | `⌘S` (menu, pre-existing) | yes |
 | Add / duplicate / delete slide, move slide earlier / later | palette-only (ride the overview buttons for the selected slide) | n/a (web-only editor chrome) | yes |
-| Open command palette | `⌘K` (pre-existing) | — (menu bar instead) | — (it is the palette) |
-| Search presentations and documents | `⌘P` (pre-existing) | — | yes |
-| Focus library search | — | `⌘K` (pre-existing webview handler) | no (Open Work menu covers it) |
+| Open command palette | `⌘K` (pre-existing) | `⌘K` opens the shared palette (search mode first; desktop keeps `⌘P` for Print) | — (it is the palette) |
+| Search presentations and documents | `⌘P` (pre-existing) | via the shared palette (search mode) | yes |
+| Focus library search | — | `⌘K` opens the shared palette in search mode (type to filter, Enter to open; commands one toggle away) | no (Open Work menu covers it) |
 | Open work | — | `⌘O` (menu, pre-existing) | no (native menu) |
 | New presentation | — (palette-only) | `⌘N` (menu, pre-existing) | yes |
 | New document | — (palette-only, owner ruling) | — (menu item, no chord) | yes |
@@ -95,7 +95,9 @@ menu items (search-focus falls back to the Open Work menu).
 
 - `⌘P`: web = quick-open; desktop = Print. Each host keeps its pre-existing
   binding; the registry records both, and uniqueness is enforced per host.
-- `⌘K`: web = command palette; desktop = focus library search.
+- `⌘K`: web = command palette (commands mode); desktop = shared palette
+  (search mode first). One component (`CommandPalette` in `packages/client`),
+  both hosts keyboard-first.
 - Present `⌘↵`: web = Stimulus global keydown; desktop = webview keydown
   (not a native accelerator, so macOS/Linux/Windows behave identically).
 - Show Library vs Open Work (desktop): separate menu ids since the

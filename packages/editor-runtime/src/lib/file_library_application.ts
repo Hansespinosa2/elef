@@ -10,8 +10,8 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { CREATE_WORK_EVENT, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client"
-import type { GraphController } from "@elef/client"
+import { CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client"
+import type { ExportMenuHandle, ExportMenuProps, GraphController, LibraryPaletteCommand } from "@elef/client"
 
 export interface WorkFolder {
   id: string;
@@ -182,8 +182,6 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     workTitle: document.querySelector("#work-title") as HTMLElement,
     status: document.querySelector("#status-text") as HTMLElement,
     settingsDialog: document.querySelector("#settings-dialog") as HTMLDialogElement,
-    settingsForm: document.querySelector("#settings-form") as HTMLFormElement,
-    libraryTheme: document.querySelector("#library-theme") as HTMLSelectElement,
     aboutDialog: document.querySelector("#about-dialog") as HTMLDialogElement,
     editorField: document.querySelector("#desktop-editor-field") as HTMLElement,
     editorForm: document.querySelector("#desktop-editor-form") as HTMLFormElement,
@@ -201,7 +199,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   let library: FileLibraryStatus | null = null
-  let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} }
+  let exportMenu: ExportMenuHandle | null = null
+  let libraryConfig: { schema_version: number; theme: string; typography: string; hotkeys: Record<string, string> } = {
+    schema_version: 1, theme: "dark", typography: "book", hotkeys: {}
+  }
   let workFolders: WorkFolder[] = []
   let activeWorkFolder: WorkFolder | null = null
   let presentationEditorHandle: any = null
@@ -253,21 +254,57 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     authoringHostDialog.showModal()
   }
 
-  // Device-local vim preferences render through the shared client UI with a
-  // bridge that live-syncs the open editor, preserving the previous
-  // controller's behavior (same storage keys, same editor push).
-  const vimMount = document.querySelector("#vim-settings-mount")
-  if (vimMount) {
-    const editorForVim = () => document.querySelector(".source-field")?.editorController || null
-    mountVimSettings(vimMount, {
-      editorBridge: {
-        setVimEnabled: (enabled: boolean) => editorForVim()?.setVimEnabled(enabled),
-        setEscapeKey: (key: string) => editorForVim()?.setEscapeKey(key),
-        clearEscapeKey: () => editorForVim()?.clearEscapeKey(),
-        setLineNumberMode: (mode: string) => editorForVim()?.setLineNumberMode(mode),
-        setModeAwareCursor: (enabled: boolean) => editorForVim()?.setModeAwareCursor(enabled)
+  // The desktop settings surface is the same shared settings page the web
+  // app mounts (workspace defaults, vim preferences, updater), rendered
+  // through mountElef with the Tauri host adapter. Remount on every open so
+  // the page loads fresh values, matching the authoring dialog above; the
+  // native dialog keeps only host chrome (authoring link, close).
+  const settingsHostDialog = elements.settingsDialog
+  const settingsMount = document.querySelector("#settings-page-mount") as HTMLElement
+  let settingsShell: any = null
+  function closeSettings(): void {
+    if (settingsShell) {
+      settingsShell.unmount()
+      settingsShell = null
+    }
+    if (settingsHostDialog.open) settingsHostDialog.close()
+  }
+  // Device-local vim preferences live-sync into the open editor through
+  // this bridge, preserving the previous controller's behavior (same
+  // storage keys, same editor push); the shared page owns the UI.
+  function vimEditorBridge(): any {
+    const editorForVim = () => (document.querySelector(".source-field") as any)?.editorController || null
+    return {
+      setVimEnabled: (enabled: boolean) => editorForVim()?.setVimEnabled(enabled),
+      setEscapeKey: (key: string) => editorForVim()?.setEscapeKey(key),
+      clearEscapeKey: () => editorForVim()?.clearEscapeKey(),
+      setLineNumberMode: (mode: string) => editorForVim()?.setLineNumberMode(mode),
+      setModeAwareCursor: (enabled: boolean) => editorForVim()?.setModeAwareCursor(enabled)
+    }
+  }
+  async function showSettings(): Promise<void> {
+    try {
+      closeSettings()
+      if (libraryHost === null) {
+        showError({ message: "The library is still loading. Try again in a moment." })
+        return
       }
-    })
+      settingsShell = await mountElef(settingsMount, libraryHost, {
+        initialUrl: "/settings",
+        vimEditorBridge: vimEditorBridge(),
+        onSettingsSaved: saved => {
+          const theme = typeof saved["theme"] === "string" ? saved["theme"] : libraryConfig.theme
+          const typography = typeof saved["typography"] === "string" ? saved["typography"] : libraryConfig.typography
+          libraryConfig = { ...libraryConfig, schema_version: 1, theme, typography }
+          applyTheme(theme)
+          setStatus("Library settings saved")
+        },
+        ...(updateEnabled && platform.updaterSeam ? { updater: platform.updaterSeam } : {})
+      })
+      settingsHostDialog.showModal()
+    } catch (error) {
+      showError(error)
+    }
   }
 
   const transport = createTransportAdapter({ onConflict: (event: any) => saveFlow?.handleConflict(event) })
@@ -518,7 +555,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   function applyTheme(theme: string): void {
-    document.documentElement.dataset.theme = ["system", "light", "dark"].includes(theme) ? theme : "system"
+    // The shared page stores the follow-the-system theme as "match" (web
+    // vocabulary); the desktop stylesheet keys it as "system".
+    const normalized = theme === "match" ? "system" : theme
+    document.documentElement.dataset.theme = ["system", "light", "dark"].includes(normalized) ? normalized : "system"
   }
 
   function showError(error: any): void {
@@ -535,7 +575,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     elements.library.hidden = !library
     elements.workView.hidden = true
     elements.libraryName.textContent = library ? library.root.split(/[\\/]/).filter(Boolean).at(-1) || library.root : "No library selected"
-    shellElement<HTMLButtonElement>("#new-work").disabled = !library
+    newWorkMenu.setDisabled(!library)
     shellElement<HTMLButtonElement>("#import-elef").disabled = !library
     shellElement<HTMLElement>("#breadcrumb-current").textContent = "Works"
     // The first show preserves the boot filter (a deep-linked tab); every
@@ -642,13 +682,65 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
   }
 
-  // The create dialog is client-owned; the host only requests it. Creation
-  // itself flows through the host adapter, then the navigate adapter opens
-  // the new work, matching the old create-then-open sequence.
-  function showCreateDialog(kind = "presentation") {
+  // Direct-open parity with the web header menu: the web click navigates
+  // straight to the unsaved edit shell (documents#new / presentations#new
+  // with a default source). The desktop has no unsaved-shell route — a work
+  // folder needs a valid unique name at creation (local-store rejects empty
+  // and colliding names) — so the same click creates with the shared unique
+  // default title and opens the editor, where the title stays editable. The
+  // name-first dialog remains for the shared empty-state button, exactly
+  // like the web empty-state dialog.
+  function requestDirectCreate(kind = "presentation") {
     mount.querySelector(".library-shared-view")?.dispatchEvent(
-      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })
+      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind, direct: true } })
     )
+  }
+
+  // The shared New dropdown (the same component and web classes as the web
+  // menu) sits where the old single-kind button sat; it only picks the kind
+  // and the direct-create flow above does the rest.
+  const newWorkMenu = mountNewWorkMenu(
+    document.querySelector("#new-work-mount") as HTMLElement,
+    { onSelect: kind => requestDirectCreate(kind), disabled: true }
+  )
+
+  // Library-meaningful palette commands: labels, descriptions, and chord
+  // chips come from the shared registry so the palette cannot drift from
+  // the documented shortcut map. Editor-scoped actions (save, present,
+  // print) stay out: the palette mounts in the library view.
+  function desktopPaletteCommands(): LibraryPaletteCommand[] {
+    const platform = /Mac|iPhone|iPad|iPod/i.test(
+      ((navigator as any).userAgentData?.platform || navigator.platform || "")
+    ) ? "mac" : "other"
+    const command = (id: string, run: () => void): LibraryPaletteCommand => {
+      const action = shortcutById(id)
+      const chord = action?.desktopChord ?? null
+      return {
+        id,
+        label: action?.label ?? id,
+        description: action?.description ?? "",
+        chord: chord === null ? null : chordDisplay(chord, platform),
+        run
+      }
+    }
+    return [
+      command("new-presentation", () => requestDirectCreate("presentation")),
+      command("new-document", () => requestDirectCreate("document")),
+      command("open-work", () => void handleMenuAction("open-work")),
+      command("library-all", () => {
+        showLibrary()
+        shell?.setFilter("all")
+      }),
+      command("library-documents", () => {
+        showLibrary()
+        shell?.setFilter("documents")
+      }),
+      command("library-presentations", () => {
+        showLibrary()
+        shell?.setFilter("presentations")
+      }),
+      command("open-settings", () => void showSettings())
+    ]
   }
 
   const openWork = createWorkOpenFlow(openWorkNow)
@@ -802,7 +894,13 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   // host only keeps its editor-side caches consistent and reports status.
   function handleLibraryEvent(event: any): void {
     if (event.type === "renamed") {
-      if (activeWorkFolder && activeWorkFolder.id === event.work.id) Object.assign(activeWorkFolder, { name: event.work.title })
+      if (activeWorkFolder && activeWorkFolder.id === event.work.id) {
+        Object.assign(activeWorkFolder, { name: event.work.title })
+        // A card rename is server truth for the active work too: mirror it
+        // into the title input, or the title save flow reads the stale input
+        // as a pending edit and renames the work back on the next open.
+        elements.titleInput.value = event.work.title
+      }
       workFolders = workFolders.map(item => item.id === event.work.id ? { ...item, name: event.work.title } : item)
     }
     if (event.type === "deleted") {
@@ -919,30 +1017,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     return editorFor(elements.editorField)?.sourceValue ?? elements.editorInput.value
   }
 
-  async function showSettings(): Promise<void> {
-    try {
-      libraryConfig = await fileLibrary.readLibraryConfig()
-      elements.libraryTheme.value = libraryConfig.theme
-      elements.settingsDialog.showModal()
-    } catch (error) {
-      showError(error)
-    }
-  }
-
-  async function saveSettings(event: SubmitEvent): Promise<void> {
-    if ((event.submitter as HTMLButtonElement | null)?.value !== "save") return
-    event.preventDefault()
-    const next = { ...libraryConfig, schema_version: 1, theme: elements.libraryTheme.value }
-    try {
-      await fileLibrary.writeLibraryConfig(next)
-      libraryConfig = next
-      applyTheme(next.theme)
-      elements.settingsDialog.close()
-      setStatus("Library settings saved")
-    } catch (error) {
-      showError(error)
-    }
-  }
+  // showSettings lives beside the authoring mount above: the dialog body is
+  // the shared settings page, so there is no host-owned form to save.
 
   async function exportCurrentWork(): Promise<void> {
     if (!activeWorkFolder) {
@@ -1066,7 +1142,14 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       showNotice("Render the Work before printing it.", "error")
       return
     }
-    document.body.classList.add("printing-work")
+    // The printed payload is the Work preview only: the kind marker selects
+    // the matching web print geometry (A4 document pages, fixed 16:9
+    // presentation pages) from the shared print contract, and pausing videos
+    // mirrors the web print-view controller so PDFs carry the poster frame.
+    const printKind = printWorkKindForSourceFile(activeWorkFolder?.source_file)
+    const printMarkers = printMarkerClasses(printKind)
+    pausePrintVideos(preview)
+    document.body.classList.add(...printMarkers)
     await new Promise(resolve => requestAnimationFrame(resolve))
     try {
       // The platform print dialog (and its PDF destination) opens only
@@ -1082,13 +1165,13 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // Harness probe: the e2e run cannot dismiss the platform dialog, so
       // it asserts this flag (native seam reached) instead of dialog pixels.
       if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
-        globalThis.__elefPrintResult = { native: printViaNative }
+        globalThis.__elefPrintResult = { native: printViaNative, kind: printKind }
       }
     } catch (error) {
       console.error("[desktop-print]", error)
       showNotice("The print dialog could not be opened.", "error")
     } finally {
-      document.body.classList.remove("printing-work")
+      document.body.classList.remove(...printMarkers)
     }
   }
 
@@ -1198,13 +1281,39 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     conflictDialog.close()
   }
 
+  // The work-view Export menu is the shared client component both hosts
+  // mount: direct PDF and PPTX options with shared labels, visibility from
+  // the export registry, so the desktop keeps no separate menu markup or
+  // dismissal wiring. Delivery stays in the desktop seams below (native
+  // print pipeline for PDF, native save dialog for PPTX). Hook ids stay
+  // stable so host suites keep addressing the same nodes.
+  function exportMenuProps(): ExportMenuProps {
+    const kind = activeWorkFolder?.source_file === "document.md" ? "document" : "presentation"
+    return {
+      menuId: "export-menu",
+      buttonId: "export-menu-button",
+      menuLabel: "Export",
+      statusId: "export-pptx-status",
+      options: exportMenuOptionsFor({
+        kind,
+        editions: [{
+          edition: "draft",
+          onPdf: () => printCurrentWork(),
+          onExportPptx: () => exportPptxCurrentWork(),
+          pdfOptionId: "print-work",
+          pptxOptionId: "export-pptx",
+        }],
+      }),
+    }
+  }
+
   function syncSourceLabel(): void {
     if (!activeWorkFolder) return
     shellElement<HTMLElement>("#work-source-name").textContent = activeWorkFolder.source_file
     shellElement<HTMLElement>("#work-kind").textContent = activeWorkFolder.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION"
-    // PowerPoint export is presentation-only (export registry); documents
-    // keep no PPTX option, and the handler gates the menu path as well.
-    shellElement<HTMLElement>("#export-pptx").hidden = activeWorkFolder.source_file === "document.md"
+    // The shared menu re-derives its options (PPTX is presentation-only per
+    // the registry) every time the open Work changes.
+    exportMenu?.update(exportMenuProps())
   }
 
   async function handleMenuAction(action: string): Promise<any> {
@@ -1227,8 +1336,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       showLibrary()
       return
     }
-    if (action === "new-presentation") return showCreateDialog("presentation")
-    if (action === "new-document") return showCreateDialog("document")
+    if (action === "new-presentation") return requestDirectCreate("presentation")
+    if (action === "new-document") return requestDirectCreate("document")
     if (action === "save") return flushSave({ force: true })
     if (action === "export-elef") return exportCurrentWork()
     if (action === "export-pptx") return exportPptxCurrentWork()
@@ -1248,38 +1357,14 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     shellElement<HTMLElement>("#back-to-library").click()
   })
   shellElement<HTMLElement>("#open-settings").addEventListener("click", () => void showSettings())
-  shellElement<HTMLElement>("#new-work").addEventListener("click", () => {
-    showCreateDialog(currentFilter() === "documents" ? "document" : "presentation")
-  })
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
-  // The Export menu holds one option per format (the PPTX option hides for
-  // documents in syncSourceLabel). Desktop export never navigates, so the
-  // menu closes on activation, outside interaction, and Escape.
-  function closeExportMenu(): void {
-    shellElement<HTMLDetailsElement>("#export-menu").open = false
-  }
-  shellElement<HTMLElement>("#export-pptx").addEventListener("click", () => {
-    closeExportMenu()
-    void exportPptxCurrentWork()
-  })
-  // The Print / Save PDF option reuses the File → Print… seam for both
-  // kinds; PDF bytes come from the platform print pipeline on both hosts.
-  shellElement<HTMLElement>("#print-work").addEventListener("click", () => {
-    closeExportMenu()
-    void printCurrentWork()
-  })
-  // Outside pointerdown dismisses immediately for mouse and touch; outside
-  // click also dismisses because activation without a pointer (keyboard,
-  // assistive tech, programmatic clicks) never fires pointerdown.
-  function dismissExportMenuOnOutsideEvent(event: Event): void {
-    if (event.target instanceof Element && !event.target.closest("#export-menu")) closeExportMenu()
-  }
-  document.addEventListener("pointerdown", dismissExportMenuOnOutsideEvent)
-  document.addEventListener("click", dismissExportMenuOnOutsideEvent)
-  document.addEventListener("keydown", event => {
-    if (event.key === "Escape") closeExportMenu()
-  })
+  // The work-view Export menu is the shared client component: one trigger
+  // whose options vary by Work kind, with the same dismissal contract on
+  // both hosts. Desktop export never navigates; the PDF option reuses the
+  // native print pipeline (the same File → Print… command) and the PPTX
+  // option the native save seam.
+  exportMenu = mountExportMenu(shellElement<HTMLElement>("#export-menu-mount"), exportMenuProps())
   shellElement<HTMLElement>("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then(saved => {
@@ -1292,9 +1377,14 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     showLibrary()
     setStatus("Library")
   })
-  elements.settingsForm.addEventListener("submit", event => void saveSettings(event))
+  settingsHostDialog.addEventListener("close", () => {
+    if (settingsShell) {
+      settingsShell.unmount()
+      settingsShell = null
+    }
+  })
   shellElement<HTMLElement>("#manage-authoring").addEventListener("click", () => {
-    elements.settingsDialog.close()
+    closeSettings()
     void openAuthoringSettings()
   })
   // The updater affordances exist only on updater-capable builds; the shell
@@ -1346,7 +1436,12 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     const action = desktopMenuKeyAction(event)
     if (action === "focus-search") {
       event.preventDefault()
-      mount.querySelector<HTMLElement>("#library-search")?.focus()
+      // Library-scoped: ⌘K opens the shared palette in search mode — the
+      // same keyboard-first entry the old inline-search focus gave (type to
+      // filter, Enter to open), with every library command one toggle away.
+      // In the editor the palette has no surface, so the key stays a no-op
+      // there exactly as before.
+      if (!elements.library.hidden) shell?.openPalette("search")
     } else if (action === "start-presentation") {
       event.preventDefault()
       void handleMenuAction("start-presentation")
@@ -1378,6 +1473,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
           if (opened) void startPresentation()
         })
       },
+      palette: { commands: desktopPaletteCommands() },
       onLibraryEvent: handleLibraryEvent
     })
   }

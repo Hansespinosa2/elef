@@ -9,6 +9,7 @@ const controllerSource = (await readFile(new URL("mermaid_assist_controller.js",
   .replace('import { Controller } from "@hotwired/stimulus";', "class Controller {}")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js";', "const editorFor = () => null")
   .replace('import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";', () => visualAssistSource)
+  .replace('import { forwardEscapeToVim } from "../lib/vim_escape.js";', "const forwardEscapeToVim = () => false")
   .replace(
     'import { diagramTemplate, mermaidCompletion, mermaidEnterEdit, mermaidTabEdit, MERMAID_DIAGRAMS, slashDiagramQuery } from "./mermaid_syntax.js";',
     `import { diagramTemplate, mermaidCompletion, mermaidEnterEdit, mermaidTabEdit, MERMAID_DIAGRAMS, slashDiagramQuery } from "${syntaxUrl}";`

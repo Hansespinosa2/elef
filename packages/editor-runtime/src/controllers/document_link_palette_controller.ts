@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
+import { forwardEscapeToVim } from "../lib/vim_escape.js"
 import { mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
 
 // Prefix matches score 0, later substring matches score their index, and titles
@@ -187,6 +188,7 @@ export default class extends Controller {
     } else if (event.key === "Escape") {
       event.preventDefault()
       this.close()
+      forwardEscapeToVim(this.editorController, event)
     }
   }
 

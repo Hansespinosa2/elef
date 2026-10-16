@@ -21,9 +21,16 @@ export {
   toEditorLineEndings,
 } from "./session/source_ops.js";
 export { mountElef } from "./application/shell.js";
+export { mountNewWorkMenu } from "./application/new_work_menu_mount.js";
+export type { NewWorkMenuHandle } from "./application/new_work_menu_mount.js";
 export { isSettingsRoute, isWorkRoute, parseLibraryRoute, parseSettingsRoute, parseWorkRoute } from "./application/router.js";
 export type { SettingsRoute, WorkRoute, WorkView } from "./application/router.js";
 export { CREATE_WORK_EVENT } from "./features/library/LibraryApp.js";
+export { nextDefaultWorkTitle } from "./features/library/default_titles.js";
+export { NewWorkMenu } from "./features/library/NewWorkMenu.js";
+export type { NewWorkMenuProps } from "./features/library/NewWorkMenu.js";
+export { CommandPalette } from "./features/library/CommandPalette.js";
+export type { PaletteMode } from "./application/types.js";
 export {
   PALETTE_ACTION_IDS,
   RESERVED_WEB_CHORDS,
@@ -37,6 +44,27 @@ export { createPresentationNavigation, presentationActionForKey } from "./featur
 export { attachCanvasScaling, PresentationController, mountPresentation } from "./features/presentation/presentation.js";
 export { exportPptxModel, downloadBlob, dataUriToBlob } from "./features/export/pptx.js";
 export { EXPORT_FORMATS, exportFormatsFor, exportFormatById } from "./features/export/registry.js";
+export { ExportMenu, exportMenuOptionsFor, mountExportMenu } from "./features/export/ExportMenu.js";
+export type {
+  ExportDelivery,
+  ExportEdition,
+  ExportMenuEditionSeams,
+  ExportMenuFormat,
+  ExportMenuHandle,
+  ExportMenuOption,
+  ExportMenuProps,
+} from "./features/export/ExportMenu.js";
+export {
+  DOCUMENT_PRINT_GEOMETRY,
+  PRESENTATION_PRINT_GEOMETRY,
+  PRINT_DOCUMENT_MARKER,
+  PRINT_MARKER,
+  PRINT_PRESENTATION_MARKER,
+  pausePrintVideos,
+  printMarkerClasses,
+  printWorkKindForSourceFile,
+} from "./features/export/print.js";
+export type { PrintWorkKind } from "./features/export/print.js";
 export {
   presentationBlockAttributes,
   presentationBlockControls,
@@ -56,6 +84,8 @@ export type {
   ElefShell,
   LibraryFilter,
   LibraryOperation,
+  LibraryPaletteCommand,
+  LibraryPaletteSeam,
   NoticeTone,
   UpdaterSeam,
   UpdaterStatus,

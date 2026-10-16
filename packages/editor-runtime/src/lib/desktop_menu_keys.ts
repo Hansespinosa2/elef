@@ -1,8 +1,8 @@
 // Pure desktop webview key dispatch: which global Cmd chord the event
 // carries, if any. Kept dependency-free (no DOM, no host APIs) so both the
 // file-library application and plain node tests import it. Behavior mirror:
-// - Cmd/Ctrl+K focuses library search (pre-existing; any shift/alt state,
-//   exactly as before).
+// - Cmd/Ctrl+K opens the shared palette in search mode (any shift/alt state,
+//   exactly as before; the palette keeps the old search-first keyboard flow).
 // - Cmd/Ctrl+Enter starts presentation (registry "present"; guarded: no
 //   Shift/Alt/IME, so shifted variants keep their platform meaning).
 export type DesktopMenuKeyAction = "focus-search" | "start-presentation"

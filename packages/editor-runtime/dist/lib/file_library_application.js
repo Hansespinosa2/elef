@@ -10,7 +10,7 @@ import { presentConflictDialog } from "./conflict_dialog.js";
 import { createRendererClient } from "./renderer_worker_client.js";
 import { applyDesktopFeatureFlags } from "./feature_flags.js";
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js";
-import { CREATE_WORK_EVENT, mountElef, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client";
+import { CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client";
 function ensureWorkFolderHash(workFolder) {
   workFolder.content_hash ??= "";
   return workFolder;
@@ -112,8 +112,6 @@ function startFileLibraryApplication(platform) {
     workTitle: document.querySelector("#work-title"),
     status: document.querySelector("#status-text"),
     settingsDialog: document.querySelector("#settings-dialog"),
-    settingsForm: document.querySelector("#settings-form"),
-    libraryTheme: document.querySelector("#library-theme"),
     aboutDialog: document.querySelector("#about-dialog"),
     editorField: document.querySelector("#desktop-editor-field"),
     editorForm: document.querySelector("#desktop-editor-form"),
@@ -130,7 +128,13 @@ function startFileLibraryApplication(platform) {
     presentationStart: document.querySelector("#start-presentation")
   };
   let library = null;
-  let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} };
+  let exportMenu = null;
+  let libraryConfig = {
+    schema_version: 1,
+    theme: "dark",
+    typography: "book",
+    hotkeys: {}
+  };
   let workFolders = [];
   let activeWorkFolder = null;
   let presentationEditorHandle = null;
@@ -174,18 +178,49 @@ function startFileLibraryApplication(platform) {
     });
     authoringHostDialog.showModal();
   }
-  const vimMount = document.querySelector("#vim-settings-mount");
-  if (vimMount) {
+  const settingsHostDialog = elements.settingsDialog;
+  const settingsMount = document.querySelector("#settings-page-mount");
+  let settingsShell = null;
+  function closeSettings() {
+    if (settingsShell) {
+      settingsShell.unmount();
+      settingsShell = null;
+    }
+    if (settingsHostDialog.open) settingsHostDialog.close();
+  }
+  function vimEditorBridge() {
     const editorForVim = () => document.querySelector(".source-field")?.editorController || null;
-    mountVimSettings(vimMount, {
-      editorBridge: {
-        setVimEnabled: (enabled) => editorForVim()?.setVimEnabled(enabled),
-        setEscapeKey: (key) => editorForVim()?.setEscapeKey(key),
-        clearEscapeKey: () => editorForVim()?.clearEscapeKey(),
-        setLineNumberMode: (mode) => editorForVim()?.setLineNumberMode(mode),
-        setModeAwareCursor: (enabled) => editorForVim()?.setModeAwareCursor(enabled)
+    return {
+      setVimEnabled: (enabled) => editorForVim()?.setVimEnabled(enabled),
+      setEscapeKey: (key) => editorForVim()?.setEscapeKey(key),
+      clearEscapeKey: () => editorForVim()?.clearEscapeKey(),
+      setLineNumberMode: (mode) => editorForVim()?.setLineNumberMode(mode),
+      setModeAwareCursor: (enabled) => editorForVim()?.setModeAwareCursor(enabled)
+    };
+  }
+  async function showSettings() {
+    try {
+      closeSettings();
+      if (libraryHost === null) {
+        showError({ message: "The library is still loading. Try again in a moment." });
+        return;
       }
-    });
+      settingsShell = await mountElef(settingsMount, libraryHost, {
+        initialUrl: "/settings",
+        vimEditorBridge: vimEditorBridge(),
+        onSettingsSaved: (saved) => {
+          const theme = typeof saved["theme"] === "string" ? saved["theme"] : libraryConfig.theme;
+          const typography = typeof saved["typography"] === "string" ? saved["typography"] : libraryConfig.typography;
+          libraryConfig = { ...libraryConfig, schema_version: 1, theme, typography };
+          applyTheme(theme);
+          setStatus("Library settings saved");
+        },
+        ...updateEnabled && platform.updaterSeam ? { updater: platform.updaterSeam } : {}
+      });
+      settingsHostDialog.showModal();
+    } catch (error) {
+      showError(error);
+    }
   }
   const transport = createTransportAdapter({ onConflict: (event) => saveFlow?.handleConflict(event) });
   const sessionTransport = {
@@ -435,7 +470,8 @@ function startFileLibraryApplication(platform) {
     shell?.notify(null);
   }
   function applyTheme(theme) {
-    document.documentElement.dataset.theme = ["system", "light", "dark"].includes(theme) ? theme : "system";
+    const normalized = theme === "match" ? "system" : theme;
+    document.documentElement.dataset.theme = ["system", "light", "dark"].includes(normalized) ? normalized : "system";
   }
   function showError(error) {
     const message = typeof error?.message === "string" ? error.message : "The operation could not be completed.";
@@ -450,7 +486,7 @@ function startFileLibraryApplication(platform) {
     elements.library.hidden = !library;
     elements.workView.hidden = true;
     elements.libraryName.textContent = library ? library.root.split(/[\\/]/).filter(Boolean).at(-1) || library.root : "No library selected";
-    shellElement("#new-work").disabled = !library;
+    newWorkMenu.setDisabled(!library);
     shellElement("#import-elef").disabled = !library;
     shellElement("#breadcrumb-current").textContent = "Works";
     if (libraryShown) {
@@ -534,10 +570,48 @@ function startFileLibraryApplication(platform) {
       showError(error);
     }
   }
-  function showCreateDialog(kind = "presentation") {
+  function requestDirectCreate(kind = "presentation") {
     mount.querySelector(".library-shared-view")?.dispatchEvent(
-      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })
+      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind, direct: true } })
     );
+  }
+  const newWorkMenu = mountNewWorkMenu(
+    document.querySelector("#new-work-mount"),
+    { onSelect: (kind) => requestDirectCreate(kind), disabled: true }
+  );
+  function desktopPaletteCommands() {
+    const platform2 = /Mac|iPhone|iPad|iPod/i.test(
+      navigator.userAgentData?.platform || navigator.platform || ""
+    ) ? "mac" : "other";
+    const command = (id, run) => {
+      const action = shortcutById(id);
+      const chord = action?.desktopChord ?? null;
+      return {
+        id,
+        label: action?.label ?? id,
+        description: action?.description ?? "",
+        chord: chord === null ? null : chordDisplay(chord, platform2),
+        run
+      };
+    };
+    return [
+      command("new-presentation", () => requestDirectCreate("presentation")),
+      command("new-document", () => requestDirectCreate("document")),
+      command("open-work", () => void handleMenuAction("open-work")),
+      command("library-all", () => {
+        showLibrary();
+        shell?.setFilter("all");
+      }),
+      command("library-documents", () => {
+        showLibrary();
+        shell?.setFilter("documents");
+      }),
+      command("library-presentations", () => {
+        showLibrary();
+        shell?.setFilter("presentations");
+      }),
+      command("open-settings", () => void showSettings())
+    ];
   }
   const openWork = createWorkOpenFlow(openWorkNow);
   async function openWorkNow(id) {
@@ -671,7 +745,10 @@ function startFileLibraryApplication(platform) {
   }
   function handleLibraryEvent(event) {
     if (event.type === "renamed") {
-      if (activeWorkFolder && activeWorkFolder.id === event.work.id) Object.assign(activeWorkFolder, { name: event.work.title });
+      if (activeWorkFolder && activeWorkFolder.id === event.work.id) {
+        Object.assign(activeWorkFolder, { name: event.work.title });
+        elements.titleInput.value = event.work.title;
+      }
       workFolders = workFolders.map((item) => item.id === event.work.id ? { ...item, name: event.work.title } : item);
     }
     if (event.type === "deleted") {
@@ -776,29 +853,6 @@ function startFileLibraryApplication(platform) {
   }
   function currentSource() {
     return editorFor(elements.editorField)?.sourceValue ?? elements.editorInput.value;
-  }
-  async function showSettings() {
-    try {
-      libraryConfig = await fileLibrary.readLibraryConfig();
-      elements.libraryTheme.value = libraryConfig.theme;
-      elements.settingsDialog.showModal();
-    } catch (error) {
-      showError(error);
-    }
-  }
-  async function saveSettings(event) {
-    if (event.submitter?.value !== "save") return;
-    event.preventDefault();
-    const next = { ...libraryConfig, schema_version: 1, theme: elements.libraryTheme.value };
-    try {
-      await fileLibrary.writeLibraryConfig(next);
-      libraryConfig = next;
-      applyTheme(next.theme);
-      elements.settingsDialog.close();
-      setStatus("Library settings saved");
-    } catch (error) {
-      showError(error);
-    }
   }
   async function exportCurrentWork() {
     if (!activeWorkFolder) {
@@ -911,20 +965,23 @@ function startFileLibraryApplication(platform) {
       showNotice("Render the Work before printing it.", "error");
       return;
     }
-    document.body.classList.add("printing-work");
+    const printKind = printWorkKindForSourceFile(activeWorkFolder?.source_file);
+    const printMarkers = printMarkerClasses(printKind);
+    pausePrintVideos(preview);
+    document.body.classList.add(...printMarkers);
     await new Promise((resolve) => requestAnimationFrame(resolve));
     try {
       const printViaNative = typeof fileLibrary.printWork === "function";
       if (printViaNative) await fileLibrary.printWork();
       else window.print();
       if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
-        globalThis.__elefPrintResult = { native: printViaNative };
+        globalThis.__elefPrintResult = { native: printViaNative, kind: printKind };
       }
     } catch (error) {
       console.error("[desktop-print]", error);
       showNotice("The print dialog could not be opened.", "error");
     } finally {
-      document.body.classList.remove("printing-work");
+      document.body.classList.remove(...printMarkers);
     }
   }
   let presentationMount = null;
@@ -1014,11 +1071,30 @@ function startFileLibraryApplication(platform) {
     const conflictDialog = elements.editorForm.querySelector("#conflict-dialog");
     conflictDialog.close();
   }
+  function exportMenuProps() {
+    const kind = activeWorkFolder?.source_file === "document.md" ? "document" : "presentation";
+    return {
+      menuId: "export-menu",
+      buttonId: "export-menu-button",
+      menuLabel: "Export",
+      statusId: "export-pptx-status",
+      options: exportMenuOptionsFor({
+        kind,
+        editions: [{
+          edition: "draft",
+          onPdf: () => printCurrentWork(),
+          onExportPptx: () => exportPptxCurrentWork(),
+          pdfOptionId: "print-work",
+          pptxOptionId: "export-pptx"
+        }]
+      })
+    };
+  }
   function syncSourceLabel() {
     if (!activeWorkFolder) return;
     shellElement("#work-source-name").textContent = activeWorkFolder.source_file;
     shellElement("#work-kind").textContent = activeWorkFolder.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION";
-    shellElement("#export-pptx").hidden = activeWorkFolder.source_file === "document.md";
+    exportMenu?.update(exportMenuProps());
   }
   async function handleMenuAction(action) {
     if (action === "quit") return getCurrentWindow().close();
@@ -1037,8 +1113,8 @@ function startFileLibraryApplication(platform) {
       showLibrary();
       return;
     }
-    if (action === "new-presentation") return showCreateDialog("presentation");
-    if (action === "new-document") return showCreateDialog("document");
+    if (action === "new-presentation") return requestDirectCreate("presentation");
+    if (action === "new-document") return requestDirectCreate("document");
     if (action === "save") return flushSave({ force: true });
     if (action === "export-elef") return exportCurrentWork();
     if (action === "export-pptx") return exportPptxCurrentWork();
@@ -1057,30 +1133,9 @@ function startFileLibraryApplication(platform) {
     shellElement("#back-to-library").click();
   });
   shellElement("#open-settings").addEventListener("click", () => void showSettings());
-  shellElement("#new-work").addEventListener("click", () => {
-    showCreateDialog(currentFilter() === "documents" ? "document" : "presentation");
-  });
   shellElement("#refresh-library").addEventListener("click", () => void refreshLibrary());
   shellElement("#import-elef").addEventListener("click", () => void importWork());
-  function closeExportMenu() {
-    shellElement("#export-menu").open = false;
-  }
-  shellElement("#export-pptx").addEventListener("click", () => {
-    closeExportMenu();
-    void exportPptxCurrentWork();
-  });
-  shellElement("#print-work").addEventListener("click", () => {
-    closeExportMenu();
-    void printCurrentWork();
-  });
-  function dismissExportMenuOnOutsideEvent(event) {
-    if (event.target instanceof Element && !event.target.closest("#export-menu")) closeExportMenu();
-  }
-  document.addEventListener("pointerdown", dismissExportMenuOnOutsideEvent);
-  document.addEventListener("click", dismissExportMenuOnOutsideEvent);
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeExportMenu();
-  });
+  exportMenu = mountExportMenu(shellElement("#export-menu-mount"), exportMenuProps());
   shellElement("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then((saved) => {
@@ -1093,9 +1148,14 @@ function startFileLibraryApplication(platform) {
     showLibrary();
     setStatus("Library");
   });
-  elements.settingsForm.addEventListener("submit", (event) => void saveSettings(event));
+  settingsHostDialog.addEventListener("close", () => {
+    if (settingsShell) {
+      settingsShell.unmount();
+      settingsShell = null;
+    }
+  });
   shellElement("#manage-authoring").addEventListener("click", () => {
-    elements.settingsDialog.close();
+    closeSettings();
     void openAuthoringSettings();
   });
   if (updateEnabled) shellElement("#check-for-updates").addEventListener("click", () => void checkForUpdates(true));
@@ -1140,7 +1200,7 @@ function startFileLibraryApplication(platform) {
     const action = desktopMenuKeyAction(event);
     if (action === "focus-search") {
       event.preventDefault();
-      mount.querySelector("#library-search")?.focus();
+      if (!elements.library.hidden) shell?.openPalette("search");
     } else if (action === "start-presentation") {
       event.preventDefault();
       void handleMenuAction("start-presentation");
@@ -1169,6 +1229,7 @@ function startFileLibraryApplication(platform) {
           if (opened) void startPresentation();
         });
       },
+      palette: { commands: desktopPaletteCommands() },
       onLibraryEvent: handleLibraryEvent
     });
   }

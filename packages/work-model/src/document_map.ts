@@ -392,6 +392,28 @@ export function normalizeThemeValue(value: unknown): string {
   return normalizeStyleValue(value, THEMES, "match")
 }
 
+// Shared new-work seed: visible YAML front matter carrying the workspace
+// theme default, mirroring Document.available_default_source and
+// Presentation.available_default_source on Rails. The web host passes its
+// workspace default; hosts without a workspace style setting (desktop)
+// omit it for the canonical "match" default. Unknown themes fall back to
+// "match" exactly like Workspace#default_theme; only kind/title misuse
+// throws.
+export function buildNewWorkSource(input: { kind: unknown; title: unknown; theme?: unknown }): string {
+  const kind = (input as { kind?: unknown } | null)?.kind
+  if (kind !== "document" && kind !== "presentation") {
+    throw new TypeError("New works need kind \"document\" or \"presentation\".")
+  }
+  const title = String((input as { title?: unknown } | null)?.title ?? "")
+    .replace(/[\r\n]/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+  if (title === "") throw new TypeError("New works need a title.")
+  const provided = (input as { theme?: unknown } | null)?.theme
+  const theme = provided === undefined ? "match" : normalizeThemeValue(provided)
+  return `---\ntheme: ${theme}\n---\n# ${title}\n\n`
+}
+
 export function normalizeTypographyValue(value: unknown): string {
   return normalizeStyleValue(value, TYPOGRAPHIES, "book")
 }

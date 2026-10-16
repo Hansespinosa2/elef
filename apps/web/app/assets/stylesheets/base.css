@@ -27,7 +27,7 @@ body.elef-app {
 .new-work-trigger:hover { background: transparent; color: var(--oradia-ink); }
 .new-work-plus { align-items: center; display: inline-flex; font-size: 1.1rem; height: 1.1rem; justify-content: center; line-height: 1; width: 1.1rem; }
 .new-work-chevron { border-bottom: 1px solid currentColor; border-right: 1px solid currentColor; height: 0.42rem; margin-left: 0.1rem; transform: rotate(45deg) translateY(-0.1rem); width: 0.42rem; }
-.new-work-menu[open] .new-work-chevron { transform: rotate(225deg) translate(-0.05rem, -0.05rem); }
+.new-work-menu[open] .new-work-chevron, .new-work-menu[data-open="true"] .new-work-chevron { transform: rotate(225deg) translate(-0.05rem, -0.05rem); }
 .new-work-panel { background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 0.8rem; box-shadow: 0 18px 45px #0006; padding: 0.45rem; position: absolute; right: 0; top: calc(100% + 0.65rem); width: min(20rem, calc(100vw - 2rem)); z-index: 20; }
 .new-work-option { align-items: center; border: 1px solid transparent; border-radius: 0.65rem; cursor: pointer; display: flex; gap: 0.7rem; padding: 0.75rem; text-decoration: none; transition: background 120ms ease, border-color 120ms ease; }
 .new-work-option:hover, .new-work-option:focus-visible { background: var(--oradia-slate-800); border-color: var(--oradia-line); }

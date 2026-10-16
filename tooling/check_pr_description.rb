@@ -14,6 +14,8 @@ module PullRequestDescription
     "## Database / migration impact"
   ].freeze
 
+  IMAGE_REF = /!\[[^\]]*\]\([^)]+\)/.freeze
+
   def self.errors(body)
     text = body.to_s
     errors = []
@@ -32,7 +34,22 @@ module PullRequestDescription
       errors << "section is empty: #{section}" if section_body.empty?
     end
 
+    errors.concat(screenshot_pair_errors(text))
+
     errors
+  end
+
+  def self.screenshot_pair_errors(text)
+    section_body = text[/^## Screenshots\s*$\n?(.*?)(?=^##\s|\z)/im, 1].to_s
+    section_body = section_body.gsub(/<!--.*?-->/m, "").strip
+    return [] if section_body.empty?
+
+    images = section_body.scan(IMAGE_REF)
+    has_before = section_body.match?(/before/i)
+    has_after = section_body.match?(/after/i)
+    return [] if images.length >= 2 && has_before && has_after
+
+    ["screenshots must include at least one before/after image pair (a Before image and an After image); screenshots are mandatory on every PR"]
   end
 end
 

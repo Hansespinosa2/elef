@@ -1219,6 +1219,7 @@ const MathShorthandController = await loadController("math_shorthand", {
   overrides: {
     "../lib/editor_controller_lookup.js": "const editorFor = element => element.currentEditor\n",
     "../lib/visual_assist.js": visualAssistSource,
+    "../lib/vim_escape.js": "const editorPopupOpen = () => false\n",
     "@codemirror/language": "const syntaxTree = (state) => state.tree\n"
   }
 })

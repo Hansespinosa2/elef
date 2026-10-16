@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { editorFor } from "../lib/editor_controller_lookup.js";
+import { forwardEscapeToVim } from "../lib/vim_escape.js";
 import { mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";
 function scoreLinkTitle(title, query) {
   const value = title.toLowerCase();
@@ -148,6 +149,7 @@ class document_link_palette_controller_default extends Controller {
     } else if (event.key === "Escape") {
       event.preventDefault();
       this.close();
+      forwardEscapeToVim(this.editorController, event);
     }
   }
   refresh() {

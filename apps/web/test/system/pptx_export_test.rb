@@ -56,7 +56,8 @@ class PptxExportTest < ApplicationSystemTestCase
     visit edit_presentation_path(presentation)
     capture_pptx_blob
     fill_in "Markdown source", with: "# Unsaved source\n\nThis edit has not autosaved yet."
-    find("button", text: "Download PPTX draft").click
+    find("#work-export-menu-button", text: "Export").click
+    find("button", text: "PPTX").click
     assert_selector '[role="status"]', text: "PowerPoint downloaded.", wait: 15
 
     Zip::File.open_buffer(StringIO.new(captured_pptx_bytes)) do |archive|
@@ -74,7 +75,8 @@ class PptxExportTest < ApplicationSystemTestCase
     capture_pptx_blob
     fill_in "Title", with: "Unsaved new work"
     fill_in "Markdown source", with: "# Unsaved new slide\n\nDraft body."
-    find("button", text: "Download PPTX draft").click
+    find("#work-export-menu-button", text: "Export").click
+    find("button", text: "PPTX").click
     assert_selector '[role="status"]', text: "PowerPoint downloaded.", wait: 15
 
     Zip::File.open_buffer(StringIO.new(captured_pptx_bytes)) do |archive|

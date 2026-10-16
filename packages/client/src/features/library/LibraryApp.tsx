@@ -4,12 +4,17 @@ import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
 import type { ElefMountOptions, LibraryFilter, NoticeTone } from "../../application/types.js";
 import { parseLibraryRoute } from "../../application/router.js";
 import { filterWorks, sameWorks } from "./filtering.js";
+import { nextDefaultWorkTitle } from "./default_titles.js";
 import { LibraryCard } from "./LibraryCard.js";
+import type { PaletteMode } from "../../application/types.js";
+import { CommandPalette } from "./CommandPalette.js";
+import { buildNewWorkSource } from "@elef/work-model/document-map";
 
 export interface LibraryControl {
   reload(): Promise<void>;
   notify(message: string | null, tone?: NoticeTone): void;
   setFilter(filter: LibraryFilter): void;
+  openPalette(mode: PaletteMode): void;
 }
 
 export interface LibraryAppProps {
@@ -21,6 +26,12 @@ export interface LibraryAppProps {
 
 export const LIBRARY_RENDER_BATCH_SIZE = 48;
 export const CREATE_WORK_EVENT = "elef:create-work";
+// Event detail contract: { kind: WorkKind; direct?: boolean }. Without
+// `direct` (the shared empty-state button on both hosts) the client opens
+// its name-first dialog; with `direct: true` (the desktop menu, palette,
+// and native menu — parity with the web header navigating straight to the
+// edit shell) the client creates immediately with the shared unique default
+// title and opens the new work.
 
 const FILTER_DESCRIPTIONS: Record<LibraryFilter, string> = {
   all: "One home for your documents, presentations, and source.",
@@ -50,11 +61,18 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogKind, setDialogKind] = useState<WorkKind>("presentation");
   const [dialogName, setDialogName] = useState("");
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteMode, setPaletteMode] = useState<PaletteMode>("commands");
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const loadMoreRef = useRef<HTMLButtonElement | null>(null);
   const filterRef = useRef(filter);
   filterRef.current = filter;
+  // The create listener below registers once, so it reads the work list for
+  // default-title uniqueness through this mirror (same idiom as filterRef).
+  const worksRef = useRef(works);
+  worksRef.current = works;
+  const directCreatePendingRef = useRef(false);
 
   const showNotice = useCallback((message: string | null, tone: NoticeTone = "info") => {
     setNotice(message ?? "");
@@ -117,6 +135,10 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
         setFilter(next);
         setVisibleCount(LIBRARY_RENDER_BATCH_SIZE);
       },
+      openPalette: (mode) => {
+        setPaletteMode(mode);
+        setPaletteOpen(true);
+      },
     });
   }, [registerControl, reload, showNotice]);
 
@@ -142,18 +164,60 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
     }
   }, [filter]);
 
+  const createDirect = useCallback(
+    async (kind: WorkKind): Promise<void> => {
+      // Double-submit guard: two rapid menu activations would otherwise
+      // compute the same default title and the second create fails on the
+      // host's uniqueness check. Cross-window races still land on the
+      // notice path below, like any other failed create.
+      if (directCreatePendingRef.current) return;
+      directCreatePendingRef.current = true;
+      try {
+        const name = nextDefaultWorkTitle(
+          kind,
+          worksRef.current.map((work) => work.title),
+        );
+        const spaces = await host.library.listWorkspaces();
+        const space = spaces[0];
+        if (space === undefined) return;
+        const created = await host.library.createWork({
+          workspaceId: space.id,
+          title: name,
+          kind,
+          // New works seed the default front matter, exactly like the
+          // name-first dialog below; without it direct-created works would
+          // skip the default seed.
+          text: buildNewWorkSource({ kind, title: name }),
+        });
+        options.onLibraryEvent?.({ type: "created", work: created });
+        await reload();
+        options.navigate?.({ workId: created.id, kind: created.kind });
+      } catch (error) {
+        showNotice(error instanceof Error ? error.message : String(error), "error");
+      } finally {
+        directCreatePendingRef.current = false;
+      }
+    },
+    [host, options, reload, showNotice],
+  );
+
   useEffect(() => {
     const root = rootRef.current;
     if (root === null) return;
     function onCreate(event: Event): void {
-      const kind = (event as CustomEvent).detail?.kind;
-      setDialogKind(kind === "document" ? "document" : "presentation");
+      const detail = (event as CustomEvent).detail ?? {};
+      const kind = detail.kind === "document" ? "document" : "presentation";
+      if (detail.direct === true) {
+        void createDirect(kind);
+        return;
+      }
+      setDialogKind(kind);
       setDialogName("");
       setDialogOpen(true);
     }
     root.addEventListener(CREATE_WORK_EVENT, onCreate as EventListener);
     return () => root.removeEventListener(CREATE_WORK_EVENT, onCreate as EventListener);
-  }, []);
+  }, [createDirect]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -237,6 +301,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
         workspaceId: space.id,
         title: name,
         kind: dialogKind,
+        text: buildNewWorkSource({ kind: dialogKind, title: name }),
       });
       options.onLibraryEvent?.({ type: "created", work: created });
       await reload();
@@ -380,6 +445,27 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
           No Works match this search.
         </p>
       </section>
+
+      {options.palette !== undefined && (
+        <CommandPalette
+          open={paletteOpen}
+          initialMode={paletteMode}
+          commands={options.palette.commands}
+          works={works.map((work) => ({ id: work.id, title: work.title, kind: work.kind }))}
+          onOpenWork={(selected) => {
+            const kind = selected.kind === "document" ? "document" : "presentation";
+            options.navigate?.({ workId: selected.id, kind });
+          }}
+          onClose={() => {
+            setPaletteOpen(false);
+            // Keyboard home: ⌘K came from the search box, so Esc returns
+            // focus there instead of dropping it to the body. Command runs
+            // that open a surface re-focus afterwards through their own
+            // autofocus, so this never steals a dialog's focus.
+            rootRef.current?.querySelector<HTMLElement>("#library-search")?.focus?.();
+          }}
+        />
+      )}
 
       <dialog ref={dialogRef} id="create-dialog" className="app-dialog" onCancel={() => setDialogOpen(false)}>
         <form id="create-form" onSubmit={(event) => void create(event)}>

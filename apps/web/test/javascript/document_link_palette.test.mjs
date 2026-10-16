@@ -7,6 +7,7 @@ const source = (await readFile(new URL("../../../../packages/editor-runtime/dist
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
   .replace('import { mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"', () => visualAssistSource)
+  .replace('import { forwardEscapeToVim } from "../lib/vim_escape.js"', "const forwardEscapeToVim = () => false")
 const palette = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 const { insideCode, insideInlineCode, rankLinkTitles, scoreLinkTitle } = palette

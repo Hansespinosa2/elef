@@ -148,6 +148,107 @@ test("create dialog creates through the port and opens the new work", async () =
     const target = seen[0] as { workId: string };
     const works = await host.library.listWorks(ws("ws-1"));
     assert.ok(works.some((work) => work.id === target.workId));
+    const createdWork = await host.works.getWork(target.workId as WorkId);
+    assert.equal(
+      (createdWork as unknown as { text: string }).text,
+      "---\ntheme: match\n---\n# Fresh work\n\n",
+      "dialog create seeds editable front matter through the port",
+    );
+  } finally {
+    shell.unmount();
+  }
+});
+
+function dispatchCreateWork(element: Element, detail: unknown): void {
+  // The listener lives on the library view itself: dispatching on an
+  // ancestor would never reach it (bubbles travel up, not down).
+  const root = element.querySelector(".library-shared-view") as unknown as {
+    ownerDocument: Document;
+    dispatchEvent: (event: unknown) => void;
+  };
+  const event = root.ownerDocument.createEvent("CustomEvent");
+  (event as unknown as { initCustomEvent: (t: string, b: boolean, c: boolean, d: unknown) => void }).initCustomEvent(
+    CREATE_WORK_EVENT,
+    true,
+    false,
+    detail,
+  );
+  root.dispatchEvent(event);
+}
+
+function dialogOpen(element: Element): boolean {
+  return (
+    element.querySelector("#create-dialog") as unknown as {
+      hasAttribute: (name: string) => boolean;
+    }
+  ).hasAttribute("open");
+}
+
+test("direct create event creates with the default title and skips the dialog", async () => {
+  const host = typedHost();
+  const seen: unknown[] = [];
+  const { element, shell } = await mountInto(host, { navigate: (target) => seen.push(target) });
+  try {
+    dispatchCreateWork(element, { kind: "presentation", direct: true });
+    await settled();
+    assert.equal(dialogOpen(element), false, "direct create never opens the name dialog");
+    assert.deepEqual(titles(element), ["Untitled presentation"]);
+    assert.equal(seen.length, 1, "new work opens after create");
+    const target = seen[0] as { workId: string; kind: string };
+    assert.equal(target.kind, "presentation");
+    const works = await host.library.listWorks(ws("ws-1"));
+    assert.ok(works.some((work) => work.id === target.workId && work.title === "Untitled presentation"));
+  } finally {
+    shell.unmount();
+  }
+});
+
+test("direct create counts past taken defaults, any case", async () => {
+  const host = typedHost();
+  await host.library.createWork({ workspaceId: ws("ws-1"), title: "Untitled document", kind: "document" });
+  await host.library.createWork({ workspaceId: ws("ws-1"), title: "UNTITLED DOCUMENT 2", kind: "document" });
+  await host.library.createWork({ workspaceId: ws("ws-1"), title: "Untitled presentation", kind: "presentation" });
+  const seen: unknown[] = [];
+  const { element, shell } = await mountInto(host, { navigate: (target) => seen.push(target) });
+  try {
+    dispatchCreateWork(element, { kind: "document", direct: true });
+    await settled();
+    assert.equal(dialogOpen(element), false, "direct create never opens the name dialog");
+    const target = seen[0] as { workId: string };
+    const works = await host.library.listWorks(ws("ws-1"));
+    assert.ok(
+      works.some((work) => work.id === target.workId && work.title === "Untitled document 3"),
+      "counter skips taken defaults without touching the other kind",
+    );
+  } finally {
+    shell.unmount();
+  }
+});
+
+test("a failed direct create surfaces a notice and stays in the library", async () => {
+  const host = typedHost();
+  const seen: unknown[] = [];
+  const failing = {
+    ...host,
+    library: {
+      ...host.library,
+      createWork: async (): Promise<never> => {
+        throw new Error("The disk is full.");
+      },
+    },
+  };
+  const { element, shell } = await mountInto(failing, { navigate: (target) => seen.push(target) });
+  try {
+    dispatchCreateWork(element, { kind: "document", direct: true });
+    await settled();
+    assert.equal(dialogOpen(element), false, "failure never opens the name dialog");
+    assert.deepEqual(seen, [], "no navigation follows a failed create");
+    const notice = element.querySelector("#notice") as unknown as {
+      hidden: boolean;
+      textContent: string | null;
+    };
+    assert.equal(notice.hidden, false);
+    assert.match(notice.textContent ?? "", /The disk is full/);
   } finally {
     shell.unmount();
   }

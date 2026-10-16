@@ -4,7 +4,7 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
 import type { ElefHost } from "@elef/contracts";
-import type { ElefMountOptions, ElefShell, LibraryFilter, NoticeTone } from "./types.js";
+import type { ElefMountOptions, ElefShell, LibraryFilter, NoticeTone, PaletteMode } from "./types.js";
 import { parseLibraryRoute, parseSettingsRoute } from "./router.js";
 import type { SettingsRoute } from "./router.js";
 import type { LibraryControl } from "../features/library/LibraryApp.js";
@@ -70,6 +70,10 @@ export async function mountElef(
         registerControl: (next) => {
           settingsControl = next;
         },
+        ...(options.vimEditorBridge === undefined || options.vimEditorBridge === null
+          ? {}
+          : { editorBridge: options.vimEditorBridge }),
+        ...(options.onSettingsSaved === undefined ? {} : { onSaved: options.onSettingsSaved }),
       });
     }
     return createElement(LibraryApp, {
@@ -116,6 +120,13 @@ export async function mountElef(
       if (control === null) return;
       const active = control;
       flushSync(() => active.setFilter(filter));
+    },
+    openPalette(mode: PaletteMode): void {
+      // No palette seam, no surface: settings routes and hosts without the
+      // seam ignore the call so one shell handle works across views.
+      if (control === null) return;
+      const active = control;
+      flushSync(() => active.openPalette(mode));
     },
     unmount(): void {
       root.unmount();

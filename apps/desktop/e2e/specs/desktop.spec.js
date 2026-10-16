@@ -552,7 +552,30 @@ class DesktopEditorUi {
 
   async enableVimRelativeLineNumbers() {
     await openDesktopSettings()
-    // Vim preferences render through the shared client UI now (same device
+    // The desktop settings surface is the shared settings page (the same
+    // component and element ids as the web /settings page). Prove the
+    // parity contract first: identical defaults controls and options.
+    await browser.waitUntil(async () => browser.execute(() =>
+      document.querySelector("#settings-page-mount .settings-page") !== null
+    ), {
+      timeout: 10_000,
+      timeoutMsg: "The shared settings page did not mount in the desktop settings dialog"
+    })
+    const optionValues = await browser.execute(() => ({
+      theme: [...document.querySelectorAll("#settings-theme option")].map(option => option.value),
+      typography: [...document.querySelectorAll("#settings-typography option")].map(option => option.value)
+    }))
+    if (JSON.stringify(optionValues.theme) !== JSON.stringify(["match", "light", "dark"])) {
+      throw new Error(`Desktop settings themes diverged from the shared page: ${JSON.stringify(optionValues.theme)}`)
+    }
+    if (JSON.stringify(optionValues.typography) !== JSON.stringify(["book", "modern", "technical"])) {
+      throw new Error(`Desktop settings typographies diverged from the shared page: ${JSON.stringify(optionValues.typography)}`)
+    }
+    // Round-trip a workspace default through the shared form, then restore
+    // it so later tests keep the default library appearance.
+    await this.saveSharedWorkspaceDefault("#settings-typography", "modern")
+    await this.saveSharedWorkspaceDefault("#settings-typography", "book")
+    // Vim preferences render through the shared client UI (same device
     // storage keys, same editor bridge); drive its stable hooks.
     const vimToggle = $("#vim-enabled")
     if (!(await vimToggle.isSelected())) await vimToggle.click()
@@ -570,8 +593,24 @@ class DesktopEditorUi {
       timeout: 5_000,
       timeoutMsg: "The native Vim settings control did not save relative line numbers"
     })
-    await $("#settings-form button[value='save']").click()
+    await $("#close-settings").click()
     await $("#settings-dialog").waitForDisplayed({ reverse: true })
+  }
+
+  async saveSharedWorkspaceDefault(selectId, value) {
+    await browser.execute((id, selectedValue) => {
+      const select = document.querySelector(id)
+      select.value = selectedValue
+      select.dispatchEvent(new Event("input", { bubbles: true }))
+      select.dispatchEvent(new Event("change", { bubbles: true }))
+    }, selectId, value)
+    await $("button=Save workspace defaults").click()
+    await browser.waitUntil(async () => browser.execute(() =>
+      document.querySelector("#settings-page-mount .settings-notice")?.textContent === "Workspace appearance saved."
+    ), {
+      timeout: 10_000,
+      timeoutMsg: "The shared workspace-defaults form did not report a save"
+    })
   }
 
   async reopenWork() {
@@ -1786,11 +1825,43 @@ class DesktopEditorUi {
 class DesktopLibraryUi {
   async createWork(title, kind) {
     await this.openLibrary()
-    await $("#new-work").click()
-    await $("#new-work-kind").selectByAttribute("value", kind)
-    await $("#new-work-name").setValue(title)
-    await $("#create-submit").click()
+    await $(".new-work-trigger").click()
+    await $(`[data-new-work-kind="${kind}"]`).click()
+    // Direct-open parity with the web menu: the click creates with a unique
+    // default title and lands in the editor. Name the work through the
+    // editor so shared scenarios keep deterministic titles.
     await $("#work-view").waitForDisplayed()
+    const editor = new DesktopEditorUi()
+    if (kind === "document") {
+      // A document's library title is its folder name, which only the card
+      // rename changes; the editor source carries the H1 separately. Set
+      // the H1 first, then rename the folder to match. New works seed the
+      // default front matter, so the retitle preserves it.
+      const defaultTitle = await browser.execute(
+        () => document.querySelector("#work-title")?.textContent.trim()
+      )
+      await editor.replaceSource(`---\ntheme: match\n---\n# ${title}\n\n`)
+      await editor.waitForSource(`---\ntheme: match\n---\n# ${title}\n\n`)
+      await browser.waitUntil(async () => browser.execute(
+        () => window.__elefSaveTestHooks?.saveStatus() === "clean"
+      ), {
+        timeout: 10_000,
+        timeoutMsg: `The retitled ${kind} source did not finish saving`
+      })
+      await this.openLibrary()
+      await this.renameWork(defaultTitle, title)
+      // The card list renders the rename optimistically: force a server
+      // round-trip so the open below reads the persisted folder name.
+      await $("#refresh-library").click()
+      await browser.waitUntil(async () => (await $(`[aria-label='Edit ${title}']`).isDisplayed()), {
+        timeout: 10_000,
+        timeoutMsg: `The renamed ${title} work did not survive a library refresh`
+      })
+      await editor.openWork(title)
+    } else {
+      await editor.renameEditorTitle(title)
+      await editor.waitForEditorTitle(title)
+    }
     await browser.waitUntil(async () => browser.execute(({ expected, documentKind }) => {
       if (documentKind) return document.querySelector("#work-title")?.textContent.trim() === expected
       return document.querySelector("#desktop-editor-title")?.value === expected
@@ -1808,7 +1879,7 @@ class DesktopLibraryUi {
         : document.querySelector("#desktop-editor-title")?.value,
       source: document.querySelector("#desktop-editor-field")?.editorController?.sourceValue
     }), { expected: title, documentKind: kind === "document" })
-    if (result.title !== title || (kind === "document" && result.source !== `# ${title}\n\n`)) {
+    if (result.title !== title || (kind === "document" && result.source !== `---\ntheme: match\n---\n# ${title}\n\n`)) {
       throw new Error(`The editor did not open the new ${kind} with its expected content: ${JSON.stringify(result)}`)
     }
   }
@@ -2224,7 +2295,7 @@ class DesktopLibraryUi {
 }
 
 describe("desktop binary workflows and native boundaries", () => {
-  it("opens the new-work dialog from the native menu accelerator", async () => {
+  it("creates a presentation directly from the native menu accelerator", async () => {
     await $("#library-view").waitForDisplayed()
     await browser.execute(() => window.focus())
     if (process.platform === "darwin") {
@@ -2234,14 +2305,15 @@ describe("desktop binary workflows and native boundaries", () => {
     } else {
       throw new Error(`Native menu smoke is unsupported on ${process.platform}`)
     }
-    const dialog = await $("#create-dialog")
-    await dialog.waitForDisplayed()
-    focusDesktopWindow()
-    sendNativeKey("Escape", { activate: false })
-    await browser.waitUntil(async () => browser.execute(() => !document.querySelector("#create-dialog")?.open), {
-      timeout: 5_000,
-      timeoutMsg: "Escape did not close the new-work dialog"
-    })
+    // Web parity: File → New Presentation skips the name dialog and opens
+    // the editor with the shared unique default title, like the header menu.
+    await $("#work-view").waitForDisplayed()
+    const title = await $("#desktop-editor-title").getValue()
+    assert.match(title, /^Untitled presentation( \d+)?$/)
+    const library = new DesktopLibraryUi()
+    await library.openLibrary()
+    await library.deleteWork(title)
+    await library.assertWorkAbsent(title)
   })
 
   it("opens and cancels the native library folder picker", async () => {
@@ -2329,7 +2401,7 @@ describe("desktop binary workflows and native boundaries", () => {
       await $("#print-work").click()
       await browser.waitUntil(async () => browser.execute(() => window.__elefPrintResult?.native === true), {
         timeout: 10_000,
-        timeoutMsg: "The Print / Save PDF option did not reach the native print command"
+        timeoutMsg: "The PDF option did not reach the native print command"
       })
       await ui.assertExportMenuClosed("the print option")
       // The native dialog fires no afterprint event: the printing-work

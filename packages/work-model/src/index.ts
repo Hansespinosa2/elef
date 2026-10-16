@@ -5,6 +5,7 @@
 export {
   buildEditorMap,
   buildEditorStructure,
+  buildNewWorkSource,
   frontMatterHasKey,
   initialFrontMatter,
   MARGIN_SETTING_KEYS,
