@@ -389,7 +389,7 @@ const VISUAL_SNIPPETS = [
 ]
 
 function stubAssistEngine({ mode = "visual", value = "Body /ta", caret = 8 } = {}) {
-  const calls = { replaceRange: [], focus: 0, setSelectionRange: [], dispatched: [] }
+  const calls = { replaceRange: [], replaceRangeWithSelection: [], focus: 0, setSelectionRange: [], dispatched: [] }
   const doc = {
     get length() { return engine.value.length },
     lineAt(offset) {
@@ -414,14 +414,27 @@ function stubAssistEngine({ mode = "visual", value = "Body /ta", caret = 8 } = {
       removeAttribute: () => {},
       addEventListener: () => {},
       removeEventListener: () => {},
+      contains: () => true,
       getBoundingClientRect: () => ({ left: 0, top: 0, bottom: 0, right: 0, width: 0, height: 0 })
     },
-    view: { state: { doc }, dispatch: (transaction) => calls.dispatched.push(transaction), coordsAtPos: () => null },
+    view: {
+      state: { doc },
+      dispatch: (transaction) => calls.dispatched.push(transaction),
+      coordsAtPos: () => null,
+      scrollDOM: { addEventListener: () => {}, removeEventListener: () => {} },
+      dom: { addEventListener: () => {}, removeEventListener: () => {} }
+    },
     scrollElement: { addEventListener: () => {}, removeEventListener: () => {} },
     replaceRange(insert, from, to = from) {
       calls.replaceRange.push([insert, from, to])
       engine.value = engine.value.slice(0, from) + insert + engine.value.slice(to)
       engine.selectionStart = engine.selectionEnd = from + insert.length
+    },
+    replaceRangeWithSelection(insert, from, to, selection) {
+      calls.replaceRangeWithSelection.push([insert, from, to, selection])
+      engine.value = engine.value.slice(0, from) + insert + engine.value.slice(to)
+      engine.selectionStart = from + selection.from
+      engine.selectionEnd = from + selection.to
     },
     focus() { calls.focus += 1 },
     setSelectionRange(anchor, head = anchor) {
@@ -434,7 +447,7 @@ function stubAssistEngine({ mode = "visual", value = "Body /ta", caret = 8 } = {
 }
 
 function mountAssistPalette({ controllerClass = SnippetPaletteController, mode = "visual", value = "Body /ta", caret = 8, registry = VISUAL_SNIPPETS, host = null, assign = {} } = {}) {
-  const { document } = parseHTML(`<form><div class="field"><div id="palette" role="listbox" hidden></div></div></form>`)
+  const { document } = parseHTML(`<form><div class="field"><div id="palette" role="listbox" hidden></div><div class="editor-projection"><div class="block" contenteditable="true"></div></div></div></form>`)
   const form = document.querySelector("form")
   const field = document.querySelector(".field")
   const palette = document.querySelector("#palette")
@@ -1034,5 +1047,168 @@ test("visual math placeholder stops walk the projection caret on Tab", (t) => {
   assert.equal(prevented, true)
   assert.deepEqual(hostCalls.carets, [[11, null], [13, null]])
   assert.deepEqual(mounted.controller.stops, [])
+})
+
+// --- Visual-mode mermaid assist ---
+
+const mermaidSyntaxSource = await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/mermaid_syntax.js", import.meta.url), "utf8")
+const MermaidAssistController = await loadController("mermaid_assist", {
+  base: sharedControllerPath,
+  overrides: {
+    "../lib/editor_controller_lookup.js": "const editorFor = element => element.currentEditor\n",
+    "../lib/visual_assist.js": visualAssistSource,
+    "./mermaid_syntax.js": mermaidSyntaxSource
+  }
+})
+
+function focusProjectionBlock(document) {
+  const block = document.querySelector(".editor-projection .block")
+  Object.defineProperty(document, "activeElement", { configurable: true, value: block })
+  return block
+}
+
+test("visual mermaid refresh opens the palette on a diagram command", (t) => {
+  const mounted = mountAssistPalette({
+    controllerClass: MermaidAssistController,
+    value: "See /diag",
+    caret: 9,
+    registry: []
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  focusProjectionBlock(mounted.document)
+  mounted.controller.connected = true
+
+  mounted.controller.refresh()
+
+  assert.equal(mounted.palette.hidden, false)
+  assert.equal(mounted.controller.model.kind, "diagram-command")
+  assert.equal(mounted.palette.style.left, "100px")
+  assert.equal(mounted.palette.style.top, "222px")
+})
+
+test("visual mermaid accept chains from command to diagram types", async (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MermaidAssistController,
+    value: "See /diag",
+    caret: 9,
+    registry: [],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  focusProjectionBlock(mounted.document)
+  mounted.controller.connected = true
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.acceptSelected()
+  assert.deepEqual(mounted.calls.replaceRange, [["/diagram", 4, 9]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 4, to: 9, insert: "/diagram", caret: 12 }])
+  assert.deepEqual(hostCalls.carets, [[12, null]])
+
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal(mounted.palette.hidden, false)
+  assert.equal(mounted.controller.model.kind, "diagram-types")
+  assert.equal(mounted.controller.matches.length, 4)
+})
+
+test("visual mermaid type accept inserts the template through the host", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MermaidAssistController,
+    value: "See /diagram",
+    caret: 12,
+    registry: [],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  focusProjectionBlock(mounted.document)
+  mounted.controller.connected = true
+  mounted.controller.refresh()
+  assert.equal(mounted.controller.model.kind, "diagram-types")
+
+  mounted.controller.acceptSelected()
+
+  const template = "```mermaid\nflowchart LR\n    A[]\n```"
+  assert.deepEqual(mounted.calls.replaceRangeWithSelection, [[`\n${template}`, 4, 12, { from: 31, to: 31 }]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 4, to: 12, insert: `\n${template}`, caret: 35 }])
+  assert.deepEqual(hostCalls.carets, [[35, null]])
+})
+
+test("visual mermaid structural edits route through the host", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MermaidAssistController,
+    value: "See /diag",
+    caret: 9,
+    registry: [],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.connected = true
+
+  mounted.controller.applyEdit({ moveTo: 7 })
+  assert.deepEqual(mounted.calls.setSelectionRange, [[7, 7]])
+  assert.deepEqual(hostCalls.carets, [[7, null]])
+
+  mounted.controller.applyEdit({ insert: "X", from: 5, to: 5, selection: { from: 1, to: 1 } })
+  assert.deepEqual(mounted.calls.replaceRangeWithSelection, [["X", 5, 5, { from: 1, to: 1 }]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 5, to: 5, insert: "X", caret: 6 }])
+  assert.deepEqual(hostCalls.carets, [[7, null], [6, null]])
+})
+
+test("source mermaid accept commits without host routing", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MermaidAssistController,
+    mode: "source",
+    value: "See /diag",
+    caret: 9,
+    registry: [],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.connected = true
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.acceptSelected()
+
+  assert.deepEqual(mounted.calls.replaceRange, [["/diagram", 4, 9]])
+  assert.deepEqual(hostCalls.inserts, [])
+  assert.deepEqual(hostCalls.carets, [])
+})
+
+test("visual mermaid keydown accepts the match on Enter", (t) => {
+  const { host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MermaidAssistController,
+    value: "See /diag",
+    caret: 9,
+    registry: [],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  focusProjectionBlock(mounted.document)
+  mounted.controller.connected = true
+  mounted.controller.refresh()
+  let prevented = false
+  let stopped = false
+
+  mounted.controller.keydown({ key: "Enter", defaultPrevented: false, isComposing: false, keyCode: 13, preventDefault: () => { prevented = true }, stopPropagation: () => { stopped = true } })
+
+  assert.equal(prevented, true)
+  assert.equal(stopped, true)
+  assert.deepEqual(mounted.calls.replaceRange, [["/diagram", 4, 9]])
+})
+
+test("visual mermaid routing binds on document capture and ignores idle keys", (t) => {
+  assertVisualRouting(t, MermaidAssistController)
 })
 

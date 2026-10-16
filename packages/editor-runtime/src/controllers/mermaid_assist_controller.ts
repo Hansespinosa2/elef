@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
+import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
 import { diagramTemplate, mermaidCompletion, mermaidEnterEdit, mermaidTabEdit, MERMAID_DIAGRAMS, slashDiagramQuery } from "./mermaid_syntax.js"
 import type { DiagramTemplate, MermaidEdit } from "./mermaid_syntax.js"
 
@@ -19,7 +20,22 @@ export default class extends Controller<HTMLElement> {
     this.element.addEventListener("elef:editor-ready", this.editorReady)
     this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange)
     this.positionPalette = this.positionPalette.bind(this)
+    this.visualKeydown = (event: Event) => {
+      if (this.editorController?.editingMode !== "visual") return
+      // Structural Enter/Tab edits apply with the palette hidden; all other
+      // keys route only while the palette is open.
+      const key = (event as KeyboardEvent).key
+      if (this.paletteTarget.hidden && key !== "Enter" && key !== "Tab") return
+      this.keydown(event as KeyboardEvent)
+    }
+    this.visualScroll = () => {
+      if (this.editorController?.editingMode === "visual") this.positionPalette()
+    }
     window.addEventListener("resize", this.positionPalette)
+    // Document capture precedes the form-level projection router
+    // deterministically; idle visual keys never reach the palette.
+    document.addEventListener("keydown", this.visualKeydown, true)
+    window.addEventListener("scroll", this.visualScroll, { capture: true, passive: true })
     this.setupEditor()
   }
 
@@ -27,6 +43,8 @@ export default class extends Controller<HTMLElement> {
     this.connected = false
     this.composing = false
     window.removeEventListener("resize", this.positionPalette)
+    document.removeEventListener("keydown", this.visualKeydown, true)
+    window.removeEventListener("scroll", this.visualScroll, { capture: true })
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
     this.element.removeEventListener("elef:editor-selection-change", this.editorSelectionChange)
     this.detachEditorListeners()
@@ -120,7 +138,7 @@ export default class extends Controller<HTMLElement> {
       if (!this.paletteTarget.hidden) this.close()
       return
     }
-    if (editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return
+    if (!assistsInMode(editor) || editor.selectionStart !== editor.selectionEnd) return
 
     if (!this.paletteTarget.hidden) {
       if (!this.modelStillMatches()) {
@@ -173,7 +191,12 @@ export default class extends Controller<HTMLElement> {
 
   refresh() {
     const editor = this.editorController
-    if (!this.connected || this.composing || !this.editorAvailable() || !editor.dom.contains(document.activeElement) || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd || !editor.insertMode) return this.close()
+    // In visual mode the caret lives in the projection, so focus inside the
+    // rendered surface authorizes the palette the way engine focus does.
+    const focused = editor?.editingMode === "visual"
+      ? this.element.closest("form")?.querySelector(".editor-projection")?.contains(document.activeElement)
+      : editor?.dom.contains(document.activeElement)
+    if (!this.connected || this.composing || !this.editorAvailable() || !focused || !assistsInMode(editor) || editor.selectionStart !== editor.selectionEnd || !editor.insertMode) return this.close()
     if (this.otherPaletteOpen()) return this.close()
 
     const source = editor.value
@@ -214,7 +237,7 @@ export default class extends Controller<HTMLElement> {
     const model = this.model
     if (!model) return false
     const editor = this.editorController
-    if (!this.editorAvailable() || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return false
+    if (!this.editorAvailable() || !assistsInMode(editor) || editor.selectionStart !== editor.selectionEnd) return false
 
     if (model.kind.startsWith("diagram-")) {
       const current = slashDiagramQuery(editor.value, editor.selectionStart)
@@ -261,9 +284,11 @@ export default class extends Controller<HTMLElement> {
     const model = this.model
     const match = this.matches[this.selectedIndex]
     if (!this.editorAvailable() || !model || !match) return this.close()
+    const visual = editor.editingMode === "visual"
 
     if (model.kind === "diagram-command") {
       editor.replaceRange("/diagram", model.from, model.to)
+      if (visual) this.afterVisualCommit(model.from, model.to, "/diagram", model.from + "/diagram".length)
       this.close()
       this.scheduleRefresh()
       return
@@ -274,20 +299,32 @@ export default class extends Controller<HTMLElement> {
       if (!template) return this.close()
       const insertion = diagramInsertion(editor.value, model.from, model.to, template)
       editor.replaceRangeWithSelection(insertion.text, insertion.from, insertion.to, insertion.selection)
+      if (visual) this.afterVisualCommit(insertion.from, insertion.to, insertion.text, insertion.from + insertion.selection.to)
       this.close()
       return
     }
 
     editor.replaceRange(match.text, model.from, model.to)
+    if (visual) this.afterVisualCommit(model.from, model.to, match.text, model.from + match.text.length)
     this.close()
+  }
+
+  // Visual insertion follow-up shared by palette accepts and structural
+  // edits: shift the map, patch the caret text, and walk the native caret.
+  afterVisualCommit(from: number, to: number, insert: string, caret: number) {
+    projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from, to, insert, caret })
+    placeVisualCaret(this.element, caret)
   }
 
   applyEdit(edit: MermaidEdit) {
     if (!this.editorAvailable()) return this.close()
+    const visual = this.editorController.editingMode === "visual"
     if (edit.moveTo !== undefined) {
       this.editorController.setSelectionRange(edit.moveTo)
-    } else {
+      if (visual) placeVisualCaret(this.element, edit.moveTo)
+    } else if (edit.insert !== undefined && edit.from !== undefined && edit.to !== undefined && edit.selection) {
       this.editorController.replaceRangeWithSelection(edit.insert, edit.from, edit.to, edit.selection)
+      if (visual) this.afterVisualCommit(edit.from, edit.to, edit.insert, edit.from + edit.selection.to)
     }
     this.close()
   }
@@ -318,10 +355,21 @@ export default class extends Controller<HTMLElement> {
     const selected = openPalette?.querySelector('[aria-selected="true"]')
     if (selected) editor.setAttribute("aria-activedescendant", selected.id)
     else editor.removeAttribute("aria-activedescendant")
+    if (this.editorController?.editingMode !== "visual") return
+    mirrorPopupAccessibility(this.element, { open: Boolean(openPalette), selectedId: selected?.id ?? null })
   }
 
   positionPalette() {
     if (!this.editorAvailable() || this.paletteTarget.hidden) return
+
+    // The engine surface hides in visual mode: anchor to the native
+    // projection caret instead of engine coordinates.
+    if (this.editorController.editingMode === "visual") {
+      const rect = visualCaretRect()
+      if (!rect) return
+      placePaletteBelow(this.paletteTarget, rect)
+      return
+    }
 
     const editorRect = this.editorController.dom.getBoundingClientRect()
     const markerRect = this.editorController.view.coordsAtPos(this.editorController.selectionStart) || editorRect

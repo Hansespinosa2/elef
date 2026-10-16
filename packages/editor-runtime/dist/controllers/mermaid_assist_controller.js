@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { editorFor } from "../lib/editor_controller_lookup.js";
+import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";
 import { diagramTemplate, mermaidCompletion, mermaidEnterEdit, mermaidTabEdit, MERMAID_DIAGRAMS, slashDiagramQuery } from "./mermaid_syntax.js";
 class mermaid_assist_controller_default extends Controller {
   static targets = ["palette"];
@@ -16,13 +17,26 @@ class mermaid_assist_controller_default extends Controller {
     this.element.addEventListener("elef:editor-ready", this.editorReady);
     this.element.addEventListener("elef:editor-selection-change", this.editorSelectionChange);
     this.positionPalette = this.positionPalette.bind(this);
+    this.visualKeydown = (event) => {
+      if (this.editorController?.editingMode !== "visual") return;
+      const key = event.key;
+      if (this.paletteTarget.hidden && key !== "Enter" && key !== "Tab") return;
+      this.keydown(event);
+    };
+    this.visualScroll = () => {
+      if (this.editorController?.editingMode === "visual") this.positionPalette();
+    };
     window.addEventListener("resize", this.positionPalette);
+    document.addEventListener("keydown", this.visualKeydown, true);
+    window.addEventListener("scroll", this.visualScroll, { capture: true, passive: true });
     this.setupEditor();
   }
   disconnect() {
     this.connected = false;
     this.composing = false;
     window.removeEventListener("resize", this.positionPalette);
+    document.removeEventListener("keydown", this.visualKeydown, true);
+    window.removeEventListener("scroll", this.visualScroll, { capture: true });
     this.element.removeEventListener("elef:editor-ready", this.editorReady);
     this.element.removeEventListener("elef:editor-selection-change", this.editorSelectionChange);
     this.detachEditorListeners();
@@ -108,7 +122,7 @@ class mermaid_assist_controller_default extends Controller {
       if (!this.paletteTarget.hidden) this.close();
       return;
     }
-    if (editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return;
+    if (!assistsInMode(editor) || editor.selectionStart !== editor.selectionEnd) return;
     if (!this.paletteTarget.hidden) {
       if (!this.modelStillMatches()) {
         this.close();
@@ -156,7 +170,8 @@ class mermaid_assist_controller_default extends Controller {
   }
   refresh() {
     const editor = this.editorController;
-    if (!this.connected || this.composing || !this.editorAvailable() || !editor.dom.contains(document.activeElement) || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd || !editor.insertMode) return this.close();
+    const focused = editor?.editingMode === "visual" ? this.element.closest("form")?.querySelector(".editor-projection")?.contains(document.activeElement) : editor?.dom.contains(document.activeElement);
+    if (!this.connected || this.composing || !this.editorAvailable() || !focused || !assistsInMode(editor) || editor.selectionStart !== editor.selectionEnd || !editor.insertMode) return this.close();
     if (this.otherPaletteOpen()) return this.close();
     const source = editor.value;
     const caret = editor.selectionStart;
@@ -194,7 +209,7 @@ class mermaid_assist_controller_default extends Controller {
     const model = this.model;
     if (!model) return false;
     const editor = this.editorController;
-    if (!this.editorAvailable() || editor.editingMode !== "source" || editor.selectionStart !== editor.selectionEnd) return false;
+    if (!this.editorAvailable() || !assistsInMode(editor) || editor.selectionStart !== editor.selectionEnd) return false;
     if (model.kind.startsWith("diagram-")) {
       const current2 = slashDiagramQuery(editor.value, editor.selectionStart);
       return Boolean(current2 && current2.kind === model.kind && current2.start === model.from && current2.end === model.to && current2.text === model.query);
@@ -235,8 +250,10 @@ class mermaid_assist_controller_default extends Controller {
     const model = this.model;
     const match = this.matches[this.selectedIndex];
     if (!this.editorAvailable() || !model || !match) return this.close();
+    const visual = editor.editingMode === "visual";
     if (model.kind === "diagram-command") {
       editor.replaceRange("/diagram", model.from, model.to);
+      if (visual) this.afterVisualCommit(model.from, model.to, "/diagram", model.from + "/diagram".length);
       this.close();
       this.scheduleRefresh();
       return;
@@ -246,18 +263,29 @@ class mermaid_assist_controller_default extends Controller {
       if (!template) return this.close();
       const insertion = diagramInsertion(editor.value, model.from, model.to, template);
       editor.replaceRangeWithSelection(insertion.text, insertion.from, insertion.to, insertion.selection);
+      if (visual) this.afterVisualCommit(insertion.from, insertion.to, insertion.text, insertion.from + insertion.selection.to);
       this.close();
       return;
     }
     editor.replaceRange(match.text, model.from, model.to);
+    if (visual) this.afterVisualCommit(model.from, model.to, match.text, model.from + match.text.length);
     this.close();
+  }
+  // Visual insertion follow-up shared by palette accepts and structural
+  // edits: shift the map, patch the caret text, and walk the native caret.
+  afterVisualCommit(from, to, insert, caret) {
+    projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from, to, insert, caret });
+    placeVisualCaret(this.element, caret);
   }
   applyEdit(edit) {
     if (!this.editorAvailable()) return this.close();
+    const visual = this.editorController.editingMode === "visual";
     if (edit.moveTo !== void 0) {
       this.editorController.setSelectionRange(edit.moveTo);
-    } else {
+      if (visual) placeVisualCaret(this.element, edit.moveTo);
+    } else if (edit.insert !== void 0 && edit.from !== void 0 && edit.to !== void 0 && edit.selection) {
       this.editorController.replaceRangeWithSelection(edit.insert, edit.from, edit.to, edit.selection);
+      if (visual) this.afterVisualCommit(edit.from, edit.to, edit.insert, edit.from + edit.selection.to);
     }
     this.close();
   }
@@ -283,9 +311,17 @@ class mermaid_assist_controller_default extends Controller {
     const selected = openPalette?.querySelector('[aria-selected="true"]');
     if (selected) editor.setAttribute("aria-activedescendant", selected.id);
     else editor.removeAttribute("aria-activedescendant");
+    if (this.editorController?.editingMode !== "visual") return;
+    mirrorPopupAccessibility(this.element, { open: Boolean(openPalette), selectedId: selected?.id ?? null });
   }
   positionPalette() {
     if (!this.editorAvailable() || this.paletteTarget.hidden) return;
+    if (this.editorController.editingMode === "visual") {
+      const rect = visualCaretRect();
+      if (!rect) return;
+      placePaletteBelow(this.paletteTarget, rect);
+      return;
+    }
     const editorRect = this.editorController.dom.getBoundingClientRect();
     const markerRect = this.editorController.view.coordsAtPos(this.editorController.selectionStart) || editorRect;
     const paletteRect = this.paletteTarget.getBoundingClientRect();

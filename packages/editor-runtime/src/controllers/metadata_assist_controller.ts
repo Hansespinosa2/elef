@@ -6,7 +6,7 @@ import {
   metadataQueryAt,
   rankMetadataCandidates
 } from "../lib/metadata_assist.js"
-import { assistsInMode, mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
+import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
 import type { MetadataQuery } from "../lib/metadata_assist.js"
 
 export default class extends Controller<HTMLElement> {
@@ -204,23 +204,12 @@ export default class extends Controller<HTMLElement> {
     if (editor.editingMode === "visual") {
       const rect = visualCaretRect()
       if (!rect) return
-      this.placePalette(rect)
+      placePaletteBelow(this.paletteTarget, rect)
       return
     }
     const editorRect = editor.dom.getBoundingClientRect()
     const markerRect = editor.view.coordsAtPos(editor.selectionStart) || editorRect
-    this.placePalette(markerRect)
-  }
-
-  placePalette(markerRect: { left: number; bottom: number; top: number }) {
-    const paletteRect = this.paletteTarget.getBoundingClientRect()
-    const left = Math.max(8, Math.min(markerRect.left, window.innerWidth - paletteRect.width - 8))
-    const maxTop = window.innerHeight - paletteRect.height - 8
-    const belowTop = markerRect.bottom + 4
-    const aboveTop = markerRect.top - paletteRect.height - 4
-    const top = belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop))
-    this.paletteTarget.style.left = `${left}px`
-    this.paletteTarget.style.top = `${top}px`
+    placePaletteBelow(this.paletteTarget, markerRect)
   }
 
   insertSelected(): void {

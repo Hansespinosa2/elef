@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
-import { assistsInMode, mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
+import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
 import { application } from "./application.js"
 import { editorInsideMath, expandMathShorthand, innermostMathChainWindow, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js"
 import { authoringRegistryFor } from "./authoring_registry.js"
@@ -392,21 +392,12 @@ export default class extends Controller<HTMLElement> {
     if (editor.editingMode === "visual") {
       const rect = visualCaretRect()
       if (!rect) return
-      this.placePalette(rect)
+      placePaletteBelow(this.paletteTarget, rect)
       return
     }
     const editorRect = editor.dom.getBoundingClientRect()
     const marker = editor.view.coordsAtPos(editor.selectionStart) || editorRect
-    this.placePalette(marker)
-  }
-
-  placePalette(marker: { left: number; bottom: number; top: number }) {
-    const paletteRect = this.paletteTarget.getBoundingClientRect()
-    this.paletteTarget.style.left = `${Math.max(8, Math.min(marker.left, window.innerWidth - paletteRect.width - 8))}px`
-    const maxTop = window.innerHeight - paletteRect.height - 8
-    const belowTop = marker.bottom + 4
-    const aboveTop = marker.top - paletteRect.height - 4
-    this.paletteTarget.style.top = `${belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop))}px`
+    placePaletteBelow(this.paletteTarget, marker)
   }
 
   move(amount: number): void {

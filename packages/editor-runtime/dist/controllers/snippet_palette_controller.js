@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { editorFor } from "../lib/editor_controller_lookup.js";
-import { assistsInMode, mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";
+import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";
 import { editorInsideCode, editorInsideMath } from "./math_shorthand_controller.js";
 import { authoringRegistryFor } from "./authoring_registry.js";
 import { snippetStopsEffect } from "./snippet_stops.js";
@@ -311,22 +311,12 @@ class snippet_palette_controller_default extends Controller {
     if (editor.editingMode === "visual") {
       const rect = visualCaretRect();
       if (!rect) return;
-      this.placePalette(rect);
+      placePaletteBelow(this.paletteTarget, rect);
       return;
     }
     const editorRect = editor.dom.getBoundingClientRect();
     const markerRect = editor.view.coordsAtPos(editor.selectionStart) || editorRect;
-    this.placePalette(markerRect);
-  }
-  placePalette(markerRect) {
-    const paletteRect = this.paletteTarget.getBoundingClientRect();
-    const left = Math.max(8, Math.min(markerRect.left, window.innerWidth - paletteRect.width - 8));
-    const maxTop = window.innerHeight - paletteRect.height - 8;
-    const belowTop = markerRect.bottom + 4;
-    const aboveTop = markerRect.top - paletteRect.height - 4;
-    const top = belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop));
-    this.paletteTarget.style.left = `${left}px`;
-    this.paletteTarget.style.top = `${top}px`;
+    placePaletteBelow(this.paletteTarget, markerRect);
   }
   insertSelected() {
     const snippet = this.matches[this.selectedIndex];

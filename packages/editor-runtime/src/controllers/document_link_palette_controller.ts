@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
-import { mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
+import { mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
 
 // Prefix matches score 0, later substring matches score their index, and titles
 // that miss the query entirely drop out. Ties fall back to the title so the
@@ -229,14 +229,7 @@ export default class extends Controller {
     if (this.editorController?.editingMode === "visual") {
       const rect = visualCaretRect()
       if (!rect) return
-      const paletteRect = this.paletteTarget.getBoundingClientRect()
-      const left = Math.max(8, Math.min(rect.left, window.innerWidth - paletteRect.width - 8))
-      const maxTop = window.innerHeight - paletteRect.height - 8
-      const belowTop = rect.bottom + 4
-      const aboveTop = rect.top - paletteRect.height - 4
-      const top = belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop))
-      this.paletteTarget.style.left = `${left}px`
-      this.paletteTarget.style.top = `${top}px`
+      placePaletteBelow(this.paletteTarget, rect)
       return
     }
 

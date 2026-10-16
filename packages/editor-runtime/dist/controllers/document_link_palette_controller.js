@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { editorFor } from "../lib/editor_controller_lookup.js";
-import { mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";
+import { mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";
 function scoreLinkTitle(title, query) {
   const value = title.toLowerCase();
   if (!query) return 0;
@@ -185,14 +185,7 @@ class document_link_palette_controller_default extends Controller {
     if (this.editorController?.editingMode === "visual") {
       const rect = visualCaretRect();
       if (!rect) return;
-      const paletteRect2 = this.paletteTarget.getBoundingClientRect();
-      const left2 = Math.max(8, Math.min(rect.left, window.innerWidth - paletteRect2.width - 8));
-      const maxTop = window.innerHeight - paletteRect2.height - 8;
-      const belowTop = rect.bottom + 4;
-      const aboveTop = rect.top - paletteRect2.height - 4;
-      const top2 = belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop));
-      this.paletteTarget.style.left = `${left2}px`;
-      this.paletteTarget.style.top = `${top2}px`;
+      placePaletteBelow(this.paletteTarget, rect);
       return;
     }
     if (this.editorController) {

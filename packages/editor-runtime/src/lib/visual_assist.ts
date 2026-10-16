@@ -36,6 +36,19 @@ export function visualCaretRect(): { left: number; top: number; bottom: number }
   return rect
 }
 
+// Shared viewport-clamped placement below a caret or engine marker, falling
+// back above it when the viewport bottom is near.
+export function placePaletteBelow(palette: HTMLElement, marker: { left: number; top: number; bottom: number }): void {
+  const paletteRect = palette.getBoundingClientRect()
+  const left = Math.max(8, Math.min(marker.left, window.innerWidth - paletteRect.width - 8))
+  const maxTop = window.innerHeight - paletteRect.height - 8
+  const belowTop = marker.bottom + 4
+  const aboveTop = marker.top - paletteRect.height - 4
+  const top = belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop))
+  palette.style.left = `${left}px`
+  palette.style.top = `${top}px`
+}
+
 // In visual mode the native caret lives in the projection block, so mirror
 // the popup state there for assistive technology.
 export function mirrorPopupAccessibility(fieldElement: Element, params: { open: boolean; selectedId: string | null }): void {
