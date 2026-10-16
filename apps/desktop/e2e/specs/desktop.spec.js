@@ -1825,11 +1825,43 @@ class DesktopEditorUi {
 class DesktopLibraryUi {
   async createWork(title, kind) {
     await this.openLibrary()
-    await $("#new-work").click()
-    await $("#new-work-kind").selectByAttribute("value", kind)
-    await $("#new-work-name").setValue(title)
-    await $("#create-submit").click()
+    await $(".new-work-trigger").click()
+    await $(`[data-new-work-kind="${kind}"]`).click()
+    // Direct-open parity with the web menu: the click creates with a unique
+    // default title and lands in the editor. Name the work through the
+    // editor so shared scenarios keep deterministic titles.
     await $("#work-view").waitForDisplayed()
+    const editor = new DesktopEditorUi()
+    if (kind === "document") {
+      // A document's library title is its folder name, which only the card
+      // rename changes; the editor source carries the H1 separately. Set
+      // the H1 first, then rename the folder to match. New works seed the
+      // default front matter, so the retitle preserves it.
+      const defaultTitle = await browser.execute(
+        () => document.querySelector("#work-title")?.textContent.trim()
+      )
+      await editor.replaceSource(`---\ntheme: match\n---\n# ${title}\n\n`)
+      await editor.waitForSource(`---\ntheme: match\n---\n# ${title}\n\n`)
+      await browser.waitUntil(async () => browser.execute(
+        () => window.__elefSaveTestHooks?.saveStatus() === "clean"
+      ), {
+        timeout: 10_000,
+        timeoutMsg: `The retitled ${kind} source did not finish saving`
+      })
+      await this.openLibrary()
+      await this.renameWork(defaultTitle, title)
+      // The card list renders the rename optimistically: force a server
+      // round-trip so the open below reads the persisted folder name.
+      await $("#refresh-library").click()
+      await browser.waitUntil(async () => (await $(`[aria-label='Edit ${title}']`).isDisplayed()), {
+        timeout: 10_000,
+        timeoutMsg: `The renamed ${title} work did not survive a library refresh`
+      })
+      await editor.openWork(title)
+    } else {
+      await editor.renameEditorTitle(title)
+      await editor.waitForEditorTitle(title)
+    }
     await browser.waitUntil(async () => browser.execute(({ expected, documentKind }) => {
       if (documentKind) return document.querySelector("#work-title")?.textContent.trim() === expected
       return document.querySelector("#desktop-editor-title")?.value === expected
@@ -2263,7 +2295,7 @@ class DesktopLibraryUi {
 }
 
 describe("desktop binary workflows and native boundaries", () => {
-  it("opens the new-work dialog from the native menu accelerator", async () => {
+  it("creates a presentation directly from the native menu accelerator", async () => {
     await $("#library-view").waitForDisplayed()
     await browser.execute(() => window.focus())
     if (process.platform === "darwin") {
@@ -2273,14 +2305,15 @@ describe("desktop binary workflows and native boundaries", () => {
     } else {
       throw new Error(`Native menu smoke is unsupported on ${process.platform}`)
     }
-    const dialog = await $("#create-dialog")
-    await dialog.waitForDisplayed()
-    focusDesktopWindow()
-    sendNativeKey("Escape", { activate: false })
-    await browser.waitUntil(async () => browser.execute(() => !document.querySelector("#create-dialog")?.open), {
-      timeout: 5_000,
-      timeoutMsg: "Escape did not close the new-work dialog"
-    })
+    // Web parity: File → New Presentation skips the name dialog and opens
+    // the editor with the shared unique default title, like the header menu.
+    await $("#work-view").waitForDisplayed()
+    const title = await $("#desktop-editor-title").getValue()
+    assert.match(title, /^Untitled presentation( \d+)?$/)
+    const library = new DesktopLibraryUi()
+    await library.openLibrary()
+    await library.deleteWork(title)
+    await library.assertWorkAbsent(title)
   })
 
   it("opens and cancels the native library folder picker", async () => {

@@ -10,7 +10,7 @@ import { presentConflictDialog } from "./conflict_dialog.js";
 import { createRendererClient } from "./renderer_worker_client.js";
 import { applyDesktopFeatureFlags } from "./feature_flags.js";
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js";
-import { CREATE_WORK_EVENT, exportMenuOptionsFor, mountElef, mountExportMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile } from "@elef/client";
+import { CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client";
 function ensureWorkFolderHash(workFolder) {
   workFolder.content_hash ??= "";
   return workFolder;
@@ -486,7 +486,7 @@ function startFileLibraryApplication(platform) {
     elements.library.hidden = !library;
     elements.workView.hidden = true;
     elements.libraryName.textContent = library ? library.root.split(/[\\/]/).filter(Boolean).at(-1) || library.root : "No library selected";
-    shellElement("#new-work").disabled = !library;
+    newWorkMenu.setDisabled(!library);
     shellElement("#import-elef").disabled = !library;
     shellElement("#breadcrumb-current").textContent = "Works";
     if (libraryShown) {
@@ -570,10 +570,48 @@ function startFileLibraryApplication(platform) {
       showError(error);
     }
   }
-  function showCreateDialog(kind = "presentation") {
+  function requestDirectCreate(kind = "presentation") {
     mount.querySelector(".library-shared-view")?.dispatchEvent(
-      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })
+      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind, direct: true } })
     );
+  }
+  const newWorkMenu = mountNewWorkMenu(
+    document.querySelector("#new-work-mount"),
+    { onSelect: (kind) => requestDirectCreate(kind), disabled: true }
+  );
+  function desktopPaletteCommands() {
+    const platform2 = /Mac|iPhone|iPad|iPod/i.test(
+      navigator.userAgentData?.platform || navigator.platform || ""
+    ) ? "mac" : "other";
+    const command = (id, run) => {
+      const action = shortcutById(id);
+      const chord = action?.desktopChord ?? null;
+      return {
+        id,
+        label: action?.label ?? id,
+        description: action?.description ?? "",
+        chord: chord === null ? null : chordDisplay(chord, platform2),
+        run
+      };
+    };
+    return [
+      command("new-presentation", () => requestDirectCreate("presentation")),
+      command("new-document", () => requestDirectCreate("document")),
+      command("open-work", () => void handleMenuAction("open-work")),
+      command("library-all", () => {
+        showLibrary();
+        shell?.setFilter("all");
+      }),
+      command("library-documents", () => {
+        showLibrary();
+        shell?.setFilter("documents");
+      }),
+      command("library-presentations", () => {
+        showLibrary();
+        shell?.setFilter("presentations");
+      }),
+      command("open-settings", () => void showSettings())
+    ];
   }
   const openWork = createWorkOpenFlow(openWorkNow);
   async function openWorkNow(id) {
@@ -707,7 +745,10 @@ function startFileLibraryApplication(platform) {
   }
   function handleLibraryEvent(event) {
     if (event.type === "renamed") {
-      if (activeWorkFolder && activeWorkFolder.id === event.work.id) Object.assign(activeWorkFolder, { name: event.work.title });
+      if (activeWorkFolder && activeWorkFolder.id === event.work.id) {
+        Object.assign(activeWorkFolder, { name: event.work.title });
+        elements.titleInput.value = event.work.title;
+      }
       workFolders = workFolders.map((item) => item.id === event.work.id ? { ...item, name: event.work.title } : item);
     }
     if (event.type === "deleted") {
@@ -1072,8 +1113,8 @@ function startFileLibraryApplication(platform) {
       showLibrary();
       return;
     }
-    if (action === "new-presentation") return showCreateDialog("presentation");
-    if (action === "new-document") return showCreateDialog("document");
+    if (action === "new-presentation") return requestDirectCreate("presentation");
+    if (action === "new-document") return requestDirectCreate("document");
     if (action === "save") return flushSave({ force: true });
     if (action === "export-elef") return exportCurrentWork();
     if (action === "export-pptx") return exportPptxCurrentWork();
@@ -1092,9 +1133,6 @@ function startFileLibraryApplication(platform) {
     shellElement("#back-to-library").click();
   });
   shellElement("#open-settings").addEventListener("click", () => void showSettings());
-  shellElement("#new-work").addEventListener("click", () => {
-    showCreateDialog(currentFilter() === "documents" ? "document" : "presentation");
-  });
   shellElement("#refresh-library").addEventListener("click", () => void refreshLibrary());
   shellElement("#import-elef").addEventListener("click", () => void importWork());
   exportMenu = mountExportMenu(shellElement("#export-menu-mount"), exportMenuProps());
@@ -1162,7 +1200,7 @@ function startFileLibraryApplication(platform) {
     const action = desktopMenuKeyAction(event);
     if (action === "focus-search") {
       event.preventDefault();
-      mount.querySelector("#library-search")?.focus();
+      if (!elements.library.hidden) shell?.openPalette("search");
     } else if (action === "start-presentation") {
       event.preventDefault();
       void handleMenuAction("start-presentation");
@@ -1191,6 +1229,7 @@ function startFileLibraryApplication(platform) {
           if (opened) void startPresentation();
         });
       },
+      palette: { commands: desktopPaletteCommands() },
       onLibraryEvent: handleLibraryEvent
     });
   }

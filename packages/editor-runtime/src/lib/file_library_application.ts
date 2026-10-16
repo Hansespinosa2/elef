@@ -10,8 +10,8 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { CREATE_WORK_EVENT, exportMenuOptionsFor, mountElef, mountExportMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile } from "@elef/client"
-import type { ExportMenuHandle, ExportMenuProps, GraphController } from "@elef/client"
+import { CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client"
+import type { ExportMenuHandle, ExportMenuProps, GraphController, LibraryPaletteCommand } from "@elef/client"
 
 export interface WorkFolder {
   id: string;
@@ -575,7 +575,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     elements.library.hidden = !library
     elements.workView.hidden = true
     elements.libraryName.textContent = library ? library.root.split(/[\\/]/).filter(Boolean).at(-1) || library.root : "No library selected"
-    shellElement<HTMLButtonElement>("#new-work").disabled = !library
+    newWorkMenu.setDisabled(!library)
     shellElement<HTMLButtonElement>("#import-elef").disabled = !library
     shellElement<HTMLElement>("#breadcrumb-current").textContent = "Works"
     // The first show preserves the boot filter (a deep-linked tab); every
@@ -682,13 +682,65 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
   }
 
-  // The create dialog is client-owned; the host only requests it. Creation
-  // itself flows through the host adapter, then the navigate adapter opens
-  // the new work, matching the old create-then-open sequence.
-  function showCreateDialog(kind = "presentation") {
+  // Direct-open parity with the web header menu: the web click navigates
+  // straight to the unsaved edit shell (documents#new / presentations#new
+  // with a default source). The desktop has no unsaved-shell route — a work
+  // folder needs a valid unique name at creation (local-store rejects empty
+  // and colliding names) — so the same click creates with the shared unique
+  // default title and opens the editor, where the title stays editable. The
+  // name-first dialog remains for the shared empty-state button, exactly
+  // like the web empty-state dialog.
+  function requestDirectCreate(kind = "presentation") {
     mount.querySelector(".library-shared-view")?.dispatchEvent(
-      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind } })
+      new CustomEvent(CREATE_WORK_EVENT, { detail: { kind, direct: true } })
     )
+  }
+
+  // The shared New dropdown (the same component and web classes as the web
+  // menu) sits where the old single-kind button sat; it only picks the kind
+  // and the direct-create flow above does the rest.
+  const newWorkMenu = mountNewWorkMenu(
+    document.querySelector("#new-work-mount") as HTMLElement,
+    { onSelect: kind => requestDirectCreate(kind), disabled: true }
+  )
+
+  // Library-meaningful palette commands: labels, descriptions, and chord
+  // chips come from the shared registry so the palette cannot drift from
+  // the documented shortcut map. Editor-scoped actions (save, present,
+  // print) stay out: the palette mounts in the library view.
+  function desktopPaletteCommands(): LibraryPaletteCommand[] {
+    const platform = /Mac|iPhone|iPad|iPod/i.test(
+      ((navigator as any).userAgentData?.platform || navigator.platform || "")
+    ) ? "mac" : "other"
+    const command = (id: string, run: () => void): LibraryPaletteCommand => {
+      const action = shortcutById(id)
+      const chord = action?.desktopChord ?? null
+      return {
+        id,
+        label: action?.label ?? id,
+        description: action?.description ?? "",
+        chord: chord === null ? null : chordDisplay(chord, platform),
+        run
+      }
+    }
+    return [
+      command("new-presentation", () => requestDirectCreate("presentation")),
+      command("new-document", () => requestDirectCreate("document")),
+      command("open-work", () => void handleMenuAction("open-work")),
+      command("library-all", () => {
+        showLibrary()
+        shell?.setFilter("all")
+      }),
+      command("library-documents", () => {
+        showLibrary()
+        shell?.setFilter("documents")
+      }),
+      command("library-presentations", () => {
+        showLibrary()
+        shell?.setFilter("presentations")
+      }),
+      command("open-settings", () => void showSettings())
+    ]
   }
 
   const openWork = createWorkOpenFlow(openWorkNow)
@@ -842,7 +894,13 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   // host only keeps its editor-side caches consistent and reports status.
   function handleLibraryEvent(event: any): void {
     if (event.type === "renamed") {
-      if (activeWorkFolder && activeWorkFolder.id === event.work.id) Object.assign(activeWorkFolder, { name: event.work.title })
+      if (activeWorkFolder && activeWorkFolder.id === event.work.id) {
+        Object.assign(activeWorkFolder, { name: event.work.title })
+        // A card rename is server truth for the active work too: mirror it
+        // into the title input, or the title save flow reads the stale input
+        // as a pending edit and renames the work back on the next open.
+        elements.titleInput.value = event.work.title
+      }
       workFolders = workFolders.map(item => item.id === event.work.id ? { ...item, name: event.work.title } : item)
     }
     if (event.type === "deleted") {
@@ -1278,8 +1336,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       showLibrary()
       return
     }
-    if (action === "new-presentation") return showCreateDialog("presentation")
-    if (action === "new-document") return showCreateDialog("document")
+    if (action === "new-presentation") return requestDirectCreate("presentation")
+    if (action === "new-document") return requestDirectCreate("document")
     if (action === "save") return flushSave({ force: true })
     if (action === "export-elef") return exportCurrentWork()
     if (action === "export-pptx") return exportPptxCurrentWork()
@@ -1299,9 +1357,6 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     shellElement<HTMLElement>("#back-to-library").click()
   })
   shellElement<HTMLElement>("#open-settings").addEventListener("click", () => void showSettings())
-  shellElement<HTMLElement>("#new-work").addEventListener("click", () => {
-    showCreateDialog(currentFilter() === "documents" ? "document" : "presentation")
-  })
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
   // The work-view Export menu is the shared client component: one trigger
@@ -1381,7 +1436,12 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     const action = desktopMenuKeyAction(event)
     if (action === "focus-search") {
       event.preventDefault()
-      mount.querySelector<HTMLElement>("#library-search")?.focus()
+      // Library-scoped: ⌘K opens the shared palette in search mode — the
+      // same keyboard-first entry the old inline-search focus gave (type to
+      // filter, Enter to open), with every library command one toggle away.
+      // In the editor the palette has no surface, so the key stays a no-op
+      // there exactly as before.
+      if (!elements.library.hidden) shell?.openPalette("search")
     } else if (action === "start-presentation") {
       event.preventDefault()
       void handleMenuAction("start-presentation")
@@ -1413,6 +1473,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
           if (opened) void startPresentation()
         })
       },
+      palette: { commands: desktopPaletteCommands() },
       onLibraryEvent: handleLibraryEvent
     })
   }
