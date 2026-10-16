@@ -1,0 +1,43 @@
+{
+  "branch_runs": {
+    "dev": [
+      {
+        "databaseId": 902,
+        "conclusion": "failure",
+        "createdAt": "2026-10-11T08:00:00Z",
+        "workflowName": "CI",
+        "url": "https://github.com/example/elef/actions/runs/902"
+      },
+      {
+        "databaseId": 901,
+        "conclusion": "success",
+        "createdAt": "2026-10-11T06:00:00Z",
+        "workflowName": "slow-lane",
+        "url": "https://github.com/example/elef/actions/runs/901"
+      }
+    ],
+    "main": [
+      {
+        "databaseId": 800,
+        "conclusion": "success",
+        "createdAt": "2026-10-09T06:00:00Z",
+        "workflowName": "CI",
+        "url": "https://github.com/example/elef/actions/runs/800"
+      }
+    ]
+  },
+  "failing_jobs": {
+    "902": [
+      "desktop-macos",
+      "system-test"
+    ]
+  },
+  "deploy_refs": {
+    "elef-deploy-dev": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "elef-deploy-main": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "branch_tips": {
+    "dev": "cccccccccccccccccccccccccccccccccccccccc",
+    "main": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  }
+}

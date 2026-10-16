@@ -1,30 +1,32 @@
-# ADR-002: Tauri desktop shell
+# ADR-002: Tauri shell with signed updates through GitHub Releases
+
+Reach for when: touching the desktop shell, webviews, install/update flows, or release signing.
 
 - Status: Proposed
-- Date: 2026-09-30 (revised 2026-10-01)
+- Date: 2026-09-30 (update-channel decision merged in 2026-10-11; decisions unchanged)
 - Decider: Andres
-- Confidence: medium
-- Accepted when: S2, S3, and S4 evidence is complete, including the owner-device first-install experience
+- Accepted when: macOS and Linux install/update evidence is complete, updater key custody is performed, and the owner-device first-install experience passes
 
 ## Context
 
-Elef needs an offline desktop application for macOS and Linux, with native filesystem access and signed updates. A paid Apple Developer ID is not available for v1.
+Elef needs an offline desktop app for macOS and Linux with native filesystem access and self-updates, without an update server or Apple Developer ID. Update verification is a security boundary: a signing key authorizes executable code.
 
 ## Options considered
 
-- **Tauri:** Rust commands, system webviews, small packages, and signed updates without a Developer ID.
-- **Electron:** mature tooling and consistent Chromium, but larger packages and a signing-dependent macOS updater path.
+- Tauri with GitHub Releases and Ed25519 update verification (chosen): small packages and signed updates without a Developer ID.
+- Electron: mature tooling and consistent Chromium, but larger packages and a signing-dependent macOS updater path.
+- A dedicated update service, or manual builds only: rejected, cost without benefit at this scale.
 
 ## Decision
 
-Use Tauri. Its updater and native file boundary fit the platform and offline requirements.
+Use Tauri. Publish signed update artifacts through GitHub Releases; the app verifies against its configured public key and uses the native confirmed install flow. Release packaging is defined in [the desktop release workflow](../../../.github/workflows/desktop-release.yml).
 
 ## Consequences
 
-- macOS uses WKWebView and Linux uses WebKitGTK; parity must be exercised against both native builds.
-- The shared frontend and file formats remain shell-independent where possible. See [architecture](../../architecture.md) and [development and testing](../../development.md).
-- Unsigned macOS first-install and owner-device acceptance remain release checks; see [install and use](../install-and-use.md).
+- macOS uses WKWebView and Linux uses WebKitGTK; parity is exercised against both native builds.
+- Production release credentials and two offline encrypted private-key backups are owner-managed; test fixtures use ephemeral keys. A lost production key strands installed versions; a compromised key can authorize malicious releases.
+- Unsigned macOS first-install friction remains until Developer ID signing is adopted.
 
 ## Revisit when
 
-A concrete editing or performance gap cannot be solved in the shared frontend, or signing becomes available and changes the updater trade-off.
+A concrete editing or performance gap cannot be solved in the shared frontend, distribution expands beyond the owner, key custody changes, or a platform change blocks the signed update path.

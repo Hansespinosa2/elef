@@ -1,0 +1,439 @@
+#!/usr/bin/env python3
+
+
+"""Steady-state repository check interface."""
+
+
+from __future__ import annotations
+
+
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+CHECK = ROOT / "bin" / "check"
+
+
+DESKTOP_SOURCE = "apps/desktop"
+DESKTOP_PATH_PREFIX = DESKTOP_SOURCE + "/"
+
+
+COMMANDS = ("quick", "affected", "all", "arch", "fresh")
+
+
+class CheckFailure(Exception):
+    pass
+
+
+def fail(message: str) -> None:
+    raise CheckFailure(message)
+
+
+def git(*args: str, check: bool = True) -> str:
+    result = subprocess.run(
+        ["git", "-C", str(ROOT), *args],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if check and result.returncode:
+        fail(f"git {' '.join(args)} failed: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
+D_E2E = DESKTOP_PATH_PREFIX + "e2e"
+
+def run_rails_adapter_conformance() -> float:
+    import socket
+    import time
+
+    pid_file = ROOT / "apps" / "web" / "tmp" / "pids" / "tier-server.pid"
+    server = subprocess.Popen(
+        ["apps/web/bin/rails", "server", "-e", "test", "-p", "3101", "-b", "127.0.0.1",
+         "-P", str(pid_file)],
+        cwd=ROOT,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    started = time.monotonic()
+    try:
+        deadline = started + 90
+        while True:
+            try:
+                socket.create_connection(("127.0.0.1", 3101), timeout=2).close()
+                break
+            except OSError:
+                if time.monotonic() > deadline or server.poll() is not None:
+                    fail("rails conformance server did not boot")
+                time.sleep(1)
+        node = subprocess.run(
+            ["node", "tests/host-conformance/run-node.js", "rails"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            env={**os.environ, "ELEF_CONFORMANCE_RAILS_URL": "http://127.0.0.1:3101"},
+        )
+        if node.returncode:
+            tail = (node.stdout + node.stderr).strip().splitlines()[-20:]
+            fail("rails adapter conformance failed\n" + "\n".join(tail))
+    finally:
+        server.terminate()
+        try:
+            server.wait(timeout=20)
+        except subprocess.TimeoutExpired:
+            server.kill()
+    return time.monotonic() - started
+
+
+def run_harness_step(label: str, inner: str) -> float:
+    import time
+
+    started = time.monotonic()
+    try:
+        result = subprocess.run(
+            ["dbus-run-session", "--", "xvfb-run", "--auto-servernum", "bash", "-c",
+             f"set -o pipefail; openbox --sm-disable >/tmp/elef-{label}-openbox.log 2>&1 & sleep 1; {inner}"],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode:
+            tail = (result.stdout + result.stderr).strip().splitlines()[-25:]
+            fail(f"{label} failed\n" + "\n".join(tail))
+    finally:
+        for pattern in ("tauri-driver", "chromedriver", "openbox --sm-disable"):
+            subprocess.run(["pkill", "-f", pattern], capture_output=True, check=False)
+    return time.monotonic() - started
+
+
+def run_build_step(label: str, args: list, extra_env: dict | None = None) -> float:
+    import time
+
+    started = time.monotonic()
+    env = dict(os.environ)
+    if extra_env:
+        env.update(extra_env)
+    result = subprocess.run(
+        args, cwd=ROOT, capture_output=True, text=True, check=False, env=env
+    )
+    if result.returncode:
+        tail = (result.stdout + result.stderr).strip().splitlines()[-25:]
+        fail(f"{label} failed\n" + "\n".join(tail))
+    return time.monotonic() - started
+
+
+def run_desktop_e2e() -> float:
+    build_elapsed = run_build_step(
+        "desktop e2e debug build",
+        ["npm", "run", "tauri:build", "--prefix", "apps/desktop/frontend", "--",
+         "--debug", "--no-bundle", "--features", "desktop-dev,webdriver",
+         "--config", "src-tauri/tauri.e2e.conf.json"],
+        # The e2e Tauri config reads frontendDist dist-e2e, which build.mjs
+        # only emits under this flag.
+        extra_env={"ELEF_E2E_BUILD": "1"},
+    )
+    harness_elapsed = run_harness_step(
+        "desktop-e2e", "RAILS_ENV=test ELEF_USE_SQLITE=1 npm test --prefix apps/desktop/e2e"
+    )
+    return build_elapsed + harness_elapsed
+
+
+def run_web_e2e() -> float:
+    import time
+
+    started = time.monotonic()
+    result = subprocess.run(
+        ["node", "apps/desktop/e2e/seed-web-fixtures.mjs"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+        env={**os.environ, "RAILS_ENV": "test", "ELEF_USE_SQLITE": "1"},
+    )
+    if result.returncode:
+        tail = (result.stdout + result.stderr).strip().splitlines()[-25:]
+        fail("web e2e failed\n" + "\n".join(tail))
+    for pattern in ("chromedriver", "openbox --sm-disable"):
+        subprocess.run(["pkill", "-f", pattern], capture_output=True, check=False)
+    return time.monotonic() - started
+
+
+def run_native_benchmark() -> float:
+    build_elapsed = run_build_step(
+        "native benchmark release build",
+        ["npm", "run", "tauri:build", "--prefix", "apps/desktop/frontend", "--",
+         "--features", "desktop-dev,webdriver", "--no-bundle",
+         "--config", "src-tauri/tauri.e2e.conf.json",
+         "--config", "src-tauri/tauri.performance.conf.json"],
+        extra_env={"ELEF_E2E_BUILD": "1"},
+    )
+    harness_elapsed = run_harness_step(
+        "native-benchmark",
+        'node apps/desktop/e2e/benchmark-native.mjs --binary "$PWD/target/release/elef-desktop" --report-runner',
+    )
+    return build_elapsed + harness_elapsed
+
+
+def run_fresh_tier() -> float:
+    import time
+
+    started = time.monotonic()
+    run_fresh()
+    return time.monotonic() - started
+
+
+QUICK_CEILING_S = 180.0
+AFFECTED_CEILING_S = 420.0
+ALL_CEILING_S = 2700.0
+
+
+QUICK_COMMANDS_1 = (
+    "./node_modules/.bin/tsc -p packages/contracts/tsconfig.test.json",
+    "node --test tests/host-conformance/conformance-fake.test.js",
+    "node --test tests/spec/editor-markup-vocabulary.test.js",
+    "npm run test:javascript",
+    "npm test --prefix packages/work-model",
+    "npm test --prefix packages/renderer",
+    "./node_modules/.bin/tsc --noEmit -p packages/client/tsconfig.test.json",
+    "./node_modules/.bin/tsc --noEmit -p packages/work-model/tsconfig.json",
+    "./node_modules/.bin/tsc --noEmit -p packages/renderer/tsconfig.json",
+    "./node_modules/.bin/tsc --noEmit -p packages/editor-runtime/tsconfig.json",
+    "npm test --prefix packages/client",
+    f"npm test --prefix {DESKTOP_PATH_PREFIX}frontend",
+    f"npm run test:unit --prefix {D_E2E}",
+    "npm run test:arch-package",
+    "python3 apps/web/script/check_frontend_ownership.py",
+    "python3 tooling/check_boundaries.py",
+    "python3 tooling/check_boundaries.py --self-test",
+    "python3 tooling/check_spec.py",
+    "python3 tooling/ci_affected.py --self-test",
+    "python3 tooling/ci_report.py --self-test",
+    "cargo test --manifest-path Cargo.toml -p local-store --locked",
+)
+
+
+AFFECTED_RAILS_TESTS = (
+    "apps/web/test/lib/source/renderer_test.rb apps/web/test/lib/source/javascript_renderer_test.rb "
+    "apps/web/test/lib/source/document_test.rb apps/web/test/lib/source/block_renderer_test.rb "
+    "apps/web/test/lib/authoring_registry_test.rb apps/web/test/models/presentation_test.rb "
+    "apps/web/test/models/document_links_test.rb apps/web/test/models/work_test.rb "
+    "apps/web/test/services/presentations/pptx_export_test.rb "
+    "apps/web/test/controllers/host_api_controller_test.rb"
+)
+AFFECTED_COMMANDS_1 = (
+    *QUICK_COMMANDS_1,
+    "npm run renderer:build",
+    "git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js",
+    "npm run build --prefix packages/client",
+    "git diff --exit-code -- packages/client/dist/",
+    "npm run build --prefix packages/work-model",
+    "git diff --exit-code -- packages/work-model/dist/",
+    "npm run build --prefix packages/editor-runtime",
+    "git diff --exit-code -- packages/editor-runtime/dist/",
+    "apps/web/bin/rails tailwindcss:build",
+    "git diff --exit-code -- apps/web/app/assets/builds/tailwind.css",
+    "apps/web/bin/rails db:test:prepare",
+    f"apps/web/bin/rails test {AFFECTED_RAILS_TESTS}",
+    ("rails adapter conformance (tier-booted test server)", run_rails_adapter_conformance),
+    f"npm run build --prefix {DESKTOP_PATH_PREFIX}frontend",
+    f"npm run build --prefix {DESKTOP_PATH_PREFIX}frontend -- --profile=dev",
+    f"ELEF_E2E_BUILD=1 ELEF_DESKTOP_PROFILE=stable npm run build --prefix {DESKTOP_PATH_PREFIX}frontend",
+    f"python3 {DESKTOP_PATH_PREFIX}scripts/check_architecture.py",
+    "npm run check:desktop-profiles",
+    "npm run check:release-fixtures",
+    "npm run check:release-ci",
+    "cargo fmt --manifest-path Cargo.toml --all -- --check",
+    "cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings",
+    "cargo check --manifest-path Cargo.toml -p elef-desktop --features desktop-dev",
+    "cargo test --manifest-path Cargo.toml --workspace --locked",
+)
+
+
+# Full release/integration envelope (constitution §7). Rails suites rely on
+# ambient PGPASSWORD like the affected tier; the sqlite variants pin their own
+# adapter. Browser/native suites serialize inside their steps; each step cleans
+# its harness processes so repeated runs start cold.
+ALL_COMMANDS_1 = (
+    *AFFECTED_COMMANDS_1,
+    ("freshness checks", run_fresh_tier),
+
+
+    "ELEF_USE_SQLITE=1 apps/web/bin/rails db:test:prepare",
+    "ELEF_USE_SQLITE=1 apps/web/bin/rails test",
+    "apps/web/bin/rails test",
+    "PARALLEL_WORKERS=1 apps/web/bin/rails test test/system",
+    ("desktop e2e (debug build + native suite)", run_desktop_e2e),
+    ("web e2e (seeded playwright suite)", run_web_e2e),
+    ("native benchmark (release build + 20 runs)", run_native_benchmark),
+)
+
+
+ARCH_COMMANDS_1 = (
+    "python3 apps/web/script/check_frontend_ownership.py",
+    "python3 tooling/check_boundaries.py",
+    "python3 tooling/check_boundaries.py --self-test",
+    "python3 tooling/check_spec.py",
+    f"python3 {DESKTOP_PATH_PREFIX}scripts/check_architecture.py",
+)
+
+
+ENV_REQUIRED_PATTERN = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*):\?([^}]*)\}")
+ENV_ASSIGN_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+
+
+def run_step(command: str) -> float:
+    import shlex
+    import time
+
+    def require(match: "re.Match") -> str:
+        name, message = match.group(1), match.group(2)
+        value = os.environ.get(name, "")
+        if not value:
+            fail(f"required environment for step is missing: {message}")
+        return value
+
+    expanded = ENV_REQUIRED_PATTERN.sub(require, command)
+    parts = shlex.split(expanded)
+    env = dict(os.environ)
+    while parts and ENV_ASSIGN_PATTERN.match(parts[0]):
+        key, value = parts[0].split("=", 1)
+        env[key] = value
+        parts = parts[1:]
+    if not parts:
+        fail(f"step has no command: {command}")
+    step_cwd = ROOT
+    if parts[0].startswith("apps/web/bin/"):
+        # Rails binstubs run inside apps/web (rake resolves its Rakefile from
+        # the working directory); the recorded command string keeps the
+        # root-relative form while argv resolves app-relative paths.
+        step_cwd = ROOT / "apps" / "web"
+        parts = [part[len("apps/web/"):] if part.startswith("apps/web/") else part for part in parts]
+    started = time.monotonic()
+    result = subprocess.run(
+        parts,
+        cwd=step_cwd,
+        capture_output=True,
+        text=True,
+        check=False,
+        env=env,
+    )
+    elapsed = time.monotonic() - started
+    if result.returncode:
+        tail = (result.stdout + result.stderr).strip().splitlines()[-20:]
+        fail(f"step failed ({result.returncode}): {command}\n" + "\n".join(tail))
+    return elapsed
+
+
+def run_tier(commands: tuple, ceiling: float, quiet: bool) -> dict:
+    durations: dict = {}
+    for entry in commands:
+        if isinstance(entry, tuple):
+            label, step = entry
+            durations[label] = step()
+            continue
+        durations[entry] = run_step(entry)
+    total = sum(durations.values())
+    if total > ceiling:
+        fail(f"tier total {total:.1f}s exceeds the {ceiling:.0f}s ceiling")
+    if not quiet:
+        for command, elapsed in durations.items():
+            print(f"{elapsed:8.1f}s  {command}")
+        print(f"{total:8.1f}s  total (ceiling {ceiling:.0f}s)")
+    return durations
+
+
+def check_contracts_fresh() -> None:
+    import shutil
+    import tempfile
+
+    with tempfile.TemporaryDirectory(prefix="elef-contracts-a-") as first:
+        with tempfile.TemporaryDirectory(prefix="elef-contracts-b-") as second:
+            for out in (first, second):
+                result = subprocess.run(
+                    ["./node_modules/.bin/tsc", "-p", "packages/contracts/tsconfig.json",
+                     "--outDir", out],
+                    cwd=ROOT,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if result.returncode:
+                    fail(f"contracts build failed:\n{(result.stdout + result.stderr).strip()[-2000:]}")
+            compare = subprocess.run(
+                ["diff", "-r", first, second],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            if compare.returncode:
+                fail(f"contracts build is not deterministic:\n{compare.stdout.strip()[-2000:]}")
+
+
+def check_renderer_fresh() -> None:
+    run_step("npm run renderer:build")
+    run_step("git diff --exit-code -- packages/renderer/dist/elef-renderer.bundle.js packages/renderer/dist/elef-renderer.js")
+
+
+def run_fresh() -> None:
+    check_renderer_fresh()
+    check_contracts_fresh()
+
+
+def run_tier_command(tier: str, commands: tuple, ceiling: float) -> int:
+    before_status = git("status", "--porcelain", "--untracked-files=all")
+    try:
+        durations = run_tier(commands, ceiling, quiet=False)
+        after_status = git("status", "--porcelain", "--untracked-files=all")
+        if after_status != before_status:
+            fail(f"bin/check {tier} changed the working tree")
+    except (CheckFailure, OSError, ValueError) as error:
+        print(f"bin/check {tier}: {error}", file=sys.stderr)
+        return 1
+    print(f"bin/check {tier}: PASS ({sum(durations.values()):.1f}s)")
+    return 0
+
+
+def print_usage() -> None:
+    print("Usage: bin/check {quick|affected|all|arch|fresh}", file=sys.stderr)
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] not in COMMANDS:
+        print_usage()
+        return 2
+    command = argv[0]
+    if len(argv) != 1:
+        print_usage()
+        return 2
+    if command == "quick":
+        return run_tier_command("quick", QUICK_COMMANDS_1, QUICK_CEILING_S)
+    if command == "affected":
+        return run_tier_command("affected", AFFECTED_COMMANDS_1, AFFECTED_CEILING_S)
+    if command == "all":
+        return run_tier_command("all", ALL_COMMANDS_1, ALL_CEILING_S)
+    if command == "arch":
+        return run_tier_command("arch", ARCH_COMMANDS_1, QUICK_CEILING_S)
+    if command == "fresh":
+        before_status = git("status", "--porcelain", "--untracked-files=all")
+        try:
+            run_fresh()
+            after_status = git("status", "--porcelain", "--untracked-files=all")
+            if after_status != before_status:
+                fail("bin/check fresh changed the working tree")
+        except (CheckFailure, OSError, ValueError) as error:
+            print(f"bin/check fresh: {error}", file=sys.stderr)
+            return 1
+        print("bin/check fresh: PASS")
+        return 0
+    print_usage()
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
