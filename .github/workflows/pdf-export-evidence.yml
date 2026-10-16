@@ -12,6 +12,13 @@ name: pdf-export-evidence
 
 on:
   workflow_dispatch:
+  # Temporary push trigger so the dispatch-only lane can run from branches
+  # (GitHub only registers workflows from the default branch for dispatch).
+  # Scoped to the two evidence refs; removed once the artifacts land.
+  push:
+    branches:
+      - fix/desktop-pdf-export-redo
+      - evidence/pdf-export-prefix
 
 jobs:
   evidence:
