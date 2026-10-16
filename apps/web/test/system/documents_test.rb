@@ -3195,8 +3195,30 @@ class DocumentsTest < ApplicationSystemTestCase
     visit print_document_path(document)
 
     page.execute_script("window.print = () => { window.printWasRequested = true }")
-    click_on "Print / Save PDF"
+    click_on "Save as PDF"
     assert_equal true, page.evaluate_script("window.printWasRequested")
+  end
+
+  test "export menu PDF arrival opens the PDF dialog without an extra click" do
+    document = Document.create!(title: "Direct PDF", source: "# Direct PDF")
+    browser = page.driver.browser
+    injected = browser.execute_cdp("Page.addScriptToEvaluateOnNewDocument",
+      source: "window.__exportPrintRequested = false; window.print = () => { window.__exportPrintRequested = true };")
+    begin
+      visit "#{print_document_path(document)}?from_export=1"
+      Selenium::WebDriver::Wait.new(timeout: 5).until do
+        page.evaluate_script("window.__exportPrintRequested") == true
+      end
+
+      visit print_document_path(document)
+      assert_selector ".document-print-pages"
+      sleep 0.5
+      assert_equal false, page.evaluate_script("window.__exportPrintRequested")
+      click_on "Save as PDF"
+      assert_equal true, page.evaluate_script("window.__exportPrintRequested")
+    ensure
+      browser.execute_cdp("Page.removeScriptToEvaluateOnNewDocument", identifier: injected["identifier"])
+    end
   end
 
   test "changes alignment immediately after visual edits and reflects it visually in the block" do

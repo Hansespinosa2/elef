@@ -8,6 +8,7 @@ import { nextDefaultWorkTitle } from "./default_titles.js";
 import { LibraryCard } from "./LibraryCard.js";
 import type { PaletteMode } from "../../application/types.js";
 import { CommandPalette } from "./CommandPalette.js";
+import { buildNewWorkSource } from "@elef/work-model/document-map";
 
 export interface LibraryControl {
   reload(): Promise<void>;
@@ -296,6 +297,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
         workspaceId: space.id,
         title: name,
         kind: dialogKind,
+        text: buildNewWorkSource({ kind: dialogKind, title: name }),
       });
       options.onLibraryEvent?.({ type: "created", work: created });
       await reload();

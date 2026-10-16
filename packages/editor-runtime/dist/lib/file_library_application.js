@@ -10,7 +10,7 @@ import { presentConflictDialog } from "./conflict_dialog.js";
 import { createRendererClient } from "./renderer_worker_client.js";
 import { applyDesktopFeatureFlags } from "./feature_flags.js";
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js";
-import { CREATE_WORK_EVENT, chordDisplay, mountElef, mountNewWorkMenu, mountPresentation, parseLibraryRoute, shortcutById } from "@elef/client";
+import { CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client";
 function ensureWorkFolderHash(workFolder) {
   workFolder.content_hash ??= "";
   return workFolder;
@@ -128,6 +128,7 @@ function startFileLibraryApplication(platform) {
     presentationStart: document.querySelector("#start-presentation")
   };
   let library = null;
+  let exportMenu = null;
   let libraryConfig = {
     schema_version: 1,
     theme: "dark",
@@ -964,20 +965,23 @@ function startFileLibraryApplication(platform) {
       showNotice("Render the Work before printing it.", "error");
       return;
     }
-    document.body.classList.add("printing-work");
+    const printKind = printWorkKindForSourceFile(activeWorkFolder?.source_file);
+    const printMarkers = printMarkerClasses(printKind);
+    pausePrintVideos(preview);
+    document.body.classList.add(...printMarkers);
     await new Promise((resolve) => requestAnimationFrame(resolve));
     try {
       const printViaNative = typeof fileLibrary.printWork === "function";
       if (printViaNative) await fileLibrary.printWork();
       else window.print();
       if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
-        globalThis.__elefPrintResult = { native: printViaNative };
+        globalThis.__elefPrintResult = { native: printViaNative, kind: printKind };
       }
     } catch (error) {
       console.error("[desktop-print]", error);
       showNotice("The print dialog could not be opened.", "error");
     } finally {
-      document.body.classList.remove("printing-work");
+      document.body.classList.remove(...printMarkers);
     }
   }
   let presentationMount = null;
@@ -1067,11 +1071,30 @@ function startFileLibraryApplication(platform) {
     const conflictDialog = elements.editorForm.querySelector("#conflict-dialog");
     conflictDialog.close();
   }
+  function exportMenuProps() {
+    const kind = activeWorkFolder?.source_file === "document.md" ? "document" : "presentation";
+    return {
+      menuId: "export-menu",
+      buttonId: "export-menu-button",
+      menuLabel: "Export",
+      statusId: "export-pptx-status",
+      options: exportMenuOptionsFor({
+        kind,
+        editions: [{
+          edition: "draft",
+          onPdf: () => printCurrentWork(),
+          onExportPptx: () => exportPptxCurrentWork(),
+          pdfOptionId: "print-work",
+          pptxOptionId: "export-pptx"
+        }]
+      })
+    };
+  }
   function syncSourceLabel() {
     if (!activeWorkFolder) return;
     shellElement("#work-source-name").textContent = activeWorkFolder.source_file;
     shellElement("#work-kind").textContent = activeWorkFolder.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION";
-    shellElement("#export-pptx").hidden = activeWorkFolder.source_file === "document.md";
+    exportMenu?.update(exportMenuProps());
   }
   async function handleMenuAction(action) {
     if (action === "quit") return getCurrentWindow().close();
@@ -1112,25 +1135,7 @@ function startFileLibraryApplication(platform) {
   shellElement("#open-settings").addEventListener("click", () => void showSettings());
   shellElement("#refresh-library").addEventListener("click", () => void refreshLibrary());
   shellElement("#import-elef").addEventListener("click", () => void importWork());
-  function closeExportMenu() {
-    shellElement("#export-menu").open = false;
-  }
-  shellElement("#export-pptx").addEventListener("click", () => {
-    closeExportMenu();
-    void exportPptxCurrentWork();
-  });
-  shellElement("#print-work").addEventListener("click", () => {
-    closeExportMenu();
-    void printCurrentWork();
-  });
-  function dismissExportMenuOnOutsideEvent(event) {
-    if (event.target instanceof Element && !event.target.closest("#export-menu")) closeExportMenu();
-  }
-  document.addEventListener("pointerdown", dismissExportMenuOnOutsideEvent);
-  document.addEventListener("click", dismissExportMenuOnOutsideEvent);
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeExportMenu();
-  });
+  exportMenu = mountExportMenu(shellElement("#export-menu-mount"), exportMenuProps());
   shellElement("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then((saved) => {

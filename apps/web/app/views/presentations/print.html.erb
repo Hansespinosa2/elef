@@ -1,8 +1,8 @@
 <% content_for :title, "Print #{@presentation.title}" %>
 <main class="presentation-print presentation-surface work-theme-<%= @presentation.theme %> work-typography-<%= @presentation.typography %> slides-theme-<%= @presentation.theme %> slides-typography-<%= @presentation.typography %> slides-presentation-<%= @presentation.presentation_theme %>" data-controller="print-view<%= ' art-layout' if @presentation.slides.any? { |slide| slide.blocks.any? { |block| block.art } } %>">
-  <div class="presentation-print-toolbar" aria-label="Print controls">
+  <div class="presentation-print-toolbar" aria-label="PDF controls">
     <%= link_to "Back to editor", edit_presentation_path(@presentation), class: "button" %>
-    <button type="button" class="button primary" data-action="print-view#print">Print / Save PDF</button>
+    <button type="button" class="button primary" data-action="print-view#print">Save as PDF</button>
     <span><%= @release ? "Published release" : "Latest draft" %> · <%= @presentation.title %></span>
   </div>
   <div class="slides presentation-print-slides" data-bug-report-ignore>

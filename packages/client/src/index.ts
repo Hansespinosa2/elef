@@ -42,6 +42,27 @@ export type { DocumentEditorDeps, DocumentEditorSeam } from "./features/document
 export { SlideOverview } from "./features/overview/overview.js";
 export { exportPptxModel, downloadBlob, dataUriToBlob } from "./features/export/pptx.js";
 export { EXPORT_FORMATS, exportFormatsFor, exportFormatById } from "./features/export/registry.js";
+export { ExportMenu, exportMenuOptionsFor, mountExportMenu } from "./features/export/ExportMenu.js";
+export type {
+  ExportDelivery,
+  ExportEdition,
+  ExportMenuEditionSeams,
+  ExportMenuFormat,
+  ExportMenuHandle,
+  ExportMenuOption,
+  ExportMenuProps,
+} from "./features/export/ExportMenu.js";
+export {
+  DOCUMENT_PRINT_GEOMETRY,
+  PRESENTATION_PRINT_GEOMETRY,
+  PRINT_DOCUMENT_MARKER,
+  PRINT_MARKER,
+  PRINT_PRESENTATION_MARKER,
+  pausePrintVideos,
+  printMarkerClasses,
+  printWorkKindForSourceFile,
+} from "./features/export/print.js";
+export type { PrintWorkKind } from "./features/export/print.js";
 export {
   presentationBlockAttributes,
   presentationBlockControls,

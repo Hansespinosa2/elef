@@ -120,22 +120,39 @@ Capability keys come from the `HostCapabilities` interface
   "shared export flow downloads PPTX in the web app";
   `apps/desktop/e2e/specs/desktop.spec.js`, "exports PPTX through the
   desktop Export menu option into the harness path", which opens the
-  work-view Export menu, clicks the Download PPTX option, and asserts the
+  work-view Export menu, clicks the PPTX option, and asserts the
   harness file is a valid zip containing a slide plus the embedded deck
   image).
 - Desktop trigger: one work-view Export menu whose options vary by kind —
-  documents offer Print / Save PDF only, presentations add Download PPTX
-  (the export registry scopes PPTX to presentations; `syncSourceLabel`
-  hides the option for documents). The PPTX option plus the File →
-  Export PowerPoint… menu item call the desktop export seam
-  (`exportPptx` on the file-library transport); the PDF option (both
-  kinds) and File → Print… call `printCurrentWork`, which delivers
-  through the native `print_work` command (`apps/desktop/src-tauri/src/printing.rs`
+  documents offer PDF only, presentations add PPTX (the export registry
+  scopes PPTX to presentations; the shared menu omits the option for
+  documents). Both hosts mount the same client `ExportMenu`
+  (`packages/client/src/features/export/ExportMenu.tsx`, options from
+  `exportMenuOptionsFor` over the registry): each option delivers
+  immediately on click with no Print/Save wording and no intermediate
+  Export step. The web edit page mounts it through `export-menu-host`
+  (PDF options stay anchors to the print routes with `from_export`, so
+  the print page opens its PDF dialog immediately; PPTX runs the
+  draft-form model fetch), the desktop work view mounts it through
+  `file_library_application.ts` (PDF runs `printCurrentWork`, PPTX runs
+  `exportPptxCurrentWork`). Neither host keeps its own menu markup or
+  dismissal wiring. The PPTX option plus the File → Export PowerPoint…
+  menu item call the desktop export seam (`exportPptx` on the
+  file-library transport, delivered through the native save dialog titled
+  "Save PowerPoint"); the PDF option (both kinds) and File → Print…
+  call `printCurrentWork`, which delivers through the native `print_work`
+  command (`apps/desktop/src-tauri/src/printing.rs`
   → `WebviewWindow::print()` → the platform print dialog with its PDF
   destination). Script `window.print()` is only the fallback: it is a
   silent no-op in the desktop webviews on macOS and Linux, so it never
-  reached the platform pipeline there. The native dialog fires no
-  `afterprint` event, so the `printing-work` marker clears when the
+  reached the platform pipeline there. Before printing, `printCurrentWork`
+  prepares through the shared print contract (`packages/client/src/features/
+  export/print.ts`): videos pause (as the web print-view controller does)
+  and a kind marker (`printing-document` / `printing-presentation`) selects
+  the matching web print geometry, so the PDF carries the Work preview only —
+  shell, Export menu, notices, and editor affordances stay out — with fixed
+  13.333 × 7.5 in presentation pages and flowing A4 document pages. The native
+  dialog fires no `afterprint` event, so the markers clear when the
   command resolves; the WebDriver harness resolves the command without
   opening the dialog. The menu closes on activation, outside pointerdown
   or click, and Escape.
