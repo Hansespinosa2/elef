@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
+import { forwardEscapeToVim } from "../lib/vim_escape.js"
 import { editorInsideCode, editorInsideMath } from "./math_shorthand_controller.js"
 import { authoringRegistryFor } from "./authoring_registry.js"
 import { snippetStopsEffect } from "./snippet_stops.js"
@@ -155,6 +156,7 @@ export default class extends Controller<HTMLElement> {
       event.preventDefault()
       this.close()
       if (this.stops.length) this.endStops()
+      forwardEscapeToVim(editor, event)
     } else {
       queueMicrotask(() => this.refresh())
     }
