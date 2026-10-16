@@ -69,8 +69,23 @@ test("the desktop document print path selects A4 without touching the PPTX pipel
 })
 
 test("the desktop print flow prepares through the shared print contract", () => {
-  for (const token of ["pausePrintVideos", "printMarkerClasses", "printWorkKindForSourceFile"]) {
+  for (const token of ["pausePrintVideos", "printMarkerClasses", "printWorkKindForSourceFile", "ALL_PRINT_MARKERS"]) {
     assert.ok(printFlow.includes(token), `expected printCurrentWork to use the shared ${token}`)
   }
   assert.ok(printFlow.includes("kind: printKind"), "expected the harness probe to carry the work kind")
+})
+
+test("the print markers stay print-media-only so persisting them is screen-safe", () => {
+  // printCurrentWork keeps the markers across the native dialog lifetime
+  // (the dialog outlives the command resolve); that is only safe while no
+  // screen stylesheet keys off them. The flow must also never clear the
+  // markers when the command resolves.
+  const screenCss = hostCss.slice(0, hostCss.indexOf("@media print"))
+  for (const marker of ["printing-work", "printing-document", "printing-presentation"]) {
+    assert.ok(!screenCss.includes(marker), `expected no screen rule to reference ${marker}`)
+  }
+  assert.ok(
+    !/finally\s*{[^}]*classList\.remove/.test(printFlow),
+    "expected printCurrentWork to keep the markers once the native command resolves",
+  )
 })

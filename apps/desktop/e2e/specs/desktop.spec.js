@@ -2395,7 +2395,7 @@ describe("desktop binary workflows and native boundaries", () => {
     // Linux). The WebDriver harness cannot dismiss the platform print
     // dialog, so the command resolves without opening one there, and the
     // app records which delivery seam it used for the driver to assert.
-    async function expectPrintOptionReachesPipeline() {
+    async function expectPrintOptionReachesPipeline(expectedKindMarker) {
       await browser.execute(() => { delete window.__elefPrintResult })
       await ui.openExportMenu()
       await $("#print-work").click()
@@ -2404,10 +2404,16 @@ describe("desktop binary workflows and native boundaries", () => {
         timeoutMsg: "The PDF option did not reach the native print command"
       })
       await ui.assertExportMenuClosed("the print option")
-      // The native dialog fires no afterprint event: the printing-work
-      // marker must clear when the command resolves instead of leaking.
-      const markerLeaked = await browser.execute(() => document.body.classList.contains("printing-work"))
-      if (markerLeaked) throw new Error("The printing-work marker leaked after the native print command resolved")
+      // The platform dialog (and its PDF destination) outlives the resolve
+      // of the native command, so the render-time print markers must still
+      // cover the document after the command resolves: clearing them then
+      // renders the unmarked live editor shell into the PDF. Markers are
+      // print-media-only, so keeping them is screen-safe.
+      const markers = await browser.execute(() => [...document.body.classList].filter(marker => marker.startsWith("printing-")).sort())
+      const expected = ["printing-work", expectedKindMarker].sort()
+      if (JSON.stringify(markers) !== JSON.stringify(expected)) {
+        throw new Error(`The render-time print markers were ${JSON.stringify(markers)} instead of ${JSON.stringify(expected)} after the native print command resolved`)
+      }
     }
 
     await ui.openWork("E2E seed")
@@ -2422,7 +2428,7 @@ describe("desktop binary workflows and native boundaries", () => {
     // An outside pointerdown closes it too; the save note is inert.
     await $(".desktop-save-note").click()
     await ui.assertExportMenuClosed("an outside click")
-    await expectPrintOptionReachesPipeline()
+    await expectPrintOptionReachesPipeline("printing-presentation")
 
     await ui.openWork("E2E document")
     await $("#export-menu-button").waitForDisplayed()
@@ -2432,7 +2438,9 @@ describe("desktop binary workflows and native boundaries", () => {
       timeout: 10_000,
       timeoutMsg: "The PPTX option stayed visible for a document work"
     })
-    await expectPrintOptionReachesPipeline()
+    // Printing the document after the presentation must also drop the stale
+    // presentation kind marker, leaving exactly the document pair.
+    await expectPrintOptionReachesPipeline("printing-document")
   })
 
   it("keeps slide position stacks and lanes aligned in the desktop preview", async () => {
