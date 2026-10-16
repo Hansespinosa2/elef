@@ -1038,9 +1038,9 @@ function startFileLibraryApplication(platform) {
         kind,
         editions: [{
           edition: "draft",
-          onPrint: () => printCurrentWork(),
+          onPdf: () => printCurrentWork(),
           onExportPptx: () => exportPptxCurrentWork(),
-          printOptionId: "print-work",
+          pdfOptionId: "print-work",
           pptxOptionId: "export-pptx"
         }]
       })

@@ -11,15 +11,17 @@
     <div class="flex flex-wrap items-center gap-3">
       <%# Shared Export menu: the same component both hosts mount (labels and
         option visibility come from the client export registry). The web
-        adapter supplies print-route hrefs and the draft-form PPTX fetch;
-        the desktop adapter supplies its native seams. Present stays a
-        host-owned button (publish route vs in-app stage). %>
+        adapter supplies PDF hrefs (print routes with from_export, so the
+        print page opens its PDF dialog immediately) and the draft-form
+        PPTX fetch; the desktop adapter supplies its native seams. Present
+        stays a host-owned button (publish route vs in-app stage). %>
       <% present_icon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M10.2 8.9 15.6 12l-5.4 3.1V8.9Z"/></svg>'.html_safe %>
       <% has_published = !new_record && work.presentation? && work.published_release %>
       <% export_editions = has_published ? %w[draft published] : %w[draft] %>
-      <% export_print_urls = {} %>
-      <% export_print_urls["draft"] = work.document? ? print_document_path(work) : print_presentation_path(work) unless new_record %>
-      <% export_print_urls["published"] = print_presentation_path(work, version: "published") if has_published %>
+      <% export_pdf_url = ->(path) { path.include?("?") ? "#{path}&from_export=1" : "#{path}?from_export=1" } %>
+      <% export_pdf_urls = {} %>
+      <% export_pdf_urls["draft"] = export_pdf_url.call(work.document? ? print_document_path(work) : print_presentation_path(work)) unless new_record %>
+      <% export_pdf_urls["published"] = export_pdf_url.call(print_presentation_path(work, version: "published")) if has_published %>
       <% export_pptx_urls = {} %>
       <% if work.presentation? %>
         <% export_pptx_urls["draft"] = new_record ? pptx_presentations_path(version: "draft") : pptx_presentation_path(work, version: "draft") %>
@@ -28,7 +30,7 @@
       <div data-controller="export-menu-host"
            data-export-menu-host-kind-value="<%= work.presentation? ? "presentation" : "document" %>"
            data-export-menu-host-editions-value="<%= ERB::Util.html_escape(export_editions.to_json) %>"
-           data-export-menu-host-print-urls-value="<%= ERB::Util.html_escape(export_print_urls.to_json) %>"
+           data-export-menu-host-pdf-urls-value="<%= ERB::Util.html_escape(export_pdf_urls.to_json) %>"
            data-export-menu-host-pptx-urls-value="<%= ERB::Util.html_escape(export_pptx_urls.to_json) %>"
            data-export-menu-host-library-url-value="<%= pptx_library_path %>">
       </div>

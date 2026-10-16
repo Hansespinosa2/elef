@@ -3,20 +3,21 @@ import { downloadBlob, exportMenuOptionsFor, exportPptxModel, mountExportMenu } 
 
 // Rails host mount for the shared client Export menu on the work edit page.
 // Labels, option visibility, and dismissal live in @elef/client
-// features/export; this adapter only owns the Rails edges — the print-route
-// hrefs per edition, the draft-form PPTX model fetch, and status reporting.
-// (Show pages keep their standalone pptx-export-host buttons.)
+// features/export; this adapter only owns the Rails edges — the PDF
+// (print-route) hrefs per edition, the draft-form PPTX model fetch, and
+// status reporting. (Show pages keep their standalone pptx-export-host
+// buttons.)
 
 export default class extends Controller {
-  static values = { kind: String, editions: Array, printUrls: Object, pptxUrls: Object, libraryUrl: String }
+  static values = { kind: String, editions: Array, pdfUrls: Object, pptxUrls: Object, libraryUrl: String }
 
   connect() {
     const editions = (this.editionsValue ?? ["draft"]).map((edition) => ({
       edition,
-      printHref: this.printUrlsValue?.[edition] ?? null,
-      onPrint: null,
+      pdfHref: this.pdfUrlsValue?.[edition] ?? null,
+      onPdf: null,
       onExportPptx: this.pptxUrlsValue?.[edition] ? () => this.downloadPptx(edition) : null,
-      printOptionId: `work-export-${edition}-print`,
+      pdfOptionId: `work-export-${edition}-print`,
       pptxOptionId: `work-export-${edition}-pptx`,
     }))
     this.exportMenu = mountExportMenu(this.element, {

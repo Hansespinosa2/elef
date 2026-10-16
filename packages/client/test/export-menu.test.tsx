@@ -24,24 +24,26 @@ function testDocument() {
   return document as unknown as Document;
 }
 
+// Hook ids stay stable across the Print->PDF relabel so host suites keep
+// addressing the same nodes (desktop e2e clicks #print-work / #export-pptx).
 function draftSeams(overrides: Partial<ExportMenuEditionSeams> = {}): ExportMenuEditionSeams {
   return {
     edition: "draft",
-    onPrint: () => {},
+    onPdf: () => {},
     onExportPptx: () => {},
-    printOptionId: "print-work",
+    pdfOptionId: "print-work",
     pptxOptionId: "export-pptx",
     ...overrides,
   };
 }
 
-test("draft-only presentation offers Print / Save PDF plus Download PPTX", () => {
+test("draft-only presentation offers direct PDF plus PPTX options", () => {
   const options = exportMenuOptionsFor({ kind: "presentation", editions: [draftSeams()] });
   assert.deepEqual(
     options.map((option) => [option.format, option.label, option.id]),
     [
-      ["print", "Print / Save PDF", "print-work"],
-      ["pptx", "Download PPTX", "export-pptx"],
+      ["pdf", "PDF", "print-work"],
+      ["pptx", "PPTX", "export-pptx"],
     ],
   );
 });
@@ -53,16 +55,16 @@ test("draft plus published editions qualify every label", () => {
       draftSeams(),
       {
         edition: "published",
-        printHref: "/presentations/1/print?version=published",
+        pdfHref: "/presentations/1/print?version=published",
         onExportPptx: () => {},
-        printOptionId: "print-published",
+        pdfOptionId: "print-published",
         pptxOptionId: "pptx-published",
       },
     ],
   });
   assert.deepEqual(
     options.map((option) => option.label),
-    ["Print draft / save PDF", "Download PPTX draft", "Print published release", "Download published PPTX"],
+    ["PDF draft", "PPTX draft", "PDF published", "PPTX published"],
   );
   assert.equal(options[2]?.href, "/presentations/1/print?version=published");
 });
@@ -71,14 +73,14 @@ test("documents never offer PPTX even when a seam is passed", () => {
   const options = exportMenuOptionsFor({ kind: "document", editions: [draftSeams()] });
   assert.deepEqual(
     options.map((option) => [option.format, option.label]),
-    [["print", "Print / Save PDF"]],
+    [["pdf", "PDF"]],
   );
 });
 
 test("editions without delivery contribute no options", () => {
   const options = exportMenuOptionsFor({
     kind: "presentation",
-    editions: [draftSeams({ onPrint: null, printHref: null, onExportPptx: null })],
+    editions: [draftSeams({ onPdf: null, pdfHref: null, onExportPptx: null })],
   });
   assert.deepEqual(options, []);
 });
@@ -90,7 +92,7 @@ test("menu activation runs the seam and closes the menu", async () => {
     kind: "presentation",
     editions: [
       draftSeams({
-        onPrint: () => void seen.push("print"),
+        onPdf: () => void seen.push("pdf"),
         onExportPptx: () => void seen.push("pptx"),
       }),
     ],
@@ -114,7 +116,7 @@ test("menu activation runs the seam and closes the menu", async () => {
     assert.ok(menu, "menu renders");
     menu.open = true;
     const pptx = document.getElementById("export-pptx") as unknown as HTMLButtonElement;
-    assert.equal(pptx?.textContent, "Download PPTX");
+    assert.equal(pptx?.textContent, "PPTX");
     await act(async () => {
       pptx.click();
     });
@@ -128,11 +130,11 @@ test("menu activation runs the seam and closes the menu", async () => {
   }
 });
 
-test("print href options render as anchors", async () => {
+test("pdf href options render as anchors", async () => {
   const document = testDocument();
   const options = exportMenuOptionsFor({
     kind: "document",
-    editions: [draftSeams({ edition: "draft", printHref: "/documents/1/print", onPrint: null, onExportPptx: null })],
+    editions: [draftSeams({ edition: "draft", pdfHref: "/documents/1/print", onPdf: null, onExportPptx: null })],
   });
   const container = document.getElementById("app") as unknown as Element;
   let root: ReturnType<typeof createRoot> | undefined;
@@ -183,7 +185,7 @@ test("mountExportMenu update swaps options as the open Work changes", async () =
         options: exportMenuOptionsFor({ kind: "presentation", editions: [draftSeams()] }),
       });
     });
-    assert.equal(document.getElementById("export-pptx")?.textContent, "Download PPTX");
+    assert.equal(document.getElementById("export-pptx")?.textContent, "PPTX");
   } finally {
     await act(async () => {
       handle?.unmount();

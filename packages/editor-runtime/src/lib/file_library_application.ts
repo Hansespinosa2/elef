@@ -1217,9 +1217,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   // The work-view Export menu is the shared client component both hosts
-  // mount: labels and option visibility come from the export registry, so
-  // the desktop keeps no separate menu markup or dismissal wiring. Delivery
-  // stays in the desktop seams below (native print, native PPTX save).
+  // mount: direct PDF and PPTX options with shared labels, visibility from
+  // the export registry, so the desktop keeps no separate menu markup or
+  // dismissal wiring. Delivery stays in the desktop seams below (native
+  // print pipeline for PDF, native save dialog for PPTX). Hook ids stay
+  // stable so host suites keep addressing the same nodes.
   function exportMenuProps(): ExportMenuProps {
     const kind = activeWorkFolder?.source_file === "document.md" ? "document" : "presentation"
     return {
@@ -1231,9 +1233,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
         kind,
         editions: [{
           edition: "draft",
-          onPrint: () => printCurrentWork(),
+          onPdf: () => printCurrentWork(),
           onExportPptx: () => exportPptxCurrentWork(),
-          printOptionId: "print-work",
+          pdfOptionId: "print-work",
           pptxOptionId: "export-pptx",
         }],
       }),
@@ -1297,8 +1299,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
   // The work-view Export menu is the shared client component: one trigger
   // whose options vary by Work kind, with the same dismissal contract on
-  // both hosts. Desktop export never navigates; the Print / Save PDF option
-  // reuses the File → Print… seam and the PPTX option the native save seam.
+  // both hosts. Desktop export never navigates; the PDF option reuses the
+  // native print pipeline (the same File → Print… command) and the PPTX
+  // option the native save seam.
   exportMenu = mountExportMenu(shellElement<HTMLElement>("#export-menu-mount"), exportMenuProps())
   shellElement<HTMLElement>("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {

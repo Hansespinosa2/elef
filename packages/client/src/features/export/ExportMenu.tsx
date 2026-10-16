@@ -1,9 +1,11 @@
-// Shared work Export menu (P07-06): one component renders the Export and
-// Save-to-PDF actions identically on every host. Option visibility comes
-// from the export registry (which formats exist per Work kind); delivery
-// (where the bytes or dialogs come from) rides host-supplied seams, so the
-// client never branches on hosts. Hosts mount it through mountExportMenu
-// and keep only their delivery functions.
+// Shared work Export menu (P07-06): one component renders the Export menu
+// with direct PDF and PPTX options identically on every host. Each option
+// delivers immediately on click (no intermediate wording or dialog in the
+// component); option visibility comes from the export registry (which
+// formats exist per Work kind), while delivery (where the bytes or dialogs
+// come from) rides host-supplied seams, so the client never branches on
+// hosts. Hosts mount it through mountExportMenu and keep only their
+// delivery functions.
 
 import { createElement, useEffect, useRef } from "react";
 import type { JSX, MouseEvent } from "react";
@@ -17,19 +19,20 @@ export type ExportDelivery = () => void | Promise<void>;
 
 export interface ExportMenuEditionSeams {
   readonly edition: ExportEdition;
-  // Web navigates to its print route; desktop runs its native print seam.
-  // Absent when printing is unavailable (e.g. a web new-record page).
-  readonly printHref?: string | null;
-  readonly onPrint?: ExportDelivery | null;
+  // Web navigates to its PDF (print-route) page; desktop runs its native
+  // print seam. Absent when PDF delivery is unavailable (e.g. a web
+  // new-record page).
+  readonly pdfHref?: string | null;
+  readonly onPdf?: ExportDelivery | null;
   // Absent when PPTX is unavailable. Documents never offer PPTX: the
   // registry scopes that format to presentations.
   readonly onExportPptx?: ExportDelivery | null;
   // Stable hook ids so host suites keep addressing the same nodes.
-  readonly printOptionId: string;
+  readonly pdfOptionId: string;
   readonly pptxOptionId: string;
 }
 
-export type ExportMenuFormat = "print" | "pptx";
+export type ExportMenuFormat = "pdf" | "pptx";
 
 export interface ExportMenuOption {
   readonly id: string;
@@ -40,19 +43,22 @@ export interface ExportMenuOption {
   readonly run?: ExportDelivery | null;
 }
 
+// Menu labels are shared truth: the Export menu offers direct "PDF" and
+// "PPTX" options (edition-qualified only when several editions are
+// visible). Labels never carry Print/Save/Download/Export wording: each
+// option delivers immediately through its seam.
 function optionLabel(format: ExportMenuFormat, edition: ExportEdition, editionCount: number): string {
   if (format === "pptx") {
-    if (edition === "published") return "Download published PPTX";
-    return editionCount > 1 ? "Download PPTX draft" : "Download PPTX";
+    if (edition === "published") return "PPTX published";
+    return editionCount > 1 ? "PPTX draft" : "PPTX";
   }
-  if (edition === "published") return "Print published release";
-  return editionCount > 1 ? "Print draft / save PDF" : "Print / Save PDF";
+  if (edition === "published") return "PDF published";
+  return editionCount > 1 ? "PDF draft" : "PDF";
 }
 
 // Builds the visible menu options for one Work: labels are shared truth,
-// delivery rides the per-edition seams. Print and PDF collapse into the one
-// print-pipeline option both hosts serve; PPTX appears only where the
-// registry offers it for the kind.
+// delivery rides the per-edition seams. PDF rides the print pipeline both
+// hosts serve; PPTX appears only where the registry offers it for the kind.
 export function exportMenuOptionsFor({
   kind,
   editions,
@@ -61,18 +67,18 @@ export function exportMenuOptionsFor({
   editions: ReadonlyArray<ExportMenuEditionSeams>;
 }): Array<ExportMenuOption> {
   const formats = exportFormatsFor({ kind });
-  const offersPrint = formats.some((format) => format.engine === "print");
+  const offersPdf = formats.some((format) => format.id === "pdf");
   const offersPptx = formats.some((format) => format.id === "pptx");
   const options: Array<ExportMenuOption> = [];
   for (const edition of editions) {
-    if (offersPrint && (edition.printHref || edition.onPrint)) {
+    if (offersPdf && (edition.pdfHref || edition.onPdf)) {
       options.push({
-        id: edition.printOptionId,
-        format: "print",
+        id: edition.pdfOptionId,
+        format: "pdf",
         edition: edition.edition,
-        label: optionLabel("print", edition.edition, editions.length),
-        href: edition.printHref ?? null,
-        run: edition.onPrint ?? null,
+        label: optionLabel("pdf", edition.edition, editions.length),
+        href: edition.pdfHref ?? null,
+        run: edition.onPdf ?? null,
       });
     }
     if (offersPptx && edition.onExportPptx) {
