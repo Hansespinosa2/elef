@@ -10,7 +10,7 @@ import { presentConflictDialog } from "./conflict_dialog.js";
 import { createRendererClient } from "./renderer_worker_client.js";
 import { applyDesktopFeatureFlags } from "./feature_flags.js";
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js";
-import { CREATE_WORK_EVENT, exportMenuOptionsFor, mountElef, mountExportMenu, mountPresentation, mountVimSettings, parseLibraryRoute } from "@elef/client";
+import { CREATE_WORK_EVENT, exportMenuOptionsFor, mountElef, mountExportMenu, mountPresentation, parseLibraryRoute } from "@elef/client";
 function ensureWorkFolderHash(workFolder) {
   workFolder.content_hash ??= "";
   return workFolder;
@@ -112,8 +112,6 @@ function startFileLibraryApplication(platform) {
     workTitle: document.querySelector("#work-title"),
     status: document.querySelector("#status-text"),
     settingsDialog: document.querySelector("#settings-dialog"),
-    settingsForm: document.querySelector("#settings-form"),
-    libraryTheme: document.querySelector("#library-theme"),
     aboutDialog: document.querySelector("#about-dialog"),
     editorField: document.querySelector("#desktop-editor-field"),
     editorForm: document.querySelector("#desktop-editor-form"),
@@ -131,7 +129,12 @@ function startFileLibraryApplication(platform) {
   };
   let library = null;
   let exportMenu = null;
-  let libraryConfig = { schema_version: 1, theme: "dark", hotkeys: {} };
+  let libraryConfig = {
+    schema_version: 1,
+    theme: "dark",
+    typography: "book",
+    hotkeys: {}
+  };
   let workFolders = [];
   let activeWorkFolder = null;
   let presentationEditorHandle = null;
@@ -175,18 +178,49 @@ function startFileLibraryApplication(platform) {
     });
     authoringHostDialog.showModal();
   }
-  const vimMount = document.querySelector("#vim-settings-mount");
-  if (vimMount) {
+  const settingsHostDialog = elements.settingsDialog;
+  const settingsMount = document.querySelector("#settings-page-mount");
+  let settingsShell = null;
+  function closeSettings() {
+    if (settingsShell) {
+      settingsShell.unmount();
+      settingsShell = null;
+    }
+    if (settingsHostDialog.open) settingsHostDialog.close();
+  }
+  function vimEditorBridge() {
     const editorForVim = () => document.querySelector(".source-field")?.editorController || null;
-    mountVimSettings(vimMount, {
-      editorBridge: {
-        setVimEnabled: (enabled) => editorForVim()?.setVimEnabled(enabled),
-        setEscapeKey: (key) => editorForVim()?.setEscapeKey(key),
-        clearEscapeKey: () => editorForVim()?.clearEscapeKey(),
-        setLineNumberMode: (mode) => editorForVim()?.setLineNumberMode(mode),
-        setModeAwareCursor: (enabled) => editorForVim()?.setModeAwareCursor(enabled)
+    return {
+      setVimEnabled: (enabled) => editorForVim()?.setVimEnabled(enabled),
+      setEscapeKey: (key) => editorForVim()?.setEscapeKey(key),
+      clearEscapeKey: () => editorForVim()?.clearEscapeKey(),
+      setLineNumberMode: (mode) => editorForVim()?.setLineNumberMode(mode),
+      setModeAwareCursor: (enabled) => editorForVim()?.setModeAwareCursor(enabled)
+    };
+  }
+  async function showSettings() {
+    try {
+      closeSettings();
+      if (libraryHost === null) {
+        showError({ message: "The library is still loading. Try again in a moment." });
+        return;
       }
-    });
+      settingsShell = await mountElef(settingsMount, libraryHost, {
+        initialUrl: "/settings",
+        vimEditorBridge: vimEditorBridge(),
+        onSettingsSaved: (saved) => {
+          const theme = typeof saved["theme"] === "string" ? saved["theme"] : libraryConfig.theme;
+          const typography = typeof saved["typography"] === "string" ? saved["typography"] : libraryConfig.typography;
+          libraryConfig = { ...libraryConfig, schema_version: 1, theme, typography };
+          applyTheme(theme);
+          setStatus("Library settings saved");
+        },
+        ...updateEnabled && platform.updaterSeam ? { updater: platform.updaterSeam } : {}
+      });
+      settingsHostDialog.showModal();
+    } catch (error) {
+      showError(error);
+    }
   }
   const transport = createTransportAdapter({ onConflict: (event) => saveFlow?.handleConflict(event) });
   const sessionTransport = {
@@ -436,7 +470,8 @@ function startFileLibraryApplication(platform) {
     shell?.notify(null);
   }
   function applyTheme(theme) {
-    document.documentElement.dataset.theme = ["system", "light", "dark"].includes(theme) ? theme : "system";
+    const normalized = theme === "match" ? "system" : theme;
+    document.documentElement.dataset.theme = ["system", "light", "dark"].includes(normalized) ? normalized : "system";
   }
   function showError(error) {
     const message = typeof error?.message === "string" ? error.message : "The operation could not be completed.";
@@ -778,29 +813,6 @@ function startFileLibraryApplication(platform) {
   function currentSource() {
     return editorFor(elements.editorField)?.sourceValue ?? elements.editorInput.value;
   }
-  async function showSettings() {
-    try {
-      libraryConfig = await fileLibrary.readLibraryConfig();
-      elements.libraryTheme.value = libraryConfig.theme;
-      elements.settingsDialog.showModal();
-    } catch (error) {
-      showError(error);
-    }
-  }
-  async function saveSettings(event) {
-    if (event.submitter?.value !== "save") return;
-    event.preventDefault();
-    const next = { ...libraryConfig, schema_version: 1, theme: elements.libraryTheme.value };
-    try {
-      await fileLibrary.writeLibraryConfig(next);
-      libraryConfig = next;
-      applyTheme(next.theme);
-      elements.settingsDialog.close();
-      setStatus("Library settings saved");
-    } catch (error) {
-      showError(error);
-    }
-  }
   async function exportCurrentWork() {
     if (!activeWorkFolder) {
       showNotice("Open a Work before exporting it.");
@@ -1095,9 +1107,14 @@ function startFileLibraryApplication(platform) {
     showLibrary();
     setStatus("Library");
   });
-  elements.settingsForm.addEventListener("submit", (event) => void saveSettings(event));
+  settingsHostDialog.addEventListener("close", () => {
+    if (settingsShell) {
+      settingsShell.unmount();
+      settingsShell = null;
+    }
+  });
   shellElement("#manage-authoring").addEventListener("click", () => {
-    elements.settingsDialog.close();
+    closeSettings();
     void openAuthoringSettings();
   });
   if (updateEnabled) shellElement("#check-for-updates").addEventListener("click", () => void checkForUpdates(true));

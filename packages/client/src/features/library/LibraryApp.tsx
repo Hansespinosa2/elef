@@ -5,6 +5,7 @@ import type { ElefMountOptions, LibraryFilter, NoticeTone } from "../../applicat
 import { parseLibraryRoute } from "../../application/router.js";
 import { filterWorks, sameWorks } from "./filtering.js";
 import { LibraryCard } from "./LibraryCard.js";
+import { buildNewWorkSource } from "@elef/work-model/document-map";
 
 export interface LibraryControl {
   reload(): Promise<void>;
@@ -237,6 +238,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
         workspaceId: space.id,
         title: name,
         kind: dialogKind,
+        text: buildNewWorkSource({ kind: dialogKind, title: name }),
       });
       options.onLibraryEvent?.({ type: "created", work: created });
       await reload();

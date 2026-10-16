@@ -552,7 +552,30 @@ class DesktopEditorUi {
 
   async enableVimRelativeLineNumbers() {
     await openDesktopSettings()
-    // Vim preferences render through the shared client UI now (same device
+    // The desktop settings surface is the shared settings page (the same
+    // component and element ids as the web /settings page). Prove the
+    // parity contract first: identical defaults controls and options.
+    await browser.waitUntil(async () => browser.execute(() =>
+      document.querySelector("#settings-page-mount .settings-page") !== null
+    ), {
+      timeout: 10_000,
+      timeoutMsg: "The shared settings page did not mount in the desktop settings dialog"
+    })
+    const optionValues = await browser.execute(() => ({
+      theme: [...document.querySelectorAll("#settings-theme option")].map(option => option.value),
+      typography: [...document.querySelectorAll("#settings-typography option")].map(option => option.value)
+    }))
+    if (JSON.stringify(optionValues.theme) !== JSON.stringify(["match", "light", "dark"])) {
+      throw new Error(`Desktop settings themes diverged from the shared page: ${JSON.stringify(optionValues.theme)}`)
+    }
+    if (JSON.stringify(optionValues.typography) !== JSON.stringify(["book", "modern", "technical"])) {
+      throw new Error(`Desktop settings typographies diverged from the shared page: ${JSON.stringify(optionValues.typography)}`)
+    }
+    // Round-trip a workspace default through the shared form, then restore
+    // it so later tests keep the default library appearance.
+    await this.saveSharedWorkspaceDefault("#settings-typography", "modern")
+    await this.saveSharedWorkspaceDefault("#settings-typography", "book")
+    // Vim preferences render through the shared client UI (same device
     // storage keys, same editor bridge); drive its stable hooks.
     const vimToggle = $("#vim-enabled")
     if (!(await vimToggle.isSelected())) await vimToggle.click()
@@ -570,8 +593,24 @@ class DesktopEditorUi {
       timeout: 5_000,
       timeoutMsg: "The native Vim settings control did not save relative line numbers"
     })
-    await $("#settings-form button[value='save']").click()
+    await $("#close-settings").click()
     await $("#settings-dialog").waitForDisplayed({ reverse: true })
+  }
+
+  async saveSharedWorkspaceDefault(selectId, value) {
+    await browser.execute((id, selectedValue) => {
+      const select = document.querySelector(id)
+      select.value = selectedValue
+      select.dispatchEvent(new Event("input", { bubbles: true }))
+      select.dispatchEvent(new Event("change", { bubbles: true }))
+    }, selectId, value)
+    await $("button=Save workspace defaults").click()
+    await browser.waitUntil(async () => browser.execute(() =>
+      document.querySelector("#settings-page-mount .settings-notice")?.textContent === "Workspace appearance saved."
+    ), {
+      timeout: 10_000,
+      timeoutMsg: "The shared workspace-defaults form did not report a save"
+    })
   }
 
   async reopenWork() {
@@ -1808,7 +1847,7 @@ class DesktopLibraryUi {
         : document.querySelector("#desktop-editor-title")?.value,
       source: document.querySelector("#desktop-editor-field")?.editorController?.sourceValue
     }), { expected: title, documentKind: kind === "document" })
-    if (result.title !== title || (kind === "document" && result.source !== `# ${title}\n\n`)) {
+    if (result.title !== title || (kind === "document" && result.source !== `---\ntheme: match\n---\n# ${title}\n\n`)) {
       throw new Error(`The editor did not open the new ${kind} with its expected content: ${JSON.stringify(result)}`)
     }
   }
