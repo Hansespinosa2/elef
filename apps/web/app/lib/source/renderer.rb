@@ -2,8 +2,8 @@ module Source
   module Renderer
     module_function
 
-    def render(markdown, media_resolver: nil)
-      Source::JavascriptRenderer.render(markdown, media_resolver: media_resolver).html_safe
+    def render(markdown, media_resolver: nil, bare: false)
+      Source::JavascriptRenderer.render(markdown, media_resolver: media_resolver, bare: bare).html_safe
     end
 
     def render_art_block(markdown, host_mode: "flowing", media_resolver: nil, document_nodes: [])

@@ -108,7 +108,7 @@ bin/rails tailwindcss:build
 git diff -- apps/web/app/assets/builds/tailwind.css
 ~~~
 
-Build order is fixed by a dependency cycle, so always call `npm run build:packages` whole and never reorder or split its steps: client needs renderer dist, renderer needs editor-runtime dist, editor-runtime needs client dist. The bootstrap builds client without its renderer-dependent entries first, then renderer, then client whole. Committing a bundle to "fix" a missing-file failure reintroduces the merge-conflict treadmill — rebuild instead. Breaking the cycle properly (moving one edge) is tracked follow-up work.
+Build order is topological in one pass (`npm run build:packages`: work-model, then renderer, then client, then editor-runtime), so always call it whole and never reorder or split its steps. Committing a bundle to "fix" a missing-file failure reintroduces the merge-conflict treadmill — rebuild instead.
 
 ## PR evidence rule
 

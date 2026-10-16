@@ -18,7 +18,7 @@ Separate Ruby and JavaScript renderers would make every rendering fix a permanen
 
 ## Decision
 
-One JavaScript renderer bundle (`packages/renderer`, output `dist/elef-renderer.bundle.js`). Rails runs it through MiniRacer; desktop runs it in a web worker. Mermaid stays in the browser/webview because it needs a DOM. No Ruby renderer implementation remains: `Source::Renderer` delegates to `Source::JavascriptRenderer`, and the boundary checker (R8) rejects any second interpretation of Work syntax.
+One JavaScript renderer: bare projection lives in `packages/renderer` (ESM entries `dist/elef-renderer.js` and `dist/projection.js`); editor-chrome composition lives in the editor-runtime-owned entry `packages/editor-runtime/src/composed_renderer.ts` (output `dist/composed_renderer.js`). Rails runs the composed bundle through MiniRacer; desktop runs it in a web worker. Mermaid stays in the browser/webview because it needs a DOM. No Ruby renderer implementation remains: `Source::Renderer` delegates to `Source::JavascriptRenderer`, and the boundary checker (R8) rejects any second interpretation of Work syntax. (Amendment: the composition entry moved from `packages/renderer/src/renderer_global.ts` to editor-runtime to break the client/renderer/editor-runtime build-time cycle; rendered bytes are unchanged.)
 
 ## Consequences
 

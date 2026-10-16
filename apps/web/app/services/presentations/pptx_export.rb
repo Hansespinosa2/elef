@@ -85,7 +85,7 @@ module Presentations
     end
 
     def markdown_html(markdown)
-      html = Source::Renderer.render(markdown, media_resolver: method(:resolve_asset))
+      html = Source::Renderer.render(markdown, media_resolver: method(:resolve_asset), bare: true)
       fragment = Nokogiri::HTML::DocumentFragment.parse(html.to_s)
       fragment.css("img[src]").each do |image|
         source = image["src"].to_s

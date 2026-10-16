@@ -162,14 +162,14 @@ const duplicates = [...packageInstallations]
 if (duplicates.length) {
   throw new Error(`Desktop bundle contains duplicate runtime identity packages:\n${duplicates.join("\n")}`)
 }
-// @elef/renderer owns and builds the renderer. Desktop packages the exact same artifact.
-const rendererBundle = path.join(repoRoot, "packages/renderer/dist/elef-renderer.bundle.js")
-await copyFile(rendererBundle, path.join(assets, "renderer.bundle.js"))
+// @elef/editor-runtime owns and builds the composed renderer. Desktop packages the exact same artifact.
+const rendererBundle = path.join(repoRoot, "packages/editor-runtime/dist/composed_renderer.js")
+await copyFile(rendererBundle, path.join(assets, "composed_renderer.js"))
 await build({
   entryPoints: [path.join(frontendRoot, "src/renderer-worker.js")],
   nodePaths: [path.join(frontendRoot, "node_modules")],
   bundle: true,
-  external: ["./renderer.bundle.js"],
+  external: ["./composed_renderer.js"],
   format: "esm",
   target: "es2022",
   outfile: path.join(assets, "renderer-worker.js"),

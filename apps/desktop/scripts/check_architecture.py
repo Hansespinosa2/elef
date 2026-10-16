@@ -50,7 +50,7 @@ feature_flags_source = (REPO_ROOT / "packages" / "editor-runtime" / "src" / "lib
 feature_flags_doc = (REPO_ROOT / "docs" / "desktop" / "feature-flags.md").read_text()
 document_model = (REPO_ROOT / "apps" / "web" / "app" / "lib" / "source" / "document.rb").read_text()
 javascript_renderer = (REPO_ROOT / "apps" / "web" / "app" / "lib" / "source" / "javascript_renderer.rb").read_text()
-renderer_global = (REPO_ROOT / "packages" / "renderer" / "src" / "renderer_global.ts").read_text()
+renderer_global = (REPO_ROOT / "packages" / "editor-runtime" / "src" / "composed_renderer.ts").read_text()
 renderer_worker = (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "renderer-worker.js").read_text()
 desktop_main = (REPO_ROOT / "apps" / "desktop" / "frontend" / "src" / "main.js").read_text()
 desktop_application = (REPO_ROOT / "packages" / "editor-runtime" / "src" / "lib" / "file_library_application.ts").read_text()
@@ -353,13 +353,13 @@ assert "applyDesktopFeatureFlags(document, featureFlags)" in desktop_application
 assert re.search(r"def editor_map\([^)]*\).*?Source::JavascriptRenderer\.editor_map", document_model, re.DOTALL), "Rails editor maps must delegate to the shared JavaScript implementation"
 assert '"ElefRenderer.buildEditorMap"' in javascript_renderer, "the Rails wrapper must call the shared map exported by the renderer bundle"
 assert "buildEditorMap" in renderer_global and "buildEditorStructure" in renderer_global, "the renderer bundle must expose the shared editor map and structure"
-assert 'import "./renderer.bundle.js"' in renderer_worker, "the desktop worker must load the same renderer bundle as Rails"
-package_bundle = REPO_ROOT / "packages" / "renderer" / "dist" / "elef-renderer.bundle.js"
-desktop_bundle = REPO_ROOT / "apps" / "desktop" / "frontend" / "dist" / "assets" / "renderer.bundle.js"
+assert 'import "./composed_renderer.js"' in renderer_worker, "the desktop worker must load the same renderer bundle as Rails"
+package_bundle = REPO_ROOT / "packages" / "editor-runtime" / "dist" / "composed_renderer.js"
+desktop_bundle = REPO_ROOT / "apps" / "desktop" / "frontend" / "dist" / "assets" / "composed_renderer.js"
 assert desktop_bundle.is_file(), "build the desktop frontend before checking the shared renderer bundle"
 package_hash = hashlib.sha256(package_bundle.read_bytes()).hexdigest()
 desktop_hash = hashlib.sha256(desktop_bundle.read_bytes()).hexdigest()
-assert package_hash == desktop_hash, "package and desktop renderer bundle hashes differ; run npm run renderer:build"
+assert package_hash == desktop_hash, "package and desktop renderer bundle hashes differ; run npm run build:packages"
 assert not re.search(r"def (?:editor_blocks|editable_region_for_block|utf16_range)\b", document_model), "Rails must not retain a second editor-map implementation"
 assert not any(":" in permission for permission in permissions if not permission.startswith("core:")), "Stable common capability must not expose updater plugins"
 assert set(macos_updater_capability["permissions"]) == {

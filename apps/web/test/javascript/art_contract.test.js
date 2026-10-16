@@ -34,7 +34,7 @@ const controllerJs = readFileSync(join(repoRoot, "packages", "editor-runtime", "
   + "\n" + readFileSync(join(repoRoot, "packages", "editor-runtime", "src", "lib", "art_layout.ts"), "utf8")
 const sourceJs = readFileSync(join(repoRoot, "packages", "work-model", "src", "art_source.ts"), "utf8")
 const rendererJs = readFileSync(join(repoRoot, "packages", "renderer", "src", "renderer.ts"), "utf8")
-const globalRendererJs = readFileSync(join(repoRoot, "packages", "renderer", "src", "renderer_global.ts"), "utf8")
+const globalRendererJs = readFileSync(join(repoRoot, "packages", "editor-runtime", "src", "composed_renderer.ts"), "utf8")
 const authoringRegistry = readFileSync(join(webRoot, "app", "javascript", "data", "default_authoring_registry.json"), "utf8")
 const authoringEntries = JSON.parse(authoringRegistry)
 
