@@ -10,7 +10,7 @@ import { presentConflictDialog } from "./conflict_dialog.js";
 import { createRendererClient } from "./renderer_worker_client.js";
 import { applyDesktopFeatureFlags } from "./feature_flags.js";
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js";
-import { CREATE_WORK_EVENT, mountElef, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile } from "@elef/client";
+import { CREATE_WORK_EVENT, exportMenuOptionsFor, mountElef, mountExportMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile } from "@elef/client";
 function ensureWorkFolderHash(workFolder) {
   workFolder.content_hash ??= "";
   return workFolder;
@@ -128,6 +128,7 @@ function startFileLibraryApplication(platform) {
     presentationStart: document.querySelector("#start-presentation")
   };
   let library = null;
+  let exportMenu = null;
   let libraryConfig = {
     schema_version: 1,
     theme: "dark",
@@ -1029,11 +1030,30 @@ function startFileLibraryApplication(platform) {
     const conflictDialog = elements.editorForm.querySelector("#conflict-dialog");
     conflictDialog.close();
   }
+  function exportMenuProps() {
+    const kind = activeWorkFolder?.source_file === "document.md" ? "document" : "presentation";
+    return {
+      menuId: "export-menu",
+      buttonId: "export-menu-button",
+      menuLabel: "Export",
+      statusId: "export-pptx-status",
+      options: exportMenuOptionsFor({
+        kind,
+        editions: [{
+          edition: "draft",
+          onPdf: () => printCurrentWork(),
+          onExportPptx: () => exportPptxCurrentWork(),
+          pdfOptionId: "print-work",
+          pptxOptionId: "export-pptx"
+        }]
+      })
+    };
+  }
   function syncSourceLabel() {
     if (!activeWorkFolder) return;
     shellElement("#work-source-name").textContent = activeWorkFolder.source_file;
     shellElement("#work-kind").textContent = activeWorkFolder.source_file === "document.md" ? "DOCUMENT" : "PRESENTATION";
-    shellElement("#export-pptx").hidden = activeWorkFolder.source_file === "document.md";
+    exportMenu?.update(exportMenuProps());
   }
   async function handleMenuAction(action) {
     if (action === "quit") return getCurrentWindow().close();
@@ -1077,25 +1097,7 @@ function startFileLibraryApplication(platform) {
   });
   shellElement("#refresh-library").addEventListener("click", () => void refreshLibrary());
   shellElement("#import-elef").addEventListener("click", () => void importWork());
-  function closeExportMenu() {
-    shellElement("#export-menu").open = false;
-  }
-  shellElement("#export-pptx").addEventListener("click", () => {
-    closeExportMenu();
-    void exportPptxCurrentWork();
-  });
-  shellElement("#print-work").addEventListener("click", () => {
-    closeExportMenu();
-    void printCurrentWork();
-  });
-  function dismissExportMenuOnOutsideEvent(event) {
-    if (event.target instanceof Element && !event.target.closest("#export-menu")) closeExportMenu();
-  }
-  document.addEventListener("pointerdown", dismissExportMenuOnOutsideEvent);
-  document.addEventListener("click", dismissExportMenuOnOutsideEvent);
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeExportMenu();
-  });
+  exportMenu = mountExportMenu(shellElement("#export-menu-mount"), exportMenuProps());
   shellElement("#back-to-library").addEventListener("click", () => {
     if (hasUnsavedChanges()) {
       void flushSave().then((saved) => {

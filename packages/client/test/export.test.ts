@@ -62,18 +62,19 @@ function testModel() {
 }
 
 test("export registry is the only format-rule source", () => {
-  assert.equal(EXPORT_FORMATS.length, 4);
+  assert.equal(EXPORT_FORMATS.length, 3);
   assert.equal(exportFormatById("pptx")?.engine, "pptx");
+  assert.equal(exportFormatById("pdf")?.engine, "print");
+  assert.equal(exportFormatById("print"), null);
   assert.equal(exportFormatById("unknown"), null);
 
   const webPresentation = exportFormatsFor({ kind: "presentation", host: "web" }).map((format) => format.id);
   assert.ok(webPresentation.includes("pptx"));
-  assert.ok(webPresentation.includes("print"));
   assert.ok(webPresentation.includes("pdf"));
 
   const desktopPresentation = exportFormatsFor({ kind: "presentation", host: "desktop" }).map((format) => format.id);
   assert.ok(desktopPresentation.includes("pptx"));
-  assert.ok(desktopPresentation.includes("print"));
+  assert.ok(desktopPresentation.includes("pdf"));
   assert.ok(desktopPresentation.includes("elef"));
 
   assert.equal(exportFormatById("elef")?.via, "TransferPort");

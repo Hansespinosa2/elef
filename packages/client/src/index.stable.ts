@@ -37,6 +37,16 @@ export { createPresentationNavigation, presentationActionForKey } from "./featur
 export { attachCanvasScaling, PresentationController, mountPresentation } from "./features/presentation/presentation.js";
 export { exportPptxModel, downloadBlob, dataUriToBlob } from "./features/export/pptx.js";
 export { EXPORT_FORMATS, exportFormatsFor, exportFormatById } from "./features/export/registry.js";
+export { ExportMenu, exportMenuOptionsFor, mountExportMenu } from "./features/export/ExportMenu.js";
+export type {
+  ExportDelivery,
+  ExportEdition,
+  ExportMenuEditionSeams,
+  ExportMenuFormat,
+  ExportMenuHandle,
+  ExportMenuOption,
+  ExportMenuProps,
+} from "./features/export/ExportMenu.js";
 export {
   DOCUMENT_PRINT_GEOMETRY,
   PRESENTATION_PRINT_GEOMETRY,

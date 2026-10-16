@@ -46,10 +46,12 @@ async fn save_pptx_bytes_inner(
     }
     #[cfg(not(feature = "webdriver"))]
     let _ = use_native_dialog;
+    // The work-view Export menu already chose the format, so this dialog
+    // carries no Export wording: it only picks the destination file.
     let Some(selection) = app
         .dialog()
         .file()
-        .set_title("Export PowerPoint")
+        .set_title("Save PowerPoint")
         .set_file_name(suggested)
         .add_filter("PowerPoint", &["pptx"])
         .blocking_save_file()

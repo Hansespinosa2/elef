@@ -2368,7 +2368,7 @@ describe("desktop binary workflows and native boundaries", () => {
       await $("#print-work").click()
       await browser.waitUntil(async () => browser.execute(() => window.__elefPrintResult?.native === true), {
         timeout: 10_000,
-        timeoutMsg: "The Print / Save PDF option did not reach the native print command"
+        timeoutMsg: "The PDF option did not reach the native print command"
       })
       await ui.assertExportMenuClosed("the print option")
       // The native dialog fires no afterprint event: the printing-work
