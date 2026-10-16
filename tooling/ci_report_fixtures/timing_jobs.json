@@ -1,0 +1,96 @@
+[
+  {
+    "_workflow": "CI",
+    "_run_id": 900,
+    "total_count": 2,
+    "jobs": [
+      {
+        "name": "desktop-fast",
+        "conclusion": "success",
+        "steps": [
+          {
+            "name": "Set up Node",
+            "status": "completed",
+            "conclusion": "success",
+            "started_at": "2026-10-10T06:00:00Z",
+            "completed_at": "2026-10-10T06:00:30Z"
+          },
+          {
+            "name": "Run the fast desktop unit tier",
+            "status": "completed",
+            "conclusion": "success",
+            "started_at": "2026-10-10T06:01:00Z",
+            "completed_at": "2026-10-10T06:03:00Z"
+          }
+        ]
+      },
+      {
+        "name": "desktop",
+        "conclusion": "failure",
+        "steps": [
+          {
+            "name": "Install Linux desktop build dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "started_at": "2026-10-10T06:00:00Z",
+            "completed_at": "2026-10-10T06:05:00Z"
+          },
+          {
+            "name": "Run shared scenarios with external network blocked",
+            "status": "completed",
+            "conclusion": "failure",
+            "started_at": "2026-10-10T06:06:00Z",
+            "completed_at": "2026-10-10T06:16:00Z"
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "_workflow": "CI",
+    "_run_id": 901,
+    "total_count": 2,
+    "jobs": [
+      {
+        "name": "desktop-fast",
+        "conclusion": "success",
+        "steps": [
+          {
+            "name": "Set up Node",
+            "status": "completed",
+            "conclusion": "success",
+            "started_at": "2026-10-10T06:00:00Z",
+            "completed_at": "2026-10-10T06:00:25Z"
+          },
+          {
+            "name": "Run the fast desktop unit tier",
+            "status": "completed",
+            "conclusion": "success",
+            "started_at": "2026-10-10T06:01:00Z",
+            "completed_at": "2026-10-10T06:02:40Z"
+          }
+        ]
+      },
+      {
+        "name": "desktop",
+        "conclusion": "success",
+        "steps": [
+          {
+            "name": "Install Linux desktop build dependencies",
+            "status": "completed",
+            "conclusion": "success",
+            "started_at": "2026-10-10T06:00:00Z",
+            "completed_at": "2026-10-10T06:04:40Z"
+          },
+          {
+            "name": "Run shared scenarios with external network blocked",
+            "status": "completed",
+            "conclusion": "success",
+            "started_at": "2026-10-10T06:06:00Z",
+            "completed_at": "2026-10-10T06:15:50Z"
+          }
+        ]
+      }
+    ]
+  }
+]

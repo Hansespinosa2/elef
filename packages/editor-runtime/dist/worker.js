@@ -1,0 +1,1 @@
+function d(s,o,u=o){let{id:t,input:n}=s||{};try{let r=n?.kind==="markdown-block"?u(n.source):o(n);return{id:t,result:r}}catch(r){let e=r;return{id:t,error:{code:typeof e?.code=="string"?e.code:"render_error",message:typeof e?.message=="string"?e.message:"Preview could not be rendered.",retryable:e?.retryable===!0}}}}export{d as renderWorkerMessage};

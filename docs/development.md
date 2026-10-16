@@ -1,61 +1,89 @@
 # Development and testing
 
+Reach for when: setting up, choosing a check tier, or running the web/desktop suites.
+
 Use the smallest check that covers a change, then run the shared web/desktop flow when product behavior is shared. Keep test data disposable.
 
 ## Environment
 
-The repository uses Ruby 3.4 (.ruby-version), Rails 8.1, Node 22 in CI, and stable Rust for Tauri. config/database.yml defaults Rails to PostgreSQL. CI also runs SQLite compatibility and desktop E2E database jobs with ELEF_USE_SQLITE=1; SQLite is never the desktop store.
+The repository uses Ruby 3.4 (apps/web/.ruby-version), Rails 8.1, Node 22 in CI, and stable Rust for Tauri. apps/web/config/database.yml defaults Rails to PostgreSQL. CI also runs SQLite compatibility and desktop E2E database jobs with ELEF_USE_SQLITE=1; SQLite is never the desktop store.
 
-In Andres's Omarchy checkout, use the existing web app at https://127.0.0.1:3000/. Do not start a second Rails server or change its port. If the endpoint is down, diagnose the existing proxy, Rails, and database setup. See [AGENTS.md](../AGENTS.md) for the agent-specific environment rules.
+In Andres's Omarchy checkout, https://127.0.0.1:3000/ is the owner's interactive preview. Automated tests and browser harnesses use isolated test environments and disposable data; never target this server. Do not start a second Rails server, restart the owner's server or change its port. If the endpoint is down, diagnose the existing proxy, Rails, and database setup read-only. See [AGENTS.md](../AGENTS.md) for the agent-specific environment rules.
 
 To test a merged change on the Mac mini, follow the [Mac mini deployment runbook](mac-mini-deployment.md#automatic-deployment) and use its development URL. The watcher deploys only a commit approved by PR CI; an open feature branch does not change the dev instance.
 
 For a separate local Rails environment, install dependencies and prepare the configured database:
 
 ~~~sh
-bundle install
 npm ci
+cd apps/web
+bundle install
 bin/rails db:prepare
 bin/rails tailwindcss:build
 ~~~
 
-bin/dev starts Rails plus the Tailwind watcher and defaults to port 3000. Use it only in an isolated environment where that port is free; it does not provide the Omarchy checkout's configured HTTPS endpoint. Development database variables are PGDATABASE, PGUSER, PGPASSWORD, PGHOST, and PGPORT. Test uses PGTESTDATABASE; never point tests at personal or production data.
+apps/web/bin/dev starts Rails plus the Tailwind watcher and defaults to port 3000. Use it only in an isolated environment where that port is free; it does not provide the Omarchy checkout's configured HTTPS endpoint. Development database variables are PGDATABASE, PGUSER, PGPASSWORD, PGHOST, and PGPORT. Test uses PGTESTDATABASE; never point tests at personal or production data.
 
 The desktop app loads a built static frontend and does not need the Rails server. Install its packages and launch it with:
 
 ~~~sh
-npm ci --prefix desktop/frontend
-npm run tauri:dev --prefix desktop/frontend
+npm ci --prefix apps/desktop/frontend
+npm run tauri:dev --prefix apps/desktop/frontend
 ~~~
 
-The Tauri configuration runs the Rails-owned frontend build before dev and production launches. After changing shared frontend sources, the running desktop app must be relaunched to load the rebuilt bundle.
+The Tauri configuration runs the shared frontend build before dev and production launches. After changing shared frontend sources, the running desktop app must be relaunched to load the rebuilt bundle.
+
+## Testing built desktop artifacts
+
+Built artifacts install without the dev harness. On Linux, make the AppImage executable and launch it; if FUSE is unavailable, install the distribution's FUSE 2 compatibility package (`fuse2` on Arch) or fall back to `./Elef.AppImage --appimage-extract-and-run`. On macOS, the unsigned test build trips Gatekeeper on first launch; use the per-app Open Anyway exception in System Settings → Privacy & Security only for a build from a trusted source. If macOS reports the app damaged or containing malware, stop and rebuild rather than excepting it.
+
+Tagging and publishing a release (draft → publish, Gate A, emergency block) is documented in [Desktop release operations](desktop/release-operations.md); installing and using a published release is documented in [Install and use Elef Desktop](desktop/install-and-use.md).
+
+## Check tiers
+
+`bin/check` is the canonical entry point. Tiers nest: each tier runs everything below it plus its own scope.
+
+| Tier | Command | Covers |
+|---|---|---|
+| quick | `bin/check quick` | JS/package unit suites, ownership/boundary/spec/CI-planner checkers, local-store tests (~20 s) |
+| affected | `bin/check affected` | quick + generated-asset diffs, Rails unit subset, adapter conformance, frontend build, Tauri arch checker, fmt/clippy, Rust workspace tests (~1 min) |
+| all | `bin/check all` | affected + full Rails unit (PostgreSQL + SQLite) + Rails system + desktop e2e + web e2e + native benchmark (~18 min, ceiling 45 min) |
+
+Rails suites need ambient `PGPASSWORD` for the local PostgreSQL test database (same as CI). Browser suites need a graphical harness (`dbus-run-session`, `xvfb-run`, `openbox`, all installed in dev/CI) and /tmp headroom: the client and browser suites stage tens of MB under `/tmp/elef-*`; on `ENOSPC` clear stale `elef-*` entries left by killed runs and retry before concluding anything is broken. Keep browser automation headless and run suites one at a time on small machines.
 
 ## Fast checks
 
 | Change | First check |
 |---|---|
-| Rails-owned JavaScript or shared editor workflow | npm run test:javascript |
-| Desktop transport/native frontend adapter | npm test --prefix desktop/frontend |
-| E2E harness helpers | npm run test:unit --prefix desktop/e2e |
-| Rust deck storage or archive behavior | cargo test --manifest-path desktop/Cargo.toml -p elef-core --locked |
-| Rails model, service, controller, or request behavior | bin/rails test path/to/focused_test.rb |
-| Renderer implementation | npm run renderer:build, then npm run test:javascript |
+| Rails-owned JavaScript (host adapters, web-only behavior) | npm run test:javascript |
+| Host-neutral client UI or behavior | npm run typecheck --prefix packages/client, then npm test --prefix packages/client |
+| Shared Stimulus editor shell (`packages/editor-runtime`) | npm run typecheck --prefix packages/editor-runtime, then npm run test:javascript |
+| Pure Work semantics or transforms | npm run typecheck --prefix packages/work-model, then npm test --prefix packages/work-model |
+| Desktop transport/native frontend adapter | npm test --prefix apps/desktop/frontend |
+| E2E harness helpers | npm run test:unit --prefix apps/desktop/e2e |
+| Rust work folder storage or archive behavior | cargo test --manifest-path Cargo.toml -p local-store --locked |
+| Rails model, service, controller, or request behavior | bin/rails test test/path_to_focused_test.rb (from apps/web/) |
+| Renderer implementation | npm run typecheck --prefix packages/renderer, then npm run renderer:build, then npm run test:javascript |
+
+Run Rails `bin/*` commands from `apps/web/`; rake tasks resolve the Rakefile from the working directory.
 
 Before handing off shared or native changes, also run the relevant build and boundary checks:
 
 ~~~sh
-npm run build --prefix desktop/frontend
-python3 script/check_frontend_ownership.py
-python3 desktop/scripts/check_architecture.py
-cargo fmt --manifest-path desktop/Cargo.toml --all -- --check
-cargo clippy --manifest-path desktop/Cargo.toml --workspace --all-targets -- -D warnings
+npm run build --prefix apps/desktop/frontend
+python3 apps/web/script/check_frontend_ownership.py
+python3 apps/desktop/scripts/check_architecture.py
+cargo fmt --manifest-path Cargo.toml --all -- --check
+cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
 ~~~
+
+Package TypeScript holds the strictest bar: `strict` + `exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` (see `tsconfig.base.json`). Run the owning package's `typecheck` script for every package you touch — the `npm test` runners bundle with esbuild and do not typecheck. `bin/check quick` runs the typecheck for every TypeScript package (contracts, client, work-model, renderer, editor-runtime). Contortion guard: write explicit narrowing guards instead of `!` assertions; a per-file documented relaxation needs a recorded justification and stays the exception, never the pattern.
 
 ## Web and desktop parity
 
-The user-flow definitions live once in `test/e2e/scenarios/` with the Rails test suite. Playwright and WebdriverIO adapters under `desktop/e2e/` run those flows against Rails and the real Tauri binary. The runners differ because the Tauri driver uses WebDriver, but the scenarios and expected behavior are shared.
+The user-flow definitions live once in `apps/web/test/e2e/scenarios/` with the Rails test suite. Playwright and WebdriverIO adapters under `apps/desktop/e2e/` run those flows against Rails and the real Tauri binary. The runners differ because the Tauri driver uses WebDriver, but the scenarios and expected behavior are shared.
 
-The full CI parity harness is npm test --prefix desktop/e2e. It seeds disposable Rails test records and a temporary desktop library, then runs web and native desktop scenarios, including offline and update paths. Its Rails test server uses port 3000; do not run this harness while the user's development server occupies that port. CI runs the native matrix on Linux and macOS. A unit test, frontend bundle, or browser-only run does not establish native WebKit behavior.
+The full local parity envelope is `bin/check all`, which runs the e2e harness plus every suite below it. The harness itself (`npm test --prefix apps/desktop/e2e`) seeds disposable Rails test records and a temporary desktop library, then runs web and native desktop scenarios, including offline and update paths; run it directly when iterating on e2e behavior only. Its Rails test server uses port 3000; do not run this harness while the user's development server occupies that port. CI runs the native matrix on Linux and macOS. A unit test, frontend bundle, or browser-only run does not establish native WebKit behavior.
 
 For Rails browser workflows, run a focused system test first, then the suite as needed:
 
@@ -68,12 +96,31 @@ Rails system tests use Selenium in headless mode. Keep browser automation headle
 
 ## Generated assets and review
 
-When changing the renderer or styles, rebuild the relevant artifact and inspect its diff:
+JavaScript tests run against committed `dist/` bundles, and `bin/check quick` does not rebuild them. `bin/check affected` rebuilds every bundle and fails on any diff, so always run it before handoff. When changing package sources or styles, rebuild the relevant artifacts and inspect the diff yourself first:
 
 ~~~sh
 npm run renderer:build
+npm run build --prefix packages/client
+npm run build --prefix packages/work-model
+npm run build --prefix packages/editor-runtime
 bin/rails tailwindcss:build
-git diff -- app/assets/builds/tailwind.css vendor/javascript/elef-renderer.bundle.js vendor/javascript/art_source.bundle.js
+git diff -- apps/web/app/assets/builds/tailwind.css packages/renderer/dist/ packages/client/dist/ packages/editor-runtime/dist/ packages/work-model/dist/
 ~~~
 
-CI checks that these generated files match their sources, checks the one-way frontend ownership and Tauri capability/CSP contracts, runs Rails tests with PostgreSQL and SQLite, runs Rails system tests, and builds/tests desktop on Linux and macOS. Re-run the smallest relevant check after the final edit; report the exact tier and platform actually exercised.
+The package order matters: the editor-runtime Stable entry bundles the Stable client and work-model dists, so those two must be built first on a fresh checkout.
+
+## PR evidence rule
+
+Every pull request must let a reviewer verify the change in one pass: what
+changed and why, before/after screenshots cropped to the specific changed
+parts (or an explicit reason there are none), exact validation commands with
+results, the full adversarial-review trace until acceptance, parity across
+web/desktop/macOS, and known gaps. The form is
+`.github/pull_request_template.md`; `tooling/check_pr_description.rb` (PR
+hygiene) enforces the required sections. Report only checks that actually
+ran — an unrun check is never written as passing. Branch names use a
+Conventional Commits type prefix (`feat/`, `fix/`, `build/`, `chore/`,
+`ci/`, `docs/`, `style/`, `refactor/`, `perf/`, `test/`, `revert/`) plus a
+description; PR hygiene derives the PR title from the branch name.
+
+CI checks that these generated files match their sources, checks the one-way frontend ownership and Tauri capability/CSP contracts, runs Rails tests with PostgreSQL and SQLite, runs Rails system tests, and builds/tests desktop on Linux and macOS. The lane design (quick, shadow plan, slow, nightly), the dev shepherd loop, and the manual promotion path live in [CI operations](ci-operations.md). Re-run the smallest relevant check after the final edit; report the exact tier and platform actually exercised.

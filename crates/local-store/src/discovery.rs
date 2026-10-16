@@ -1,0 +1,424 @@
+//! Work folder listing, summaries, and source-file selection.
+
+use std::collections::BTreeMap;
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+
+use crate::io::{read_regular_file, sha256};
+use crate::library::Library;
+use crate::manifest::{manifest_notices, read_manifest};
+use crate::types::{CoreError, DocumentGraphDocument, WorkFolderRecord, WorkFolderSummary};
+use crate::work_folders::normalized_name;
+
+pub(crate) fn choose_source_file(work_folder_path: &Path) -> Result<Option<String>, CoreError> {
+    let mut candidates = fs::read_dir(work_folder_path)?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let file_type = entry.file_type().ok()?;
+            if !file_type.is_file() || file_type.is_symlink() {
+                return None;
+            }
+            let name = entry.file_name().to_string_lossy().into_owned();
+            if name.starts_with(".") || !Path::new(&name).extension()?.eq_ignore_ascii_case("md") {
+                return None;
+            }
+            Some(name)
+        })
+        .collect::<Vec<_>>();
+    candidates.sort_by_key(|name| source_file_key(name));
+    Ok(candidates.into_iter().next())
+}
+
+pub(crate) fn source_file_for_write(
+    work_folder_path: &Path,
+    previous_source_path: &Path,
+) -> Result<String, CoreError> {
+    if let Some(source_file) = choose_source_file(work_folder_path)? {
+        return Ok(source_file);
+    }
+    if fs::symlink_metadata(previous_source_path)
+        .is_ok_and(|metadata| metadata.file_type().is_symlink())
+    {
+        return Err(CoreError::PathRejected);
+    }
+    Err(CoreError::NotFound)
+}
+
+pub(crate) fn source_file_key(name: &str) -> (u8, usize, String, String) {
+    let preferred = if name.eq_ignore_ascii_case("presentation.md") {
+        0
+    } else if name.eq_ignore_ascii_case("document.md") {
+        1
+    } else {
+        2
+    };
+    (
+        preferred,
+        name.chars().count(),
+        name.to_lowercase(),
+        name.to_owned(),
+    )
+}
+
+pub(crate) fn path_id(path: &Path) -> String {
+    format!("path:{}", sha256(path.to_string_lossy().as_bytes()))
+}
+
+impl Library {
+    pub fn list_work_folders(&self) -> Result<Vec<WorkFolderSummary>, CoreError> {
+        // Hold the index write lock across discovery + merge + replace so the
+        // re-list is atomic against concurrent refresh/remove: a refresh that
+        // lands mid-scan must strictly win or lose, never be silently
+        // overwritten by a stale snapshot (lost save) or resurrect a delete.
+        // Discovery itself takes no other lock, so the global order (per-id
+        // guard outer, index lock inner) is preserved; scans are read-only
+        // directory walks that complete in milliseconds.
+        let mut index = self
+            .records
+            .write()
+            .expect("work folder index lock poisoned");
+        let mut records = self.discover_work_folders()?;
+        // Discovery rebuilds records from disk, which would drop the
+        // in-memory-only merge ancestry. Carry it over so a re-list between a
+        // save and an external change does not silently degrade the next merge
+        // to `Overlap` — but only when the selected source file is unchanged,
+        // so the ancestor never becomes the base for unrelated bytes.
+        for record in records.values_mut() {
+            if let Some(prior) = index.get(&record.id)
+                && prior.source_file == record.source_file
+                && prior.source_path == record.source_path
+            {
+                record.persisted_source = prior.persisted_source.clone();
+            }
+        }
+        *index = records;
+        let mut summaries = index
+            .values()
+            .map(|record| self.summary(record))
+            .collect::<Vec<_>>();
+        drop(index);
+        summaries.sort_by_key(|work_folder| {
+            (
+                normalized_name(&work_folder.name),
+                work_folder.path.to_lowercase(),
+                work_folder.path.clone(),
+            )
+        });
+        Ok(summaries)
+    }
+
+    pub fn document_graph(&self) -> Result<Vec<DocumentGraphDocument>, CoreError> {
+        let summaries = self
+            .list_work_folders()?
+            .into_iter()
+            .filter(|work_folder| work_folder.kind == "document")
+            .collect::<Vec<_>>();
+        let mut documents = Vec::with_capacity(summaries.len());
+        for summary in summaries {
+            let record = self.record(&summary.id)?;
+            self.validate_work_folder_path(&record.path)?;
+            let bytes = read_regular_file(&record.source_path)?;
+            let source = String::from_utf8(bytes).map_err(|_| CoreError::InvalidInput)?;
+            documents.push(DocumentGraphDocument {
+                id: summary.id,
+                name: summary.name,
+                source,
+            });
+        }
+        Ok(documents)
+    }
+
+    pub fn work_folder_summary(&self, id: &str) -> Result<WorkFolderSummary, CoreError> {
+        let record = self.record(id)?;
+        self.validate_work_folder_path(&record.path)?;
+        Ok(self.summary(&record))
+    }
+
+    pub(crate) fn available_work_folder_name(&self, requested: &str) -> Result<String, CoreError> {
+        if !self.name_collision_exists(requested)? {
+            return Ok(requested.into());
+        }
+        for suffix in 2..=10_000 {
+            let candidate = format!("{requested} ({suffix})");
+            if !self.name_collision_exists(&candidate)? {
+                return Ok(candidate);
+            }
+        }
+        Err(CoreError::InvalidInput)
+    }
+
+    pub(crate) fn discover_work_folders(
+        &self,
+    ) -> Result<HashMap<String, WorkFolderRecord>, CoreError> {
+        let mut directories = fs::read_dir(&self.root)?
+            .filter_map(Result::ok)
+            .filter_map(|entry| {
+                let name = entry.file_name();
+                if name.to_string_lossy().starts_with(".") {
+                    return None;
+                }
+                let file_type = entry.file_type().ok()?;
+                if !file_type.is_dir() || file_type.is_symlink() {
+                    return None;
+                }
+                Some(entry.path())
+            })
+            .collect::<Vec<_>>();
+        directories.sort_by_key(|path| {
+            let text = path.to_string_lossy().into_owned();
+            (text.to_lowercase(), text)
+        });
+
+        let mut records = Vec::new();
+        for path in directories {
+            let canonical_path = match fs::canonicalize(&path) {
+                Ok(canonical) if canonical.parent() == Some(self.root.as_path()) => canonical,
+                _ => continue,
+            };
+            let Some(source_file) = choose_source_file(&canonical_path)? else {
+                continue;
+            };
+            let manifest = read_manifest(&canonical_path);
+            let source_path = canonical_path.join(&source_file);
+            let (id, notices) = match &manifest {
+                Ok(Some(manifest)) => (manifest.id.to_string(), manifest_notices(manifest)),
+                Ok(None) => (path_id(&canonical_path), Vec::new()),
+                Err(()) => (
+                    path_id(&canonical_path),
+                    vec!["The Work manifest is invalid; its path is used as identity.".into()],
+                ),
+            };
+            records.push(WorkFolderRecord {
+                id,
+                path: canonical_path,
+                source_path,
+                source_file,
+                manifest: manifest.ok().flatten(),
+                notices,
+                identity_repair: false,
+                persisted_source: None,
+            });
+        }
+
+        let mut groups: BTreeMap<String, Vec<WorkFolderRecord>> = BTreeMap::new();
+        for record in records {
+            groups.entry(record.id.clone()).or_default().push(record);
+        }
+
+        let mut result = HashMap::new();
+        for (_id, mut group) in groups {
+            let duplicated = group.len() > 1;
+            group.sort_by_key(|record| {
+                let text = record.path.to_string_lossy().into_owned();
+                (text.to_lowercase(), text)
+            });
+            for (index, mut record) in group.into_iter().enumerate() {
+                if index > 0 && record.manifest.is_some() {
+                    record.id = path_id(&record.path);
+                    record.identity_repair = true;
+                } else if duplicated && index > 0 {
+                    record.id = path_id(&record.path);
+                }
+                result.insert(record.id.clone(), record);
+            }
+        }
+        Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::fs::File;
+    #[cfg(unix)]
+    use std::os::unix::fs::symlink;
+    use std::time::SystemTime;
+
+    use uuid::Uuid;
+
+    use crate::consts::MANIFEST_FILE;
+    use crate::discovery::{choose_source_file, path_id};
+    use crate::io::system_time_ms;
+    use crate::manifest::read_manifest;
+    use crate::test_support::{library, write_work_folder};
+    use crate::types::WorkFolderManifest;
+
+    #[test]
+    fn source_file_rule_prefers_named_then_shorter_then_alphabetical() {
+        let (temp, _) = library();
+        let path = write_work_folder(
+            temp.path(),
+            "Talk",
+            &[
+                ("talk (conflicted copy).md", "conflict"),
+                ("z.md", "z"),
+                ("a.md", "a"),
+                ("presentation.md", "preferred"),
+                ("document.md", "second"),
+            ],
+        );
+        assert_eq!(
+            choose_source_file(&path).unwrap().as_deref(),
+            Some("presentation.md")
+        );
+        fs::remove_file(path.join("presentation.md")).unwrap();
+        assert_eq!(
+            choose_source_file(&path).unwrap().as_deref(),
+            Some("document.md")
+        );
+        fs::remove_file(path.join("document.md")).unwrap();
+        assert_eq!(choose_source_file(&path).unwrap().as_deref(), Some("a.md"));
+    }
+
+    #[test]
+    fn document_graph_command_returns_documents_for_shared_frontend_resolution() {
+        let (temp, library) = library();
+        write_work_folder(
+            temp.path(),
+            "A",
+            &[(
+                "document.md",
+                "---\ntheme: light\n---\n# First Document\n\n[[Second Document|next]] [[Second Document]] `[[Inline Code]]` \\[[Escaped]]\n\n```md\n[[Fenced Code]]\n```\n    [[Indented Code]]\n",
+            )],
+        );
+        write_work_folder(temp.path(), "B", &[("document.md", "# Second Document\n")]);
+        write_work_folder(
+            temp.path(),
+            "Slides",
+            &[("presentation.md", "# Slides\n\n[[Second Document]]")],
+        );
+
+        let summaries = library.list_work_folders().unwrap();
+        let graph_documents = library.document_graph().unwrap();
+        let first_id = summaries
+            .iter()
+            .find(|work_folder| work_folder.name == "A")
+            .unwrap()
+            .id
+            .clone();
+        let second_id = summaries
+            .iter()
+            .find(|work_folder| work_folder.name == "B")
+            .unwrap()
+            .id
+            .clone();
+        assert_eq!(graph_documents.len(), 2);
+        let first = graph_documents
+            .iter()
+            .find(|document| document.id == first_id)
+            .unwrap();
+        assert_eq!(first.name, "A");
+        assert!(first.source.contains("[[Second Document|next]]"));
+        assert_eq!(
+            graph_documents
+                .iter()
+                .find(|document| document.id == second_id)
+                .unwrap()
+                .name,
+            "B"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn scan_ignores_dot_folders_nested_markdown_and_symlink_work_folders() {
+        let (temp, library) = library();
+        write_work_folder(temp.path(), "Good", &[("presentation.md", "# good")]);
+        let notes = temp.path().join("Notes");
+        fs::create_dir(&notes).unwrap();
+        fs::create_dir(notes.join("nested")).unwrap();
+        fs::write(notes.join("nested/deep.md"), "not a work").unwrap();
+        write_work_folder(temp.path(), ".hidden", &[("notes.md", "hidden")]);
+        symlink(temp.path().join("Good"), temp.path().join("Linked")).unwrap();
+
+        let work_folders = library.list_work_folders().unwrap();
+        assert_eq!(work_folders.len(), 1);
+        assert_eq!(work_folders[0].name, "Good");
+    }
+
+    #[test]
+    fn work_folder_summary_uses_the_source_file_modification_time() {
+        let (temp, library) = library();
+        let work_folder_path = write_work_folder(
+            temp.path(),
+            "Source timestamp",
+            &[("presentation.md", "# Talk")],
+        );
+        let source_path = work_folder_path.join("presentation.md");
+        let expected = SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_600_000_000);
+        File::open(source_path)
+            .unwrap()
+            .set_times(fs::FileTimes::new().set_modified(expected))
+            .unwrap();
+
+        let summary = library.list_work_folders().unwrap().remove(0);
+        assert_eq!(summary.modified_ms, system_time_ms(expected).unwrap());
+    }
+
+    #[test]
+    fn duplicate_manifest_ids_are_resolved_deterministically() {
+        let (temp, library) = library();
+        let id = Uuid::new_v4();
+        let manifest = serde_json::to_vec(&WorkFolderManifest {
+            id,
+            schema_version: 1,
+        })
+        .unwrap();
+        let first = write_work_folder(temp.path(), "A Work", &[("talk.md", "a")]);
+        let second = write_work_folder(temp.path(), "B Work", &[("talk.md", "b")]);
+        fs::write(first.join(MANIFEST_FILE), &manifest).unwrap();
+        fs::write(second.join(MANIFEST_FILE), &manifest).unwrap();
+
+        let work_folders = library.list_work_folders().unwrap();
+        assert_eq!(work_folders.len(), 2);
+        assert_eq!(work_folders[0].id, id.to_string());
+        assert_ne!(work_folders[1].id, id.to_string());
+        assert_eq!(
+            read_manifest(&first).unwrap().unwrap().id,
+            read_manifest(&second).unwrap().unwrap().id,
+            "listing is read-only; duplicate repair waits until the work folder is opened"
+        );
+
+        library.open_work_folder(&work_folders[1].id).unwrap();
+        assert_ne!(
+            read_manifest(&first).unwrap().unwrap().id,
+            read_manifest(&second).unwrap().unwrap().id
+        );
+    }
+
+    #[test]
+    fn relisting_preserves_the_in_memory_merge_ancestor() {
+        let (temp, library) = library();
+        let work_folder =
+            write_work_folder(temp.path(), "Ancestry", &[("presentation.md", "saved\n")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
+
+        // A re-list between a save and an external change must not silently
+        // degrade the next merge to `Overlap` by dropping the ancestor.
+        library.list_work_folders().unwrap();
+        let record = library.record(&opened.id).unwrap();
+        assert_eq!(record.persisted_source.as_deref(), Some("saved\n"));
+    }
+
+    #[test]
+    fn relisting_drops_the_ancestor_when_the_selected_source_changes() {
+        let (temp, library) = library();
+        let work_folder = write_work_folder(temp.path(), "Switch", &[("talk.md", "old\n")]);
+        let id = path_id(&work_folder.canonicalize().unwrap());
+        library.list_work_folders().unwrap();
+        let opened = library.open_work_folder(&id).unwrap();
+        assert_eq!(opened.source_file, "talk.md");
+
+        // An external writer adds a preferred source file: the old ancestor
+        // must not become the merge base for the new file's bytes.
+        fs::write(work_folder.join("presentation.md"), "preferred\n").unwrap();
+        library.list_work_folders().unwrap();
+
+        let record = library.record(&opened.id).unwrap();
+        assert_eq!(record.source_file, "presentation.md");
+        assert_eq!(record.persisted_source, None);
+    }
+}

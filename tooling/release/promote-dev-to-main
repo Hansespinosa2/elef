@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Open the manual dev -> main promotion pull request.
+#
+# ONLY the owner runs this, at their discretion, normally when dev is fully
+# green. The shepherd never promotes. This helper only OPENS the pull
+# request; the owner still merges it by hand after promotion CI passes.
+# It never pushes to main, never merges, and never deploys.
+#
+#   tooling/release/promote-dev-to-main            # dry run: print the plan
+#   tooling/release/promote-dev-to-main --create   # open the PR with gh
+#   tooling/release/promote-dev-to-main --create --allow-red "reason"
+#
+# Without --allow-red the helper refuses while the latest dev lane runs
+# are red. With it, the reason is recorded in the PR body.
+set -euo pipefail
+
+remote="${DEPLOYMENT_REMOTE:-origin}"
+create=false
+allow_red=""
+
+while (($#)); do
+  case "$1" in
+    --create) create=true; shift ;;
+    --allow-red) allow_red="${2:?--allow-red needs a reason}"; shift 2 ;;
+    -h|--help)
+      sed -n '2,15p' "${BASH_SOURCE[0]}"
+      exit 0
+      ;;
+    *) echo "Unknown argument: $1" >&2; exit 1 ;;
+  esac
+done
+
+for command_name in gh git python3; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "Required command is not installed: $command_name" >&2
+    exit 1
+  fi
+done
+
+repository="$(gh repo view --json nameWithOwner --jq .nameWithOwner)"
+git fetch --quiet "$remote" dev main
+
+dev_tip="$(git rev-parse "$remote/dev")"
+main_tip="$(git rev-parse "$remote/main")"
+behind="$(git rev-list --count "$remote/dev..$remote/main")"
+ahead="$(git rev-list --count "$remote/main..$remote/dev")"
+
+if [[ "$behind" != 0 ]]; then
+  echo "origin/dev is $behind commit(s) behind origin/main; merge main back into dev first" >&2
+  exit 1
+fi
+if [[ "$ahead" == 0 ]]; then
+  echo "origin/dev matches origin/main; nothing to promote"
+  exit 1
+fi
+
+latest_conclusion() {
+  local workflow="$1"
+  gh run list --repo "$repository" --branch dev --workflow "$workflow" \
+    --limit 5 --json databaseId,conclusion,createdAt,url |
+    python3 -c 'import json,sys
+runs = [run for run in json.load(sys.stdin) if run.get("conclusion")]
+runs.sort(key=lambda run: run.get("createdAt", ""), reverse=True)
+if runs:
+    print(runs[0]["conclusion"], runs[0].get("url", ""))'
+}
+
+ci_lane="$(latest_conclusion ci.yml)"
+slow_lane="$(latest_conclusion slow-lane.yml)"
+ci_conclusion="${ci_lane%% *}"
+slow_conclusion="${slow_lane%% *}"
+
+echo "Promotion plan: $remote/dev ($ahead commits) -> $remote/main"
+git log --oneline "$remote/main..$remote/dev" | head -50
+echo "CI lane on dev: ${ci_lane:-no completed run}"
+echo "Slow lane on dev: ${slow_lane:-no completed run}"
+
+red_lanes=()
+[[ -n "$ci_conclusion" && "$ci_conclusion" != success ]] && red_lanes+=("CI lane: $ci_lane")
+[[ -n "$slow_conclusion" && "$slow_conclusion" != success ]] && red_lanes+=("slow lane: $slow_lane")
+if ((${#red_lanes[@]})) && [[ -z "$allow_red" ]]; then
+  printf 'Refusing to promote while dev lanes are red:\n' >&2
+  printf '  %s\n' "${red_lanes[@]}" >&2
+  printf 'Re-run with --allow-red "reason" to record an explicit override.\n' >&2
+  exit 1
+fi
+
+body="Manual dev -> main promotion.
+
+- dev tip: \`$dev_tip\`
+- Commits: $ahead
+- CI lane on dev: ${ci_lane:-no completed run}
+- Slow lane on dev: ${slow_lane:-no completed run}"
+if [[ -n "$allow_red" ]]; then
+  body="$body
+- Red-lane override: $allow_red"
+fi
+body="$body
+
+Merge only after this promotion PR is fully green. Merging advances
+elef-deploy-main after deployment authorization; red never deploys."
+
+if ! $create; then
+  echo "Dry run: pass --create to open the promotion PR with:"
+  echo "  gh pr create --repo \"$repository\" --base main --head dev --title \"Promote dev to main\" --body-file <above>"
+  printf '%s\n' "$body"
+  exit 0
+fi
+
+gh pr create --repo "$repository" --base main --head dev \
+  --title "Promote dev to main" --body "$body"

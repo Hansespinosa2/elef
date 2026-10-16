@@ -1,10 +1,10 @@
 # Desktop documentation
 
-- [Install and use Elef Desktop](install-and-use.md): platform install, library setup, editing, archives, updates, and offline behavior.
-- [Architecture and code map](../architecture.md): how the Rails app and Tauri consumer fit together.
-- [Development and testing](../development.md): local commands and the shared web/desktop test strategy.
-- [Data format](data-format.md): deck folders, manifests, library settings, and .elef archives.
-- [Transport boundary](transport-adapter.md): shared application integration with desktop commands and native services.
-- [Security model](security.md): webview capabilities, CSP, file boundaries, and import checks.
-- [Feature flags](delivery-plan.md): the two desktop features kept off and the CI-checked defaults.
+Reach for when: finding the surviving desktop docs.
+
+- [Data format](data-format.md): work folders, manifests, library settings, `.elef` archives, and the trust boundary.
+- [Diagnostics](diagnostics.md): local-only event logs and the Export Diagnostics ZIP.
+- [Feature flags](feature-flags.md): the two desktop features kept off and the CI-checked defaults.
+- [Install and use](install-and-use.md): installing, updating, and rolling back a published desktop release.
+- [Release operations](release-operations.md): tagging, Gate A, publishing, emergency block, and AUR recovery.
 - [Decision records](adr/README.md): decisions, current status, and remaining acceptance evidence.
