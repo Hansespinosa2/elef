@@ -6,6 +6,7 @@ import {
   metadataQueryAt,
   rankMetadataCandidates
 } from "../lib/metadata_assist.js";
+import { assistsInMode, mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";
 class metadata_assist_controller_default extends Controller {
   static targets = ["editor", "palette"];
   connect() {
@@ -20,12 +21,24 @@ class metadata_assist_controller_default extends Controller {
     this.editorModeChange = () => this.close();
     this.editorForm?.addEventListener("elef:editor-mode-change", this.editorModeChange);
     this.positionPalette = this.positionPalette.bind(this);
+    this.visualKeydown = (event) => {
+      if (this.editorController?.editingMode !== "visual") return;
+      if (this.paletteTarget.hidden) return;
+      this.keydown(event);
+    };
+    this.visualScroll = () => {
+      if (this.editorController?.editingMode === "visual") this.positionPalette();
+    };
     this.paletteTarget.setAttribute("aria-live", "polite");
     this.setupEditor();
     window.addEventListener("resize", this.positionPalette);
+    document.addEventListener("keydown", this.visualKeydown, true);
+    window.addEventListener("scroll", this.visualScroll, { capture: true, passive: true });
   }
   disconnect() {
     window.removeEventListener("resize", this.positionPalette);
+    document.removeEventListener("keydown", this.visualKeydown, true);
+    window.removeEventListener("scroll", this.visualScroll, { capture: true });
     if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette);
     if (this.keydownBound) this.editorController?.dom.removeEventListener("keydown", this.handleEditorKeydown, true);
     this.element.removeEventListener("elef:editor-ready", this.editorReady);
@@ -70,6 +83,8 @@ class metadata_assist_controller_default extends Controller {
     const selected = openPalette?.querySelector('[aria-selected="true"]');
     if (selected) editor.setAttribute("aria-activedescendant", selected.id);
     else editor.removeAttribute("aria-activedescendant");
+    if (this.editorController?.editingMode !== "visual") return;
+    mirrorPopupAccessibility(this.element, { open: Boolean(openPalette), selectedId: selected?.id ?? null });
   }
   input() {
     this.refresh();
@@ -77,7 +92,7 @@ class metadata_assist_controller_default extends Controller {
   keydown(event) {
     if (event.defaultPrevented) return;
     const editor = this.editorController;
-    if (!editor || editor.editingMode !== "source") {
+    if (!assistsInMode(editor)) {
       this.close();
       return;
     }
@@ -111,7 +126,7 @@ class metadata_assist_controller_default extends Controller {
   }
   refresh() {
     const editor = this.editorController;
-    if (!editor || editor.editingMode !== "source") return this.close();
+    if (!assistsInMode(editor)) return this.close();
     if (editor.selectionStart !== editor.selectionEnd) return this.close();
     const query = metadataQueryAt(editor.value, editor.selectionStart);
     if (!query) return this.close();
@@ -164,8 +179,17 @@ class metadata_assist_controller_default extends Controller {
     if (this.paletteTarget.hidden) return;
     const editor = this.editorController;
     if (!editor) return;
+    if (editor.editingMode === "visual") {
+      const rect = visualCaretRect();
+      if (!rect) return;
+      this.placePalette(rect);
+      return;
+    }
     const editorRect = editor.dom.getBoundingClientRect();
     const markerRect = editor.view.coordsAtPos(editor.selectionStart) || editorRect;
+    this.placePalette(markerRect);
+  }
+  placePalette(markerRect) {
     const paletteRect = this.paletteTarget.getBoundingClientRect();
     const left = Math.max(8, Math.min(markerRect.left, window.innerWidth - paletteRect.width - 8));
     const maxTop = window.innerHeight - paletteRect.height - 8;
@@ -181,13 +205,15 @@ class metadata_assist_controller_default extends Controller {
     const editor = this.editorController;
     if (!candidate || !query || !editor) return this.close();
     const caret = editor.selectionStart;
-    if (query.kind === "key") {
-      editor.replaceRange(`${candidate}: `, this.queryStart, caret);
+    const insertion = query.kind === "key" ? `${candidate}: ` : candidate;
+    editor.replaceRange(insertion, this.queryStart, caret);
+    if (editor.editingMode === "visual") {
+      projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from: this.queryStart, to: caret, insert: insertion, caret: this.queryStart + insertion.length });
+      placeVisualCaret(this.element, this.queryStart + insertion.length);
     } else {
-      editor.replaceRange(candidate, this.queryStart, caret);
+      editor.focus();
     }
     this.close();
-    editor.focus();
     queueMicrotask(() => this.refresh());
   }
   close() {

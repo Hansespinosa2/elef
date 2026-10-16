@@ -2,6 +2,10 @@
 // metadata palettes) and the visual projection host. Every assist reads the
 // engine and commits through it in both modes; only anchoring, key routing,
 // insertion follow-up, and popup announcements differ in visual mode.
+export function assistsInMode(editor: { editingMode?: string } | null | undefined): boolean {
+  return !!editor && (editor.editingMode === "source" || editor.editingMode === "visual")
+}
+
 export interface VisualAssistHost {
   applyVisualAssistInsert?: (edit: { from: number; to: number; insert: string; caret: number }) => boolean;
   restoreCaret?: (sourceOffset: number, preferredBlockId: string | null) => boolean;

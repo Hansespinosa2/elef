@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { editorFor } from "../lib/editor_controller_lookup.js"
-import { mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
+import { assistsInMode, mirrorPopupAccessibility, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
 import { editorInsideCode, editorInsideMath } from "./math_shorthand_controller.js"
 import { authoringRegistryFor } from "./authoring_registry.js"
 import { snippetStopsEffect } from "./snippet_stops.js"
@@ -103,10 +103,6 @@ export default class extends Controller<HTMLElement> {
     mirrorPopupAccessibility(this.element, { open: Boolean(openPalette), selectedId: selected?.id ?? null })
   }
 
-  assistsInMode(editor: { editingMode?: string } | null | undefined): boolean {
-    return !!editor && (editor.editingMode === "source" || editor.editingMode === "visual")
-  }
-
   projectionHost() {
     return projectionHostFor(this.element)
   }
@@ -133,7 +129,7 @@ export default class extends Controller<HTMLElement> {
   pruneStops() {
     if (!this.stops.length) return
     const editor = this.editorController
-    if (!this.assistsInMode(editor) || editor?.destroyed) return this.endStops()
+    if (!assistsInMode(editor) || editor?.destroyed) return this.endStops()
     const active = this.activeStop
     if (!active) return this.endStops()
     const from = editor.selectionStart
@@ -145,7 +141,7 @@ export default class extends Controller<HTMLElement> {
   keydown(event: KeyboardEvent) {
     if (event.defaultPrevented) return
     const editor = this.editorController
-    if (!this.assistsInMode(editor)) {
+    if (!assistsInMode(editor)) {
       this.close()
       if (this.stops.length) this.endStops()
       return
@@ -190,7 +186,7 @@ export default class extends Controller<HTMLElement> {
 
   refresh() {
     const editor = this.editorController
-    if (!this.assistsInMode(editor)) return this.close()
+    if (!assistsInMode(editor)) return this.close()
     const directiveQuery = this.directiveQueryAtCaret()
     const query = directiveQuery || this.queryAtCaret()
     if (!query) return this.close()

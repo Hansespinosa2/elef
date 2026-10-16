@@ -756,3 +756,128 @@ test("visual link routing binds on document capture and ignores idle keys", (t) 
   assertVisualRouting(t, DocumentLinkPaletteController)
 })
 
+// --- Visual-mode metadata assist ---
+
+const metadataAssistSource = (await readFile(new URL("../../../../packages/editor-runtime/dist/lib/metadata_assist.js", import.meta.url), "utf8"))
+  .replace('from "@elef/client"', `from "${import.meta.resolve("@elef/client")}"`)
+  .replace('from "@elef/work-model"', `from "${import.meta.resolve("@elef/work-model")}"`)
+  .replace(/^export\s*\{[^}]*\}\s*;?/m, "")
+const MetadataAssistController = await loadController("metadata_assist", {
+  base: sharedControllerPath,
+  overrides: {
+    "../lib/editor_controller_lookup.js": "const editorFor = element => element.currentEditor\n",
+    "../lib/metadata_assist.js": metadataAssistSource,
+    "../lib/visual_assist.js": visualAssistSource
+  }
+})
+
+test("visual metadata refresh opens the palette on a frontmatter key", (t) => {
+  const mounted = mountAssistPalette({
+    controllerClass: MetadataAssistController,
+    value: "---\nthe\n---\n",
+    caret: 7,
+    registry: []
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+
+  mounted.controller.refresh()
+
+  assert.equal(mounted.palette.hidden, false)
+  assert.deepEqual(mounted.controller.matches, ["theme"])
+  assert.equal(mounted.controller.queryStart, 4)
+  assert.equal(mounted.palette.style.left, "100px")
+  assert.equal(mounted.palette.style.top, "222px")
+})
+
+test("visual metadata insert pipelines a key candidate with its colon", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MetadataAssistController,
+    value: "---\nthe\n---\n",
+    caret: 7,
+    registry: [],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.insertSelected()
+
+  assert.deepEqual(mounted.calls.replaceRange, [["theme: ", 4, 7]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 4, to: 7, insert: "theme: ", caret: 11 }])
+  assert.equal(mounted.calls.focus, 0)
+  assert.deepEqual(hostCalls.carets, [[11, null]])
+  assert.equal(mounted.palette.hidden, true)
+})
+
+test("visual metadata insert pipelines a pure value insertion", async (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MetadataAssistController,
+    value: "---\ntheme: \n---\n",
+    caret: 11,
+    registry: [],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.insertSelected()
+  await new Promise((resolve) => setImmediate(resolve))
+
+  assert.deepEqual(mounted.calls.replaceRange, [["dark", 11, 11]])
+  assert.deepEqual(hostCalls.inserts, [{ from: 11, to: 11, insert: "dark", caret: 15 }])
+  assert.deepEqual(hostCalls.carets, [[15, null]])
+})
+
+test("source metadata insert still focuses the engine", (t) => {
+  const { calls: hostCalls, host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MetadataAssistController,
+    mode: "source",
+    value: "---\nthe\n---\n",
+    caret: 7,
+    registry: [],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  assert.equal(mounted.palette.hidden, false)
+
+  mounted.controller.insertSelected()
+
+  assert.deepEqual(mounted.calls.replaceRange, [["theme: ", 4, 7]])
+  assert.equal(mounted.calls.focus, 1)
+  assert.deepEqual(hostCalls.inserts, [])
+})
+
+test("visual metadata keydown accepts the match on Enter", (t) => {
+  const { host } = stubHostDouble()
+  const mounted = mountAssistPalette({
+    controllerClass: MetadataAssistController,
+    value: "---\nthe\n---\n",
+    caret: 7,
+    registry: [],
+    host
+  })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.controller.refresh()
+  let prevented = false
+
+  mounted.controller.keydown({ key: "Enter", defaultPrevented: false, preventDefault: () => { prevented = true } })
+
+  assert.equal(prevented, true)
+  assert.deepEqual(mounted.calls.replaceRange, [["theme: ", 4, 7]])
+})
+
+test("visual metadata routing binds on document capture and ignores idle keys", (t) => {
+  assertVisualRouting(t, MetadataAssistController)
+})
+

@@ -1,3 +1,6 @@
+function assistsInMode(editor) {
+  return !!editor && (editor.editingMode === "source" || editor.editingMode === "visual");
+}
 function projectionHostFor(element) {
   const form = element.closest("form");
   return form?.presentationEditorController || form?.visualEditorController || null;
@@ -20,6 +23,7 @@ function mirrorPopupAccessibility(fieldElement, params) {
   else active.removeAttribute("aria-activedescendant");
 }
 export {
+  assistsInMode,
   mirrorPopupAccessibility,
   placeVisualCaret,
   projectionHostFor,
