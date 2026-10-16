@@ -691,6 +691,13 @@ jobs:
             apps/desktop/e2e/test-results
             apps/desktop/e2e/playwright-report
           if-no-files-found: ignore
+      - name: Preserve caret-autofocus evidence shots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: caret-autofocus-shots
+          path: apps/desktop/e2e/test-results/caret-autofocus
+          if-no-files-found: warn
       - name: Build Apple Silicon desktop package
         run: npm run tauri:build --prefix apps/desktop/frontend -- --bundles app,dmg
 
