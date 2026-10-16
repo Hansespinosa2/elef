@@ -7,6 +7,7 @@
   ],
   "scripts": {
     "renderer:build": "node packages/renderer/build.mjs",
+    "build:packages": "npm run build --prefix packages/work-model && node packages/client/build.mjs --skip-renderer-deps && npm run build --prefix packages/editor-runtime && npm run renderer:build && npm run build --prefix packages/client",
     "test:javascript": "node --test apps/web/test/javascript/*.test.js apps/web/test/javascript/*.test.mjs apps/web/test/javascript/shared/*.test.js",
     "check:release-fixtures": "node apps/desktop/scripts/check_release_fixture_manifest.mjs",
     "check:desktop-profiles": "node apps/desktop/scripts/check_release_profiles.mjs",
