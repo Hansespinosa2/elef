@@ -10,7 +10,7 @@ import {
   visibleOffsetForSourceOffset
 } from "../controllers/editor_caret.js";
 import { markdownForVisibleText, renderInlineMath } from "../controllers/editor_markdown.js";
-import { handleMathClick, handleMathKeydown, syncActiveMath } from "../controllers/editor_math.js";
+import { handleMathClick, handleMathKeydown, recordMathMousedown, syncActiveMath } from "../controllers/editor_math.js";
 import { activeInlineMap, syncActiveInline } from "../controllers/editor_reveal.js";
 import { setProjectionBlockEditable } from "./projection_editability.js";
 import { mountPresentationEditor } from "@elef/client";
@@ -28,6 +28,7 @@ function presentationEditorDeps() {
     markdownForVisibleText: (source, text, kind, element, options) => markdownForVisibleText(source, text, kind, element, { ...options, revealActives: activeInlineMap(source, element) }),
     renderInlineMath,
     handleMathClick,
+    recordMathMousedown,
     handleMathKeydown,
     syncActiveMath,
     syncActiveInline,

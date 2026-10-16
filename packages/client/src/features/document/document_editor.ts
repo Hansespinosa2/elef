@@ -84,6 +84,8 @@ export interface DocumentEditorSeam {
 
 export interface DocumentProjectionEvent {
   readonly target: EventTarget | null | undefined
+  readonly clientX?: number | undefined
+  readonly clientY?: number | undefined
   preventDefault(): void
 }
 
@@ -113,6 +115,7 @@ export interface DocumentEditorDeps {
   syncActiveMath(target: Element | null, flush: () => void): void
   syncActiveInline(target: Element | null, getSource: (block: Element) => string | null, flush: () => void): void
   handleMathClick(event: DocumentProjectionEvent, target: Element | null): boolean
+  recordMathMousedown(event: DocumentProjectionEvent, target: Element | null): void
   handleMathKeydown(event: DocumentProjectionKeyEvent, target: Element | null, flush: () => void): boolean
   moveCaretBetweenBlocks(event: DocumentProjectionKeyEvent, target: Element | null): boolean
   finishMathBeforeEnter(event: DocumentProjectionKeyEvent, target: Element | null, flush: () => void): void
@@ -180,6 +183,7 @@ export class DocumentEditor {
   previewStaleHandler: ((event: any) => void) | undefined
   documentPaginatedHandler: (() => void) | undefined
   projectionLinkHandler: ((event: any) => void) | undefined
+  mathPressHandler: ((event: any) => void) | undefined
   positionControlOutsidePointerDown: ((event: any) => void) | undefined
   blockKeydownHandler: ((event: any) => void) | undefined
   beforeinputHandler: ((event: any) => void) | undefined
@@ -260,6 +264,8 @@ export class DocumentEditor {
     this.element.addEventListener("elef:document-paginated", this.documentPaginatedHandler)
     this.projectionLinkHandler = (event) => this.projectionLinkClicked(event)
     this.element.addEventListener("click", this.projectionLinkHandler)
+    this.mathPressHandler = (event) => this.deps.recordMathMousedown(event, this.projectionTarget)
+    this.element.addEventListener("mousedown", this.mathPressHandler)
     // The host can connect this feature after the first preview event when
     // a desktop work is opened. Restore the toggle from the installed preview
     // state so that a successful render cannot leave Visual permanently disabled.
@@ -291,6 +297,7 @@ export class DocumentEditor {
     this.element.removeEventListener("elef:preview-stale", this.previewStaleHandler as EventListener)
     this.element.removeEventListener("elef:document-paginated", this.documentPaginatedHandler as EventListener)
     this.element.removeEventListener("click", this.projectionLinkHandler as EventListener)
+    this.element.removeEventListener("mousedown", this.mathPressHandler as EventListener)
     document.removeEventListener("pointerdown", this.positionControlOutsidePointerDown as EventListener, true)
     this.element.removeEventListener("keydown", this.blockKeydownHandler as EventListener, true)
     this.element.removeEventListener("beforeinput", this.beforeinputHandler as EventListener, true)

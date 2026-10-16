@@ -103,6 +103,8 @@ export interface PresentationEditorSeam {
 
 export interface ProjectionEvent {
   readonly target: EventTarget | null | undefined
+  readonly clientX?: number | undefined
+  readonly clientY?: number | undefined
   preventDefault(): void
 }
 
@@ -131,6 +133,7 @@ export interface PresentationEditorDeps {
   syncActiveMath(element: Element | null, flush: () => void): void
   syncActiveInline(target: Element | null, getSource: (block: Element) => string | null, flush: () => void): void
   handleMathClick(event: ProjectionEvent, target: Element | null): boolean
+  recordMathMousedown(event: ProjectionEvent, target: Element | null): void
   handleMathKeydown(event: ProjectionKeyEvent, canvas: Element | null, flush: () => void): boolean
   moveCaretBetweenBlocks(event: ProjectionKeyEvent, canvas: Element | null): boolean
   visibleOffsetAtPoint(block: Element, node: Node | null, offset: number): number | null
@@ -288,6 +291,7 @@ export class PresentationEditor {
     on(form, "elef:preview-stale", (event) => this.previewStale(event.detail))
     on(form, "click", (event) => this.handleAction(event))
     on(form, "click", (event) => this.projectionLinkClicked(event))
+    on(form, "mousedown", (event) => this.deps.recordMathMousedown(event, this.canvas()))
     on(form, "change", (event) => {
       if (event.target?.closest?.("[data-presentation-editor-align]")) this.alignmentChanged(event)
     })

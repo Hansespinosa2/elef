@@ -18,7 +18,7 @@ export function mountPresentationEditor(form, options) {
 `).toString("base64")}`
 const source = (await readFile(path.join(root, "packages/editor-runtime/dist/lib/presentation_editor_host.js"), "utf8"))
   .replace(/^import \{[^}]*\} from "\.\.\/controllers\/editor_math\.js";?$/ms, "const createActiveMathSpan = () => null; const deRenderMath = () => null; const finishMathBeforeEnter = () => null")
-  .replace(/^import \{[^}]*\} from "\.\.\/controllers\/editor_math\.js";?$/ms, "const handleMathClick = () => null; const handleMathKeydown = () => null; const syncActiveMath = () => null")
+  .replace(/^import \{[^}]*\} from "\.\.\/controllers\/editor_math\.js";?$/ms, "const handleMathClick = () => null; const recordMathMousedown = () => null; const handleMathKeydown = () => null; const syncActiveMath = () => null")
   .replace(/^import \{[^}]*\} from "\.\.\/controllers\/editor_reveal\.js";?$/ms, "const activeInlineMap = () => null; const syncActiveInline = () => null")
   .replace(/^import \{[^}]*\} from "\.\.\/controllers\/editor_markdown\.js";?$/ms, "const sourceOffsetForVisiblePosition = () => null")
   .replace(/^import \{[^}]*\} from "\.\.\/controllers\/editor_markdown\.js";?$/ms, "const markdownForVisibleText = () => null; const renderInlineMath = () => null")

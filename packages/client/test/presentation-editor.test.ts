@@ -118,6 +118,7 @@ function stubDeps() {
     markdownForVisibleText: (source: string) => source,
     renderInlineMath: () => {},
     handleMathClick: () => false,
+    recordMathMousedown: () => {},
     handleMathKeydown: () => false,
     syncActiveMath: (_element: unknown, flush: () => void) => flush(),
     syncActiveInline: () => {},

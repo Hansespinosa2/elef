@@ -40,3 +40,41 @@ test("completed math renders through the imported KaTeX module", () => {
   assert.equal(rendered.textContent, "x^2")
   delete globalThis.document
 })
+
+test("click retargeted off math by a focus reflow still activates the pressed math", () => {
+  const { document } = parseHTML("<html><body><div id=root><p>before <span class=katex data-editor-math-source=x^2><i>x</i></span> after</p></div></body></html>")
+  globalThis.document = document
+  globalThis.window = { getSelection: () => null }
+  const root = document.querySelector("#root")
+  const inner = root.querySelector("i")
+  const paragraph = root.querySelector("p")
+
+  editorMath.recordMathMousedown({ target: inner, clientX: 100, clientY: 200 }, root)
+  const handled = editorMath.handleMathClick(
+    { target: paragraph, clientX: 101, clientY: 201, preventDefault: () => {} }, root
+  )
+
+  assert.equal(handled, true)
+  assert.ok(root.querySelector(".editor-math-active"))
+  delete globalThis.document
+  delete globalThis.window
+})
+
+test("press-and-drag across math does not derender it", () => {
+  const { document } = parseHTML("<html><body><div id=root><p>before <span class=katex data-editor-math-source=x^2><i>x</i></span> after</p></div></body></html>")
+  globalThis.document = document
+  globalThis.window = { getSelection: () => null }
+  const root = document.querySelector("#root")
+  const inner = root.querySelector("i")
+  const paragraph = root.querySelector("p")
+
+  editorMath.recordMathMousedown({ target: inner, clientX: 100, clientY: 200 }, root)
+  const handled = editorMath.handleMathClick(
+    { target: paragraph, clientX: 160, clientY: 200, preventDefault: () => {} }, root
+  )
+
+  assert.equal(handled, false)
+  assert.equal(root.querySelector(".editor-math-active"), null)
+  delete globalThis.document
+  delete globalThis.window
+})

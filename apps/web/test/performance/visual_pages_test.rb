@@ -582,6 +582,26 @@ class VisualPagesTest < ApplicationSystemTestCase
     ) == 3
   end
 
+  # The suggestion palette only triggers in plain prose (a "/" inside
+  # inline code or math is literal text, correctly). Step left with real
+  # ArrowLeft keys (unmeasured setup) until the text caret sits outside
+  # code, math, and link spans.
+  def ensure_plain_caret(block_index)
+    12.times do
+      return true if page.evaluate_script(
+        "(() => { const sel = document.getSelection();" \
+        " const node = sel.anchorNode;" \
+        " if (!node || node.nodeType !== 3) return false;" \
+        " const el = node.parentElement;" \
+        " return el && !el.closest('code, pre, .katex, a'); })()"
+      )
+
+      page.driver.browser.action.send_keys(:arrow_left).perform
+      sleep 0.2
+    end
+    false
+  end
+
   def bridge_caret(block_index, which)
     page.evaluate_script(
       "(() => { const form = document.querySelector('form.visual-editor-form');" \
@@ -756,6 +776,20 @@ class VisualPagesTest < ApplicationSystemTestCase
         page.driver.browser.action.move_to_location(coords[0], coords[1]).click.perform
       end
       record_input_sample(samples, stalls, overlaps, "revelation", name, index, ms, flags, trace)
+      if ms == -1
+        puts "PERF_TIMEOUT_STATE n=#{index} katex=#{target} " + page.evaluate_script(
+          "(() => { const nodes = document.querySelectorAll('.document-surface .katex');" \
+          " const node = nodes[#{target}];" \
+          " const block = node ? node.closest('[data-editor-block-id]') : null;" \
+          " const chain = []; let el = node ? node.parentElement : null;" \
+          " while (el && chain.length < 4) { chain.push(el.tagName + '.' + String(el.className || '').slice(0, 20)); el = el.parentElement; }" \
+          " return 'active=' + Boolean(document.querySelector('.editor-math-active'))" \
+          " + ' display=' + Boolean(node && node.closest('.katex-display'))" \
+          " + ' hasSource=' + Boolean(node && node.hasAttribute('data-editor-math-source'))" \
+          " + ' chain=' + chain.join('>') + ' tex=' + JSON.stringify(node ? node.textContent.slice(0, 50) : null)" \
+          " + ' blockCE=' + (block ? block.getAttribute('contenteditable') : null); })()"
+        ).to_s
+      end
       caret = bridge_caret_ready(0, :start)
       raise "revelation reset caret failed: #{caret}" unless caret == "caret:true"
     end
@@ -776,9 +810,11 @@ class VisualPagesTest < ApplicationSystemTestCase
       " const seen = new Set(); const groups = [];" \
       " blocks.forEach((block, i) => { const id = block.dataset.editorBlockId;" \
       " const math = block.querySelector('.katex-display') !== null;" \
-      " if (seen.has(id)) { const g = groups[groups.length - 1]; g.len += block.textContent.length; g.math = g.math || math; return; }" \
-      " seen.add(id); groups.push({ i, len: block.textContent.length, math }); });" \
-      " const prose = groups.filter((g) => g.len > 100 && !g.math).map((g) => g.i);" \
+      " const code = block.querySelector('pre') !== null;" \
+      " const table = block.querySelector('table') !== null;" \
+      " if (seen.has(id)) { const g = groups[groups.length - 1]; g.len += block.textContent.length; g.math = g.math || math; g.code = g.code || code; g.table = g.table || table; return; }" \
+      " seen.add(id); groups.push({ i, len: block.textContent.length, math, code, table }); });" \
+      " const prose = groups.filter((g) => g.len > 100 && !g.math && !g.code && !g.table).map((g) => g.i);" \
       " return prose.filter((_, k) => k % Math.max(1, Math.floor(prose.length / #{count})) === 0).slice(0, #{count}); })()"
     )
     raise "no prose blocks for suggestion benchmark" unless targets.is_a?(Array) && targets.length == count
@@ -794,11 +830,33 @@ class VisualPagesTest < ApplicationSystemTestCase
       caret = bridge_caret_ready(target, :end)
       raise "suggestion caret placement failed: #{caret}" unless caret == "caret:true"
       raise "suggestion target #{target} has no text caret" unless ensure_text_caret(target)
+      raise "suggestion target #{target} has no plain caret" unless ensure_plain_caret(target)
       wait_for_quiet
       ms, flags, trace = measure_sample(SUGGEST_PAINT_INSTALL) do
         page.driver.browser.action.send_keys(" /i").perform
       end
       record_input_sample(samples, stalls, overlaps, "suggestion", name, index, ms, flags, trace)
+      if ms == -1
+        puts "PERF_TIMEOUT_STATE n=#{index} target=#{target} " + page.evaluate_script(
+          "(() => { const pal = document.querySelector('.snippet-palette:not([hidden])');" \
+          " const opts = pal ? pal.querySelectorAll('.snippet-option').length : 0;" \
+          " const blocks = [...document.querySelectorAll('.document-surface [data-editor-block-id]')];" \
+          " const block = blocks[#{target}];" \
+          " const id = block ? block.dataset.editorBlockId : null;" \
+          " const group = blocks.filter((b) => b.dataset.editorBlockId === id)" \
+          " .map((b) => b.textContent).join('');" \
+          " const sel = document.getSelection();" \
+          " const anchor = sel.anchorNode;" \
+          " const chain = [];" \
+          " let el = anchor ? anchor.parentElement : null;" \
+          " while (el && chain.length < 5) { chain.push(el.tagName + '.' + String(el.className || '').slice(0, 24)); el = el.parentElement; }" \
+          " const prev = anchor && anchor.nodeType === 3 ? anchor.textContent.slice(Math.max(0, sel.anchorOffset - 24), sel.anchorOffset) : null;" \
+          " return 'palette=' + Boolean(pal) + ' opts=' + opts" \
+          " + ' landed=' + group.includes(' /i')" \
+          " + ' blockTag=' + (block ? block.tagName : null)" \
+          " + ' chain=' + chain.join('>') + ' prev=' + JSON.stringify(prev); })()"
+        ).to_s
+      end
       # Browser-level Escape: a projection reinstall between the trigger
       # and dismissal would stale any block handle.
       page.driver.browser.action.send_keys(:escape).perform

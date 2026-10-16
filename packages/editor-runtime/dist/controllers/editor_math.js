@@ -180,11 +180,28 @@ function finishMathBeforeEnter(event, rootElement, onFlush = null) {
   reRenderMath(info.activeSpan, { caret: "after" }, onFlush);
   return true;
 }
+let pendingMathPress = null;
+const CLICK_DRAG_PX = 6;
+function recordMathMousedown(event, rootElement) {
+  pendingMathPress = null;
+  const math = event.target?.closest?.("[data-editor-math-source]:not([data-editor-math-active])");
+  if (math && rootElement?.contains(math)) {
+    pendingMathPress = { math, x: event.clientX, y: event.clientY };
+  }
+}
 function handleMathClick(event, rootElement) {
   const math = event.target?.closest?.("[data-editor-math-source]:not([data-editor-math-active])");
   if (math && rootElement?.contains(math)) {
+    pendingMathPress = null;
     event.preventDefault();
     deRenderMath(math, { caret: "click", clickEvent: event });
+    return true;
+  }
+  const pending = pendingMathPress;
+  pendingMathPress = null;
+  if (pending && rootElement?.contains(pending.math) && Math.hypot(event.clientX - pending.x, event.clientY - pending.y) < CLICK_DRAG_PX) {
+    event.preventDefault();
+    deRenderMath(pending.math, { caret: "click", clickEvent: event });
     return true;
   }
   return false;
@@ -292,5 +309,6 @@ export {
   handleMathClick,
   handleMathKeydown,
   reRenderMath,
+  recordMathMousedown,
   syncActiveMath
 };
