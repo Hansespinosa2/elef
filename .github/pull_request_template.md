@@ -12,14 +12,17 @@
 
 ## Screenshots
 
-<!-- REQUIRED for any visual change: EMBED before/after image pairs CROPPED to the
-specific changed parts (not only full pages), one pair per part — never local
-file paths. In the web UI just paste/drag screenshots into this box (GitHub
-hosts them). From CLI/API, where upload is unavailable, commit them to a
-scratch assets branch and embed the hosted URLs. Name what to look at in each
-pair. No visual change: write "None — <reason>" (e.g. CI-only, behavior
-covered by unit tests). Desktop-shell-only changes that cannot render in a
-browser: say so and list the on-device checks instead. -->
+<!-- MANDATORY on every PR: embed at least one before/after image pair proving the
+user-visible behavior. Crop each shot to the specific changed part (not only
+full pages); label them Before: and After: and name what to look at. Add more
+pairs for multi-step workflows. In the web UI just paste/drag screenshots into
+this box (GitHub hosts them). From CLI/API, where upload is unavailable, commit
+them to a scratch assets branch and embed the hosted URLs. Non-visual change
+(CI-only, persistence-only): screenshot the evidence instead (e.g. the passing
+check output side-by-side with the pre-change failure, or the unchanged UI
+before and after) — a "None" Screenshots section fails PR hygiene. Desktop-
+shell-only changes that cannot render in a browser: say so, embed the on-device
+captures, and list the on-device checks instead. -->
 
 ## Validation
 

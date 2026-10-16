@@ -1847,7 +1847,7 @@ class DesktopLibraryUi {
         : document.querySelector("#desktop-editor-title")?.value,
       source: document.querySelector("#desktop-editor-field")?.editorController?.sourceValue
     }), { expected: title, documentKind: kind === "document" })
-    if (result.title !== title || (kind === "document" && result.source !== `# ${title}\n\n`)) {
+    if (result.title !== title || (kind === "document" && result.source !== `---\ntheme: match\n---\n# ${title}\n\n`)) {
       throw new Error(`The editor did not open the new ${kind} with its expected content: ${JSON.stringify(result)}`)
     }
   }
@@ -2368,7 +2368,7 @@ describe("desktop binary workflows and native boundaries", () => {
       await $("#print-work").click()
       await browser.waitUntil(async () => browser.execute(() => window.__elefPrintResult?.native === true), {
         timeout: 10_000,
-        timeoutMsg: "The Print / Save PDF option did not reach the native print command"
+        timeoutMsg: "The PDF option did not reach the native print command"
       })
       await ui.assertExportMenuClosed("the print option")
       // The native dialog fires no afterprint event: the printing-work

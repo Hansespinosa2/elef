@@ -39,6 +39,15 @@ class HostApiControllerTest < ActionDispatch::IntegrationTest
     assert_nil Document.find_by(id: created["id"])
   end
 
+  test "create without text seeds workspace theme front matter" do
+    post "/api/host/works", params: { workspace_id: "default", title: "Seeded", kind: "document" }, as: :json
+    assert_response :created
+
+    get "/api/host/works/#{response.parsed_body["id"]}", as: :json
+    assert_response :ok
+    assert_equal "---\ntheme: match\n---\n# Seeded\n", response.parsed_body["text"]
+  end
+
   test "destroy answers recomputed card notes for orphaned forks" do
     parent = Presentation.create!(title: "Note parent", source: "# Parent\n")
     child = parent.fork_as("inspiration")

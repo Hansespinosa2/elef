@@ -160,15 +160,16 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 1, media_controllers
     assert_select 'button[data-dirty-navigation]', text: "Present"
     # The edit page mounts the shared Export menu (same component as the
-    # desktop work view): draft-only works expose one edition, print rides
-    # an anchor href, PPTX rides the draft-form fetch. Labels live in the
-    # client registry (packages/client/test/export-menu.test.tsx).
+    # desktop work view): draft-only works expose one edition, PDF rides
+    # an anchor href (print route with from_export, so the print page opens
+    # its PDF dialog immediately), PPTX rides the draft-form fetch. Labels
+    # live in the client registry (packages/client/test/export-menu.test.tsx).
     mount = css_select('[data-controller="export-menu-host"]').first
     assert mount, "expected the shared export menu mount"
     assert_equal "presentation", mount["data-export-menu-host-kind-value"]
     assert_equal ["draft"], JSON.parse(mount["data-export-menu-host-editions-value"])
-    assert_equal print_presentation_path(presentations(:one)),
-      JSON.parse(mount["data-export-menu-host-print-urls-value"])["draft"]
+    assert_equal "#{print_presentation_path(presentations(:one))}?from_export=1",
+      JSON.parse(mount["data-export-menu-host-pdf-urls-value"])["draft"]
     assert_equal pptx_presentation_path(presentations(:one), version: "draft"),
       JSON.parse(mount["data-export-menu-host-pptx-urls-value"])["draft"]
     get new_presentation_path
@@ -459,8 +460,8 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     pptx_urls = JSON.parse(mount["data-export-menu-host-pptx-urls-value"])
     assert_equal pptx_presentation_path(presentation, version: "draft"), pptx_urls["draft"]
     assert_equal pptx_presentation_path(presentation, version: "published"), pptx_urls["published"]
-    print_urls = JSON.parse(mount["data-export-menu-host-print-urls-value"])
-    assert_equal print_presentation_path(presentation, version: "published"), print_urls["published"]
+    pdf_urls = JSON.parse(mount["data-export-menu-host-pdf-urls-value"])
+    assert_equal "#{print_presentation_path(presentation, version: "published")}&from_export=1", pdf_urls["published"]
 
     get new_presentation_path
     mount = css_select('[data-controller="export-menu-host"]').first

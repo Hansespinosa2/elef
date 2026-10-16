@@ -407,7 +407,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
     get print_document_path(document)
     assert_response :success
     assert_select ".document-print-toolbar", text: /Printable Document/
-    assert_select ".document-print-toolbar button", text: "Print / Save PDF"
+    assert_select ".document-print-toolbar button", text: "Save as PDF"
     assert_select ".document-surface h1", text: "Page 1"
     assert_select ".document-surface h1", text: "Page 2"
     assert_select ".document-print-pages[data-bug-report-ignore]", count: 1

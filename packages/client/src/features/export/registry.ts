@@ -32,19 +32,15 @@ export const EXPORT_FORMATS: Array<ExportFormat> = [
     model: "web-json",
   },
   {
-    id: "print",
-    label: "Print",
-    kinds: ["presentation", "document"],
-    hosts: ["web", "desktop"],
-    engine: "print",
-  },
-  {
+    // The menu offers this format as "PDF". Delivery rides the print
+    // pipeline on both hosts (web print routes, desktop native print
+    // command), so the engine stays "print": it names the pipeline, not
+    // the menu wording.
     id: "pdf",
-    label: "PDF (via print)",
+    label: "PDF",
     kinds: ["presentation", "document"],
     hosts: ["web", "desktop"],
     engine: "print",
-    via: "print",
   },
   {
     id: "elef",

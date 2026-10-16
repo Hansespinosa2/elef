@@ -16,7 +16,7 @@ export function createBaseFileLibraryTransport({ invoke, pptxSeams } = {}) {
     writeLibraryConfig: config => invoke("write_library_config", { config }),
     exportElef: id => invoke("export_elef", { id }),
     exportPptx: (workId, input) => pptxExport.exportPresentationPptx(workId, input),
-    // Desktop Print / Save PDF delivery: the Rust print_work command opens
+    // Desktop PDF delivery: the Rust print_work command opens
     // the platform print dialog (Save as PDF on macOS, Print to File on
     // Linux, Print to PDF on Windows). Script window.print() never reaches
     // that pipeline from the Tauri webviews, so it stays only a fallback.

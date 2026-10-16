@@ -15,7 +15,9 @@ class HostApiController < ApplicationController
     klass = params.require(:kind) == "presentation" ? Presentation : Document
     title = params.require(:title).to_s
     work = klass.new(workspace: host_workspace, title: title)
-    work.source = params[:text].presence || "# #{title}\n"
+    # New Works start with visible source metadata showing the workspace
+    # theme default, matching available_default_source on the HTML flow.
+    work.source = params[:text].presence || "---\ntheme: #{host_workspace.default_theme}\n---\n# #{title}\n"
     if work.save
       render json: work_snapshot(work), status: :created
     else
