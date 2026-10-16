@@ -1,4 +1,5 @@
 require "application_system_test_case"
+require "digest"
 require "json"
 require "fileutils"
 
@@ -500,6 +501,157 @@ class VisualPagesTest < ApplicationSystemTestCase
     end
   end
 
+  # Real click at a centered, header-clear point: Capybara's click
+  # auto-scrolls tall elements under the sticky site header (click
+  # intercepted), so scroll to center first, then drive viewport
+  # coordinates with genuine mouse events (measurement stays honest).
+  # The hit point and the resulting focus are verified; a covered
+  # point (sticky header, overlays) scrolls clear and retries.
+  def center_coords(selector, index, line_y = 420)
+    # The projection surface scrolls inside its pane (the window barely
+    # scrolls), so drive the pane until the target sits at a
+    # header-clear viewport line. Converged across frames: skipped
+    # content-visibility pages render asynchronously, so each measure
+    # waits a beat before the next correction.
+    4.times do
+      done = page.evaluate_script(
+        "(() => { const el = document.querySelectorAll('#{selector}')[#{index}];" \
+        " const pane = el.closest('.editor-projection.preview-pane');" \
+        " const r = el.getBoundingClientRect();" \
+        " const dy = (r.top + Math.min(r.height, 48) / 2) - #{line_y};" \
+        " if (Math.abs(dy) < 8) return true;" \
+        " if (pane) pane.scrollTop += dy; else window.scrollBy(0, dy);" \
+        " return false; })()"
+      )
+      break if done
+
+      sleep 0.3
+    end
+    page.evaluate_script(
+      "(() => { const el = document.querySelectorAll('#{selector}')[#{index}];" \
+      " const r = el.getBoundingClientRect();" \
+      " return [Math.round(r.left + Math.min(r.width, 240) / 2), Math.round(r.top + Math.min(r.height, 48) / 2)]; })()"
+    )
+  end
+
+  # Focus + caret through the product's own caret bridge, retried
+  # like Capybara waiting: post-settle preview churn briefly parks
+  # blocks non-editable, and restoreCaret honestly refuses then. Setup
+  # only: the measured keypress below is always genuine input.
+  # Deterministic where element clicks flake (sticky headers,
+  # transparent overlays, unrendered quiet pages).
+  def bridge_caret_ready(block_index, which)
+    # Scroll the target into view first: the bridge resolves the visible
+    # fragment, and a real user scrolls before clicking. Setup scrolls
+    # are unmeasured; only the keystroke after them is timed.
+    page.evaluate_script(
+      "(() => { const blocks = document.querySelectorAll('.document-surface [data-editor-block-id]');" \
+      " const block = blocks[#{block_index}];" \
+      " if (block) block.scrollIntoView({ block: 'center' }); return Boolean(block); })()"
+    )
+    sleep 0.4
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 15
+    loop do
+      caret = bridge_caret(block_index, which)
+      return caret if caret == "caret:true"
+
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      raise "caret placement failed: #{caret}" if now > deadline
+
+      sleep 0.3
+    end
+  end
+
+  # The caret bridge can land element-anchored at block end (e.g. right
+  # after trailing math, where no text node follows). The editor refuses
+  # element-anchored input rather than corrupt source, so step left with
+  # real ArrowLeft keys (unmeasured setup) until the caret sits in text.
+  def ensure_text_caret(block_index)
+    3.times do
+      anchored = page.evaluate_script(
+        "(() => { const sel = document.getSelection();" \
+        " return sel.anchorNode ? sel.anchorNode.nodeType : 0; })()"
+      )
+      return true if anchored == 3
+
+      page.driver.browser.action.send_keys(:arrow_left).perform
+      sleep 0.2
+    end
+    page.evaluate_script(
+      "document.getSelection().anchorNode ? document.getSelection().anchorNode.nodeType : 0"
+    ) == 3
+  end
+
+  def bridge_caret(block_index, which)
+    page.evaluate_script(
+      "(() => { const form = document.querySelector('form.visual-editor-form');" \
+      " const adapter = form ? form.visualEditorController : null;" \
+      " const block = document.querySelectorAll('.document-surface [data-editor-block-id]')[#{block_index}];" \
+      " const id = block ? block.dataset.editorBlockId : null;" \
+      " const map = adapter ? adapter.editor.map : null;" \
+      " const regions = map ? (map.editable_regions || map.slides.flatMap((s) => s.editable_regions || [])) : [];" \
+      " const region = regions.find((r) => r.block_id === id);" \
+      " if (!adapter || !region) return 'no-region';" \
+      " const at = #{which == :start ? "region.content_range.start" : "region.content_range.end"};" \
+      " const result = adapter.restoreCaret(at, id);" \
+      " if (result) return 'caret:true';" \
+      " const editor = adapter.editor;" \
+      " const frags = editor.blockFragments(id);" \
+      " return 'caret:false|' + JSON.stringify({ frags: frags.length," \
+      " ceAttr: block ? block.getAttribute('contenteditable') : 'missing'," \
+      " stale: form.getAttribute('data-preview-projection-stale')," \
+      " focusBlock: Boolean(editor.focusedProjectionBlock && editor.focusedProjectionBlock()) }); })()"
+    )
+  end
+
+  def center_click(selector, index)
+    # A transparent collapsed-source strip overlays one viewport band
+    # (pre-existing); vary the target line so a covered point retries
+    # elsewhere instead of converging on the same obstruction.
+    [420, 580, 300].each do |line_y|
+      coords = center_coords(selector, index, line_y)
+      sleep 0.2
+      hit = page.evaluate_script(
+        "(() => { const target = document.querySelectorAll('#{selector}')[#{index}];" \
+        " const el = document.elementFromPoint(#{coords[0]}, #{coords[1]});" \
+        " return Boolean(el) && (target === el || target.contains(el)); })()"
+      )
+      next unless hit
+
+      page.driver.browser.action.move_to_location(coords[0], coords[1]).click.perform
+      sleep 0.2
+      focused = page.evaluate_script(
+        "(() => { const target = document.querySelectorAll('#{selector}')[#{index}];" \
+        " const active = document.activeElement;" \
+        " return Boolean(active) && (target === active || target.contains(active)); })()"
+      )
+      return if focused
+    end
+    raise "could not focus #{selector}[#{index}] after retries"
+  end
+
+  # Quiet offscreen pages skip rendering (content-visibility); after
+  # scrolling one into view, wait until its content has boxes before
+  # driving keys (setup only, never measured).
+  def wait_for_rendered(selector, index)
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 10
+    loop do
+      rendered = page.evaluate_script(
+        "(() => { const el = document.querySelectorAll('#{selector}')[#{index}];" \
+        " if (!el) return false;" \
+        " const kid = el.firstElementChild;" \
+        " return Boolean(kid) && kid.getBoundingClientRect().height > 0; })()"
+      )
+      break if rendered
+
+      now = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+      raise "block #{index} never rendered" if now > deadline
+
+      center_coords(selector, index)
+      sleep 0.3
+    end
+  end
+
   def benchmark_typing(name, source, count, stalls, overlaps)
     document = create_perf_document("Perf #{name} typing", source)
     visit edit_document_path(document)
@@ -510,8 +662,12 @@ class VisualPagesTest < ApplicationSystemTestCase
     # settle after every switch and keep focus within a block's run.
     targets = page.evaluate_script(
       "(() => { const blocks = [...document.querySelectorAll('.document-surface [data-editor-block-id]')];" \
-      " const prose = blocks.map((block, i) => [i, block.textContent.length])" \
-      ".filter(([i, len]) => len > 100).map(([i]) => i);" \
+      " const seen = new Set(); const groups = [];" \
+      " blocks.forEach((block, i) => { const id = block.dataset.editorBlockId;" \
+      " const math = block.querySelector('.katex-display') !== null;" \
+      " if (seen.has(id)) { const g = groups[groups.length - 1]; g.len += block.textContent.length; g.math = g.math || math; return; }" \
+      " seen.add(id); groups.push({ i, len: block.textContent.length, math }); });" \
+      " const prose = groups.filter((g) => g.len > 100 && !g.math).map((g) => g.i);" \
       " return [prose[0], prose[Math.floor(prose.length / 2)]]; })()"
     )
     raise "no prose blocks for typing benchmark" unless targets.is_a?(Array) && targets[0]
@@ -522,23 +678,30 @@ class VisualPagesTest < ApplicationSystemTestCase
     count.times do |index|
       target = plan[index]
       if target != current
-        page.execute_script("document.querySelectorAll('.document-surface [data-editor-block-id]')[#{target}].scrollIntoView({block:'center'})")
-        all(".document-surface [data-editor-block-id]")[target].click
+        # Blur first: reinstalls defer while focused, so a focused
+        # block would hold the preview stale (and the next block
+        # non-editable) forever. A real click blurs the same way.
+        page.evaluate_script("document.activeElement && document.activeElement.blur()")
         wait_for_fresh_quiet
-        all(".document-surface [data-editor-block-id]")[target].send_keys(:end)
+        caret = bridge_caret_ready(target, :end)
+        raise "typing caret placement failed: #{caret}" unless caret == "caret:true"
+        raise "typing target #{target} has no text caret" unless ensure_text_caret(target)
         current = target
       end
       wait_for_quiet
-      block = all(".document-surface [data-editor-block-id]")[target]
-      length_before = page.evaluate_script(
-        "document.querySelectorAll('.document-surface [data-editor-block-id]')[#{target}].textContent.length"
+      # Landing check reads the SOURCE (the real invariant: edits are
+      # source transactions). Block DOM text is unreliable: page
+      # fragments split one block across elements, so a char typed at
+      # block end lands in a different element than the target index.
+      source_before = page.evaluate_script(
+        "document.querySelector('.source-field').editorController.value.length"
       )
       char = "aeiou"[index % 5]
-      ms, flags, trace = measure_sample(KEY_PAINT_INSTALL) { block.send_keys(char) }
-      length_after = page.evaluate_script(
-        "document.querySelectorAll('.document-surface [data-editor-block-id]')[#{target}].textContent.length"
+      ms, flags, trace = measure_sample(KEY_PAINT_INSTALL) { page.driver.browser.action.send_keys(char).perform }
+      source_after = page.evaluate_script(
+        "document.querySelector('.source-field').editorController.value.length"
       )
-      raise "typed char did not land in block #{target} (#{length_before} -> #{length_after}): #{trace}" unless length_after == length_before + 1
+      raise "typed char did not land in source (#{source_before} -> #{source_after}): #{trace}" unless source_after == source_before + 1
       record_input_sample(samples, stalls, overlaps, "typing", name, index, ms, flags, trace)
     end
     input_stats(samples)
@@ -548,7 +711,8 @@ class VisualPagesTest < ApplicationSystemTestCase
     document = create_perf_document("Perf #{name} motion", source)
     visit edit_document_path(document)
     wait_for_full_settle
-    first(".document-surface [contenteditable='true']").click
+    caret = bridge_caret_ready(0, :start)
+    raise "motion caret placement failed: #{caret}" unless caret == "caret:true"
     page.evaluate_script("window.scrollTo(0, 0)")
     samples = []
     count.times do |index|
@@ -570,11 +734,30 @@ class VisualPagesTest < ApplicationSystemTestCase
     count.times do |index|
       target = (index * 37) % total
       wait_for_quiet
-      page.execute_script("document.querySelectorAll('.document-surface .katex')[#{target}].scrollIntoView({block:'center'})")
-      node = all(".document-surface .katex", minimum: 1)[target]
-      ms, flags, trace = measure_sample(REVEAL_PAINT_INSTALL) { node.click }
+      # Setup only: land the click point on the katex node itself
+      # (transparent overlays cover some viewport bands), varying the
+      # target line until the hit test passes. The measured click below
+      # is genuine input.
+      coords = nil
+      [420, 580, 300].each do |line_y|
+        candidate = center_coords(".document-surface .katex", target, line_y)
+        hit = page.evaluate_script(
+          "(() => { const target = document.querySelectorAll('.document-surface .katex')[#{target}];" \
+          " const el = document.elementFromPoint(#{candidate[0]}, #{candidate[1]});" \
+          " return Boolean(el) && (target === el || target.contains(el)); })()"
+        )
+        if hit
+          coords = candidate
+          break
+        end
+      end
+      raise "katex #{target} never hittable" unless coords
+      ms, flags, trace = measure_sample(REVEAL_PAINT_INSTALL) do
+        page.driver.browser.action.move_to_location(coords[0], coords[1]).click.perform
+      end
       record_input_sample(samples, stalls, overlaps, "revelation", name, index, ms, flags, trace)
-      first(".document-surface [contenteditable='true']").click
+      caret = bridge_caret_ready(0, :start)
+      raise "revelation reset caret failed: #{caret}" unless caret == "caret:true"
     end
     input_stats(samples)
   end
@@ -590,39 +773,30 @@ class VisualPagesTest < ApplicationSystemTestCase
     wait_for_full_settle
     targets = page.evaluate_script(
       "(() => { const blocks = [...document.querySelectorAll('.document-surface [data-editor-block-id]')];" \
-      " const prose = blocks.map((block, i) => [i, block.textContent.length])" \
-      ".filter(([i, len]) => len > 100).map(([i]) => i);" \
+      " const seen = new Set(); const groups = [];" \
+      " blocks.forEach((block, i) => { const id = block.dataset.editorBlockId;" \
+      " const math = block.querySelector('.katex-display') !== null;" \
+      " if (seen.has(id)) { const g = groups[groups.length - 1]; g.len += block.textContent.length; g.math = g.math || math; return; }" \
+      " seen.add(id); groups.push({ i, len: block.textContent.length, math }); });" \
+      " const prose = groups.filter((g) => g.len > 100 && !g.math).map((g) => g.i);" \
       " return prose.filter((_, k) => k % Math.max(1, Math.floor(prose.length / #{count})) === 0).slice(0, #{count}); })()"
     )
     raise "no prose blocks for suggestion benchmark" unless targets.is_a?(Array) && targets.length == count
     samples = []
     count.times do |index|
       target = targets[index]
-      # Re-query before every interaction (typing-benchmark pattern): the
-      # click blurs the previous block, installing a pending projection
-      # that replaces block nodes mid-sample.
-      page.execute_script("document.querySelectorAll('.document-surface [data-editor-block-id]')[#{target}].scrollIntoView({block:'center'})")
-      all(".document-surface [data-editor-block-id]")[target].click
+      # Blur first (reinstalls defer while focused), then focus + true
+      # block end via the caret bridge. Element clicks flake against
+      # settled 100-page projections; the measured trigger below is
+      # genuine input.
+      page.evaluate_script("document.activeElement && document.activeElement.blur()")
       wait_for_fresh_quiet
-      # True block end via the caret bridge: :end stops at the visual
-      # line (mid-block on wrapped prose), and a trigger typed beside
-      # existing whitespace collapses in legacy flushes, shifting the
-      # caret off the query.
-      caret = page.evaluate_script(
-        "(() => { const form = document.querySelector('form.visual-editor-form');" \
-        " const adapter = form ? form.visualEditorController : null;" \
-        " const block = document.querySelectorAll('.document-surface [data-editor-block-id]')[#{target}];" \
-        " const id = block ? block.dataset.editorBlockId : null;" \
-        " const map = adapter ? adapter.editor.map : null;" \
-        " const regions = map ? (map.editable_regions || map.slides.flatMap((s) => s.editable_regions || [])) : [];" \
-        " const region = regions.find((r) => r.block_id === id);" \
-        " if (!adapter || !region) return 'no-region';" \
-        " return 'caret:' + adapter.restoreCaret(region.content_range.end, id); })()"
-      )
+      caret = bridge_caret_ready(target, :end)
       raise "suggestion caret placement failed: #{caret}" unless caret == "caret:true"
+      raise "suggestion target #{target} has no text caret" unless ensure_text_caret(target)
       wait_for_quiet
       ms, flags, trace = measure_sample(SUGGEST_PAINT_INSTALL) do
-        all(".document-surface [data-editor-block-id]")[target].send_keys(" /i")
+        page.driver.browser.action.send_keys(" /i").perform
       end
       record_input_sample(samples, stalls, overlaps, "suggestion", name, index, ms, flags, trace)
       # Browser-level Escape: a projection reinstall between the trigger
@@ -649,10 +823,21 @@ class VisualPagesTest < ApplicationSystemTestCase
     }
     install_perf_probes
     report[:env] = env_info
-    {
+    manifest = JSON.parse(File.read(File.join(FIXTURE_DIR, "manifest.json")))
+    fixtures = {
       "mixed" => MIXED_FIXTURE,
       "math_heavy" => MATH_FIXTURE
-    }.each do |name, path|
+    }
+    # Freeze guards: the source bytes are pinned by the manifest, and
+    # the rendered page count is a measured property of the current
+    # renderer (recalibrated when rendering changes, never hand-tuned
+    # to pass). Every open sample must reproduce the manifest exactly.
+    fixtures.each do |name, path|
+      expected_sha = manifest.dig("fixtures", name, "sha256")
+      actual_sha = Digest::SHA256.hexdigest(File.read(path))
+      assert_equal expected_sha, actual_sha, "#{name}: fixture source frozen"
+    end
+    fixtures.each do |name, path|
       report[:fixtures][name] = benchmark_fixture(name, File.read(path))
     end
 
@@ -672,7 +857,8 @@ class VisualPagesTest < ApplicationSystemTestCase
     report[:fixtures].each do |name, result|
       next unless result[:open_pages]
 
-      assert_equal [100], result[:open_pages], "#{name}: every open sample must paginate to 100"
+      expected_pages = manifest.dig("fixtures", name, "rendered_pages")
+      assert_equal [expected_pages], result[:open_pages], "#{name}: every open sample must paginate to #{expected_pages} (manifest)"
       assert_equal 0, result[:open_math_errors], "#{name}: no math errors"
       refute result[:open_error_text], "#{name}: no <<ERROR>> text"
       stages = result.dig(:first_breakdown, "stages") || []

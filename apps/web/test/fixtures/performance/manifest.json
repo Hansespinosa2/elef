@@ -11,7 +11,10 @@
   },
   "reference_layout": {
     "surface": "web visual document editor (edit page, visual mode default)",
-    "viewport": [1400, 1000],
+    "viewport": [
+      1400,
+      1000
+    ],
     "device_scale_factor": 1,
     "browser": "Chromium 152.0.7977.82 (Arch Linux build), headless",
     "theme": "light",
@@ -35,8 +38,8 @@
       "images": 26,
       "lists": 105,
       "headings": 106,
-      "rendered_pages": 100,
-      "rendered_dom_nodes": 23128,
+      "rendered_pages": 98,
+      "rendered_dom_nodes": 14361,
       "rendered_katex": 210,
       "rendered_math_errors": 0
     },
@@ -54,8 +57,8 @@
       "images": 0,
       "lists": 0,
       "headings": 159,
-      "rendered_pages": 100,
-      "rendered_dom_nodes": 102636,
+      "rendered_pages": 86,
+      "rendered_dom_nodes": 45870,
       "rendered_katex": 1264,
       "rendered_math_errors": 0
     }
@@ -65,5 +68,9 @@
     "assets/perf-2.svg": "ae8b90e1bb95fd9fdf0bf8cb8e727c693f97dbc0f8f5ed4b5521c57a7620e9f8",
     "assets/perf-3.svg": "7c585df0f4eb47cdc7112072546bb827fa0a08cb37edf576d009a0015993f9bc",
     "assets/perf-4.svg": "6f2c6ea0909c240a741a5134ffa1d46bf04a08f160179b6c3a9d9ed8676d9e4e"
+  },
+  "recalibration": {
+    "reason": "S1 KaTeX output switched html -> mathml: fewer DOM nodes per equation with different metrics, so identical frozen sources paginate to 98/86 under the reference layout. Source sha256 pins unchanged; counts re-measured via ELEF_PERF_MODE=calibrate (stable across runs; every measure sample must reproduce them exactly).",
+    "renderer": "katex output mathml, throwOnError, locally served webfonts"
   }
 }
