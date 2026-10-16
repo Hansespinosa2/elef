@@ -1847,7 +1847,7 @@ class DesktopLibraryUi {
         : document.querySelector("#desktop-editor-title")?.value,
       source: document.querySelector("#desktop-editor-field")?.editorController?.sourceValue
     }), { expected: title, documentKind: kind === "document" })
-    if (result.title !== title || (kind === "document" && result.source !== `# ${title}\n\n`)) {
+    if (result.title !== title || (kind === "document" && result.source !== `---\ntheme: match\n---\n# ${title}\n\n`)) {
       throw new Error(`The editor did not open the new ${kind} with its expected content: ${JSON.stringify(result)}`)
     }
   }

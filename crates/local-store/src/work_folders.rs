@@ -42,6 +42,16 @@ pub(crate) fn validate_work_folder_name(name: &str) -> Result<(), CoreError> {
     Ok(())
 }
 
+/// Heading for a freshly created Work. Mirrors the shared `buildNewWorkSource`
+/// title normalization in packages/work-model, so the desktop store seeds
+/// exactly the web default.
+fn new_work_heading(name: &str) -> String {
+    name.replace(['\r', '\n'], " ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 pub(crate) fn normalized_name(name: &str) -> String {
     default_case_fold_str(&name.nfc().collect::<String>())
         .nfc()
@@ -194,7 +204,11 @@ impl Library {
         } else {
             "presentation.md"
         };
-        let source = format!("# {name}\n\n");
+        // New Works start with visible YAML front matter carrying the canonical
+        // "match" theme default, mirroring the shared buildNewWorkSource seed
+        // (desktop has no workspace style setting). Both hosts open the same
+        // editable header.
+        let source = format!("---\ntheme: match\n---\n# {}\n\n", new_work_heading(name));
         write_new_file(&path.join(source_file), source.as_bytes())?;
         let manifest = WorkFolderManifest {
             id: Uuid::new_v4(),
@@ -315,6 +329,38 @@ mod tests {
         assert_eq!(opened.fingerprint.content_hash, sha256(b"# Notes\n"));
         assert!(opened.manifest.is_some());
         assert!(work_folder.join(MANIFEST_FILE).is_file());
+    }
+
+    #[test]
+    fn create_work_folder_seeds_visible_theme_front_matter_by_default() {
+        let (_temp, library) = library();
+        let document = library
+            .create_work_folder("Fresh work", "document")
+            .unwrap();
+        assert_eq!(document.source_file, "document.md");
+        assert_eq!(document.source, "---\ntheme: match\n---\n# Fresh work\n\n");
+
+        let deck = library
+            .create_work_folder("Fresh deck", "presentation")
+            .unwrap();
+        assert_eq!(deck.source_file, "presentation.md");
+        assert_eq!(deck.source, "---\ntheme: match\n---\n# Fresh deck\n\n");
+
+        // Opening shows the same editable header the create returned.
+        let reopened = library.open_work_folder(&document.id).unwrap();
+        assert_eq!(reopened.source, document.source);
+    }
+
+    #[test]
+    fn create_work_folder_heading_collapses_whitespace_like_the_shared_seed() {
+        let (_temp, library) = library();
+        let work_folder = library
+            .create_work_folder("Fresh\n  work", "document")
+            .unwrap();
+        assert_eq!(
+            work_folder.source,
+            "---\ntheme: match\n---\n# Fresh work\n\n"
+        );
     }
 
     #[test]
