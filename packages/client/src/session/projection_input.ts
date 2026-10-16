@@ -171,6 +171,48 @@ function touchesEdgeWhitespace(visibleText: string, edit: TranslatedProjectionEd
   return false
 }
 
+// Maps a DOM-visible offset to a source offset when the block DOM lags the
+// engine by invisible whitespace: the renderer trims trailing spaces the
+// source owns, so until the next reinstall the DOM can miss whitespace
+// the model counts. Walks both texts from the start, skipping source
+// whitespace the DOM lacks; any other divergence (concealed markers,
+// missing visible text) declines so those blocks stay on the legacy
+// path. DOM-end gets end-of-source affinity past an invisible tail;
+// interior carets hug the preceding character.
+export function alignVisibleOffset(slice: string, blockText: string, domOffset: number): number | null {
+  // Contenteditable stores typed edge whitespace as non-breaking spaces
+  // while the engine commits regular spaces; normalize both sides before
+  // comparing. The substitution is one-to-one, so offsets still index the
+  // original texts.
+  slice = slice.replace(/\u00a0/g, " ")
+  blockText = blockText.replace(/\u00a0/g, " ")
+  if (domOffset < 0 || domOffset > blockText.length) return null
+  // Offset zero with a hidden prefix (concealed markers, stripped leading
+  // whitespace) has no unambiguous source: committing at zero would place
+  // the edit outside formatting the DOM caret sits inside, so decline to
+  // the structure-aware legacy path. Empty blocks map zero to zero.
+  if (domOffset === 0 && slice.length > 0 && slice[0] !== blockText[0]) return null
+  const isSkippable = (char: string | undefined): boolean =>
+    char === " " || char === "\t" || char === "\n" || char === "\r"
+  let sourceIndex = 0
+  let domIndex = 0
+  while (domIndex < domOffset) {
+    if (sourceIndex >= slice.length) return null
+    if (slice[sourceIndex] === blockText[domIndex]) {
+      sourceIndex += 1
+      domIndex += 1
+      continue
+    }
+    if (!isSkippable(slice[sourceIndex])) return null
+    sourceIndex += 1
+  }
+  if (domOffset === blockText.length) {
+    while (sourceIndex < slice.length && isSkippable(slice[sourceIndex])) sourceIndex += 1
+    return sourceIndex === slice.length ? sourceIndex : null
+  }
+  return sourceIndex
+}
+
 // A visible offset touches concealed syntax when the source map jumps
 // across hidden characters beside it: a leading offset with source
 // after position zero (marker prefix), or an interior offset whose
@@ -179,20 +221,26 @@ function touchesEdgeWhitespace(visibleText: string, edit: TranslatedProjectionEd
 // which resolves DOM caret gravity and marker-adjacent whitespace the
 // way it always has; the precise path only handles unambiguous
 // interior content. Trailing offsets need no check: the map resolves
-// them past closing delimiters, where both paths agree.
+// them past closing delimiters, where both paths agree. The mapping
+// must be the same one the commit uses (the whitespace-tolerant
+// aligner): the caret map jumps over lag whitespace the DOM never
+// rendered, which would decline every keystroke after a folded run.
+// Unmappable offsets decline: the edit stays legacy.
 export function touchesConcealedBoundary(
-  sourceOffsetForVisibleOffset: (source: string, offset: number) => number,
+  sourceOffsetForVisibleOffset: (source: string, offset: number) => number | null,
   slice: string,
   fromVisible: number,
   toVisible: number,
 ): boolean {
   for (const visible of [fromVisible, toVisible]) {
     const source = sourceOffsetForVisibleOffset(slice, visible)
+    if (source === null) return true
     if (visible <= 0) {
       if (source > 0) return true
       continue
     }
-    if (source - sourceOffsetForVisibleOffset(slice, visible - 1) > 1) return true
+    const previous = sourceOffsetForVisibleOffset(slice, visible - 1)
+    if (previous === null || source - previous > 1) return true
   }
   return false
 }

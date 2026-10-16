@@ -434,6 +434,21 @@ test("presentation flush commits then syncs the engine selection", () => {
   mount.destroy();
 });
 
+test("presentation flush discards pending edits whose base no longer matches", () => {
+  const { mount, editor, block } = syncFixture();
+  editor.value = `${"x".repeat(9)}First!${"x".repeat(5)}`;
+  mount.editor.map!.editable_regions![0]!.content_range = { start: 9, end: 15 };
+  mount.editor.pendingProjectionEdits = new Map([
+    ["r1", { id: "r1", blockId: "b1", from: 9, to: 14, source: "First", kind: "paragraph", blockElement: block as unknown as Element }],
+  ]);
+
+  mount.editor.flushPendingProjectionEdits();
+
+  assert.equal(editor.value, `${"x".repeat(9)}First!${"x".repeat(5)}`);
+  assert.equal(mount.editor.pendingProjectionEdits!.size, 0);
+  mount.destroy();
+});
+
 test("presentation typing commits a precise source transaction without pending", () => {
   const { mount, editor, block } = syncFixture();
   const replaced: Array<{ text: string; from: number; to: number }> = [];
@@ -450,6 +465,34 @@ test("presentation typing commits a precise source transaction without pending",
 
   assert.deepEqual(replaced, [{ text: "X", from: 11, to: 11 }]);
   assert.equal(mount.editor.pendingProjectionEdits, undefined);
+  mount.destroy();
+});
+
+test("presentation precise commit suppresses only the following input event", () => {
+  const { mount, editor, block } = syncFixture();
+  (mount.editor.map as unknown as { slides: Array<{ blocks: Array<{ id: string }> }> }).slides = [{ blocks: [{ id: "b1" }] }];
+  mount.editor.canEditBlock = () => true;
+  mount.editor.scheduleProjectionFlush = () => {};
+  const replaced: Array<{ text: string; from: number; to: number }> = [];
+  (editor as unknown as Record<string, unknown>).replaceRange = (text: string, from: number, to: number) => {
+    replaced.push({ text, from, to });
+  };
+
+  mount.editor.projectionBeforeinput({
+    target: block as unknown as EventTarget,
+    inputType: "insertText",
+    data: "X",
+  });
+
+  assert.deepEqual(replaced, [{ text: "X", from: 11, to: 11 }]);
+  assert.equal(mount.editor.suppressProjectionInput, true);
+
+  mount.editor.blockInput({ target: block, preventDefault: () => {} } as unknown as Parameters<typeof mount.editor.blockInput>[0]);
+  assert.equal(mount.editor.pendingProjectionEdits, undefined);
+  assert.equal(mount.editor.suppressProjectionInput, false);
+
+  mount.editor.blockInput({ target: block, preventDefault: () => {} } as unknown as Parameters<typeof mount.editor.blockInput>[0]);
+  assert.equal(mount.editor.pendingProjectionEdits!.size, 1);
   mount.destroy();
 });
 

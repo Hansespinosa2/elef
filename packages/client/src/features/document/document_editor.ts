@@ -5,7 +5,7 @@
 // the shared editing-utilities deps object, then delegates lifecycle and
 // actions. The web Stimulus controller is the thin adapter.
 import { blockOperationRange, directiveLineSpan, exciseRange, insertAlignDirective } from "@elef/work-model/document-transforms"
-import { touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
+import { alignVisibleOffset, touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
 
@@ -337,6 +337,11 @@ export class DocumentEditor {
   // native mutation still proceeds and the pending flush reconciles, which
   // also covers any batch the precise path declines.
   projectionBeforeinput(event: DocumentProjectionBeforeinputEvent): void {
+    // A set-but-unfired flag from a previous cycle is stale (its input was
+    // cancelled); each cycle re-arms only when it commits precisely below.
+    // beforeinput/input pairs never interleave, so clearing here cannot
+    // steal a live suppression.
+    this.suppressProjectionInput = false
     const editor = this.editorController
     if (!editor || this.updatingProjection || this.pendingProjectionEdits?.size) return
     const block = (event.target as Element | null | undefined)?.closest?.("[data-editor-block-id]") as HTMLElement | null | undefined
@@ -377,18 +382,30 @@ export class DocumentEditor {
     if (!edit) return
     const slice = editor.value.slice(region.content_range.start, region.content_range.end)
     // The precise path is an optimization over a correct legacy: it runs
-    // only when the DOM and the source model agree exactly on the
-    // block's visible text. Revealed source (image/link syntax),
-    // collapsed directives, and rendered math all widen or narrow one
-    // side; those blocks stay on the structure-aware legacy path.
-    const modelLength = this.deps.visibleOffsetForSourceOffset(slice, slice.length)
-    if (visibleText.length !== modelLength) return
-    if (touchesConcealedBoundary(this.deps.sourceOffsetForVisibleOffset, slice, edit.fromVisible, edit.toVisible)) return
-    const from = region.content_range.start + this.deps.sourceOffsetForVisibleOffset(slice, edit.fromVisible)
-    const to = region.content_range.start + this.deps.sourceOffsetForVisibleOffset(slice, edit.toVisible)
+    // only when the DOM and the source model agree on the block's
+    // visible text modulo whitespace the DOM never rendered (trimmed
+    // trailing spaces, folded runs not yet reinstalled). The aligner
+    // walks both texts, so it both verifies agreement and bridges lag;
+    // revealed source, collapsed directives, and rendered math diverge
+    // on non-whitespace and decline to the structure-aware legacy path.
+    // A length gate cannot prove agreement (lag shifts equal-length
+    // texts), so the aligner always maps, and the concealed check uses
+    // the same mapping (the caret map would jump the lag and decline).
+    const mapOffset = (visible: number): number | null => alignVisibleOffset(slice, visibleText, visible)
+    const mappedFrom = mapOffset(edit.fromVisible)
+    const mappedTo = mapOffset(edit.toVisible)
+    if (mappedFrom === null || mappedTo === null) return
+    if (touchesConcealedBoundary((_source, visible) => mapOffset(visible), slice, edit.fromVisible, edit.toVisible)) return
+    const from = region.content_range.start + mappedFrom
+    const to = region.content_range.start + mappedTo
     if (region.kind !== "code") this.blockFragments(blockId).forEach((fragment) => this.deps.renderInlineMath(fragment))
     this.shiftMapAfterEdit(from, to, edit.insert.length, blockId)
     editor.replaceRange(edit.insert, from, to)
+    // The commit above is complete and the map already shifted: the input
+    // event that follows this beforeinput must not arm a redundant
+    // pending entry, which would reconcile the (possibly whitespace-lagging)
+    // block DOM back over the just-committed source.
+    this.suppressProjectionInput = true
   }
 
   projectionInput(event: DocumentProjectionEvent): void {
@@ -498,10 +515,14 @@ export class DocumentEditor {
     if (!this.pendingProjectionEdits?.size || !this.editorController) return
 
     const pending = [...this.pendingProjectionEdits.values()]
+    const current = this.editorController.value
     const edits = pending.map((edit) => {
+      const region = this.regionForBlock(edit.blockId)
       const blockElement = this.combinedBlockForId(edit.blockId) || edit.blockElement
       return {
         ...edit,
+        from: region?.content_range.start ?? edit.from,
+        to: region?.content_range.end ?? edit.to,
         blockElement,
         replacement: this.deps.markdownForVisibleText(
           edit.source,
@@ -511,7 +532,16 @@ export class DocumentEditor {
           { documentMode: this.kind === "document" }
         )
       }
-    }).filter((edit) => edit.replacement !== edit.source)
+    }).filter((edit) => {
+      const region = this.regionForBlock(edit.blockId)
+      if (!region) return false
+      // A newer source transaction (assist accept, undo, reload) committed
+      // after this entry was recorded: reconciling would write stale block
+      // content back over newer input, so discard it. Ranges always resolve
+      // against the current map, never the recorded offsets.
+      if (current.slice(region.content_range.start, region.content_range.end) !== edit.source) return false
+      return edit.replacement !== edit.source
+    })
     this.pendingProjectionEdits.clear()
     if (edits.length === 0) {
       // Precise translator commits reconcile here: the engine already

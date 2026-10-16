@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
 import {
+  alignVisibleOffset,
   touchesConcealedBoundary,
   translateProjectionInput,
   vimPassthroughKey,
@@ -259,4 +260,46 @@ test("visible block text skips all newlines to agree with the source map", () =>
   const pre = preDocument.querySelector("[data-editor-block-id]") as unknown as Element;
 
   assert.equal(visibleBlockText(pre), "ab");
+});
+
+test("alignVisibleOffset bridges DOM lagging the engine by invisible whitespace", () => {
+  assert.equal(alignVisibleOffset("See [", "See[", 4), 5);
+  assert.equal(alignVisibleOffset("See [", "See[", 3), 3);
+  assert.equal(alignVisibleOffset("See [", "See[", 0), 0);
+  assert.equal(alignVisibleOffset("a b ", "ab", 2), 4);
+  assert.equal(alignVisibleOffset("a\nb", "ab", 2), 3);
+});
+
+test("alignVisibleOffset treats contenteditable nbsp as engine space", () => {
+  // Chrome stores a just-typed trailing space as \u00a0 while the engine
+  // commits a regular space; post-run typing must still map precisely.
+  assert.equal(alignVisibleOffset("See [[Research ", "See[[Research\u00a0", 14), 15);
+  assert.equal(alignVisibleOffset("See [[Research ", "See[[Research\u00a0", 13), 14);
+});
+
+test("alignVisibleOffset declines concealed and visible divergences", () => {
+  assert.equal(alignVisibleOffset("**x**", "x", 1), null);
+  assert.equal(alignVisibleOffset("a bX", "ab", 2), null);
+  assert.equal(alignVisibleOffset("abc", "Xbc", 1), null);
+  assert.equal(alignVisibleOffset("ab", "ab", 3), null);
+  assert.equal(alignVisibleOffset("ab", "ab", -1), null);
+});
+
+test("alignVisibleOffset declines offset zero under a hidden prefix", () => {
+  // Committing at zero would land outside formatting the DOM caret sits
+  // inside; the structure-aware legacy path owns those edits.
+  assert.equal(alignVisibleOffset("**bold**", "bold", 0), null);
+  assert.equal(alignVisibleOffset(" x", "x", 0), null);
+  assert.equal(alignVisibleOffset("abc", "abc", 0), 0);
+  assert.equal(alignVisibleOffset("", "", 0), 0);
+});
+
+test("concealed check declines unmappable offsets and allows lag whitespace", () => {
+  const unmappable = (_source: string, _offset: number) => null;
+  assert.equal(touchesConcealedBoundary(unmappable, "abc", 1, 1), true);
+
+  // Post-run typing ("t" after the folded "See [[Research "): the aligner
+  // bridges the lag without crossing concealed syntax.
+  const lagged = (source: string, offset: number) => alignVisibleOffset(source, "See[[Research ", offset);
+  assert.equal(touchesConcealedBoundary(lagged, "See [[Research ", 14, 14), false);
 });

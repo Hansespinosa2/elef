@@ -228,6 +228,7 @@ test("an already matching engine selection is left alone", (t) => {
 
 test("pending projection edits defer the sync until the flush commits", (t) => {
   const { editor, engine, block, calls } = stubSelectionBridge(t)
+  engine.value = `${"x".repeat(9)}First${"x".repeat(6)}`
   editor.pendingProjectionEdits = new Map([["r1", { from: 9, to: 14, source: "First", kind: "paragraph", blockId: "b1", blockElement: block }]])
   const flushed = []
   engine.replaceRanges = (changes) => flushed.push(changes)
@@ -241,10 +242,44 @@ test("pending projection edits defer the sync until the flush commits", (t) => {
   assert.deepEqual(calls, [[11, 11]])
 })
 
+test("a flush discards pending edits whose base no longer matches the engine", (t) => {
+  // An assist accept commits to the engine after typing recorded its
+  // pending entry; reconciling the entry would write stale block content
+  // back over the newer assist transaction.
+  const { editor, engine, block } = stubSelectionBridge(t)
+  engine.value = `${"x".repeat(9)}First!${"x".repeat(5)}`
+  editor.map.editable_regions[0].content_range = { start: 9, end: 15 }
+  editor.pendingProjectionEdits = new Map([["r1", { from: 9, to: 14, source: "First", kind: "paragraph", blockId: "b1", blockElement: block }]])
+  const flushed = []
+  engine.replaceRanges = (changes) => flushed.push(changes)
+
+  editor.flushPendingProjectionEdits()
+
+  assert.deepEqual(flushed, [])
+  assert.equal(editor.pendingProjectionEdits.size, 0)
+})
+
+test("a flush resolves ranges against the current map", (t) => {
+  // An earlier-region commit shifts this region's offsets after the entry
+  // was recorded; the content still matches, so the flush applies at the
+  // current range instead of the recorded offsets.
+  const { editor, engine, block } = stubSelectionBridge(t)
+  engine.value = `${"x".repeat(9)}First${"x".repeat(6)}`
+  editor.pendingProjectionEdits = new Map([["r1", { from: 0, to: 5, source: "First", kind: "paragraph", blockId: "b1", blockElement: block }]])
+  const flushed = []
+  engine.replaceRanges = (changes) => flushed.push(changes)
+
+  editor.flushPendingProjectionEdits()
+
+  assert.equal(flushed.length, 1)
+  assert.deepEqual(flushed[0], [{ from: 9, to: 14, insert: "First!" }])
+})
+
 // Precise-intent leg: caret-local plain-text beforeinput commits exact
 // source transactions; everything else stays on the reconstruction path.
 test("typing commits a precise source transaction without pending", (t) => {
-  const { editor, block, replaced } = stubSelectionBridge(t)
+  const { editor, engine, block, replaced } = stubSelectionBridge(t)
+  engine.value = `${"x".repeat(9)}First${"x".repeat(6)}`
 
   editor.projectionBeforeinput({ target: block, inputType: "insertText", data: "X" })
 
@@ -253,16 +288,37 @@ test("typing commits a precise source transaction without pending", (t) => {
   assert.deepEqual(editor.map.editable_regions[0].content_range, { start: 9, end: 15 })
 })
 
-test("concealed-boundary and model-mismatch intents stay on reconstruction", (t) => {
+test("a precise commit suppresses only the following input event", (t) => {
+  const { editor, engine, block, replaced } = stubSelectionBridge(t)
+  engine.value = `${"x".repeat(9)}First${"x".repeat(6)}`
+  editor.map.slides = [{ blocks: [{ id: "b1" }] }]
+  editor.canEditBlock = () => true
+  editor.scheduleProjectionFlush = () => {}
+
+  editor.projectionBeforeinput({ target: block, inputType: "insertText", data: "X" })
+
+  assert.deepEqual(replaced, [{ text: "X", from: 11, to: 11 }])
+  assert.equal(editor.suppressProjectionInput, true)
+
+  editor.projectionInput({ target: block })
+  assert.equal(editor.pendingProjectionEdits, undefined)
+  assert.equal(editor.suppressProjectionInput, false)
+
+  editor.projectionInput({ target: block })
+  assert.equal(editor.pendingProjectionEdits.size, 1)
+})
+
+test("concealed-boundary and content-mismatch intents stay on reconstruction", (t) => {
+  // The aligner verifies DOM/engine agreement directly: diverging text
+  // declines without consulting the caret map.
   const mismatched = stubSelectionBridge(t)
-  mismatched.editor.deps.visibleOffsetForSourceOffset = () => 999
 
   mismatched.editor.projectionBeforeinput({ target: mismatched.block, inputType: "insertText", data: "X" })
 
   assert.deepEqual(mismatched.replaced, [])
 
   const bounded = stubSelectionBridge(t)
-  bounded.editor.deps.sourceOffsetForVisibleOffset = (source, offset) => (offset >= 2 ? offset + 2 : offset)
+  bounded.engine.value = `${"x".repeat(9)}**Fir**${"x".repeat(4)}`
 
   bounded.editor.projectionBeforeinput({ target: bounded.block, inputType: "insertText", data: "X" })
 
@@ -270,7 +326,8 @@ test("concealed-boundary and model-mismatch intents stay on reconstruction", (t)
 })
 
 test("backward deletion removes one visible grapheme precisely", (t) => {
-  const { editor, block, replaced } = stubSelectionBridge(t)
+  const { editor, engine, block, replaced } = stubSelectionBridge(t)
+  engine.value = `${"x".repeat(9)}First${"x".repeat(6)}`
 
   editor.projectionBeforeinput({ target: block, inputType: "deleteContentBackward", data: null })
 
