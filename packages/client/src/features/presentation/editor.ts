@@ -1059,12 +1059,24 @@ export class PresentationEditor {
   }
 
   inlineRevealSource(block: Element): string | null {
-    const region = this.regionForBlock((block as HTMLElement).dataset.editorBlockId)
+    const blockId = (block as HTMLElement).dataset.editorBlockId
+    const region = this.regionForBlock(blockId)
     const editor = this.editorController
     if (!region?.content_range || !editor) return null
-    // Table, image, and fenced-code blocks route to dedicated differs
-    // without inline-reveal projection; never activate inside them.
-    if (["table", "image", "code"].includes(region.kind ?? "")) return null
+    // Table and image blocks route to dedicated differs without
+    // inline-reveal projection. Fenced code keeps its source: inline
+    // pairing safe-refuses inside pre (elements excluded), while the
+    // structural pass needs the source for fence delimiters.
+    if (["table", "image"].includes(region.kind ?? "")) return null
+    // Heading regions exclude the marker prefix; extend to the block
+    // start so structural markers resolve (leading # never tokenizes,
+    // so inline pairing is unaffected).
+    if (region.kind === "heading") {
+      const start = this.findBlock(blockId)?.range.start
+      if (typeof start === "number" && start < region.content_range.start) {
+        return editor.value.slice(start, region.content_range.end)
+      }
+    }
     return editor.value.slice(region.content_range.start, region.content_range.end)
   }
 

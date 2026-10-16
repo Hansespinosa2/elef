@@ -226,6 +226,98 @@ function deactivateSpan(span, onFlush) {
   }
   stashes.delete(span);
 }
+const MARKER_ATTR = "data-editor-reveal-prefix";
+const FENCE_OPEN_ATTR = "data-editor-reveal-fence-open";
+const FENCE_CLOSE_ATTR = "data-editor-reveal-fence-close";
+function collapseText(value) {
+  return value.replace(/[\s\u00a0]+/g, " ").trim();
+}
+function markerPattern(kind) {
+  if (kind === "heading") return /^(#{1,6}\s+)/;
+  if (kind === "list") return /^(\s*(?:[-+*]|\d+[.)])\s+)/;
+  if (kind === "quote") return /^(\s*>\s?)/;
+  return null;
+}
+function lineSelector(kind) {
+  if (kind === "heading") return "h1, h2, h3, h4, h5, h6";
+  if (kind === "list") return "li";
+  return "blockquote > p, blockquote > div";
+}
+function structuralMarkerForLine(kind, sourceLines, index, lineText) {
+  const pattern = markerPattern(kind);
+  if (!pattern) return null;
+  const contentLines = sourceLines.filter((line) => {
+    const marker2 = line.match(pattern);
+    return marker2 !== null && collapseText(line.slice((marker2[1] ?? "").length)) !== "";
+  });
+  const raw = contentLines[index] ?? null;
+  if (raw === null) return null;
+  const marker = raw.match(pattern)?.[1] ?? null;
+  if (!marker) return null;
+  if (collapseText(raw.slice(marker.length)) !== collapseText(lineText)) return null;
+  return marker;
+}
+function fenceDelimiters(sourceLines) {
+  const open = sourceLines[0]?.match(/^([ \t]*(`{3,}|~{3,})[^\r\n]*)$/) ?? null;
+  if (!open) return null;
+  const fenceChar = (open[2] ?? "")[0] ?? "";
+  const nonEmpty = sourceLines.filter((line) => line.trim() !== "");
+  const last = nonEmpty[nonEmpty.length - 1] ?? "";
+  const closeMatch = last.match(/^([ \t]*(`{3,}|~{3,})[ \t]*)$/);
+  const close = closeMatch && (closeMatch[2] ?? "")[0] === fenceChar && nonEmpty.length > 1 ? closeMatch[1] ?? null : null;
+  return { open: open[1] ?? "", close };
+}
+function blockStructuralKind(block) {
+  const first = block.firstElementChild;
+  if (!first) return null;
+  if (/^H[1-6]$/.test(first.tagName)) return "heading";
+  if (first.tagName === "UL" || first.tagName === "OL") return "list";
+  if (first.tagName === "BLOCKQUOTE") return "quote";
+  if (first.tagName === "PRE") return "fence";
+  return null;
+}
+function syncStructuralReveal(root, blocks, liveRange) {
+  const marked = /* @__PURE__ */ new Set();
+  if (liveRange) {
+    for (const [block, source] of blocks) {
+      const kind = blockStructuralKind(block);
+      if (!kind) continue;
+      const sourceLines = source.split("\n");
+      if (kind === "fence") {
+        if (!block.contains(liveRange.startContainer) && !block.contains(liveRange.endContainer)) continue;
+        const delimiters = fenceDelimiters(sourceLines);
+        if (!delimiters) continue;
+        block.setAttribute(FENCE_OPEN_ATTR, delimiters.open);
+        if (delimiters.close === null) block.removeAttribute(FENCE_CLOSE_ATTR);
+        else block.setAttribute(FENCE_CLOSE_ATTR, delimiters.close);
+        block.classList.add("editor-reveal-fence");
+        marked.add(block);
+        continue;
+      }
+      const lines = [...block.querySelectorAll(lineSelector(kind))];
+      lines.forEach((line, index) => {
+        const touched = line.contains(liveRange.startContainer) || line.contains(liveRange.endContainer) || !liveRange.collapsed && intersects(line, liveRange);
+        if (!touched) return;
+        const marker = structuralMarkerForLine(kind, sourceLines, index, line.textContent ?? "");
+        if (marker === null) return;
+        line.setAttribute(MARKER_ATTR, marker);
+        line.classList.add("editor-reveal-marker");
+        marked.add(line);
+      });
+    }
+  }
+  root.querySelectorAll(`[${MARKER_ATTR}]`).forEach((line) => {
+    if (marked.has(line)) return;
+    line.removeAttribute(MARKER_ATTR);
+    line.classList.remove("editor-reveal-marker");
+  });
+  root.querySelectorAll(".editor-reveal-fence").forEach((block) => {
+    if (marked.has(block)) return;
+    block.removeAttribute(FENCE_OPEN_ATTR);
+    block.removeAttribute(FENCE_CLOSE_ATTR);
+    block.classList.remove("editor-reveal-fence");
+  });
+}
 function syncActiveInline(root, getSource, onFlush = null) {
   if (!root) return;
   const selection = root.ownerDocument.getSelection?.() ?? null;
@@ -255,6 +347,7 @@ function syncActiveInline(root, getSource, onFlush = null) {
     }
   }
   const liveRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+  syncStructuralReveal(root, blocks, liveRange);
   const actives = [...root.querySelectorAll(ACTIVE_SELECTOR)];
   for (const span of actives) {
     if (liveRange && (span.contains(liveRange.startContainer) || span.contains(liveRange.endContainer))) continue;
@@ -277,6 +370,8 @@ function activeInlineMap(source, root) {
 }
 export {
   activeInlineMap,
+  fenceDelimiters,
   pairRevealables,
+  structuralMarkerForLine,
   syncActiveInline
 };

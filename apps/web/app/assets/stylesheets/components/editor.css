@@ -30,6 +30,31 @@
   padding: 0.05rem 0.25rem;
   white-space: pre-wrap;
 }
+/* Structural revelation: source prefixes render through
+   pseudo-elements so they never enter text, caret math, or the
+   differ. Revealed list items drop their native bullet (the source
+   marker takes its place); local reflow while revealed is expected. */
+.editor-reveal-marker::before {
+  color: var(--oradia-muted);
+  content: attr(data-editor-reveal-prefix);
+  font-family: var(--oradia-mono);
+  white-space: pre;
+}
+li.editor-reveal-marker { list-style: none; }
+.editor-reveal-fence::before {
+  color: var(--oradia-muted);
+  content: attr(data-editor-reveal-fence-open);
+  display: block;
+  font-family: var(--oradia-mono);
+  white-space: pre-wrap;
+}
+.editor-reveal-fence[data-editor-reveal-fence-close]::after {
+  color: var(--oradia-muted);
+  content: attr(data-editor-reveal-fence-close);
+  display: block;
+  font-family: var(--oradia-mono);
+  white-space: pre-wrap;
+}
 .editor-shell { background: var(--oradia-slate-900); border: 1px solid var(--oradia-line); border-radius: 1rem; box-shadow: 0 18px 45px rgba(0, 0, 0, 0.16); min-width: 0; max-width: 100%; overflow-x: clip; padding: clamp(1rem, 2.5vw, 1.5rem); }
 .editor-shell-header { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: 1rem; }
 .editor-title-field { flex: 1 1 auto; min-width: 0; }

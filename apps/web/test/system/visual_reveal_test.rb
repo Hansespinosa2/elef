@@ -184,6 +184,81 @@ class VisualRevealTest < ApplicationSystemTestCase
     assert_equal "Visit https://x.test/a and *warm* word.\n", engine_source
   end
 
+  test "heading marker reveals on entry and clears on leave" do
+    document = Document.create!(title: "Reveal", source: "## Warm head\n\nBody here.\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+    assert_no_selector "[data-editor-reveal-prefix]"
+
+    place_caret_in(".document-editor-block h2", offset: 2)
+    assert_selector ".document-editor-block h2[data-editor-reveal-prefix='## ']", wait: 5
+    assert_equal "## Warm head\n\nBody here.\n", engine_source
+
+    place_caret_in(".document-editor-block p", child_index: 0, offset: 1)
+    assert_no_selector "[data-editor-reveal-prefix]", wait: 5
+  end
+
+  test "list markers reveal per item and never enter committed text" do
+    document = Document.create!(title: "Reveal", source: "- one\n- two\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    page.execute_script(<<~JAVASCRIPT)
+      (() => {
+        const li = document.querySelectorAll(".document-editor-block li")[1];
+        const range = document.createRange();
+        range.setStart(li.firstChild, 1); range.collapse(true);
+        const selection = window.getSelection();
+        selection.removeAllRanges(); selection.addRange(range);
+      })()
+    JAVASCRIPT
+    assert_selector ".document-editor-block li[data-editor-reveal-prefix='- ']", text: "two", wait: 5
+
+    find(".document-editor-block li", text: "two").send_keys("X")
+    assert_field "Markdown source", with: "- one\n- tXwo\n", wait: 5
+  end
+
+  test "quote markers and nested list indents reveal exactly" do
+    document = Document.create!(title: "Reveal", source: "> quoted line\n\n- a\n  - b\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+
+    place_caret_in(".document-editor-block blockquote p", offset: 2)
+    assert_selector ".document-editor-block blockquote p[data-editor-reveal-prefix='> ']", wait: 5
+
+    page.execute_script(<<~JAVASCRIPT)
+      (() => {
+        const items = document.querySelectorAll(".document-editor-block li");
+        const nested = items[items.length - 1];
+        const range = document.createRange();
+        range.setStart(nested.firstChild, 0); range.collapse(true);
+        const selection = window.getSelection();
+        selection.removeAllRanges(); selection.addRange(range);
+      })()
+    JAVASCRIPT
+    assert_selector ".document-editor-block li[data-editor-reveal-prefix='  - ']", text: "b", wait: 5
+  end
+
+  test "fence delimiters reveal while editing code" do
+    document = Document.create!(title: "Reveal", source: "```js\ncode here\n```\n")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+    assert_no_selector ".editor-reveal-fence"
+
+    page.execute_script(<<~JAVASCRIPT)
+      (() => {
+        const code = document.querySelector(".document-editor-block pre code");
+        const text = [...code.childNodes].find((node) => node.nodeType === 3 && (node.textContent || "").includes("code"));
+        const range = document.createRange();
+        range.setStart(text || code.firstChild, 1); range.collapse(true);
+        const selection = window.getSelection();
+        selection.removeAllRanges(); selection.addRange(range);
+      })()
+    JAVASCRIPT
+    assert_selector ".document-editor-block.editor-reveal-fence[data-editor-reveal-fence-open='```js'][data-editor-reveal-fence-close='```']", wait: 5
+    assert_equal "```js\ncode here\n```\n", engine_source
+  end
+
   test "emphasis containing math stays rendered" do
     document = Document.create!(title: "Reveal", source: "A *mix $x$ up* word.\n")
     visit edit_document_path(document)

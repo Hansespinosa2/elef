@@ -329,11 +329,126 @@ function deactivateSpan(span: HTMLElement, onFlush: (() => void) | null): void {
   stashes.delete(span)
 }
 
+// Structural markers (heading/list/quote prefixes, fence delimiters)
+// reveal through CSS pseudo-elements driven by data attributes, so
+// they never enter text, caret math, or the differ. Markers derive
+// from source order and verify against rendered text; any mismatch
+// (nested constructs, split fragments, lazy lines) hides the marker
+// instead of showing a wrong one.
+const MARKER_ATTR = "data-editor-reveal-prefix"
+const FENCE_OPEN_ATTR = "data-editor-reveal-fence-open"
+const FENCE_CLOSE_ATTR = "data-editor-reveal-fence-close"
+
+type StructuralKind = "heading" | "list" | "quote" | "fence"
+
+function collapseText(value: string): string {
+  return value.replace(/[\s\u00a0]+/g, " ").trim()
+}
+
+function markerPattern(kind: StructuralKind): RegExp | null {
+  if (kind === "heading") return /^(#{1,6}\s+)/
+  if (kind === "list") return /^(\s*(?:[-+*]|\d+[.)])\s+)/
+  if (kind === "quote") return /^(\s*>\s?)/
+  return null
+}
+
+function lineSelector(kind: StructuralKind): string {
+  if (kind === "heading") return "h1, h2, h3, h4, h5, h6"
+  if (kind === "list") return "li"
+  return "blockquote > p, blockquote > div"
+}
+
+// Marker for the index-th content line, verified against the rendered
+// line text. Null when the line cannot be shown exactly.
+export function structuralMarkerForLine(kind: StructuralKind, sourceLines: string[], index: number, lineText: string): string | null {
+  const pattern = markerPattern(kind)
+  if (!pattern) return null
+  const contentLines = sourceLines.filter((line) => {
+    const marker = line.match(pattern)
+    return marker !== null && collapseText(line.slice((marker[1] ?? "").length)) !== ""
+  })
+  const raw = contentLines[index] ?? null
+  if (raw === null) return null
+  const marker = raw.match(pattern)?.[1] ?? null
+  if (!marker) return null
+  if (collapseText(raw.slice(marker.length)) !== collapseText(lineText)) return null
+  return marker
+}
+
+export function fenceDelimiters(sourceLines: string[]): { open: string; close: string | null } | null {
+  const open = sourceLines[0]?.match(/^([ \t]*(`{3,}|~{3,})[^\r\n]*)$/) ?? null
+  if (!open) return null
+  const fenceChar = (open[2] ?? "")[0] ?? ""
+  const nonEmpty = sourceLines.filter((line) => line.trim() !== "")
+  const last = nonEmpty[nonEmpty.length - 1] ?? ""
+  const closeMatch = last.match(/^([ \t]*(`{3,}|~{3,})[ \t]*)$/)
+  const close = closeMatch && (closeMatch[2] ?? "")[0] === fenceChar && nonEmpty.length > 1 ? closeMatch[1] ?? null : null
+  return { open: open[1] ?? "", close }
+}
+
+function blockStructuralKind(block: Element): StructuralKind | null {
+  const first = block.firstElementChild
+  if (!first) return null
+  if (/^H[1-6]$/.test(first.tagName)) return "heading"
+  if (first.tagName === "UL" || first.tagName === "OL") return "list"
+  if (first.tagName === "BLOCKQUOTE") return "quote"
+  if (first.tagName === "PRE") return "fence"
+  return null
+}
+
+function syncStructuralReveal(root: Element, blocks: Map<Element, string>, liveRange: Range | null): void {
+  const marked = new Set<Element>()
+  if (liveRange) {
+    for (const [block, source] of blocks) {
+      const kind = blockStructuralKind(block)
+      if (!kind) continue
+      const sourceLines = source.split("\n")
+      if (kind === "fence") {
+        if (!block.contains(liveRange.startContainer) && !block.contains(liveRange.endContainer)) continue
+        const delimiters = fenceDelimiters(sourceLines)
+        if (!delimiters) continue
+        block.setAttribute(FENCE_OPEN_ATTR, delimiters.open)
+        if (delimiters.close === null) block.removeAttribute(FENCE_CLOSE_ATTR)
+        else block.setAttribute(FENCE_CLOSE_ATTR, delimiters.close)
+        block.classList.add("editor-reveal-fence")
+        marked.add(block)
+        continue
+      }
+      const lines = [...block.querySelectorAll(lineSelector(kind))]
+      lines.forEach((line, index) => {
+        const touched = line.contains(liveRange.startContainer) ||
+          line.contains(liveRange.endContainer) ||
+          (!liveRange.collapsed && intersects(line, liveRange))
+        if (!touched) return
+        const marker = structuralMarkerForLine(kind, sourceLines, index, line.textContent ?? "")
+        if (marker === null) return
+        line.setAttribute(MARKER_ATTR, marker)
+        line.classList.add("editor-reveal-marker")
+        marked.add(line)
+      })
+    }
+  }
+  // Sweep stale markers across the root: marking derives from the
+  // live range, so anything unmarked this pass is untouched.
+  root.querySelectorAll(`[${MARKER_ATTR}]`).forEach((line) => {
+    if (marked.has(line)) return
+    line.removeAttribute(MARKER_ATTR)
+    line.classList.remove("editor-reveal-marker")
+  })
+  root.querySelectorAll(".editor-reveal-fence").forEach((block) => {
+    if (marked.has(block)) return
+    block.removeAttribute(FENCE_OPEN_ATTR)
+    block.removeAttribute(FENCE_CLOSE_ATTR)
+    block.classList.remove("editor-reveal-fence")
+  })
+}
+
 // Selection-driven sync over one projection root. Activation needs
 // each touched block's source slice (getSource); deactivation sweeps
 // the whole root so no span stays active behind the selection. Pure
 // sync: inline content is transparent text, so native caret motion
 // needs no key or click interception (unlike opaque math atoms).
+// Structural markers ride the same pass through data attributes.
 export function syncActiveInline(
   root: Element | null,
   getSource: ((block: Element) => string | null) | null,
@@ -376,6 +491,7 @@ export function syncActiveInline(
   // middle constructs); collapsed carets use strict containment so
   // leaving by one position restores the render.
   const liveRange = selection && selection.rangeCount > 0 ? selection.getRangeAt(0) : null
+  syncStructuralReveal(root, blocks, liveRange)
   const actives = [...root.querySelectorAll(ACTIVE_SELECTOR)] as HTMLElement[]
   for (const span of actives) {
     if (liveRange && (span.contains(liveRange.startContainer) || span.contains(liveRange.endContainer))) continue
