@@ -1166,7 +1166,17 @@ export class DocumentEditor {
   }
 
   previewStale(detail: { preserveActive?: boolean } = {}): void {
-    this.syncProjectionEditability({ preserveActive: detail.preserveActive || Boolean(this.focusedProjectionBlock()) })
+    // T1 fast path: while a projection block holds DOM focus, only that
+    // block's editability is observable — every other block keeps its
+    // last-synced state until blur reinstalls and re-syncs fully. This
+    // keeps the first keystroke after focusing a block off the O(blocks)
+    // sweep (measured 400-850ms inside replaceRange on 100-page fixtures).
+    const active = this.focusedProjectionBlock()
+    if (this.element.dataset.editorMode !== "source" && active) {
+      this.deps.setProjectionBlockEditable(active, true, "Editable Markdown block")
+      return
+    }
+    this.syncProjectionEditability({ preserveActive: detail.preserveActive || Boolean(active) })
   }
 
   canEditBlock(blockElement: Element): boolean {

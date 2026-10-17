@@ -976,3 +976,72 @@ test("alignment pills flip sides by measured room", () => {
   assert.equal(wide.classList.contains("pill-inside"), true);
   mount.destroy();
 });
+
+test("client presentation editor stale sync touches only the focused block", () => {
+  // T1: while a projection block holds DOM focus, preview-stale must not
+  // re-sweep every block (measured 400-850ms on 100-page fixtures); only
+  // the focused block's editability is observable until blur reinstalls.
+  const { document, form } = mountForm();
+  const canvas = document.createElement("div");
+  canvas.setAttribute("data-presentation-editor-target", "canvas");
+  const first = document.createElement("div");
+  first.setAttribute("data-editor-block-id", "b1");
+  first.setAttribute("data-editor-source-editable", "true");
+  const second = document.createElement("div");
+  second.setAttribute("data-editor-block-id", "b2");
+  second.setAttribute("data-editor-source-editable", "true");
+  canvas.append(first);
+  canvas.append(second);
+  form.append(canvas);
+  const calls: Array<{ block: unknown; editable: boolean }> = [];
+  const deps = stubDeps();
+  deps.setProjectionBlockEditable = (block: unknown, editable: boolean) => {
+    calls.push({ block, editable });
+  };
+  const mount = mountPresentationEditor(form as unknown as Parameters<typeof mountPresentationEditor>[0], {
+    editorMap: testMap(),
+    getEditor: () => fakeEditor() as unknown as ReturnType<Parameters<typeof mountPresentationEditor>[1]["getEditor"]>,
+    deps: deps as unknown as Parameters<typeof mountPresentationEditor>[1]["deps"],
+    env: { ...stubEnv(), activeElement: () => second as unknown as Element },
+  });
+  (form as unknown as { previewController?: unknown }).previewController = { projectionFresh: false };
+  calls.length = 0;
+
+  mount.editor.previewStale({ preserveActive: true });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.block, second);
+  assert.equal(calls[0]?.editable, true);
+  mount.destroy();
+});
+
+test("client presentation editor stale sync still sweeps without a focused block", () => {
+  const { document, form } = mountForm();
+  const canvas = document.createElement("div");
+  canvas.setAttribute("data-presentation-editor-target", "canvas");
+  const first = document.createElement("div");
+  first.setAttribute("data-editor-block-id", "b1");
+  first.setAttribute("data-editor-source-editable", "true");
+  canvas.append(first);
+  form.append(canvas);
+  const calls: Array<{ block: unknown; editable: boolean }> = [];
+  const deps = stubDeps();
+  deps.setProjectionBlockEditable = (block: unknown, editable: boolean) => {
+    calls.push({ block, editable });
+  };
+  const mount = mountPresentationEditor(form as unknown as Parameters<typeof mountPresentationEditor>[0], {
+    editorMap: testMap(),
+    getEditor: () => fakeEditor() as unknown as ReturnType<Parameters<typeof mountPresentationEditor>[1]["getEditor"]>,
+    deps: deps as unknown as Parameters<typeof mountPresentationEditor>[1]["deps"],
+    env: { ...stubEnv(), activeElement: () => null },
+  });
+  (form as unknown as { previewController?: unknown }).previewController = { projectionFresh: false };
+  calls.length = 0;
+
+  mount.editor.previewStale({});
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0]?.block, first);
+  assert.equal(calls[0]?.editable, false);
+  mount.destroy();
+});

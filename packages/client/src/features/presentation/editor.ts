@@ -1193,6 +1193,16 @@ export class PresentationEditor {
       this.operationPending = true
       this.setControlsDisabled(true)
     }
+    // T1 fast path (mirrors DocumentEditor.previewStale): while a
+    // source-editable projection block holds DOM focus, only that block's
+    // editability is observable — the blur reinstall re-syncs the rest.
+    const active = this.activeElement()?.closest?.("[data-editor-block-id]") as HTMLElement | null | undefined
+    if (this.element.dataset.editorMode !== "source" && active && this.canvas()?.contains(active) &&
+        active.dataset.editorSourceEditable !== "false") {
+      const label = active.classList.contains("slide-title") ? "Editable slide title" : "Editable slide block"
+      this.deps.setProjectionBlockEditable(active, true, label)
+      return
+    }
     this.syncProjectionEditability({ preserveActive: detail.preserveActive })
   }
 
