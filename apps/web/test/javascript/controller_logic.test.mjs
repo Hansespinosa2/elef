@@ -1264,16 +1264,23 @@ function shorthandKey(key, extra = {}) {
 test("visual shorthand Space commits the chain through the projection host", () => {
   const { calls: hostCalls, host } = stubHostDouble()
   const mounted = mountShorthand({ host })
+  // commitVisualEdit arms the flush through document.activeElement; the
+  // mount's own linkedom document keeps that lookup coherent.
+  const restoreDocument = replaceGlobal("document", mounted.document)
 
-  const event = shorthandKey(" ")
-  mounted.controller.keydown(event)
+  try {
+    const event = shorthandKey(" ")
+    mounted.controller.keydown(event)
 
-  assert.equal(event.defaultPrevented, true)
-  assert.equal(mounted.engine.value, "See $\\mathbf{x} $ done")
-  assert.deepEqual(mounted.calls.replaceRange, [["\\mathbf{x} ", 5, 8]])
-  assert.deepEqual(hostCalls.inserts, [{ from: 5, to: 8, insert: "\\mathbf{x} ", caret: 16 }])
-  assert.equal(mounted.calls.focus, 0, "the engine is never focused for a visual commit")
-  assert.equal(mounted.controller.pendingChain, null)
+    assert.equal(event.defaultPrevented, true)
+    assert.equal(mounted.engine.value, "See $\\mathbf{x} $ done")
+    assert.deepEqual(mounted.calls.replaceRange, [["\\mathbf{x} ", 5, 8]])
+    assert.deepEqual(hostCalls.inserts, [{ from: 5, to: 8, insert: "\\mathbf{x} ", caret: 16, selectionBefore: 7, replaced: "x.b" }])
+    assert.equal(mounted.calls.focus, 0, "the engine is never focused for a visual commit")
+    assert.equal(mounted.controller.pendingChain, null)
+  } finally {
+    restoreDocument()
+  }
 })
 
 test("source shorthand commit skips the projection pipeline", () => {
@@ -1307,14 +1314,19 @@ test("visual shorthand Escape cancels the chain without editing", () => {
 test("visual shorthand Backspace deletes a dollar pair through the host", () => {
   const { calls: hostCalls, host } = stubHostDouble()
   const mounted = mountShorthand({ value: "See $$ done", caret: 5, host })
+  const restoreDocument = replaceGlobal("document", mounted.document)
 
-  const event = shorthandKey("Backspace")
-  mounted.controller.keydown(event)
+  try {
+    const event = shorthandKey("Backspace")
+    mounted.controller.keydown(event)
 
-  assert.equal(event.defaultPrevented, true)
-  assert.equal(mounted.engine.value, "See  done")
-  assert.deepEqual(mounted.calls.replaceRange, [["", 4, 6]])
-  assert.deepEqual(hostCalls.inserts, [{ from: 4, to: 6, insert: "", caret: 4 }])
+    assert.equal(event.defaultPrevented, true)
+    assert.equal(mounted.engine.value, "See  done")
+    assert.deepEqual(mounted.calls.replaceRange, [["", 4, 6]])
+    assert.deepEqual(hostCalls.inserts, [{ from: 4, to: 6, insert: "", caret: 4, selectionBefore: 5, replaced: "$$" }])
+  } finally {
+    restoreDocument()
+  }
 })
 
 test("visual edit-actions trigger event re-refreshes every assist palette", (t) => {
