@@ -1,4 +1,4 @@
-import katex from "katex"
+import { cachedKatex, loadKatex } from "../lib/katex_loader.js"
 import type { RevealActives, RevealToken } from "./editor_reveal.js"
 
 // Dollar-math content consumes escape pairs atomically, mirroring the
@@ -117,7 +117,24 @@ interface MathSegment {
 }
 
 export function renderInlineMath(element: Element | null): number {
-  if (!element || typeof katex?.renderToString !== "function") return 0
+  // KaTeX not yet loaded (interaction outran the post-settle preload):
+  // render nothing now (today's missing-KaTeX behavior) and retry once
+  // it arrives. The retry re-reads live text nodes and selection, so
+  // caret placement stays exact; already-rendered math is skipped by
+  // the data-editor-math-source guard below.
+  const katex = cachedKatex()
+  if (!katex?.renderToString) {
+    if (element) {
+      loadKatex().then(
+        () => {
+          if (element.isConnected) renderInlineMath(element)
+        },
+        () => {}
+      )
+    }
+    return 0
+  }
+  if (!element) return 0
 
   const textNodes: Text[] = []
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)

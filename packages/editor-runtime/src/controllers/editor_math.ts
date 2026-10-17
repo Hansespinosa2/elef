@@ -1,4 +1,5 @@
-import katex from "katex"
+import { cachedKatex, loadKatex } from "../lib/katex_loader.js"
+import type { KatexApi } from "../lib/katex_loader.js"
 
 export interface MathCaretOptions {
   caret?: string;
@@ -58,6 +59,33 @@ export interface ActiveMathSpanOptions {
   display?: boolean;
 }
 
+function renderMathElement(katex: KatexApi, expression: string, open: string, close: string, isDisplay: boolean): ChildNode {
+  try {
+    const wrapper = document.createElement("span")
+    wrapper.innerHTML = katex.renderToString(expression, { displayMode: isDisplay, throwOnError: true, output: "mathml" })
+    const math = wrapper.firstElementChild as HTMLElement | null
+    if (!math) throw new Error("KaTeX produced no output")
+    math.dataset.editorMathSource = expression
+    math.dataset.editorMathOpen = open
+    math.dataset.editorMathClose = close
+    // Same katex-display restoration as the inline renderer: the
+    // class marks display math while editor CSS keeps inline layout.
+    if (isDisplay) math.classList.add("editor-live-math-display", "katex-display")
+    math.contentEditable = "false"
+    return math
+  } catch (_error) {
+    const mathError = document.createElement("span")
+    mathError.className = "math-error"
+    mathError.dataset.editorMathSource = expression
+    mathError.dataset.editorMathOpen = open
+    mathError.dataset.editorMathClose = close
+    mathError.contentEditable = "false"
+    mathError.title = "Invalid TeX"
+    mathError.textContent = expression
+    return mathError
+  }
+}
+
 export function createActiveMathSpan(fullText: string, { source = "", open = "$", close = open, display = false }: ActiveMathSpanOptions = {}): HTMLSpanElement {
   const activeSpan = document.createElement("span")
   activeSpan.className = "editor-math-active"
@@ -90,31 +118,36 @@ export function reRenderMath(activeSpan: Element | null, { caret = null }: { car
 
   if (hasDelimiters) {
     const expression = fullText.slice(open.length, fullText.length - close.length)
+    const katex = cachedKatex()
     if (katex?.renderToString && expression.trim().length > 0) {
-      try {
-        const wrapper = document.createElement("span")
-        wrapper.innerHTML = katex.renderToString(expression, { displayMode: isDisplay, throwOnError: true, output: "mathml" })
-        const math = wrapper.firstElementChild as HTMLElement | null
-        if (!math) throw new Error("KaTeX produced no output")
-        math.dataset.editorMathSource = expression
-        math.dataset.editorMathOpen = open
-        math.dataset.editorMathClose = close
-        // Same katex-display restoration as the inline renderer: the
-        // class marks display math while editor CSS keeps inline layout.
-        if (isDisplay) math.classList.add("editor-live-math-display", "katex-display")
-        math.contentEditable = "false"
-        replacement = math
-      } catch (_error) {
-        const mathError = document.createElement("span")
-        mathError.className = "math-error"
-        mathError.dataset.editorMathSource = expression
-        mathError.dataset.editorMathOpen = open
-        mathError.dataset.editorMathClose = close
-        mathError.contentEditable = "false"
-        mathError.title = "Invalid TeX"
-        mathError.textContent = expression
-        replacement = mathError
-      }
+      replacement = renderMathElement(katex, expression, open, close, isDisplay)
+    } else if (!katex && expression.trim().length > 0) {
+      // KaTeX not yet loaded (interaction outran the post-settle
+      // preload): flush synchronously with a quacking placeholder so
+      // caret and editing flow keep today's exact timing, then swap in
+      // the identical render on arrival. The swap only touches the
+      // placeholder node, so sibling-placed carets survive it.
+      const pending = document.createElement("span")
+      pending.className = "editor-math-pending"
+      pending.dataset.editorMathSource = expression
+      pending.dataset.editorMathOpen = open
+      pending.dataset.editorMathClose = close
+      if (isDisplay) pending.classList.add("editor-live-math-display")
+      pending.contentEditable = "false"
+      pending.textContent = fullText
+      replacement = pending
+      loadKatex().then(
+        (api) => {
+          if (!pending.isConnected || !pending.parentNode) return
+          pending.parentNode.replaceChild(renderMathElement(api, expression, open, close, isDisplay), pending)
+        },
+        () => {
+          // Load failure renders like today's missing-KaTeX path: plain
+          // source text with no math datasets.
+          if (!pending.isConnected || !pending.parentNode) return
+          pending.parentNode.replaceChild(document.createTextNode(fullText), pending)
+        }
+      )
     } else {
       replacement = document.createTextNode(fullText)
     }

@@ -3,10 +3,77 @@ import type { EditorState, Range } from "@codemirror/state"
 import { syntaxTree } from "@codemirror/language"
 import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
-import katex from "katex"
 import { MERMAID_ERROR_CLASS, renderMermaidSvg } from "./mermaid_runtime.js"
 
 export const livePreviewMode = StateEffect.define<boolean>()
+
+// KaTeX (262K vendored ESM) stays out of the open path: math widgets render a
+// TeX-source placeholder synchronously and swap in MathML once KaTeX
+// arrives (same placeholder/swap shape as mermaid widgets below).
+// Failures to LOAD retry on the next widget; failures to RENDER mark the
+// widget exactly like today's synchronous error path.
+type KatexApi = {
+  renderToString: (tex: string, options?: Record<string, unknown>) => string
+}
+
+let katexPromise: Promise<KatexApi> | null = null
+
+function loadKatex(): Promise<KatexApi> {
+  katexPromise ??= (import("katex") as Promise<unknown>).then(
+    (module) => {
+      const holder = module as { default?: KatexApi }
+      return holder.default ?? (module as KatexApi)
+    },
+    (error: unknown) => {
+      katexPromise = null
+      throw error
+    }
+  )
+  return katexPromise
+}
+
+function idlePreloadKatex(): void {
+  const idle = typeof requestIdleCallback === "function"
+    ? (callback: () => void) => requestIdleCallback(() => callback(), { timeout: 5000 })
+    : (callback: () => void) => setTimeout(callback, 500)
+  idle(() => {
+    loadKatex().catch(() => {
+      // Retry on first actual math render; never fail the open path.
+    })
+  })
+}
+
+// Preload once the open settles (never during it: KaTeX eval on the main
+// thread must not collide with pagination). The timeout covers hosts and
+// modes without a document settle event. Browser-only: importing KaTeX in
+// node test runs would only delay process exit.
+if (typeof document !== "undefined") {
+  document.addEventListener("elef:document-pages-settled", () => idlePreloadKatex(), { once: true })
+  setTimeout(() => idlePreloadKatex(), 8000)
+}
+
+function renderLiveMath(element: HTMLElement, value: string, displayMode: boolean): void {
+  loadKatex().then(
+    (katex) => {
+      if (!element.isConnected) return
+      try {
+        element.innerHTML = katex.renderToString(value, {
+          displayMode,
+          throwOnError: true,
+          output: "mathml"
+        })
+      } catch (_error) {
+        element.classList.add("math-error")
+        element.textContent = value
+      }
+    },
+    () => {
+      if (!element.isConnected) return
+      element.classList.add("math-error")
+      element.textContent = value
+    }
+  )
+}
 
 class PreviewWidget extends WidgetType {
   kind: string;
@@ -80,17 +147,11 @@ class PreviewWidget extends WidgetType {
     const element = document.createElement("span")
     element.className = `cm-live-widget cm-live-widget-${this.kind}${this.kind === "quote-marker" ? " cm-live-syntax-marker" : ""}`
     if (this.kind === "math" || this.kind === "math-display") {
-      try {
-        element.innerHTML = katex.renderToString(this.value, {
-          displayMode: this.kind === "math-display",
-          throwOnError: true,
-          output: "mathml"
-        })
-        element.setAttribute("aria-label", this.value)
-      } catch (_error) {
-        element.classList.add("math-error")
-        element.textContent = this.value
-      }
+      // Synchronous TeX placeholder; MathML swaps in once KaTeX arrives
+      // (preloaded at idle after open, so no flash in practice).
+      element.setAttribute("aria-label", this.value)
+      element.textContent = this.value
+      renderLiveMath(element, this.value, this.kind === "math-display")
       return element
     }
     element.textContent = this.value
