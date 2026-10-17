@@ -26,15 +26,12 @@
     <% if slide.title.present? %>
       <% title_block = editor_blocks.first %>
       <% title_region = title_block && editor_regions.find { |region| region[:block_id] == title_block[:id] } %>
+      <% if editable %><div class="slide-block-shell slide-title-shell <%= position_classes(slide.blocks.first&.position, vertical: "top") %>"><% end %>
       <div class="slide-title slide-block <%= position_classes(slide.blocks.first&.position, vertical: "top") %>"<% if slide.blocks.first&.reveal_event %> data-elef-reveal-event="<%= slide.blocks.first.reveal_event %>"<% end %><% if editable && title_block %> data-editor-block-id="<%= title_block[:id] %>" data-editor-region-id="<%= title_region&.dig(:id) %>" data-editor-source-editable="<%= title_region&.dig(:editable) ? "true" : "false" %>"<% if title_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide title" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
         <%= render_markdown(slide.title, work: presentation) %>
       </div>
       <% if editable && title_block %>
-        <div class="presentation-editor-block-controls" aria-label="Block controls">
-          <button type="button" data-presentation-editor-action="add-block-after" data-slide-index="<%= slide.index %>" data-block-index="0">Add block</button>
-          <button type="button" data-presentation-editor-action="delete-block" data-slide-index="<%= slide.index %>" data-block-index="0"<%= " disabled" if slide.blocks.length == 1 %>>Delete</button>
-          <button type="button" aria-label="Move block up" data-presentation-editor-action="move-block-up" data-slide-index="<%= slide.index %>" data-block-index="0" disabled>↑</button>
-          <button type="button" aria-label="Move block down" data-presentation-editor-action="move-block-down" data-slide-index="<%= slide.index %>" data-block-index="0"<%= " disabled" if slide.blocks.length == 1 %>>↓</button>
+        <div class="presentation-editor-block-controls" aria-label="Block alignment">
           <label>Align <select aria-label="Block alignment" data-presentation-editor-align data-presentation-editor-block-id="<%= title_block[:id] %>" data-slide-index="<%= slide.index %>" data-block-index="0" data-action="change->presentation-editor#alignmentChanged">
             <% %w[top middle bottom].each do |vertical| %>
               <% %w[left center right].each do |horizontal| %>
@@ -45,6 +42,7 @@
           </select></label>
         </div>
       <% end %>
+      <% if editable %></div><% end %>
       <div class="slide-regions">
         <% slide.regions.each do |region| %>
           <% art_host = region.blocks.any? { |block| block.art } %>

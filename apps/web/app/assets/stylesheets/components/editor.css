@@ -162,12 +162,22 @@ li.editor-reveal-marker { list-style: none; }
 .presentation-editor-projection .slide-frame { outline: 1px solid transparent; outline-offset: 0.25rem; }
 .presentation-editor-slide-toolbar { align-items: center; background: rgba(24, 33, 38, 0.9); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; flex-wrap: wrap; gap: 0.35rem; left: 1.25rem; padding: 0.3rem 0.45rem; position: absolute; right: 1.25rem; top: 0.8rem; z-index: 3; }
 .presentation-editor-slide-label { font-size: 0.7rem; font-weight: 800; margin-right: auto; text-transform: uppercase; }
-.presentation-editor-slide-toolbar button, .presentation-editor-block-controls button, .presentation-editor-block-controls select { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px; color: inherit; cursor: pointer; font: inherit; font-size: 0.68rem; font-weight: 700; padding: 0.25rem 0.5rem; }
-.presentation-editor-slide-toolbar button:hover, .presentation-editor-block-controls button:hover, .presentation-editor-block-controls select:hover { background: rgba(255, 255, 255, 0.18); }
-.presentation-editor-slide-toolbar button:disabled, .presentation-editor-block-controls button:disabled { cursor: not-allowed; opacity: 0.4; }
+.presentation-editor-slide-toolbar button, .presentation-editor-block-controls select { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px; color: inherit; cursor: pointer; font: inherit; font-size: 0.68rem; font-weight: 700; padding: 0.25rem 0.5rem; }
+.presentation-editor-slide-toolbar button:hover, .presentation-editor-block-controls select:hover { background: rgba(255, 255, 255, 0.18); }
+.presentation-editor-slide-toolbar button:disabled { cursor: not-allowed; opacity: 0.4; }
 .presentation-editor-projection .slide-title[contenteditable="true"], .presentation-editor-projection .slide-block[contenteditable="true"] { border-radius: 0.45rem; outline: 1px solid transparent; outline-offset: 0.35rem; transition: outline-color 120ms ease, background 120ms ease; }
 .presentation-editor-projection [contenteditable="true"]:hover, .presentation-editor-projection [contenteditable="true"]:focus { background: rgba(79, 139, 104, 0.08); outline-color: rgba(79, 139, 104, 0.5); }
-.presentation-editor-block-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.15rem 0 0.45rem; }
+.slide-block-shell { position: relative; }
+.presentation-editor-block-controls { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; left: 100%; margin-left: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; top: 0; transition: opacity 120ms ease; white-space: nowrap; z-index: 4; }
+.presentation-editor-block-controls.pill-left { left: auto; margin-left: 0; margin-right: 0.35rem; right: 100%; }
+.presentation-editor-block-controls.pill-inside { left: auto; margin-left: 0; right: 0.25rem; top: 0.15rem; }
+.slide-block-shell:hover .presentation-editor-block-controls,
+.slide-block-shell:focus-within .presentation-editor-block-controls,
+.presentation-editor-block-controls:hover,
+.presentation-editor-block-controls:focus-within { opacity: 1; pointer-events: auto; }
+.presentation-editor-block-controls::before { bottom: 0; content: ""; position: absolute; right: 100%; top: 0; width: 0.45rem; }
+.presentation-editor-block-controls.pill-left::before { left: 100%; right: auto; }
+.presentation-editor-block-controls.pill-inside::before { display: none; }
 .presentation-editor-block-controls select { max-width: 8.5rem; }
 .editor-projection[hidden], .source-field[hidden] { display: none; }
 .source-field { padding-bottom: 0.75rem; }

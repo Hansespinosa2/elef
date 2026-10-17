@@ -44,7 +44,7 @@ const ALLOWED_ACTIONS = new Set([
 const ALLOWED_EDITOR_ACTIONS = new Set(["media-choose-slide", "overview-select"]);
 const ALLOWED_CLIENT_MOUNTS = new Set(["mermaid", "document-pages", "art-layout"]);
 const ALLOWED_PRESENTATION_ACTIONS = new Set([
-  "add-slide-after", "delete-slide", "move-slide-up", "move-slide-down", "add-block-after", "delete-block", "move-block-up", "move-block-down",
+  "add-slide-after", "delete-slide", "move-slide-up", "move-slide-down",
 ]);
 
 export interface SanitizeOptions {

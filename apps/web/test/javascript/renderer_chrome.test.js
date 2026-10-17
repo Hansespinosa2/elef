@@ -18,10 +18,13 @@ test("composed presentation preview carries theme, slide frames and block hooks"
   assert.match(preview.html, /data-editor-block-id="slide-1-block-1"/)
 })
 
-test("composed presentation preview carries block controls", () => {
+test("composed presentation preview carries alignment pills inside block shells", () => {
   const preview = renderPreview({ source: "# Roadmap\n\nFirst column.", title: "Plan" })
 
-  assert.match(preview.html, /data-presentation-editor-action="add-block-after"/)
+  assert.equal((preview.html.match(/<div class="slide-block-shell position-left position-top">/g) || []).length, 2)
+  assert.match(preview.html, /aria-label="Block alignment"/)
+  assert.match(preview.html, /data-presentation-editor-align/)
+  assert.doesNotMatch(preview.html, /data-presentation-editor-action="(add|delete|move)-block/)
 })
 
 test("composed document preview joins blocks inside editor shells", () => {

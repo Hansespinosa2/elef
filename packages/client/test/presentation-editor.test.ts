@@ -25,9 +25,25 @@ function slideRanges() {
   return { firstDelim, secondStart };
 }
 
+interface TestRegion {
+  id: string;
+  block_id: string;
+  kind: string;
+  editable: boolean;
+  content_range: { start: number; end: number };
+}
+
+interface TestBlock {
+  id: string;
+  range: { start: number; end: number };
+  source_range: { start: number; end: number };
+  content_range: { start: number; end: number };
+  empty_placeholder?: boolean;
+}
+
 function testMap() {
   const { firstDelim, secondStart } = slideRanges();
-  const block = (id: string, start: number, end: number) => ({
+  const block = (id: string, start: number, end: number): TestBlock => ({
     id,
     range: { start, end },
     source_range: { start, end },
@@ -52,7 +68,7 @@ function testMap() {
       },
     ],
     directives: [],
-    editable_regions: [],
+    editable_regions: [] as TestRegion[],
   };
 }
 
@@ -790,7 +806,8 @@ test("menu block actions run against the caret block with caret restore", () => 
     mount.destroy();
   }
 
-  // Moves keep button parity: the source rewrites, the caret is untouched.
+  // Moves follow the caret: the moved block inherits its neighbor's id
+  // and the relative caret resolves against the fresh map.
   {
     const { form } = mountForm();
     const editorState = fakeEditor();
@@ -801,7 +818,81 @@ test("menu block actions run against the caret block with caret restore", () => 
 
     assert.equal(mount.editor.applyVisualBlockAction("move-block-down"), true);
     assert.ok(editorState.value.indexOf("First") < editorState.value.indexOf("# Alpha"));
+    assert.deepEqual(mount.editor.pendingCaretRestore, { sourceOffset: 0, preferredBlockId: "b2", relativeOffset: 0 });
+    mount.destroy();
+  }
+
+  // Move refusals (boundaries, empty placeholders) leave source and caret alone.
+  {
+    const { form } = mountForm();
+    const editorState = fakeEditor();
+    const map = testMap();
+    map.editable_regions = regions();
+    const mount = mountEditor(form, map, editorState);
+    mount.editor.lastProjectionCaret = { blockId: "b1", visibleOffset: 0 };
+
+    assert.equal(mount.editor.moveCaretBlock(-1), false);
+    assert.deepEqual(editorState.commits, []);
     assert.equal(mount.editor.pendingCaretRestore ?? null, null);
+    mount.destroy();
+  }
+  {
+    const { form } = mountForm();
+    const editorState = fakeEditor();
+    const map = testMap();
+    map.editable_regions = regions();
+    map.slides[0]!.blocks.splice(1, 0, {
+      id: "slide-1-empty-1",
+      range: { start: 7, end: 7 },
+      source_range: { start: 7, end: 7 },
+      content_range: { start: 7, end: 7 },
+      empty_placeholder: true,
+    });
+    const mount = mountEditor(form, map, editorState);
+    mount.editor.lastProjectionCaret = { blockId: "b1", visibleOffset: 0 };
+
+    assert.equal(mount.editor.moveCaretBlock(1), false);
+    assert.deepEqual(editorState.commits, []);
+    mount.destroy();
+  }
+
+  // Relative restores clamp into the inherited block on the fresh map.
+  {
+    const { document, form } = mountForm();
+    const editorState = fakeEditor();
+    editorState.value = "First\n\n# Alpha\n";
+    const map = testMap();
+    map.editable_regions = [
+      { id: "r2", block_id: "b2", kind: "paragraph", editable: true, content_range: { start: 0, end: 5 } },
+    ];
+    const mount = mountEditor(form, map, editorState);
+    const canvas = document.createElement("div");
+    canvas.innerHTML = `<div data-editor-block-id="b2" contenteditable="true"><p>First</p></div>`;
+    // linkedom does not reflect contenteditable to contentEditable.
+    Object.defineProperty(canvas.firstElementChild, "contentEditable", { value: "true" });
+    mount.editor.canvasElement = canvas as unknown as Element;
+    mount.editor.pendingCaretRestore = { sourceOffset: 0, preferredBlockId: "b2", relativeOffset: 3 };
+
+    mount.editor.restorePendingCaret();
+
+    assert.deepEqual(mount.editor.lastProjectionCaret, { blockId: "b2", visibleOffset: 3 });
+    mount.destroy();
+  }
+  // An unresolvable move id abandons the restore instead of jumping.
+  {
+    const { document, form } = mountForm();
+    const editorState = fakeEditor();
+    const map = testMap();
+    map.editable_regions = [];
+    const mount = mountEditor(form, map, editorState);
+    const canvas = document.createElement("div");
+    canvas.innerHTML = `<div data-editor-block-id="b2" contenteditable="true"><p>First</p></div>`;
+    mount.editor.canvasElement = canvas as unknown as Element;
+    mount.editor.pendingCaretRestore = { sourceOffset: 0, preferredBlockId: "b2", relativeOffset: 3 };
+
+    mount.editor.restorePendingCaret();
+
+    assert.equal(mount.editor.lastProjectionCaret, undefined);
     mount.destroy();
   }
 
@@ -843,4 +934,45 @@ test("menu block actions run against the caret block with caret restore", () => 
     assert.deepEqual(editorState.commits, []);
     mount.destroy();
   }
+});
+
+test("alignment pills flip sides by measured room", () => {
+  const { document, form } = mountForm();
+  const mount = mountEditor(form, testMap(), fakeEditor());
+  const editor = mount.editor;
+  const canvas = document.createElement("div") as unknown as HTMLElement;
+  canvas.innerHTML = [
+    `<section class="slide">`,
+    `<div class="slide-block-shell" id="narrow"><div class="slide-block"></div><div class="presentation-editor-block-controls"></div></div>`,
+    `<div class="slide-block-shell" id="right"><div class="slide-block"></div><div class="presentation-editor-block-controls"></div></div>`,
+    `<div class="slide-block-shell" id="wide"><div class="slide-block"></div><div class="presentation-editor-block-controls"></div></div>`,
+    `</section>`,
+  ].join("");
+  editor.canvasElement = canvas as unknown as Element;
+  const rect = (left: number, right: number) => ({ left, right, top: 0, bottom: 10, width: right - left, height: 10, x: left, y: 0, toJSON: () => ({}) });
+  const slide = canvas.querySelector(".slide") as unknown as HTMLElement;
+  (slide as unknown as { getBoundingClientRect: () => unknown }).getBoundingClientRect = () => rect(0, 1000);
+  const stub = (id: string, left: number, right: number) => {
+    const shell = canvas.querySelector(`#${id}`) as unknown as HTMLElement;
+    (shell as unknown as { getBoundingClientRect: () => unknown }).getBoundingClientRect = () => rect(left, right);
+    const controls = shell.querySelector(".presentation-editor-block-controls") as unknown as HTMLElement;
+    Object.defineProperty(controls, "offsetWidth", { value: 190 });
+    return controls;
+  };
+  const narrow = stub("narrow", 100, 300);
+  const right = stub("right", 700, 950);
+  const wide = stub("wide", 100, 950);
+
+  editor.placeAlignmentPills();
+
+  assert.equal(narrow.classList.contains("pill-left"), false);
+  assert.equal(narrow.classList.contains("pill-inside"), false);
+  assert.equal(right.classList.contains("pill-left"), true);
+  assert.equal(wide.classList.contains("pill-inside"), true);
+
+  // Re-placement is idempotent (no class churn on repeated measures).
+  editor.placeAlignmentPills();
+  assert.equal(right.classList.contains("pill-left"), true);
+  assert.equal(wide.classList.contains("pill-inside"), true);
+  mount.destroy();
 });

@@ -76,11 +76,23 @@ test("client presentation block attributes gate editability on region flags", ()
   );
 });
 
-test("client presentation block controls disable edge moves and single delete", () => {
+test("client presentation block controls keep only the alignment pill", () => {
   const single = presentationBlockControls({ slideIndex: 0, blockIndex: 0, blockCount: 1, position: null });
-  assert.match(single, /delete-block"[^>]*disabled[^>]*>Delete</);
-  assert.match(single, /Move block up[^>]*disabled/);
+  assert.doesNotMatch(single, /<button/);
+  assert.doesNotMatch(single, /data-presentation-editor-action/);
   assert.doesNotMatch(single, /data-action=/);
+  assert.match(single, /aria-label="Block alignment"/);
+  assert.match(single, /data-presentation-editor-align/);
+  assert.match(single, /<option value="left" selected>/);
+
+  const placed = presentationBlockControls({
+    slideIndex: 2,
+    blockIndex: 1,
+    blockCount: 3,
+    position: { horizontal: "right", vertical: "middle" },
+  });
+  assert.match(placed, /data-slide-index="2" data-block-index="1"/);
+  assert.match(placed, /<option value="middle right" selected>/);
 });
 
 test("client presentation root, slide block, and empty slide keep projection hooks", () => {
@@ -90,7 +102,16 @@ test("client presentation root, slide block, and empty slide keep projection hoo
 
   assert.equal(
     presentationSlideBlock({ className: "c", attributes: 'a="1"', content: "<x/>", controls: "<ctl/>" }),
-    '<div class="c" a="1"><x/></div><ctl/>',
+    '<div class="slide-block-shell"><div class="c" a="1"><x/></div><ctl/></div>',
+  );
+  assert.equal(
+    presentationSlideBlock({
+      className: "slide-title slide-block position-center position-middle",
+      attributes: 'a="1"',
+      content: "<x/>",
+      controls: "<ctl/>",
+    }),
+    '<div class="slide-block-shell position-center position-middle slide-title-shell"><div class="slide-title slide-block position-center position-middle" a="1"><x/></div><ctl/></div>',
   );
 
   const empty = presentationEmptySlide({ index: 2 });

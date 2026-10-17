@@ -68,6 +68,37 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
   end
 
+  # Runs a slide-block structure row from the shared Edit-actions menu
+  # against the block showing the given text (per-block buttons are gone;
+  # keyboard and the menu own block structure now).
+  def visual_block_menu_action(block_text, row_label, slide_index: nil)
+    scope = slide_index.nil? ? ".editor-projection" : ".editor-projection .slide[data-slide-index='#{slide_index}']"
+    find("#{scope} .slide-block", text: block_text).click
+    open_edit_menu
+    click_on row_label
+  end
+
+  # Heavy pages shift layout while slides settle, which can stale a bare
+  # click_on's coordinates; centering the menu button first keeps the open
+  # click on target.
+  def open_edit_menu
+    button = find(".edit-actions-button")
+    page.execute_script("arguments[0].scrollIntoView({block: 'center'})", button)
+    button.click
+    assert_selector ".edit-actions-menu:not([hidden])", wait: 5
+  end
+
+  # Changes a block's alignment through its hover pill: focusing the block
+  # reveals the pill (hover reveal is pinned separately in art_test.rb).
+  def select_block_alignment(slide_index, block_index, value)
+    shell = first(
+      "select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']",
+      visible: :all
+    ).find(:xpath, "./ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' slide-block-shell ')][1]")
+    shell.find(".slide-block").click
+    find("select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']").select(value)
+  end
+
   def type_visual_text(selector, visible_text, replacement)
     selector = ".editor-projection #{selector}"
     wait_for_fresh_projection
@@ -229,7 +260,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal initial_alignment["marginTop"], initial_alignment["marginBottom"]
     assert_in_delta initial_alignment["slideCenterY"], initial_alignment["titleCenterY"], 50
 
-    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='0']").select("Bottom Right")
+    select_block_alignment(0, 0, "Bottom Right")
     assert_field "Markdown source", with: /:::align\{bottom right\}\n# Untitled Document/, wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-statement .slide-block.position-right.position-top", text: "Untitled Document", wait: 5
@@ -255,19 +286,19 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".slide-statement .slide-block.position-center.position-middle", text: "Designing a visual system"
     assert_selector ".slide-statement .slide-block.position-center.position-top", text: /This work exercises automatic layouts/
 
-    find("select[data-presentation-editor-align][data-slide-index='2'][data-block-index='0']").select("Right")
+    select_block_alignment(2, 0, "Right")
     assert_field "Markdown source", with: /:::align\{right\}\n\n# Establish a visual contract/, wait: 5
     assert_selector ".slide-two-column .slide-title.slide-block.position-right.position-top", text: "Establish a visual contract", wait: 5
 
-    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='0']").select("Bottom Right")
+    select_block_alignment(0, 0, "Bottom Right")
     assert_field "Markdown source", with: /:::align\{bottom right\}\n# Designing a visual system/, wait: 5
     assert_selector ".slide-statement .slide-block.position-right.position-top", text: "Designing a visual system", wait: 5
 
-    find("[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1']").click
+    visual_block_menu_action("This work exercises automatic layouts", "Add block below", slide_index: 0)
     assert_field "Markdown source", with: /about consistent presentation design\.\n\nNew block/
     assert_selector ".slide[data-slide-index='0'] .slide-block", text: "New block", wait: 5
     accept_confirm("Delete this block?") do
-      find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2']").click
+      visual_block_menu_action("New block", "Delete block", slide_index: 0)
     end
     wait_for_fresh_projection
 
@@ -616,7 +647,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection .slide", count: 2, wait: 5
     wait_for_fresh_projection
 
-    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Middle Center")
+    select_block_alignment(0, 1, "Middle Center")
     assert_field "Markdown source", with: /:::align\{middle center\}/, wait: 5
 
     click_on "Save presentation"
@@ -665,12 +696,11 @@ class PresentationsTest < ApplicationSystemTestCase
     visit new_presentation_path
     wait_for_fresh_projection
 
-    alignment = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
-    alignment.select("Left")
+    select_block_alignment(0, 1, "Left")
     assert_field "Markdown source", with: /:::align\{left\}/, wait: 5
 
     wait_for_fresh_projection
-    find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']").select("Middle Center")
+    select_block_alignment(0, 1, "Middle Center")
     assert_field "Markdown source", with: /:::align\{middle center\}/, wait: 5
   end
 
@@ -845,7 +875,7 @@ class PresentationsTest < ApplicationSystemTestCase
       (() => {
         const form = document.querySelector('.visual-editor-form');
         const controller = form.presentationEditorController;
-        const control = form.querySelector('[data-presentation-editor-action="add-block-after"][data-block-index="1"]');
+        const control = form.querySelector('[data-presentation-editor-action="add-slide-after"]');
         controller.setControlsDisabled(true);
         controller.setControlsDisabled(true);
         controller.setControlsDisabled(false);
@@ -854,8 +884,7 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert controls_reenabled, "repeated pending updates must restore the original control state"
 
-    assert_selector "[data-presentation-editor-action='add-block-after'][data-block-index='1']:not([disabled])", wait: 5
-    find("[data-presentation-editor-action='add-block-after'][data-block-index='1']").click
+    visual_block_menu_action("Alpha with several characters", "Add block below")
     assert_field "Markdown source", with: "# Slide\n\nAlpha with several characters\n\nNew block", wait: 5
     assert_selector ".presentation-editor-projection .slide-block", text: "New block", wait: 5
   end
@@ -870,21 +899,20 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".slide-block.position-center.position-middle", text: "Positioned"
     refute_selector ".slide-block.position-center", text: "Plain"
 
-    find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
+    visual_block_menu_action("Positioned", "Move block down")
     assert_field "Markdown source", with: "# Slide\n\nPlain\n\n:::align{middle center}\n\nPositioned", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block.position-center.position-middle", text: "Positioned", wait: 5
     refute_selector ".slide-block.position-center", text: "Plain"
 
-    assert_selector "[data-presentation-editor-action='add-block-after'][data-block-index='1']:not([disabled])", wait: 5
-    find("[data-presentation-editor-action='add-block-after'][data-block-index='1']").click
+    visual_block_menu_action("Plain", "Add block below")
     assert_field "Markdown source", with: "# Slide\n\nPlain\n\nNew block\n\n:::align{middle center}\n\nPositioned", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block", text: "New block", wait: 5
     refute_selector ".slide-block.position-center", text: "New block"
 
     accept_confirm do
-      find("[data-presentation-editor-action='delete-block'][data-block-index='3']").click
+      visual_block_menu_action("Positioned", "Delete block")
     end
     wait_for_fresh_projection
     refute_includes find_field("Markdown source").value, ":::align{middle center}"
@@ -904,19 +932,15 @@ class PresentationsTest < ApplicationSystemTestCase
     )
 
     visit edit_presentation_path(presentation)
-    assert_selector "[data-presentation-editor-action='move-block-down'][data-block-index='1']:not([disabled])"
-    assert_selector "[data-presentation-editor-action='move-block-down'][data-block-index='2']:not([disabled])"
-    assert_selector "[data-presentation-editor-action='move-block-up'][data-block-index='3']:not([disabled])"
 
-    find("[data-presentation-editor-action='move-block-down'][data-block-index='1']").click
+    visual_block_menu_action("First", "Move block down")
     assert_field "Markdown source", with: "# Slide\n\nSecond\n\n:::align{center}\n\nFirst\n\nOutside", wait: 5
     wait_for_fresh_projection
     assert_selector ".slide-block.position-center", text: "First", wait: 5
     refute_selector ".slide-block.position-center", text: "Second"
 
-    assert_selector "[data-presentation-editor-action='delete-block'][data-block-index='2']:not([disabled])", wait: 5
     accept_confirm do
-      find("[data-presentation-editor-action='delete-block'][data-block-index='2']").click
+      visual_block_menu_action("First", "Delete block")
     end
     wait_for_fresh_projection
     final_source = find_field("Markdown source").value
@@ -938,7 +962,7 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
 
     assert_field "Markdown source", with: "# Live structure\n\nAlpha\n\nBeta", wait: 5
-    assert_selector "[data-presentation-editor-action='delete-block']:disabled", count: 2
+    assert_selector "[data-presentation-editor-action='add-slide-after']:disabled", count: 1
     pending = page.evaluate_async_script(<<~JAVASCRIPT)
       const done = arguments[arguments.length - 1];
       const deadline = Date.now() + 5000;
@@ -969,7 +993,8 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_equal 2, waiting_state["renderedBlocks"]
     assert_equal 2, waiting_state["installedBlocks"]
     assert_equal 3, waiting_state["pendingBlocks"]
-    page.execute_script("document.querySelector('[data-presentation-editor-action=\"delete-block\"][data-block-index=\"1\"]').click()")
+    refused = page.evaluate_script("document.querySelector('.visual-editor-form').presentationEditorController.applyVisualBlockAction('delete-block')")
+    assert_equal false, refused
     assert_field "Markdown source", with: "# Live structure\n\nAlpha\n\nBeta"
 
     page.execute_script("document.activeElement.blur()")
@@ -993,10 +1018,10 @@ class PresentationsTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert_equal aligned_state["mappedIds"], aligned_state["renderedIds"]
     assert_equal find_field("Markdown source").value.length, aligned_state["sourceLength"]
-    assert_selector "[data-presentation-editor-action='delete-block']:disabled", count: 0
+    assert_no_selector "[data-presentation-editor-action='add-slide-after'][disabled]", wait: 5
 
     accept_confirm do
-      find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='1']").click
+      visual_block_menu_action("Alpha", "Delete block")
     end
     assert_field "Markdown source", with: "# Live structure\n\nBeta", wait: 5
 
@@ -1045,7 +1070,7 @@ class PresentationsTest < ApplicationSystemTestCase
           mappedIds: form.presentationEditorController.map.slides.flatMap((slide) => slide.blocks.map((block) => block.id)),
           renderedIds: [...document.querySelectorAll('.presentation-editor-projection [data-editor-block-id]')]
             .map((block) => block.dataset.editorBlockId),
-          controlsPaused: [...form.querySelectorAll('[data-presentation-editor-action="add-block-after"]')]
+          controlsPaused: [...form.querySelectorAll('[data-presentation-editor-action="add-slide-after"]')]
             .some((control) => control.disabled)
         };
       })()
@@ -1182,9 +1207,8 @@ class PresentationsTest < ApplicationSystemTestCase
     )
 
     visit edit_presentation_path(presentation)
-    block = find(".editor-projection .slide-block", text: "First")
-    block.click
-    click_on "Edit"
+    find(".editor-projection .slide-block", text: "First").click
+    open_edit_menu
     click_on "Add block below"
     wait_for_fresh_projection
     assert_field "Markdown source", with: "# Slide\n\nFirst\n\nNew block\n\nSecond\n", wait: 5
@@ -1249,7 +1273,7 @@ class PresentationsTest < ApplicationSystemTestCase
     source_presentation = Presentation.create!(title: "Source heading keystrokes", source: "# Existing slide")
 
     visit edit_presentation_path(presentation)
-    find("[data-presentation-editor-action='add-block-after']").click
+    visual_block_menu_action("Existing slide", "Add block below")
     block = find(".editor-projection .slide-block", text: "New block", wait: 5)
     block.click
     block.send_keys(primary_modifier, "a")
@@ -1465,21 +1489,21 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit edit_presentation_path(presentation)
     dismiss_confirm do
-      find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='1']").click
+      visual_block_menu_action("First block", "Delete block", slide_index: 0)
     end
     assert_field "Markdown source", with: "# First\n\nFirst block\n\nSecond block\n---\n# Second\n\nOther block"
 
-    find("[data-presentation-editor-action='move-block-down'][data-slide-index='0'][data-block-index='1']").click
+    first_block = find(".editor-projection .slide[data-slide-index='0'] .slide-block", text: "First block")
+    first_block.click
+    first_block.send_keys([:alt, :down])
     assert_field "Markdown source", with: /# First\n\nSecond block\n\nFirst block/, wait: 5
     wait_for_fresh_projection
-    assert_no_selector "[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1'][disabled]", wait: 5
 
-    find("[data-presentation-editor-action='add-block-after'][data-slide-index='0'][data-block-index='1']").click
+    visual_block_menu_action("Second block", "Add block below", slide_index: 0)
     assert_field "Markdown source", with: /Second block\n\nNew block\n\nFirst block/, wait: 5
     wait_for_fresh_projection
-    assert_no_selector "[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2'][disabled]", wait: 5
 
-    accept_confirm { find("[data-presentation-editor-action='delete-block'][data-slide-index='0'][data-block-index='2']").click }
+    accept_confirm { visual_block_menu_action("New block", "Delete block", slide_index: 0) }
     assert_field "Markdown source", with: /Second block\n\nFirst block/, wait: 5
     wait_for_fresh_projection
     assert_no_selector "[data-presentation-editor-action='move-slide-down'][data-slide-index='0'][disabled]", wait: 5
@@ -1495,7 +1519,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit edit_presentation_path(presentation)
     assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 2
-    find("[data-presentation-editor-action='move-block-up'][data-block-index='2']").click
+    visual_block_menu_action("Alpha", "Move block up")
     assert_field "Markdown source", with: "# Keep\n\n:::art\n- Alpha\n- Beta\n\nBefore\n\nAfter\n\nTail", wait: 5
     wait_for_fresh_projection
     moved_source = find_field("Markdown source").value
@@ -1504,7 +1528,7 @@ class PresentationsTest < ApplicationSystemTestCase
     refute_includes moved_source, "data-elef-art-root"
 
     accept_confirm do
-      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
+      visual_block_menu_action("Alpha", "Delete block")
     end
     assert_field "Markdown source", with: "# Keep\n\nBefore\n\nAfter\n\nTail", wait: 5
     wait_for_fresh_projection
@@ -1523,7 +1547,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 1
 
     accept_confirm do
-      find("[data-presentation-editor-action='delete-block'][data-block-index='1']").click
+      visual_block_menu_action("Alpha", "Delete block")
     end
 
     assert_field "Markdown source", with: /# Slide\n\nNext paragraph/, wait: 5
@@ -2903,17 +2927,16 @@ class PresentationsTest < ApplicationSystemTestCase
     block.click
     block.send_keys(" with extra text")
 
-    alignment = find("select[data-presentation-editor-align][data-slide-index='0'][data-block-index='1']")
-    alignment.select("Middle Center")
+    select_block_alignment(0, 1, "Middle Center")
 
     assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-center"
     assert_field "Markdown source", with: /:::align\{middle center\}\n\nInitial.*block/, wait: 5
 
-    alignment.select("Bottom Right")
+    select_block_alignment(0, 1, "Bottom Right")
     assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-right"
     assert_field "Markdown source", with: /:::align\{bottom right\}\n\nInitial.*block/, wait: 5
 
-    alignment.select("Left")
+    select_block_alignment(0, 1, "Left")
     assert_includes find(".slide-block[data-editor-block-id='#{block_id}']")["class"], "position-left"
     assert_field "Markdown source", with: /:::align\{left\}\n\nInitial.*block/, wait: 5
   end
