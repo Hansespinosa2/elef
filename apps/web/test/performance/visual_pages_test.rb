@@ -306,9 +306,13 @@ class VisualPagesTest < ApplicationSystemTestCase
 
   # Keystroke stage split: pair every elef: start/end mark recorded during
   # the typing loop (key-beforeinput legs, projection install, paginate,
-  # preview handlers). Timestamps correlate with sample windows off-band.
+  # preview handlers) plus the longtask entries overlapping it, so the
+  # unmarked remainder (style/layout/paint, rAF work) is attributed.
+  # Timestamps correlate with sample windows off-band.
   KEY_STAGES_SCRIPT = <<~JAVASCRIPT.freeze
     (() => {
+      const tasks = window.__keyTasks || [];
+      const events = window.__keyEvents || [];
       const marks = (performance.getEntriesByType("mark") || [])
         .filter((entry) => entry.name.startsWith("elef:"))
         .map((entry) => ({ name: entry.name.slice(5), t: Math.round(entry.startTime * 10) / 10 }));
@@ -323,7 +327,7 @@ class VisualPagesTest < ApplicationSystemTestCase
           delete pending[key];
         }
       });
-      return { stages: stages.slice(-60), orphans: Object.keys(pending) };
+      return { stages: stages.slice(-60), orphans: Object.keys(pending), longtasks: tasks.slice(-20), events: events.slice(-16) };
     })()
   JAVASCRIPT
 
@@ -703,6 +707,41 @@ class VisualPagesTest < ApplicationSystemTestCase
     document = create_perf_document("Perf #{name} typing", source)
     visit edit_document_path(document)
     wait_for_full_settle
+    # Freeze the timeline buffer for the typing window: open-phase marks
+    # would otherwise evict typing entries, and Event Timing needs an
+    # observer to populate at all.
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        performance.clearMarks();
+        performance.clearMeasures();
+        // Event Timing and longtask entries are observer-only: buffer
+        // queries stay empty, so collect them into window arrays.
+        window.__keyEvents = [];
+        window.__keyTasks = [];
+        try {
+          new PerformanceObserver((list) => {
+            list.getEntries().forEach((entry) => {
+              if (entry.name !== "keydown" && entry.name !== "input" && entry.name !== "beforeinput") return;
+              window.__keyEvents.push({
+                name: entry.name,
+                start: Math.round(entry.startTime * 10) / 10,
+                ms: Math.round(entry.duration * 10) / 10,
+                handling: Math.round(((entry.processingEnd || 0) - (entry.processingStart || 0)) * 10) / 10,
+              });
+            });
+          }).observe({ type: "event", durationThreshold: 16, buffered: true });
+          new PerformanceObserver((list) => {
+            list.getEntries().forEach((entry) => {
+              window.__keyTasks.push({
+                start: Math.round(entry.startTime * 10) / 10,
+                ms: Math.round(entry.duration * 10) / 10,
+                top: ((entry.attribution || [])[0] || {}).name || null,
+              });
+            });
+          }).observe({ type: "longtask", buffered: true });
+        } catch (_) {}
+      })()
+    JAVASCRIPT
     # Two spread prose blocks (early + middle). Each keystroke commits and
     # marks the preview stale (reinstall deferred while focused); switching
     # blocks blurs, installing the pending projection and repaginating, so
