@@ -7,7 +7,7 @@
 // the client feature
 // handles block input, focus, and alignment natively, so no Stimulus
 // `data-action` is emitted here.
-import { presentationTheme } from "@elef/work-model/document-map"
+import { presentationTheme } from "@elef/work-model/style-vocab"
 
 function escapeHtml(value: unknown): string {
   return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")

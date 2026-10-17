@@ -1,5 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
-import { withAppearanceValue } from "@elef/work-model"
+// The 2K style-vocab entry (not the 179K map barrel): appearance commits
+// stay synchronous while the map parser stays out of the open path.
+import { withAppearanceValue } from "@elef/work-model/style-vocab"
 
 const normalizeSource = (source: unknown): string => String(source ?? "").replace(/\r\n?/g, "\n")
 

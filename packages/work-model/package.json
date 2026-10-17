@@ -29,6 +29,10 @@
     "./slide-position-layout": {
       "types": "./src/slide_position_layout.ts",
       "default": "./dist/slide-position-layout.js"
+    },
+    "./style-vocab": {
+      "types": "./src/style_vocab.ts",
+      "default": "./dist/style-vocab.js"
     }
   },
   "dependencies": {
