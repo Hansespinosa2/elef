@@ -1066,6 +1066,30 @@ class DesktopEditorUi {
     })
   }
 
+  async captureCaretAutofocusShot(name) {
+    // Evidence-only: a screenshot driver that cannot capture must never fail the suite.
+    try {
+      await mkdir("test-results/caret-autofocus", { recursive: true })
+      await browser.saveScreenshot(`test-results/caret-autofocus/${name}.png`)
+    } catch (_error) { /* evidence-only */ }
+  }
+
+  async assertSourceCaretAtStartOnOpen() {
+    // Parity with a fresh open: the Source caret sits at position 0 and the
+    // editor holds DOM focus, so typing and Vim navigation work immediately.
+    // This mirrors the focus precondition every native-typing scenario
+    // establishes before sending keys (view.hasFocus with contentDOM active).
+    await browser.waitUntil(async () => browser.execute(() => {
+      const editor = document.querySelector("#desktop-editor-field")?.editorController
+      return editor?.selectionStart === 0 && editor?.selectionEnd === 0
+        && editor.view.hasFocus === true
+        && document.activeElement === editor.view.contentDOM
+    }), {
+      timeout: 5_000,
+      timeoutMsg: "The desktop editor did not open with its caret at source offset 0 and focused"
+    })
+  }
+
   async typeEmptyDisplayMath(mode) {
     await browser.execute(() => window.focus())
     focusDesktopWindow()
@@ -2314,6 +2338,37 @@ describe("desktop binary workflows and native boundaries", () => {
     await library.openLibrary()
     await library.deleteWork(title)
     await library.assertWorkAbsent(title)
+  })
+
+  it("opens a library work with the source caret at 0 and focused", async () => {
+    const ui = new DesktopEditorUi()
+    await ui.openWork()
+    await ui.captureCaretAutofocusShot("library-open")
+    await ui.assertSourceCaretAtStartOnOpen()
+  })
+
+  it("creates a work from the New menu with the source caret at 0 and focused", async () => {
+    const library = new DesktopLibraryUi()
+    await library.openLibrary()
+    await $(".new-work-trigger").click()
+    await $("[data-new-work-kind=\"presentation\"]").click()
+    // Direct-create parity with the web menu: the click skips the name
+    // dialog and lands in the editor, which must already hold caret-at-0
+    // focus before any rename moves focus to the title field.
+    await $("#work-view").waitForDisplayed()
+    let title = null
+    try {
+      title = await $("#desktop-editor-title").getValue()
+      const ui = new DesktopEditorUi()
+      await ui.captureCaretAutofocusShot("direct-create-open")
+      await ui.assertSourceCaretAtStartOnOpen()
+    } finally {
+      if (title) {
+        await library.openLibrary()
+        await library.deleteWork(title)
+        await library.assertWorkAbsent(title)
+      }
+    }
   })
 
   it("opens and cancels the native library folder picker", async () => {

@@ -175,8 +175,9 @@ Capability keys come from the `HostCapabilities` interface
   scripts stay `'self'`). Parity proof: the export-parity fixtures
   (packages/client/test/fixtures/export-parity/) pin byte-identical
   canonical models on both hosts (Ruby service test plus client test over
-  the same sources); model HTML renders through the chrome-composed
-  projection on both (server bundle, `@elef/renderer/projection`). Final
+  the same sources); model HTML renders through the bare projection on
+  both (server `bare: true` render, `@elef/renderer/projection`), so both
+  hosts feed the shared engine identical chrome-free bytes. Final
   .pptx bytes still differ per run by library design (JSZip entry dates
   plus docProps timestamps; the engine sets neither), so content equality
   — not file bytes — is the proven property past the model.

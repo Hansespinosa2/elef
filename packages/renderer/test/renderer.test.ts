@@ -2,6 +2,7 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { collectMediaReferences, renderMarkdownBlock, renderPreviewCore } from "../src/index.js"
 import type { RendererChrome } from "../src/index.js"
+import { renderMarkdownBlock as renderProjectionBlock } from "../src/projection.js"
 import { buildEditorMap, buildEditorStructure } from "@elef/work-model"
 
 test("presentation preview builds editable source ranges and ignores slide delimiters in code fences", () => {
@@ -215,6 +216,17 @@ test("bare projection carries no editor chrome, Stimulus hooks or controls", () 
     assert.doesNotMatch(html, /presentation-editor/)
     assert.doesNotMatch(html, /visual-editor/)
   }
+})
+
+test("the projection entry renders the bare default with no editor chrome", () => {
+  const source = "# Title\n\n![Alt](/a.png)\n\n$x$"
+  const html = renderProjectionBlock(source)
+
+  assert.equal(html, renderMarkdownBlock(source))
+  assert.doesNotMatch(html, /data-editor-/)
+  assert.doesNotMatch(html, /contenteditable/)
+  assert.doesNotMatch(html, /data-action/)
+  assert.doesNotMatch(html, /visual-editor/)
 })
 
 test("shared Markdown rendering preserves styled transpose and inverse atoms", () => {
