@@ -91,6 +91,12 @@ li.editor-reveal-marker { list-style: none; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller::-webkit-scrollbar { display: none; }
 .visual-editor-form[data-editor-mode="visual"][data-editor-vim-enabled="true"] .source-field .editor-surface { display: block; margin-top: 0.75rem; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-cursorLayer { display: none; }
+/* Vim visual ranges paint on the rendered text via the bridge; the hidden
+   engine surface must not paint a second highlight in the source strip. */
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-selectionLayer { display: none; }
+/* Vim normal-mode block indicator over the passage character under the
+   caret. Out-of-flow and pointer-transparent: never shifts content. */
+.elef-vim-normal-caret { background-color: var(--oradia-vim-normal); border-radius: 2px; display: none; opacity: 0.55; pointer-events: none; position: fixed; z-index: 20; }
 .visual-editor-form[data-editor-mode="source"] .source-field .editor-surface { display: block; }
 .visual-editor-form[data-editor-mode="source"] .source-field.is-source-hidden { display: block; }
 .editor-layout, .source-pane, .preview-pane { min-width: 0; }

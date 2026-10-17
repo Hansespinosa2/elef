@@ -39,6 +39,8 @@ export interface ProjectionKeyHost {
   suppressProjectionInput: boolean
   flushPendingProjectionEdits(): void
   restoreCaret(sourceOffset: number, preferredBlockId: string | null): boolean
+  restoreSelection?(anchorSourceOffset: number, headSourceOffset: number, preferredBlockId: string | null): boolean
+  refreshVimNormalCaret?(): void
 }
 
 function hasModifier(event: ProjectionKeyEventLike): boolean {
@@ -89,6 +91,16 @@ function afterProjectionEngineKey(
   const head = editor.selectionHead
   const blockId = (blockElement as HTMLElement).dataset.editorBlockId ?? null
   host.restoreCaret(head, blockId)
+  // A ranged main selection (Vim visual) paints on the rendered text;
+  // the collapsed head above stays as the fallback when either end
+  // cannot map (concealed syntax) or the host has no range support.
+  if (editor.selectionStart !== editor.selectionEnd) {
+    const anchor = head === editor.selectionEnd ? editor.selectionStart : editor.selectionEnd
+    host.restoreSelection?.(anchor, head, blockId)
+  }
+  // Mode switches (normal/insert/visual) rarely move the selection, so
+  // the normal-mode block cannot rely on selectionchange alone.
+  host.refreshVimNormalCaret?.()
   if (editor.value !== valueBefore) {
     host.pendingCaretRestore = { sourceOffset: head, preferredBlockId: blockId }
     // The engine already holds the new source; the block DOM still shows

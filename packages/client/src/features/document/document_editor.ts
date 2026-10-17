@@ -7,6 +7,7 @@
 import { blockOperationRange, directiveLineSpan, exciseRange, insertAlignDirective } from "@elef/work-model/document-transforms"
 import { alignSourceOffset, alignVisibleOffset, touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
+import { updateVimNormalCaret } from "../../session/vim_caret.js"
 import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
 import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
 import { markStage } from "../../session/stage_marks.js"
@@ -190,6 +191,7 @@ export class DocumentEditor {
   blockKeydownHandler: ((event: any) => void) | undefined
   beforeinputHandler: ((event: any) => void) | undefined
   selectionChangeHandler: (() => void) | undefined
+  vimCaretRefreshHandler: (() => void) | undefined
   hasPresentationProjection: boolean | undefined
   pendingProjectionFrame: number | undefined
   pendingProjectionEdits: Map<string, DocumentProjectionEdit> | undefined
@@ -285,8 +287,16 @@ export class DocumentEditor {
       this.element.addEventListener("keydown", this.blockKeydownHandler, true)
       this.beforeinputHandler = (event) => this.projectionBeforeinput(event)
       this.element.addEventListener("beforeinput", this.beforeinputHandler, true)
-      this.selectionChangeHandler = () => this.rememberProjectionCaret()
+      this.selectionChangeHandler = () => {
+        this.refreshVimNormalCaret()
+        this.rememberProjectionCaret()
+      }
       document.addEventListener("selectionchange", this.selectionChangeHandler)
+      // The normal-mode block tracks viewport geometry: refresh on any
+      // scroll or resize as well as selection changes.
+      this.vimCaretRefreshHandler = () => this.refreshVimNormalCaret()
+      window.addEventListener("scroll", this.vimCaretRefreshHandler, true)
+      window.addEventListener("resize", this.vimCaretRefreshHandler)
     }
     this.applyMode(this.element.getAttribute("data-editor-mode") || "visual")
     this.focusNewDocumentTitle()
@@ -304,6 +314,8 @@ export class DocumentEditor {
     this.element.removeEventListener("keydown", this.blockKeydownHandler as EventListener, true)
     this.element.removeEventListener("beforeinput", this.beforeinputHandler as EventListener, true)
     document.removeEventListener("selectionchange", this.selectionChangeHandler as EventListener)
+    window.removeEventListener("scroll", this.vimCaretRefreshHandler as EventListener, true)
+    window.removeEventListener("resize", this.vimCaretRefreshHandler as EventListener)
     if (this.pendingProjectionFrame) cancelAnimationFrame(this.pendingProjectionFrame)
     this.flushPendingProjectionEdits()
   }
@@ -319,13 +331,21 @@ export class DocumentEditor {
     if (!visual) this.pendingCaretRestore = null
     this.projectionTarget?.setAttribute("aria-label", visual ? "Visual editing surface" : "Rendered preview")
     this.syncProjectionEditability()
+    this.refreshVimNormalCaret()
+  }
+
+  refreshVimNormalCaret(): void {
+    if (!this.element) return
+    updateVimNormalCaret(this.element, this.editorController, this.projectionTarget, this.element.dataset.editorMode !== "source")
   }
 
   blockFocus(): void {
     this.element.dataset.editorProjectionActive = "true"
+    this.refreshVimNormalCaret()
   }
 
   blockBlur(): void {
+    this.refreshVimNormalCaret()
     this.deps.syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
     this.deps.syncActiveInline(this.projectionTarget, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     this.flushPendingProjectionEdits()
@@ -549,8 +569,13 @@ export class DocumentEditor {
     }
   }
 
-  restoreCaret(sourceOffset: number, preferredBlockId: string | null = null): boolean {
-    if (!this.hasProjectionTarget || !this.editorController) return false
+  // Pure source-to-DOM point mapping shared by collapsed and ranged
+  // restores: region resolution, DOM-grounded placement with map
+  // fallback, and the math-END bypass. No focus, selection, or pending
+  // side effects; unmappable offsets (concealed syntax, missing text)
+  // return null so callers degrade to the collapsed head.
+  selectionPointForSourceOffset(sourceOffset: number, preferredBlockId: string | null = null): { element: HTMLElement; node: Node; offset: number; visibleOffset: number; blockId: string } | null {
+    if (!this.hasProjectionTarget || !this.editorController) return null
     const regions = this.allRegions().filter((region) => region.editable)
     const region = regions.find((candidate) => candidate.block_id === preferredBlockId) ||
       regions.find((candidate) => sourceOffset >= candidate.content_range.start && sourceOffset <= candidate.content_range.end) ||
@@ -560,7 +585,7 @@ export class DocumentEditor {
         const closestDistance = Math.min(Math.abs(sourceOffset - closest.content_range.start), Math.abs(sourceOffset - closest.content_range.end))
         return distance < closestDistance ? candidate : closest
       }, null as DocumentEditorRegion | null)
-    if (!region) return false
+    if (!region) return null
 
     const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
     const blocks = this.blockFragments(region.block_id)
@@ -599,7 +624,7 @@ export class DocumentEditor {
         visibleOffset -= length
       }
     }
-    if (!block) return false
+    if (!block) return null
     // Math END boundaries bypass the map: it models math as zero-width,
     // so at block end (or inside an active span, which shows source) the
     // mapped point lands before the atom instead of after it. Verified
@@ -607,29 +632,48 @@ export class DocumentEditor {
     const mathPoint = mathEndPlacement(blocks, source, sourceOffset - region.content_range.start)
     if (mathPoint) {
       const fragment = mathPoint.fragment as HTMLElement
-      if (fragment.contentEditable !== "true") {
-        if (this.element.previewController?.projectionFresh === false) this.pendingCaretRestore = { sourceOffset, preferredBlockId }
-        return false
-      }
-      fragment.focus({ preventScroll: true })
-      window.getSelection()?.setPosition(mathPoint.node, mathPoint.offset)
       let preceding = 0
       for (const candidate of blocks) {
         if (candidate === mathPoint.fragment) break
         preceding += this.visibleTextLength(candidate)
       }
       const local = this.deps.visibleOffsetAtPoint(fragment, mathPoint.node, mathPoint.offset) ?? visibleOffset
-      this.lastProjectionCaret = { blockId: region.block_id ?? "", visibleOffset: preceding + local }
-      return true
+      return { element: fragment, node: mathPoint.node, offset: mathPoint.offset, visibleOffset: preceding + local, blockId: region.block_id ?? "" }
     }
-    if ((block as HTMLElement).contentEditable !== "true") {
+    const point = this.deps.pointAtVisibleOffset(block, visibleOffset)
+    return { element: block as HTMLElement, node: point[0], offset: point[1], visibleOffset, blockId: region.block_id ?? "" }
+  }
+
+  restoreCaret(sourceOffset: number, preferredBlockId: string | null = null): boolean {
+    if (!this.hasProjectionTarget || !this.editorController) return false
+    const point = this.selectionPointForSourceOffset(sourceOffset, preferredBlockId)
+    if (!point) return false
+    if (point.element.contentEditable !== "true") {
       if (this.element.previewController?.projectionFresh === false) this.pendingCaretRestore = { sourceOffset, preferredBlockId }
       return false
     }
-    const point = this.deps.pointAtVisibleOffset(block, visibleOffset)
-    ;(block as HTMLElement).focus({ preventScroll: true })
-    window.getSelection()?.setPosition(point[0], point[1])
-    this.lastProjectionCaret = { blockId: region.block_id ?? "", visibleOffset }
+    point.element.focus({ preventScroll: true })
+    window.getSelection()?.setPosition(point.node, point.offset)
+    this.lastProjectionCaret = { blockId: point.blockId, visibleOffset: point.visibleOffset }
+    return true
+  }
+
+  // Paints a ranged engine selection (Vim visual) on the rendered text:
+  // both ends map through the same point machinery as the caret, so a
+  // range across blocks or pages lands natively and the reveal sync
+  // below exposes the syntax it touches. Either end unmappable or
+  // uneditable aborts (the collapsed head placed first still shows).
+  restoreSelection(anchorSourceOffset: number, headSourceOffset: number, preferredBlockId: string | null = null): boolean {
+    if (!this.hasProjectionTarget || !this.editorController) return false
+    const anchor = this.selectionPointForSourceOffset(anchorSourceOffset, preferredBlockId)
+    const head = this.selectionPointForSourceOffset(headSourceOffset, preferredBlockId)
+    if (!anchor || !head) return false
+    if (anchor.element.contentEditable !== "true" || head.element.contentEditable !== "true") return false
+    head.element.focus({ preventScroll: true })
+    window.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, head.node, head.offset)
+    this.lastProjectionCaret = { blockId: head.blockId, visibleOffset: head.visibleOffset }
+    this.deps.syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.projectionTarget, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     return true
   }
 

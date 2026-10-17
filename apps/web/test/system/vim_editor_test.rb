@@ -194,7 +194,7 @@ class VimEditorTest < ApplicationSystemTestCase
     document = Document.create!(title: "Visual selection", source: "abcdef\nsecond line")
     visit settings_path
     find("#vim-enabled").check
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "source")
 
     editor = find(".cm-content")
     editor.click
@@ -235,6 +235,89 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_operator extended_selection["to"] - extended_selection["from"], :>, selection["to"] - selection["from"]
     assert_operator extended_selection["width"], :>, selection["width"]
     assert_equal "rgba(159, 197, 169, 0.42)", extended_selection["background"]
+  end
+
+  test "Vim visual mode paints the engine range on the rendered text" do
+    document = Document.create!(title: "Visual selection", source: "abcdef\nsecond line")
+    visit settings_path
+    find("#vim-enabled").check
+    visit edit_document_path(document)
+
+    block = find(".document-editor-block", text: "abcdef")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const text = block.querySelector("p").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 3);
+      document.querySelector('.source-field').editorController.setSelectionRange(3, 3);
+    JAVASCRIPT
+    page.driver.browser.action.send_keys("v", "h", "h").perform
+    assert_selector "[data-editor-target='mode'][data-mode='visual']", text: "Visual"
+
+    painted = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selection = window.getSelection();
+        const layer = document.querySelector('.cm-selectionLayer');
+        return {
+          collapsed: selection.isCollapsed,
+          text: selection.toString(),
+          inPassage: Boolean(selection.anchorNode?.parentElement?.closest?.(".document-editor-block")),
+          stripHidden: !layer || getComputedStyle(layer).display === "none"
+        };
+      })()
+    JAVASCRIPT
+    assert_equal false, painted["collapsed"]
+    assert_equal "bcd", painted["text"]
+    assert_equal true, painted["inPassage"]
+    assert_equal true, painted["stripHidden"]
+
+    # Operating on the painted range edits the engine source exactly once.
+    page.driver.browser.action.send_keys("d").perform
+    assert_field "Markdown source", with: "aef\nsecond line", wait: 5
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+  end
+
+  test "Vim normal mode shows an on-character block on the rendered text" do
+    document = Document.create!(title: "Normal caret", source: "abcdef\nsecond line")
+    visit settings_path
+    find("#vim-enabled").check
+    visit edit_document_path(document)
+
+    block = find(".document-editor-block", text: "abcdef")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const text = block.querySelector("p").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 2);
+      document.querySelector('.source-field').editorController.setSelectionRange(2, 2);
+    JAVASCRIPT
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+
+    indicator = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const overlay = document.querySelector('.elef-vim-normal-caret');
+        const rect = overlay?.getBoundingClientRect();
+        const range = document.createRange();
+        const text = document.querySelector('.document-editor-block p').firstChild;
+        range.setStart(text, 2);
+        range.setEnd(text, 3);
+        const char = range.getBoundingClientRect();
+        return {
+          display: overlay ? getComputedStyle(overlay).display : null,
+          matches: rect && Math.abs(rect.x - char.x) < 1 && Math.abs(rect.width - char.width) < 1
+        };
+      })()
+    JAVASCRIPT
+    assert_equal "block", indicator["display"]
+    assert_equal true, indicator["matches"]
+
+    # Insert mode drops the block; Escape restores it.
+    page.driver.browser.action.send_keys("i").perform
+    assert_selector "[data-editor-target='mode'][data-mode='insert']", text: "Insert"
+    assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.elef-vim-normal-caret')).display")
+    page.driver.browser.action.send_keys(:escape).perform
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+    assert_equal "block", page.evaluate_script("getComputedStyle(document.querySelector('.elef-vim-normal-caret')).display")
   end
 
   test "Vim settings persist per browser" do
