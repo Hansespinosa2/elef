@@ -176,7 +176,7 @@ class ArtTest < ApplicationSystemTestCase
     assert_selector ".preview-warnings li", text: /taller than a document page/
   end
 
-  test "rich fixed Sequence stays vertical and eight compact items show no-fit" do
+  test "rich fixed Sequence stays vertical and ten compact items show no-fit" do
     rich = Presentation.create!(
       title: "Art rich Sequence",
       source: "# Implementation roadmap\n\n:::art\n1. Discovery\n   - Interview users\n   - Map the current process\n2. Design\n   - Prioritize constraints\n   - Produce a prototype\n3. Delivery\n   - Build the system\n   - Validate with teams\n4. Adoption\n   - Train users\n   - Measure outcomes"
@@ -192,14 +192,16 @@ class ArtTest < ApplicationSystemTestCase
     assert_in_delta 560, rich_state.fetch("host")[3], 2
     assert rich_state.fetch("containment"), rich_state.inspect
 
-    many = Presentation.create!(title: "Art no-fit", source: "# Hiring pipeline\n\n:::art\n#{(1..8).map { |index| "#{index}. Step #{index}" }.join("\n")}")
+    # Ten items overflow the fixed slide host now that block controls float
+    # outside the content flow (eight fit once the in-flow button bar left).
+    many = Presentation.create!(title: "Art no-fit", source: "# Hiring pipeline\n\n:::art\n#{(1..10).map { |index| "#{index}. Step #{index}" }.join("\n")}")
     visit edit_presentation_path(many)
     wait_for_art_settled
     art = find(".presentation-surface[data-controller~='art-layout'] [data-elef-art-root]")
     many_geometry = page.evaluate_script("(() => { const root = document.querySelector('.presentation-surface[data-controller~=\"art-layout\"] [data-elef-art-root]'); const host = root.closest('[data-art-host=\"fixed\"]'); let top = 0, node = root; while (node && node !== host) { top += node.offsetTop; node = node.offsetParent; } return {status: root.dataset.artStatus, layout: root.dataset.artLayout, root: [root.scrollHeight, root.clientHeight, root.offsetHeight], host: [host.scrollHeight, host.clientHeight], top, children: [...host.children].map(child => [child.offsetTop, child.offsetHeight])} })()")
     assert_equal "fallback-no-fit", art["data-art-status"], many_geometry.inspect
     assert_equal "ART_NO_FIT", art["data-art-diagnostic"]
-    assert_equal 8, art.all(".elef-art-list > li").length
+    assert_equal 10, art.all(".elef-art-list > li", visible: :all).length
     assert_equal "true", art.find(:xpath, "ancestor::*[@data-art-host='fixed']")["data-art-overfull"]
     assert_selector ".preview-warnings li", text: /does not fit the fixed slide/
   end
