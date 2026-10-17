@@ -1109,7 +1109,8 @@ class PresentationsTest < ApplicationSystemTestCase
       selection.addRange(range);
     JAVASCRIPT
     block.send_keys(" $x=3$")
-    assert_selector ".editor-projection .katex", text: "x=3", wait: 5
+    assert_selector ".editor-projection .katex[data-editor-math-source='x=3']", wait: 5
+    assert_selector ".editor-projection .katex[data-editor-math-source='x=3'] annotation", text: "x=3", visible: :all
 
     # Hit left arrow to enter math mode at $x=3|$
     block.send_keys(:left)
@@ -1293,10 +1294,13 @@ class PresentationsTest < ApplicationSystemTestCase
     block.send_keys(" $test$")
 
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$", wait: 5
-    assert_selector ".presentation-editor-projection .katex", text: "test", wait: 5
+    assert_selector ".presentation-editor-projection .katex[data-editor-math-source='test']", wait: 5
+    assert_selector ".presentation-editor-projection .katex[data-editor-math-source='test'] annotation", text: "test", visible: :all
     assert_equal "true", page.evaluate_script("document.activeElement.closest('[contenteditable=true]') !== null").to_s
+    # The second $ promotes the empty pair to a display skeleton, so the
+    # close already exists before the final $ skips over it.
     block.send_keys(" and $$x^2$")
-    assert_field "Markdown source", with: "# Math\n\nAn equation $test$ and $$x^2$", wait: 5
+    assert_field "Markdown source", with: "# Math\n\nAn equation $test$ and $$x^2$$", wait: 5
     block.send_keys("$")
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$ and $$x^2$$", wait: 5
     assert_selector ".presentation-editor-projection .katex-display", wait: 5
@@ -1307,7 +1311,8 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_text "Presentation saved."
     visit edit_presentation_path(presentation)
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$ and $$x^2$$ after"
-    assert_selector ".presentation-editor-projection .katex", text: "test"
+    assert_selector ".presentation-editor-projection .katex[data-editor-math-source='test']"
+    assert_selector ".presentation-editor-projection .katex[data-editor-math-source='test'] annotation", text: "test", visible: :all
   end
 
   test "visual presentation editing keeps tables and media as Markdown structures" do
@@ -2118,20 +2123,23 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-surface .slide", visible: true, wait: 5
     assert_selector ".katex", count: 4, visible: true
     assert_selector ".katex-display", visible: true
-    assert_selector ".katex-html", visible: true
-    assert_selector ".mfrac .frac-line", visible: true
-    assert_selector ".msupsub", visible: true
+    assert_selector ".katex math", visible: true
+    assert_selector ".katex math mfrac", visible: true
+    assert_selector ".katex math munderover", visible: true
     assert_text "$not_math$"
     assert_no_selector ".math-error"
     assert_equal "block",
       page.evaluate_script("getComputedStyle(document.querySelector('.katex-display')).display")
-    assert_equal "absolute",
-      page.evaluate_script("getComputedStyle(document.querySelector('.katex-mathml')).position")
+    # MathML output has no visually-hidden .katex-mathml duplicate (the
+    # <math> itself is the visible content, already pinned visible
+    # above), so the absolute-positioning check has no MathML subject.
     fraction_parts = page.evaluate_script(<<~JAVASCRIPT)
-      [...document.querySelectorAll(".mfrac > .vlist-t > .vlist-r:first-child > .vlist > span > .mord")].map((element) => {
-        const rect = element.getBoundingClientRect();
-        return { top: rect.top, bottom: rect.bottom };
-      })
+      [...document.querySelectorAll("mfrac")].flatMap((frac) =>
+        [...frac.querySelectorAll(":scope > *")].map((element) => {
+          const rect = element.getBoundingClientRect();
+          return { top: rect.top, bottom: rect.bottom };
+        })
+      )
     JAVASCRIPT
     assert_operator fraction_parts.length, :>=, 2
     assert_operator (fraction_parts[1]["top"] - fraction_parts[0]["top"]).abs, :>, 1

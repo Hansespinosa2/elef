@@ -29,7 +29,7 @@ const source = (await readFile(new URL("../../../../packages/editor-runtime/dist
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { syntaxTree } from "@codemirror/language"', "const syntaxTree = (state) => state.tree")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
-  .replace('import { assistsInMode, projectionHostFor } from "../lib/visual_assist.js"', () => visualAssistSource)
+  .replace('import { assistsInMode, placeVisualCaret, projectionHostFor } from "../lib/visual_assist.js"', () => visualAssistSource)
   .replace('import { editorPopupOpen } from "../lib/vim_escape.js"', "const editorPopupOpen = () => false")
 const math = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 globalThis.__mathTestHelpers = math
@@ -640,6 +640,36 @@ test("commits on every decided chain-breaking key, including minus", () => {
   assert.equal(minus.editor.value, "$\\mathbf{x}-c$")
 })
 
+test("visual shorthand commits sync math spans after placing the caret", () => {
+  const previousDocument = globalThis.document
+  globalThis.document = { activeElement: null }
+  try {
+  const visualHost = (calls) => ({
+    restoreCaret(offset) { calls.push(["restore", offset]) },
+    syncActiveMathAfterCaretMove() { calls.push(["sync"]) },
+    applyVisualAssistInsert() { return false }
+  })
+  const skipCalls = []
+  const skipper = createMathEditor("$x$", 2)
+  skipper.editor.editingMode = "visual"
+  skipper.controller.element = { closest: () => ({ visualEditorController: visualHost(skipCalls) }) }
+  pressMathKey(skipper, "$")
+  assert.equal(skipper.editor.value, "$x$")
+  assert.deepEqual(skipCalls, [["restore", 3], ["sync"]])
+
+  const pairCalls = []
+  const pairer = createMathEditor("$x", 2)
+  pairer.editor.editingMode = "visual"
+  pairer.controller.element = { closest: () => ({ visualEditorController: visualHost(pairCalls) }) }
+  pressMathKey(pairer, "$")
+  assert.equal(pairer.editor.value, "$x$$")
+  assert.deepEqual(pairCalls, [["restore", 3], ["sync"]])
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document
+    else globalThis.document = previousDocument
+  }
+})
+
 test("eagerly expands each known atomic @ shortcut when its dot is typed", () => {
   const shortcuts = [
     ["@a", "\\alpha"], ["@b", "\\beta"], ["@g", "\\gamma"], ["@m", "\\mu"],
@@ -790,7 +820,7 @@ test("keeps dollar-pairing behavior independent from shorthand commits", () => {
     ["", 0, "$$", 1],
     ["$$", 1, "$$$$", 2],
     ["$$", 2, "$$$$", 3],
-    ["$$$", 2, "$$$$$", 3],
+    ["$$$", 2, "$$$", 3],
     ["$$$$", 2, "$$$$", 3],
     ["$x$", 2, "$x$", 3]
   ]
@@ -832,6 +862,9 @@ test("pairs, promotes, and skips math delimiters without touching code or escape
   assert.equal(math.mathDollarAction("```\ncode\n```", 6), "literal")
   assert.equal(math.mathDollarAction("\\", 1), "literal")
   assert.equal(math.mathDollarAction("$x$", 2), "skip")
+  assert.equal(math.mathDollarAction("$$a=1$$", 6), "skip")
+  assert.equal(math.mathDollarAction("$$a$$", 3), "skip")
+  assert.equal(math.mathDollarAction("x$$", 2), "promote")
 })
 
 test("Enter in an empty paired display-math delimiter creates a blank body line", () => {

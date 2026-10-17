@@ -151,6 +151,89 @@ test("assist insert prefers the innermost containing region", () => {
   assert.deepEqual(staged, [{ sourceOffset: 6, preferredBlockId: "inner" }]);
 });
 
+test("assist insert centers around-caret replaces on the pre-commit caret", () => {
+  // Promote replaces $$ around the caret while the DOM holds an nbsp the
+  // engine trimmed: the extent is the pair, not the nbsp plus one dollar.
+  const { surface, block } = blockDocument("<p>\u00a0and\u00a0$$</p>");
+  const text = block.querySelector("p")?.firstChild as unknown as Text;
+  const { host, shifts, staged } = testHost(REGIONS, surface);
+  const { selection, positions } = testSelection(text, 6);
+
+  const patched = applyVisualAssistInsert(
+    host,
+    { from: 10, to: 12, insert: "$$$$", caret: 11, selectionBefore: 11, replaced: "$$" },
+    selection
+  );
+
+  assert.equal(patched, true);
+  assert.deepEqual(shifts, [[10, 12, 4, "b1"]]);
+  assert.deepEqual(staged, [{ sourceOffset: 11, preferredBlockId: "b1" }]);
+  assert.equal(text.data, "\u00a0and\u00a0$$$$");
+  assert.equal(positions[0]?.[0], text);
+  assert.equal(positions[0]?.[1], 9);
+});
+
+test("assist insert deletes both dollars of an around-caret backspace", () => {
+  const { surface, block } = blockDocument("<p>a$$b</p>");
+  const text = block.querySelector("p")?.firstChild as unknown as Text;
+  const { host } = testHost(REGIONS, surface);
+  const { selection, positions } = testSelection(text, 2);
+
+  const patched = applyVisualAssistInsert(
+    host,
+    { from: 1, to: 3, insert: "", caret: 1, selectionBefore: 2, replaced: "$$" },
+    selection
+  );
+
+  assert.equal(patched, true);
+  assert.equal(text.data, "ab");
+  assert.equal(positions[0]?.[1], 1);
+});
+
+test("assist insert verifies the replaced source nbsp-tolerantly", () => {
+  const { surface, block } = blockDocument("<p>x\u00a0y</p>");
+  const text = block.querySelector("p")?.firstChild as unknown as Text;
+  const { host } = testHost(REGIONS, surface);
+  const { selection } = testSelection(text, 2);
+
+  const patched = applyVisualAssistInsert(
+    host,
+    { from: 5, to: 6, insert: "AB", caret: 6, selectionBefore: 6, replaced: " " },
+    selection
+  );
+
+  assert.equal(patched, true);
+  assert.equal(text.data, "xABy");
+});
+
+test("assist insert skips the patch when the extent mismatches or drifts", () => {
+  const { surface, block } = blockDocument("<p>\u00a0and\u00a0$$</p>");
+  const text = block.querySelector("p")?.firstChild as unknown as Text;
+  const { host, shifts, staged } = testHost(REGIONS, surface);
+
+  const mismatched = applyVisualAssistInsert(
+    host,
+    { from: 10, to: 12, insert: "$$$$", caret: 11, selectionBefore: 11, replaced: "ab" },
+    testSelection(text, 6).selection
+  );
+  assert.equal(mismatched, false);
+  assert.equal(text.data, "\u00a0and\u00a0$$");
+
+  const drifted = applyVisualAssistInsert(
+    host,
+    { from: 10, to: 12, insert: "x", caret: 11, selectionBefore: 5, replaced: "$$" },
+    testSelection(text, 6).selection
+  );
+  assert.equal(drifted, false);
+  assert.equal(text.data, "\u00a0and\u00a0$$");
+
+  assert.deepEqual(shifts, [[10, 12, 4, "b1"], [10, 12, 1, "b1"]]);
+  assert.deepEqual(staged, [
+    { sourceOffset: 11, preferredBlockId: "b1" },
+    { sourceOffset: 11, preferredBlockId: "b1" },
+  ]);
+});
+
 test("assist insert skips the patch when the caret sits outside the projection", () => {
   const { block } = blockDocument("<p>Body /tab</p>");
   const text = block.querySelector("p")?.firstChild as unknown as Text;

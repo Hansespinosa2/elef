@@ -78,3 +78,22 @@ test("press-and-drag across math does not derender it", () => {
   delete globalThis.document
   delete globalThis.window
 })
+
+test("caretSideOfSpan preserves the caret side across deactivation", () => {
+  const { document } = parseHTML("<html><body><div id=root>before <span id=math>x</span> after</div><div id=far>t</div></body></html>")
+  const root = document.querySelector("#root")
+  const span = document.querySelector("#math")
+  const beforeText = root.childNodes[0]
+  const afterText = root.childNodes[2]
+  const farText = document.querySelector("#far").childNodes[0]
+  const spanText = span.childNodes[0]
+
+  assert.equal(editorMath.caretSideOfSpan(span, root, 2), "after")
+  assert.equal(editorMath.caretSideOfSpan(span, afterText, 0), "after")
+  assert.equal(editorMath.caretSideOfSpan(span, root, 1), "before")
+  assert.equal(editorMath.caretSideOfSpan(span, beforeText, 6), "before")
+  assert.equal(editorMath.caretSideOfSpan(span, span, 0), null)
+  assert.equal(editorMath.caretSideOfSpan(span, spanText, 1), null)
+  assert.equal(editorMath.caretSideOfSpan(span, farText, 0), null)
+  assert.equal(editorMath.caretSideOfSpan(span, null, 0), null)
+})

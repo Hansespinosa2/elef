@@ -29,7 +29,7 @@ export interface EditActionsEditor {
 }
 
 export interface EditActionsHost {
-  applyVisualAssistInsert?: (edit: { from: number; to: number; insert: string; caret: number }) => boolean;
+  applyVisualAssistInsert?: (edit: { from: number; to: number; insert: string; caret: number; selectionBefore?: number; replaced?: string }) => boolean;
 }
 
 export interface EditTriggerAction {

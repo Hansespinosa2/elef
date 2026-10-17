@@ -25,9 +25,10 @@ import {
   parseAlignment,
   removeBlock as removeBlockFromSource
 } from "@elef/work-model/document-transforms"
-import { alignVisibleOffset, touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
+import { alignSourceOffset, alignVisibleOffset, touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
+import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
 
 export interface EditorSourceRange {
   start: number
@@ -408,6 +409,36 @@ export class PresentationEditor {
         transferText = null
       }
     }
+    // Edits fully inside an active display span commit by identity from
+    // the verified match: the span shows literal (possibly multiline)
+    // source, and the newline-blind map cannot express empty-line
+    // carets. Raw in-span offsets count newlines, so the middle body
+    // line maps exactly. Unpaired spans decline to legacy.
+    const activeDisplay = activeDisplayMathForNodes(selection.anchorNode, selection.focusNode)
+    if (activeDisplay) {
+      const displaySlice = editor.value.slice(region.content_range.start, region.content_range.end)
+      const displayMatch = mathMatchForSpan([block], displaySlice, activeDisplay)
+      const anchorRaw = displayMatch ? this.deps.visibleOffsetAtPoint(activeDisplay, selection.anchorNode, selection.anchorOffset) : null
+      const focusRaw = displayMatch ? this.deps.visibleOffsetAtPoint(activeDisplay, selection.focusNode, selection.focusOffset) : null
+      if (!displayMatch || anchorRaw === null || focusRaw === null) return
+      const displayEdit = translateProjectionInput({
+        inputType: event.inputType,
+        data: event.data ?? null,
+        transferText,
+        transferHasHtml: transferTypes.includes("text/html"),
+        anchorVisible: anchorRaw,
+        focusVisible: focusRaw,
+        kind: region.kind ?? "paragraph"
+      }, activeDisplay.textContent ?? "")
+      const spanLength = (activeDisplay.textContent ?? "").length
+      if (!displayEdit || displayEdit.fromVisible < 0 || displayEdit.toVisible > spanLength) return
+      const displayFrom = region.content_range.start + displayMatch.start + displayEdit.fromVisible
+      const displayTo = region.content_range.start + displayMatch.start + displayEdit.toVisible
+      this.shiftMapAfterEdit(displayFrom, displayTo, displayEdit.insert.length, region.block_id)
+      editor.replaceRange(displayEdit.insert, displayFrom, displayTo)
+      this.suppressProjectionInput = true
+      return
+    }
     const visibleText = visibleBlockText(block)
     const edit = translateProjectionInput({
       inputType: event.inputType,
@@ -454,6 +485,15 @@ export class PresentationEditor {
     // never arms the flag for the next real input.
     if (this.suppressProjectionInput) {
       this.suppressProjectionInput = false
+      // The precise commit already landed and the native mutation just
+      // completed: render math this keystroke completed (the beforeinput
+      // render saw pre-mutation text). Render-only, no pending arm:
+      // reconciling the (possibly whitespace-lagging) DOM would write
+      // stale content back over the just-committed source.
+      const blockElement = (event.target as Element).closest?.("[data-editor-block-id]")
+      const block = this.findBlock((blockElement as HTMLElement | null)?.dataset.editorBlockId)
+      const region = this.map?.editable_regions?.find((candidate) => candidate.block_id === block?.id)
+      if (blockElement && region && region.kind !== "code") this.deps.renderInlineMath(blockElement)
       return
     }
     if (!this.editorController || this.updatingSource) return
@@ -495,9 +535,29 @@ export class PresentationEditor {
     const editor = this.editorController
     if (!editor) return null
     const source = editor.value.slice(region.content_range.start, region.content_range.end)
+    // Active math shows literal source, but the map models math as
+    // zero-width: without this branch every in-span caret reads as the
+    // match end, corrupting the engine caret on every selection sync.
+    // Verified pairing refuses stale spans (falls through below).
+    const activeMath = container?.closest?.(".editor-math-active")
+    if (focusNode && activeMath && block) {
+      const match = mathMatchForSpan([block], source, activeMath)
+      if (match) {
+        const offset = this.deps.visibleOffsetAtPoint(activeMath, focusNode, selection?.focusOffset ?? 0)
+        if (offset !== null) {
+          return { blockId: current.blockId ?? "", sourceOffset: region.content_range.start + match.start + offset }
+        }
+      }
+    }
+    // DOM-grounded read first (same rationale as the document editor):
+    // uncommitted whitespace the map cannot see would clamp the engine
+    // caret to the wrong boundary and corrupt the next keystroke.
+    const aligned = block && canvas?.contains(block)
+      ? alignVisibleOffset(source, visibleBlockText(block), current.visibleOffset)
+      : null
     return {
       blockId: current.blockId ?? "",
-      sourceOffset: region.content_range.start + this.deps.sourceOffsetForVisibleOffset(source, current.visibleOffset)
+      sourceOffset: region.content_range.start + (aligned ?? this.deps.sourceOffsetForVisibleOffset(source, current.visibleOffset))
     }
   }
 
@@ -523,7 +583,26 @@ export class PresentationEditor {
       return false
     }
     const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
-    const visibleOffset = this.deps.visibleOffsetForSourceOffset(source, sourceOffset - region.content_range.start)
+    // Math END boundaries bypass the map: it models math as zero-width,
+    // so at block end (or inside an active span, which shows source) the
+    // mapped point lands before the atom instead of after it. Verified
+    // pairing refuses stale spans and falls through to the map below.
+    const mathPoint = mathEndPlacement([block], source, sourceOffset - region.content_range.start)
+    if (mathPoint) {
+      ;(block as HTMLElement).focus({ preventScroll: true })
+      this.getSelection()?.setPosition(mathPoint.node, mathPoint.offset)
+      const visibleOffset = this.deps.visibleOffsetAtPoint(block, mathPoint.node, mathPoint.offset)
+        ?? this.deps.visibleOffsetForSourceOffset(source, sourceOffset - region.content_range.start)
+      this.lastProjectionCaret = { blockId: region.block_id ?? "", visibleOffset }
+      return true
+    }
+    // DOM-grounded placement first: the block DOM can lead the engine by
+    // whitespace the source trimmed (a just-typed edge space), which the
+    // canonical map cannot see. The aligner declines concealed syntax
+    // and missing text, which fall back to the map.
+    const relative = sourceOffset - region.content_range.start
+    const visibleOffset = alignSourceOffset(source, visibleBlockText(block), relative)
+      ?? this.deps.visibleOffsetForSourceOffset(source, relative)
     const point = this.deps.pointAtVisibleOffset(block, visibleOffset)
     ;(block as HTMLElement).focus({ preventScroll: true })
     this.getSelection()?.setPosition(point[0], point[1])
@@ -540,6 +619,10 @@ export class PresentationEditor {
       shiftMapAfterEdit: (from, to, length, blockId) => this.shiftMapAfterEdit(from, to, length, blockId),
       stageCaretRestore: (restore) => { this.pendingCaretRestore = restore }
     }, edit, selection)
+  }
+
+  syncActiveMathAfterCaretMove(): void {
+    this.deps.syncActiveMath(this.canvas(), () => {})
   }
 
   flushPendingProjectionEdits(): void {

@@ -318,12 +318,24 @@ test("concealed-boundary and content-mismatch intents stay on reconstruction", (
 
   assert.deepEqual(mismatched.replaced, [])
 
+  // Mid-content carets inside concealed formatting commit precisely at
+  // the content offset (the concealed openers map to zero width).
   const bounded = stubSelectionBridge(t)
   bounded.engine.value = `${"x".repeat(9)}**Fir**${"x".repeat(4)}`
 
   bounded.editor.projectionBeforeinput({ target: bounded.block, inputType: "insertText", data: "X" })
 
-  assert.deepEqual(bounded.replaced, [])
+  assert.deepEqual(bounded.replaced, [{ text: "X", from: 13, to: 13 }])
+
+  // True boundary carets (touching the concealed markers) still decline.
+  for (const focusOffset of [0, 5]) {
+    const edge = stubSelectionBridge(t, { focusOffset })
+    edge.engine.value = `${"x".repeat(9)}**Fir**${"x".repeat(4)}`
+
+    edge.editor.projectionBeforeinput({ target: edge.block, inputType: "insertText", data: "X" })
+
+    assert.deepEqual(edge.replaced, [], `focusOffset ${focusOffset}`)
+  }
 })
 
 test("backward deletion removes one visible grapheme precisely", (t) => {

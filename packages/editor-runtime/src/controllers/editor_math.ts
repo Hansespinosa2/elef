@@ -99,7 +99,9 @@ export function reRenderMath(activeSpan: Element | null, { caret = null }: { car
         math.dataset.editorMathSource = expression
         math.dataset.editorMathOpen = open
         math.dataset.editorMathClose = close
-        if (isDisplay) math.classList.add("editor-live-math-display")
+        // Same katex-display restoration as the inline renderer: the
+        // class marks display math while editor CSS keeps inline layout.
+        if (isDisplay) math.classList.add("editor-live-math-display", "katex-display")
         math.contentEditable = "false"
         replacement = math
       } catch (_error) {
@@ -276,8 +278,34 @@ export function syncActiveMath(rootElement: Element | null, onFlush: (() => void
         return
       }
     }
-    reRenderMath(span, {}, onFlush)
+    // The swap re-resolves element-offset carets adjacent to the span,
+    // so preserve the side explicitly (a following text caret also keeps
+    // subsequent keystrokes ordinary text). Far carets keep the default:
+    // the swap cannot disturb a position outside its subtree.
+    const side = caretSideOfSpan(span, selection?.focusNode ?? null, selection?.focusOffset ?? 0)
+    reRenderMath(span, side ? { caret: side } : {}, onFlush)
   })
+}
+
+// Which side of the span a caret sits on ("before" | "after"), or null
+// when the caret is inside the span or outside its parent subtree. The
+// caller deactivates only outside carets; inside positions refuse here
+// as a defensive second gate.
+export function caretSideOfSpan(span: Element, node: Node | null, offset: number): "before" | "after" | null {
+  if (!node) return null
+  const parent = span.parentNode
+  if (!parent) return null
+  const spanIndex = Array.prototype.indexOf.call(parent.childNodes, span)
+  if (spanIndex === -1) return null
+  if (node === parent) {
+    return offset > spanIndex ? "after" : "before"
+  }
+  let current: Node | null = node
+  while (current && current.parentNode !== parent) current = current.parentNode
+  if (!current || current === span) return null
+  const childIndex = Array.prototype.indexOf.call(parent.childNodes, current)
+  if (childIndex === -1) return null
+  return childIndex > spanIndex ? "after" : "before"
 }
 
 interface ActiveMathInfo {

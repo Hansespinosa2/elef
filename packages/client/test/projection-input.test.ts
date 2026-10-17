@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
 import {
+  alignSourceOffset,
   alignVisibleOffset,
   touchesConcealedBoundary,
   translateProjectionInput,
@@ -176,14 +177,18 @@ test("edits forming whitespace runs decline to the collapsing legacy path", () =
   );
 });
 
-test("content-edge whitespace declines outside code", () => {
+test("trailing edge inserts stay precise while leading inserts and exposing deletions decline", () => {
+  // Trailing inserts are precise-owned: legacy refuses pure-trailing
+  // diffs as precise-owned, so declining would strand them. Leading
+  // inserts merge with a concealed structural separator (the `# ` of an
+  // empty heading), which only the collapsing legacy path owns.
   assert.equal(
     translateProjectionInput(intent({ data: " ", anchorVisible: 0, focusVisible: 0 }), ""),
     null,
   );
-  assert.equal(
+  assert.deepEqual(
     translateProjectionInput(intent({ data: "x ", anchorVisible: 3, focusVisible: 3 }), "abc"),
-    null,
+    { fromVisible: 3, toVisible: 3, insert: "x " },
   );
   assert.equal(
     translateProjectionInput(intent({ inputType: "deleteContentBackward", anchorVisible: 2, focusVisible: 2 }), " a"),
@@ -283,6 +288,88 @@ test("alignVisibleOffset declines concealed and visible divergences", () => {
   assert.equal(alignVisibleOffset("abc", "Xbc", 1), null);
   assert.equal(alignVisibleOffset("ab", "ab", 3), null);
   assert.equal(alignVisibleOffset("ab", "ab", -1), null);
+});
+
+test("alignSourceOffset bridges DOM leading the engine by uncommitted whitespace", () => {
+  // Pair placement between $$ when the DOM holds a just-typed nbsp the
+  // engine trimmed: DOM-grounded, not map-naive.
+  assert.equal(alignSourceOffset("An equation$$", "An equation $$", 12), 13);
+  assert.equal(alignSourceOffset("An equation$$", "An equation $$", 11), 11);
+  assert.equal(alignSourceOffset("ab", "a b", 1), 1);
+  assert.equal(alignSourceOffset("ab", "a b", 2), 3);
+  assert.equal(alignSourceOffset("abc", "abc", 0), 0);
+  assert.equal(alignSourceOffset("", "", 0), 0);
+});
+
+test("alignSourceOffset skips concealed syntax the DOM folded", () => {
+  // Rendered math is zero-width; offsets past it land after the atom.
+  assert.equal(alignSourceOffset("a $x$ b", "a  b", 5), 2);
+  // Mid-construct offsets land at the atom (same as the map).
+  assert.equal(alignSourceOffset("a $x$ b", "a  b", 4), 2);
+  assert.equal(alignSourceOffset("**x**", "x", 3), 1);
+  assert.equal(alignSourceOffset("[t](u) x", "t x", 7), 2);
+  assert.equal(alignSourceOffset("*x* y", "x y", 4), 2);
+  assert.equal(alignSourceOffset("# T", "T", 3), 1);
+});
+
+test("alignSourceOffset consumes active spans and literals in parallel", () => {
+  assert.equal(alignSourceOffset("$x$", "$x$", 3), 3);
+  assert.equal(alignSourceOffset("a|b", "a|b", 3), 3);
+  assert.equal(alignSourceOffset("a\\*b", "a*b", 3), 2);
+});
+
+test("alignSourceOffset bridges mixed concealed syntax and nbsp lag", () => {
+  // Rendered math plus a just-typed nbsp the engine trimmed: the case
+  // the map (nbsp-blind) and the old aligner (concealed-declining)
+  // both missed.
+  assert.equal(alignSourceOffset("$\\bar{x}$ and$$$$", "$\\bar{x}$ and $$$$", 15), 16);
+  assert.equal(alignSourceOffset("$\\bar{x}$ and$$$$", "$\\bar{x}$ and\u00a0$$$$", 15), 16);
+  assert.equal(alignSourceOffset("$\\bar{x}$ and$$$$", " and$$$$", 15), 6);
+  assert.equal(alignSourceOffset("$\\bar{x}$ and$$$$", " and\u00a0$$$$", 15), 7);
+});
+
+test("alignSourceOffset declines concealed syntax and missing text", () => {
+  assert.equal(alignSourceOffset("[t](u)", "z", 7), null);
+  assert.equal(alignSourceOffset("abX", "ab", 3), null);
+  assert.equal(alignSourceOffset("ab", "ab", 3), null);
+  assert.equal(alignSourceOffset("ab", "ab", -1), null);
+});
+
+test("alignVisibleOffset reads through concealed syntax and nbsp lag", () => {
+  // Caret sync between an auto-paired $$ with rendered math earlier in
+  // the block and nbsp the engine trimmed: the nbsp-blind map clamps
+  // this to the pair end, which turns the next $ into a mis-sided pair
+  // instead of a promote.
+  assert.equal(alignVisibleOffset("$\\bar{x}$ and$$", "\u00a0\u00a0and\u00a0$$", 7), 14);
+  assert.equal(alignVisibleOffset("$\\bar{x}$ and$$", "\u00a0\u00a0and\u00a0$$", 8), 15);
+  // Rendered math is zero-width; offsets past it read after the atom,
+  // offsets beside it read the construct start.
+  assert.equal(alignVisibleOffset("a $x$ b", "a  b", 3), 6);
+  assert.equal(alignVisibleOffset("a $x$ b", "a  b", 2), 2);
+  // Mid-link-text carets map inside the text (no overshoot to the end).
+  assert.equal(alignVisibleOffset("[long](u)", "long", 2), 3);
+  assert.equal(alignVisibleOffset("[[x]] y", "x y", 1), 3);
+  // Trailing concealed closes still decline to the map's end affinity.
+  assert.equal(alignVisibleOffset("[long](u)", "long", 4), null);
+  assert.equal(alignVisibleOffset("![a](u)", "a", 1), null);
+});
+
+test("alignSourceOffset maps mid-link-text carets inside the text", () => {
+  assert.equal(alignSourceOffset("[long](u)", "long", 3), 2);
+  assert.equal(alignSourceOffset("[t](u) x", "t x", 6), 1);
+  assert.equal(alignSourceOffset("[[x]] y", "x y", 5), 1);
+});
+
+test("aligners skip lag before literally shown constructs", () => {
+  // Whitespace lag before an active display span: the lag skips and the
+  // literal span aligns through equality, so closer skips place in-span
+  // instead of collapsing before the span.
+  const displaySlice = "$\\bar{x}$ and$$x^2$$";
+  const displayDom = "\u00a0\u00a0and\u00a0$$x^2$$";
+  assert.equal(alignSourceOffset(displaySlice, displayDom, 19), 12);
+  assert.equal(alignVisibleOffset(displaySlice, displayDom, 11), 18);
+  // Lag before a rendered link's text still reads inside the text.
+  assert.equal(alignVisibleOffset("a [t](u) x", "a  t x", 4), 4);
 });
 
 test("alignVisibleOffset declines offset zero under a hidden prefix", () => {

@@ -159,8 +159,16 @@ function formsCollapsedWhitespaceRun(visibleText: string, edit: TranslatedProjec
   return (isCollapseSpace(left) && isCollapseSpace(first)) || (isCollapseSpace(last) && isCollapseSpace(right))
 }
 
-// True when the edit leaves horizontal whitespace at a content edge:
-// a leading/trailing space in the insert, or a deletion exposing one.
+// True when the edit touches leading edge whitespace (inserts merge with
+// a concealed structural separator there, e.g. the `# ` of an empty
+// heading, which only the collapsing legacy path owns) or when a
+// deletion exposes edge whitespace. Trailing inserts stay precise: the
+// legacy trim hides them from the differ and refuses pure-trailing
+// diffs as precise-owned, so declining strands trailing insertion
+// entirely — while committing can never diverge (trailing spaces are
+// content: hard-break authoring needs them verbatim, and legacy
+// round-trips source edges byte-identical). Run-forming inserts still
+// decline above: collapsing genuinely normalizes those.
 function touchesEdgeWhitespace(visibleText: string, edit: TranslatedProjectionEdit): boolean {
   const { fromVisible, toVisible, insert } = edit
   if (insert === "") {
@@ -169,18 +177,19 @@ function touchesEdgeWhitespace(visibleText: string, edit: TranslatedProjectionEd
     return false
   }
   if (fromVisible === 0 && isCollapseSpace(insert[0])) return true
-  if (toVisible === visibleText.length && isCollapseSpace(insert[insert.length - 1])) return true
   return false
 }
 
-// Maps a DOM-visible offset to a source offset when the block DOM lags the
-// engine by invisible whitespace: the renderer trims trailing spaces the
-// source owns, so until the next reinstall the DOM can miss whitespace
-// the model counts. Walks both texts from the start, skipping source
-// whitespace the DOM lacks; any other divergence (concealed markers,
-// missing visible text) declines so those blocks stay on the legacy
-// path. DOM-end gets end-of-source affinity past an invisible tail;
-// interior carets hug the preceding character.
+// Maps a DOM-visible offset to a source offset: the inverse walk of
+// alignSourceOffset, sharing its concealed-syntax steps. Either side can
+// lead by whitespace the other folded (trimmed trailing spaces the DOM
+// never rendered, just-typed nbsp the engine has not committed, edge
+// spaces the renderer kept): both skip, with syntax winning over DOM
+// whitespace when the source opens a construct. A DOM offset beside a
+// zero-width atom resolves to the construct start (the DOM cannot
+// express which side); anything else unrecognized declines so callers
+// fall back to the position map. DOM-end gets end-of-source affinity
+// past an invisible tail; interior carets hug the preceding character.
 export function alignVisibleOffset(slice: string, blockText: string, domOffset: number): number | null {
   // Contenteditable stores typed edge whitespace as non-breaking spaces
   // while the engine commits regular spaces; normalize both sides before
@@ -194,8 +203,6 @@ export function alignVisibleOffset(slice: string, blockText: string, domOffset: 
   // the edit outside formatting the DOM caret sits inside, so decline to
   // the structure-aware legacy path. Empty blocks map zero to zero.
   if (domOffset === 0 && slice.length > 0 && slice[0] !== blockText[0]) return null
-  const isSkippable = (char: string | undefined): boolean =>
-    char === " " || char === "\t" || char === "\n" || char === "\r"
   let sourceIndex = 0
   let domIndex = 0
   while (domIndex < domOffset) {
@@ -205,14 +212,221 @@ export function alignVisibleOffset(slice: string, blockText: string, domOffset: 
       domIndex += 1
       continue
     }
-    if (!isSkippable(slice[sourceIndex])) return null
-    sourceIndex += 1
+    if (isAlignSkippable(slice[sourceIndex])) {
+      sourceIndex += 1
+      continue
+    }
+    if (isAlignSkippable(blockText[domIndex]) &&
+      (!OPENS_ALIGN_SYNTAX.has(slice[sourceIndex] ?? "") || literalAlignAhead(slice, blockText, sourceIndex, domIndex))) {
+      domIndex += 1
+      continue
+    }
+    const stepped = skipAlignSyntax(slice, blockText, sourceIndex, domIndex)
+    if (stepped) {
+      sourceIndex = stepped.sourceIndex
+      domIndex = stepped.domIndex
+      continue
+    }
+    if (isAlignSkippable(blockText[domIndex])) {
+      domIndex += 1
+      continue
+    }
+    return null
   }
   if (domOffset === blockText.length) {
-    while (sourceIndex < slice.length && isSkippable(slice[sourceIndex])) sourceIndex += 1
+    while (sourceIndex < slice.length && isAlignSkippable(slice[sourceIndex])) sourceIndex += 1
     return sourceIndex === slice.length ? sourceIndex : null
   }
   return sourceIndex
+}
+
+// Inverse of alignVisibleOffset: maps a source offset to a DOM-visible
+// offset for caret placement. The DOM can LEAD the engine by whitespace
+// the source trimmed (a just-typed edge space stored as nbsp): the walk
+// skips whitespace on either side (source-extra is DOM-folded,
+// DOM-extra is uncommitted lag), sharing its concealed-syntax steps with
+// the read direction below.
+
+// Mirror: packages/editor-runtime/src/controllers/editor_caret.ts
+// markdownPositionMap (order, patterns, and visible forms).
+const ALIGN_LINE_PREFIX = /^[ \t]{0,3}(?:#{1,6}[ \t]+|>[ \t]?|(?:[-+*]|\d+[.)])[ \t]+)/
+const ALIGN_IMAGE = /^!\[([^\]]*)\]\((?:\\.|[^)])*\)/
+const ALIGN_LINK = /^\[([^\]]+)\]\((?:\\.|[^)])*\)/
+const ALIGN_DOCUMENT_LINK = /^\[\[([^\]]+)\]\]/
+const ALIGN_LINK_CLOSE = /^\]\((?:\\.|[^)])*\)/
+const ALIGN_DOCUMENT_LINK_CLOSE = /^\]\]/
+const ALIGN_MATH = /^(?:\$\$((?:[^\\]|\\[\s\S])+?)\$\$|\$(?!\$)((?:[^$\\\r\n]|\\[^\r\n])+?)\$(?!\$))/
+const ALIGN_DELIMITER = /^(?:\*\*|__|~~|`+|\*|_)/
+const ALIGN_ESCAPABLE = /[\\`*_{}\[\]()#+.!|>~-]/
+// Characters that can open a concealed construct. When the source holds
+// one of these opposite DOM whitespace, the whitespace either belongs
+// after a folded construct (e.g. the space following rendered math), so
+// syntax wins over the whitespace skip, or is lag before a literally
+// shown construct (e.g. an nbsp before an active display span), so the
+// lag skips and the literal text flows through the equality branch. The
+// literal-ahead lookahead below tells the two apart. A failed construct
+// still falls through to the lag skip: literal dollars can face a
+// just-typed space.
+const OPENS_ALIGN_SYNTAX = new Set([
+  "#", ">", "-", "+", "*", "_", "~", "`", "$", "[", "]", "!", "|", "\\",
+  "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+])
+
+function isAlignSkippable(char: string | undefined): boolean {
+  return char === " " || char === "\t" || char === "\n" || char === "\r"
+}
+
+// True when the DOM shows the source construct at `sourceIndex` literally
+// past a whitespace lag run: the construct's visible form (math source,
+// link text, escaped char, prefix) starts after the run. Callers skip the
+// lag and let the literal text align through equality instead of
+// consuming the construct as folded.
+function literalAlignAhead(slice: string, blockText: string, sourceIndex: number, domIndex: number): boolean {
+  let ahead = domIndex
+  while (isAlignSkippable(blockText[ahead])) ahead += 1
+  const rest = slice.slice(sourceIndex)
+  const math = rest.match(ALIGN_MATH)
+  if (math && blockText.startsWith(math[0] ?? "", ahead)) return true
+  if (rest[0] === "!") {
+    const image = rest.match(ALIGN_IMAGE)
+    if (image && blockText.startsWith(image[1] ?? "", ahead)) return true
+  } else {
+    const link = rest.match(ALIGN_LINK)
+    if (link && blockText.startsWith(link[1] ?? "", ahead)) return true
+    const docLink = rest.match(ALIGN_DOCUMENT_LINK)
+    if (docLink && blockText.startsWith(docLink[1] ?? "", ahead)) return true
+  }
+  if (rest[0] === "\\" && rest.length > 1 && ALIGN_ESCAPABLE.test(rest[1] ?? "") && blockText[ahead] === rest[1]) return true
+  const linePrefix = rest.match(ALIGN_LINE_PREFIX)
+  if (linePrefix && blockText.startsWith(linePrefix[0] ?? "", ahead)) return true
+  return false
+}
+
+interface AlignSyntaxStep {
+  sourceIndex: number
+  domIndex: number
+}
+
+// One concealed-construct step shared by both walk directions. Either the
+// DOM shows the construct literally (active spans, unrendered markers),
+// in which case indices advance together, or the DOM folded it and only
+// the source advances. Links consume in two phases: the opener verifies
+// the text ahead but advances past the bracket alone, so the text flows
+// through the equality branch one character at a time and mid-text carets
+// map inside the text instead of overshooting to the link end; the closer
+// then consumes atomically. Anything unrecognized declines so callers
+// fall back to the position map.
+function skipAlignSyntax(
+  slice: string,
+  blockText: string,
+  sourceIndex: number,
+  domIndex: number
+): AlignSyntaxStep | null {
+  const rest = slice.slice(sourceIndex)
+  // Line prefixes only open at a line start: mid-line `* ` is an
+  // emphasis boundary plus a space, not a bullet.
+  const atLineStart = sourceIndex === 0 || slice[sourceIndex - 1] === "\n"
+  const linePrefix = atLineStart ? rest.match(ALIGN_LINE_PREFIX) : null
+  if (linePrefix) {
+    const length = linePrefix[0]?.length ?? 0
+    return {
+      sourceIndex: sourceIndex + length,
+      domIndex: blockText.startsWith(linePrefix[0] ?? "", domIndex) ? domIndex + length : domIndex
+    }
+  }
+  if (rest[0] === "!") {
+    const image = rest.match(ALIGN_IMAGE)
+    if (image) {
+      const text = image[1] ?? ""
+      if (!blockText.startsWith(text, domIndex)) return null
+      return { sourceIndex: sourceIndex + 2, domIndex }
+    }
+  } else {
+    const link = rest.match(ALIGN_LINK)
+    if (link) {
+      const text = link[1] ?? ""
+      if (!blockText.startsWith(text, domIndex)) return null
+      return { sourceIndex: sourceIndex + 1, domIndex }
+    }
+    const docLink = rest.match(ALIGN_DOCUMENT_LINK)
+    if (docLink) {
+      const text = docLink[1] ?? ""
+      if (!blockText.startsWith(text, domIndex)) return null
+      return { sourceIndex: sourceIndex + 2, domIndex }
+    }
+  }
+  if (rest[0] === "]") {
+    const close = rest.match(ALIGN_LINK_CLOSE) ?? rest.match(ALIGN_DOCUMENT_LINK_CLOSE)
+    if (!close) return null
+    return { sourceIndex: sourceIndex + (close[0]?.length ?? 0), domIndex }
+  }
+  const math = rest.match(ALIGN_MATH)
+  if (math) {
+    const full = math[0] ?? ""
+    return {
+      sourceIndex: sourceIndex + full.length,
+      domIndex: blockText.startsWith(full, domIndex) ? domIndex + full.length : domIndex
+    }
+  }
+  if (rest[0] === "\\" && rest.length > 1 && ALIGN_ESCAPABLE.test(rest[1] ?? "")) {
+    if (blockText[domIndex] !== rest[1]) return null
+    return { sourceIndex: sourceIndex + 2, domIndex: domIndex + 1 }
+  }
+  const char = rest[0]
+  if (char === "\n" || char === "\r") {
+    return { sourceIndex: sourceIndex + 1, domIndex }
+  }
+  if (char === "|") {
+    return {
+      sourceIndex: sourceIndex + 1,
+      domIndex: blockText[domIndex] === "|" ? domIndex + 1 : domIndex
+    }
+  }
+  const delimiter = rest.match(ALIGN_DELIMITER)
+  if (delimiter) {
+    return { sourceIndex: sourceIndex + (delimiter[0]?.length ?? 0), domIndex }
+  }
+  return null
+}
+
+export function alignSourceOffset(slice: string, blockText: string, sourceOffset: number): number | null {
+  slice = slice.replace(/\u00a0/g, " ")
+  blockText = blockText.replace(/\u00a0/g, " ")
+  if (sourceOffset < 0 || sourceOffset > slice.length) return null
+  let sourceIndex = 0
+  let domIndex = 0
+  while (sourceIndex < sourceOffset) {
+    if (domIndex >= blockText.length) {
+      while (sourceIndex < sourceOffset && isAlignSkippable(slice[sourceIndex])) sourceIndex += 1
+      return sourceIndex === sourceOffset ? domIndex : null
+    }
+    if (slice[sourceIndex] === blockText[domIndex]) {
+      sourceIndex += 1
+      domIndex += 1
+      continue
+    }
+    if (isAlignSkippable(slice[sourceIndex])) {
+      sourceIndex += 1
+      continue
+    }
+    if (isAlignSkippable(blockText[domIndex]) &&
+      (!OPENS_ALIGN_SYNTAX.has(slice[sourceIndex] ?? "") || literalAlignAhead(slice, blockText, sourceIndex, domIndex))) {
+      domIndex += 1
+      continue
+    }
+    const stepped = skipAlignSyntax(slice, blockText, sourceIndex, domIndex)
+    if (stepped) {
+      sourceIndex = stepped.sourceIndex
+      domIndex = stepped.domIndex
+      continue
+    }
+    if (isAlignSkippable(blockText[domIndex])) {
+      domIndex += 1
+      continue
+    }
+    return null
+  }
+  return domIndex
 }
 
 // A visible offset touches concealed syntax when the source map jumps

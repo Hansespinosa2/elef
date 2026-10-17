@@ -7,8 +7,13 @@ export function assistsInMode(editor: { editingMode?: string } | null | undefine
 }
 
 export interface VisualAssistHost {
-  applyVisualAssistInsert?: (edit: { from: number; to: number; insert: string; caret: number }) => boolean;
+  applyVisualAssistInsert?: (edit: { from: number; to: number; insert: string; caret: number; selectionBefore?: number; replaced?: string }) => boolean;
   restoreCaret?: (sourceOffset: number, preferredBlockId: string | null) => boolean;
+  // Deactivates math spans the caret just left. Shorthand commits move
+  // the caret programmatically, and selectionchange delivery starves
+  // during fast typing bursts, so the commit path syncs spans itself
+  // instead of waiting for the selection listener.
+  syncActiveMathAfterCaretMove?: () => void;
 }
 
 // The document editor exposes its Stimulus adapter on the form while the

@@ -1291,7 +1291,8 @@ class DocumentsTest < ApplicationSystemTestCase
     block.send_keys(" $test$")
 
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$", wait: 5
-    assert_selector ".document-editor-block .katex", text: "test", wait: 5
+    assert_selector ".document-editor-block .katex[data-editor-math-source='test']", wait: 5
+    assert_selector ".document-editor-block .katex[data-editor-math-source='test'] annotation", text: "test", visible: :all
     block.send_keys(" after")
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$ after", wait: 5
 
@@ -1299,7 +1300,8 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_text "Document saved."
     visit edit_document_path(document)
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$ after"
-    assert_selector ".document-editor-block .katex", text: "test"
+    assert_selector ".document-editor-block .katex[data-editor-math-source='test']"
+    assert_selector ".document-editor-block .katex[data-editor-math-source='test'] annotation", text: "test", visible: :all
   end
 
   test "latex visual mode enter and exit flow allows inline editing" do
@@ -1374,8 +1376,11 @@ class DocumentsTest < ApplicationSystemTestCase
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = active_document_block
-    block.send_keys("$$")
+    # Pair centers the caret inside the empty pair; a second $ would
+    # promote to a display skeleton, so navigate around the pair instead.
+    block.send_keys("$")
     block.send_keys(:left)
+    block.send_keys(:right)
     block.send_keys("x=3")
     assert_selector ".document-editor-block .editor-math-active", text: "$x=3$", wait: 5
     assert_field "Markdown source", with: new_document_prefix + "# Untitled document\n\n$x=3$", wait: 5

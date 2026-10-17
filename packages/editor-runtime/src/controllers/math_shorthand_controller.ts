@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 import { syntaxTree } from "@codemirror/language"
 import { editorFor } from "../lib/editor_controller_lookup.js"
 import { editorPopupOpen } from "../lib/vim_escape.js"
-import { assistsInMode, projectionHostFor } from "../lib/visual_assist.js"
+import { assistsInMode, placeVisualCaret, projectionHostFor } from "../lib/visual_assist.js"
 
 export interface MathShorthandKeyEvent extends KeyboardEvent {
   elefMathShorthandHandled?: boolean;
@@ -829,7 +829,11 @@ function mathDollarActionAtEditor(editor: any, caret: number): MathDollarAction 
 
   const before = state.doc.sliceString(Math.max(0, caret - 2), caret, "\n")
   const after = state.doc.sliceString(caret, Math.min(state.doc.length, caret + 2), "\n")
-  if (before.endsWith("$") && after.startsWith("$") && !(before.endsWith("$$") && after.startsWith("$$"))) return "promote"
+  // Promote upgrades an EMPTY inline pair to display. Between the
+  // closing dollars of complete math (or beside a longer run) the
+  // dollar already exists, so the keystroke skips over it instead.
+  if (before.endsWith("$") && after.startsWith("$") && !before.endsWith("$$") && !after.startsWith("$$")
+    && editorMathContextAt(editor, caret) === "inline_math") return "promote"
   if (state.doc.sliceString(caret, caret + 1) === "$" && editorInsideMath(editor, caret)) return "skip"
   return "pair"
 }
@@ -944,7 +948,10 @@ export default class extends Controller<HTMLElement> {
     }
 
     const plainEnter = event.key === "Enter" && !event.isComposing && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey
-    if (plainEnter && collapsed) {
+    // Source mode only: visual mode defers to the client's fence path,
+    // which builds the multiline active span explicitly (the bridge
+    // cannot express empty-line carets through offset mapping).
+    if (plainEnter && collapsed && editor.editingMode !== "visual") {
       const line = editor.view?.state?.doc.lineAt(caret)
       if (line?.text === "$$$$" && caret - line.from === 2 && editorMathContextAt(editor, caret) === "display_math") {
         event.preventDefault()
@@ -992,6 +999,10 @@ export default class extends Controller<HTMLElement> {
       } else if (action === "skip") {
         event.preventDefault()
         editor.setSelectionRange(dollarCaret + 1, dollarCaret + 1)
+        if (editor.editingMode === "visual") {
+          placeVisualCaret(this.element, dollarCaret + 1)
+          projectionHostFor(this.element)?.syncActiveMathAfterCaretMove?.()
+        }
         return
       } else if (action === "pair") {
         event.preventDefault()
@@ -1056,15 +1067,39 @@ export default class extends Controller<HTMLElement> {
   // unchanged (explicit caret placements kept, natural collapses untouched);
   // in visual mode the same source transaction additionally shifts the
   // projection mapping and patches the native caret's text via the shared
-  // assist pipeline. commitAll deliberately bypasses this: it runs on blur,
-  // where the pending projection install discards the mapping anyway.
+  // assist pipeline. The engine caret aligns in both modes: every later
+  // shorthand decision (skip/promote/delete/chain) reads editor.selection,
+  // so leaving it at replaceRange's natural collapse while the DOM caret
+  // sits at `placed` diverges the two and corrupts the next keystroke.
+  // commitAll deliberately bypasses this: it runs on blur, where the
+  // pending projection install discards the mapping anyway.
   commitVisualEdit(editor: any, from: number, to: number, insert: string, caret?: number): void {
+    // Pre-commit ground truth for the visual DOM patch: the caret the
+    // extent centers on (promote and backspace replace a pair around it,
+    // not text ending at it) and the source being replaced, verified
+    // before anything is deleted.
+    const selectionBefore = editor.selectionStart
+    const replaced = editor.value.slice(from, to)
+    if (editor.editingMode === "visual") {
+      // Arm the flush BEFORE the engine commit: the keystroke was
+      // preventDefaulted, so no native input event follows to render
+      // committed math. Recording pre-commit source lets the flush's
+      // staleness guard discard any reconcile (the commit below is the
+      // newer transaction) while still running render + selection
+      // follow-ups; arming after would reconcile the (possibly stale)
+      // block DOM back over the just-committed source.
+      const block = (document.activeElement as Element | null)?.closest?.("[data-editor-block-id]")
+      block?.dispatchEvent(new Event("input", { bubbles: true }))
+    }
     editor.replaceRange(insert, from, to)
     const placed = caret ?? editor.selectionStart
+    if (caret !== undefined) editor.setSelectionRange(caret)
     if (editor.editingMode === "visual") {
-      projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from, to, insert, caret: placed })
-    } else if (caret !== undefined) {
-      editor.setSelectionRange(caret)
+      projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from, to, insert, caret: placed, selectionBefore, replaced })
+      // The pipeline patches text and shifts the map; the native caret
+      // follows through the bridge like every other palette accept.
+      placeVisualCaret(this.element, placed)
+      projectionHostFor(this.element)?.syncActiveMathAfterCaretMove?.()
     }
   }
 
@@ -1162,7 +1197,11 @@ function escapedAt(text: string, position: number): boolean {
 
 export function mathDollarAction(text: string, caret: number): MathDollarAction {
   if (insideCode(text, caret) || escapedAt(text, caret)) return "literal"
-  if (text[caret - 1] === "$" && text[caret] === "$" && !(text[caret - 2] === "$" && text[caret + 1] === "$")) return "promote"
+  // Promote upgrades an EMPTY inline pair to display. Between the
+  // closing dollars of complete math (or beside a longer run) the
+  // dollar already exists, so the keystroke skips over it instead.
+  if (text[caret - 1] === "$" && text[caret] === "$" && text[caret - 2] !== "$" && text[caret + 1] !== "$"
+    && mathContextAt(text, caret) === "inline_math") return "promote"
   if (text[caret] === "$" && insideMath(text, caret)) return "skip"
   return "pair"
 }

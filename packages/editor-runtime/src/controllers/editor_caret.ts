@@ -1,4 +1,6 @@
-const MARKDOWN_MATH = /^\$\$[\s\S]+?\$\$|^\$(?!\$)[^$\r\n]+?\$(?!\$)/
+// Math content consumes escape pairs atomically (reader parity): an
+// odd-backslash `$` is escaped text, not a boundary.
+const MARKDOWN_MATH = /^\$\$(?:[^\\]|\\[\s\S])+?\$\$|^\$(?!\$)(?:[^$\\\r\n]|\\[^\r\n])+?\$(?!\$)/
 
 export function visibleOffsetAtPoint(root: Node, target: Node, offset: number): number | null {
   let visibleOffset = 0

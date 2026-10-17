@@ -6,13 +6,22 @@
 // immediately: shift the source map over the committed edit, patch the caret
 // text node in place, and place the native caret after the insertion.
 //
-// The patch exploits one exact fact: the accepted query is literal typed text
-// ending at the caret, so its visible length equals its source length and it
-// sits in the focus text node ending at the focus offset. Multiline inserts
+// The patch exploits one exact fact: the replaced query is literal text
+// around the pre-commit caret, so its visible length equals its source
+// length and it sits in the focus text node around the focus offset. The
+// caret can sit inside the replaced range (promote and backspace replace
+// a pair around it), so the DOM extent centers on the pre-commit
+// selection, not the range end. When callers pass the replaced source it
+// is verified (nbsp-tolerant) before anything is deleted: a mismatch
+// means whitespace lag shifted the extent, and skipping the patch is
+// always safer than deleting the wrong characters. Multiline inserts
 // split across <br> elements (raw newlines inside <pre>), matching the
-// newline-invisible DOM/map convention. When the caret is not in a text node
-// the DOM patch is skipped: the map shift and pending caret restore still
-// land, and the blur reinstall heals the display.
+// newline-invisible DOM/map convention. Pure inserts (pairing, fences) also
+// land in empty blocks: with no text node at focus, the text is created at
+// the focus position instead of patched. Skipped patches still shift the
+// map and stage the caret restore, and the reinstall heals the display.
+// Callers place the native caret through the bridge after this returns;
+// the in-patch placement is an after-insert fallback only.
 export interface AssistInsertHost {
   projectionTarget: Element | null | undefined;
   allRegions(): Array<{ content_range: { start: number; end: number }; block_id?: string | null }>;
@@ -25,6 +34,12 @@ export interface AssistInsertEdit {
   to: number;
   insert: string;
   caret: number;
+  // Pre-commit caret centering the DOM extent (defaults to the range end,
+  // the palette-accept shape). Outside [from, to] the patch cannot land.
+  selectionBefore?: number;
+  // Source text the range held before the commit; when present the DOM
+  // extent must match it (nbsp-tolerant) or the patch is skipped.
+  replaced?: string;
 }
 
 export function applyVisualAssistInsert(
@@ -32,7 +47,10 @@ export function applyVisualAssistInsert(
   edit: AssistInsertEdit,
   selection: Selection | null | undefined = globalThis.window?.getSelection?.() ?? null
 ): boolean {
-  const { from, to, insert, caret } = edit
+  const { from, to, insert, caret, selectionBefore, replaced } = edit
+  const anchor = selectionBefore ?? to
+  const beforeLength = anchor - from
+  const afterLength = to - anchor
   const candidates = host.allRegions().filter((region) =>
     from >= region.content_range.start && from <= region.content_range.end)
   // Most specific containing range first (a caret inside nested regions
@@ -48,17 +66,48 @@ export function applyVisualAssistInsert(
   host.shiftMapAfterEdit(from, to, insert.length, blockId)
   host.stageCaretRestore({ sourceOffset: caret, preferredBlockId: blockId })
 
-  const queryLength = to - from
+  if (beforeLength < 0 || afterLength < 0) return false
   const focusNode = selection?.focusNode ?? null
   const focusOffset = selection?.focusOffset ?? 0
-  if (!focusNode || focusNode.nodeType !== Node.TEXT_NODE || focusOffset < queryLength) return false
+  if (!focusNode) return false
+  if (focusNode.nodeType !== Node.TEXT_NODE) {
+    // Element-anchored focus (empty blocks, boundaries): only pure
+    // inserts can land without existing text to replace.
+    if (from !== to || insert.length === 0) return false
+    const container = focusNode as Element
+    const block = container.closest?.("[data-editor-block-id]")
+    if (!block || !host.projectionTarget?.contains(block)) return false
+    try {
+      const owner = container.ownerDocument
+      const textNode = owner.createTextNode("")
+      const before = container.childNodes[Math.min(focusOffset, container.childNodes.length)] ?? null
+      container.insertBefore(textNode, before)
+      if (!insertAssistText(textNode, 0, insert)) {
+        textNode.remove()
+        return false
+      }
+      // No caret placement here: the caller positions through the
+      // bridge once the text exists (middle-of-pair included).
+      return true
+    } catch {
+      return false
+    }
+  }
+  if (focusOffset < beforeLength) return false
   const block = (focusNode.parentElement as Element | null)?.closest?.("[data-editor-block-id]")
   if (!block || !host.projectionTarget?.contains(block)) return false
 
   try {
     const textNode = focusNode as Text
-    textNode.deleteData(focusOffset - queryLength, queryLength)
-    const placed = insertAssistText(textNode, focusOffset - queryLength, insert)
+    const domFrom = focusOffset - beforeLength
+    const domTo = focusOffset + afterLength
+    if (domTo > (textNode.data?.length ?? 0)) return false
+    if (replaced !== undefined) {
+      const actual = (textNode.data ?? "").slice(domFrom, domTo).replace(/\u00a0/g, " ")
+      if (actual !== replaced.replace(/\u00a0/g, " ")) return false
+    }
+    textNode.deleteData(domFrom, beforeLength + afterLength)
+    const placed = insertAssistText(textNode, domFrom, insert)
     if (!placed) return false
     selection?.setPosition?.(placed[0], placed[1])
     return true

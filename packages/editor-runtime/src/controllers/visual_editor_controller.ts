@@ -86,4 +86,8 @@ export default class extends Controller {
   applyVisualAssistInsert(edit: any) {
     return this.editor.applyVisualAssistInsert(edit)
   }
+
+  syncActiveMathAfterCaretMove() {
+    return this.editor.syncActiveMathAfterCaretMove()
+  }
 }

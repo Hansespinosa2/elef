@@ -28,6 +28,60 @@ test("active display math preserves its block delimiters and line breaks", () =>
   }
 })
 
+test("an escaped close is literal text, never an active span", () => {
+  const sourceNode = {
+    textContent: "$\\$",
+    parentElement: null,
+    replaceWith(fragment) { this.replacement = fragment }
+  }
+  let treeWalkerUsed = false
+  globalThis.document = {
+    createTreeWalker() {
+      return {
+        nextNode() {
+          if (treeWalkerUsed) return false
+          treeWalkerUsed = true
+          this.currentNode = sourceNode
+          return true
+        }
+      }
+    },
+    createDocumentFragment() { return { children: [], append(node) { this.children.push(node) } } },
+    createTextNode(textContent) { return { textContent } },
+    createElement() { return {} }
+  }
+  globalThis.NodeFilter = { SHOW_TEXT: 4 }
+  globalThis.window = { getSelection: () => null }
+
+  try {
+    assert.equal(editorMarkdown.renderInlineMath({}), 0)
+    assert.equal(sourceNode.replacement, undefined)
+    const emptyBlock = { querySelectorAll() { return [] } }
+    assert.equal(editorMarkdown.markdownForVisibleText("$\\$", "$\\$", "paragraph", emptyBlock), "$\\$")
+  } finally {
+    delete globalThis.document
+    delete globalThis.NodeFilter
+    delete globalThis.window
+  }
+})
+
+test("insertions on both sides of a protected atom commit without leaking markers", async () => {
+  const { parseHTML } = await import("linkedom")
+  const { document } = parseHTML(
+    `<div data-editor-block-id="b1">Inline math: <span class="katex" data-editor-math-source="E = mc^2" data-editor-math-open="$" data-editor-math-close="$" contenteditable="false">ignore</span>.</div>`
+  )
+  const previousDocument = globalThis.document
+  globalThis.document = document
+  try {
+    const block = document.querySelector("div")
+    const result = editorMarkdown.markdownForVisibleText("Inline math:$E = mc^2$", "", "paragraph", block, { documentMode: true })
+    assert.equal(result, "Inline math: $E = mc^2$.")
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document
+    else globalThis.document = previousDocument
+  }
+})
+
 test("inline math renders through the imported KaTeX module without a global", () => {
   const mathClasses = new Set()
   const mathNode = { dataset: {}, classList: { add: name => mathClasses.add(name) }, contentEditable: null }
