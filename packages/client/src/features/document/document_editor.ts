@@ -389,8 +389,10 @@ export class DocumentEditor {
       return element?.closest?.("[data-editor-block-id]") ?? null
     }
     if (endpointBlock(selection.anchorNode) !== block || endpointBlock(selection.focusNode) !== block) return
+    markStage("key-visibleoffsets-start")
     const anchorVisible = this.visibleOffsetInBlockGroup(block, selection.anchorNode, selection.anchorOffset)
     const focusVisible = this.visibleOffsetInBlockGroup(block, selection.focusNode, selection.focusOffset)
+    markStage("key-visibleoffsets-end")
     if (anchorVisible === null || focusVisible === null) return
     const transferTypes = Array.from(event.dataTransfer?.types ?? [])
     let transferText: string | null = null
@@ -431,7 +433,9 @@ export class DocumentEditor {
       this.suppressProjectionInput = true
       return
     }
+    markStage("key-visibletext-start")
     const visibleText = visibleBlockText(block)
+    markStage("key-visibletext-end")
     const edit = translateProjectionInput({
       inputType: event.inputType,
       data: event.data ?? null,
@@ -453,16 +457,22 @@ export class DocumentEditor {
     // A length gate cannot prove agreement (lag shifts equal-length
     // texts), so the aligner always maps, and the concealed check uses
     // the same mapping (the caret map would jump the lag and decline).
+    markStage("key-align-start")
     const mapOffset = (visible: number): number | null => alignVisibleOffset(slice, visibleText, visible)
     const mappedFrom = mapOffset(edit.fromVisible)
     const mappedTo = mapOffset(edit.toVisible)
-    if (mappedFrom === null || mappedTo === null) return
-    if (touchesConcealedBoundary((_source, visible) => mapOffset(visible), slice, edit.fromVisible, edit.toVisible)) return
+    if (mappedFrom === null || mappedTo === null) { markStage("key-align-end"); return }
+    if (touchesConcealedBoundary((_source, visible) => mapOffset(visible), slice, edit.fromVisible, edit.toVisible)) { markStage("key-align-end"); return }
+    markStage("key-align-end")
     const from = region.content_range.start + mappedFrom
     const to = region.content_range.start + mappedTo
+    markStage("key-renderinline-start")
     if (region.kind !== "code") this.blockFragments(blockId).forEach((fragment) => this.deps.renderInlineMath(fragment))
+    markStage("key-renderinline-end")
+    markStage("key-enginecommit-start")
     this.shiftMapAfterEdit(from, to, edit.insert.length, blockId)
     editor.replaceRange(edit.insert, from, to)
+    markStage("key-enginecommit-end")
     // The commit above is complete and the map already shifted: the input
     // event that follows this beforeinput must not arm a redundant
     // pending entry, which would reconcile the (possibly whitespace-lagging)
@@ -482,11 +492,13 @@ export class DocumentEditor {
       // render saw pre-mutation text). Render-only, no pending arm:
       // reconciling the (possibly whitespace-lagging) DOM would write
       // stale content back over the just-committed source.
+      markStage("key-input-start")
       const blockId = ((event.target as Element).closest?.("[data-editor-block-id]") as HTMLElement | null | undefined)?.dataset.editorBlockId
       const region = this.regionForBlock(blockId)
       if (region && region.kind !== "code") {
         this.blockFragments(blockId).forEach((fragment) => this.deps.renderInlineMath(fragment))
       }
+      markStage("key-input-end")
       return
     }
     if (!this.editorController || this.updatingProjection) return
@@ -682,6 +694,7 @@ export class DocumentEditor {
     this.pendingProjectionFrame = undefined
     if (!this.pendingProjectionEdits?.size || !this.editorController) return
 
+    markStage("key-flush-start")
     const pending = [...this.pendingProjectionEdits.values()]
     const current = this.editorController.value
     const edits = pending.map((edit) => {
@@ -721,6 +734,7 @@ export class DocumentEditor {
         if (blockElement) this.blockFragments(edit.blockId).forEach((fragment) => this.deps.renderInlineMath(fragment))
       })
       this.syncEngineSelectionFromCaret()
+      markStage("key-flush-end")
       return
     }
 
@@ -735,6 +749,7 @@ export class DocumentEditor {
     })
     this.editorController.replaceRanges(changes)
     this.syncEngineSelectionFromCaret()
+    markStage("key-flush-end")
   }
 
   scheduleProjectionFlush(): void {

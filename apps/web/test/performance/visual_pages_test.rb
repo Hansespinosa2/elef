@@ -304,6 +304,29 @@ class VisualPagesTest < ApplicationSystemTestCase
       };
   JAVASCRIPT
 
+  # Keystroke stage split: pair every elef: start/end mark recorded during
+  # the typing loop (key-beforeinput legs, projection install, paginate,
+  # preview handlers). Timestamps correlate with sample windows off-band.
+  KEY_STAGES_SCRIPT = <<~JAVASCRIPT.freeze
+    (() => {
+      const marks = (performance.getEntriesByType("mark") || [])
+        .filter((entry) => entry.name.startsWith("elef:"))
+        .map((entry) => ({ name: entry.name.slice(5), t: Math.round(entry.startTime * 10) / 10 }));
+      const stages = [];
+      const pending = {};
+      marks.forEach((mark) => {
+        if (mark.name.endsWith("-start")) pending[mark.name.slice(0, -6)] = mark.t;
+        else if (mark.name.endsWith("-end")) {
+          const key = mark.name.slice(0, -4);
+          if (pending[key] === undefined) return;
+          stages.push({ stage: key, start: pending[key], ms: Math.round((mark.t - pending[key]) * 10) / 10 });
+          delete pending[key];
+        }
+      });
+      return { stages: stages.slice(-60), orphans: Object.keys(pending) };
+    })()
+  JAVASCRIPT
+
   KEY_PAINT_INSTALL = <<~JAVASCRIPT.freeze
     (() => {
       #{PROBE_SCAFFOLD}
@@ -728,7 +751,9 @@ class VisualPagesTest < ApplicationSystemTestCase
       raise "typed char did not land in source (#{source_before} -> #{source_after}): #{trace}" unless source_after == source_before + 1
       record_input_sample(samples, stalls, overlaps, "typing", name, index, ms, flags, trace)
     end
-    input_stats(samples)
+    stats = input_stats(samples)
+    stats[:key_stages] = page.evaluate_script(KEY_STAGES_SCRIPT)
+    stats
   end
 
   def benchmark_motion(name, source, count, stalls, overlaps)
