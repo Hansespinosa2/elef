@@ -14,9 +14,23 @@ export function mountHostEditActions(
   // Presentation forms run both the document and presentation adapters;
   // either may connect first, so the menu mount is idempotent (the loser
   // returns a no-op mount whose dispose must not remove the shared root).
+  // The one exception is block structure: when the newcomer owns block
+  // actions and the incumbent does not, the incumbent mount is disposed
+  // and the menu remounts, so block rows are always present on
+  // presentation forms regardless of connect order.
+  const owner = field as HTMLElement & { editActionsMount?: EditActionsMount | null }
   const existing = field.querySelector(".edit-actions") as HTMLElement | null
+  const offersBlocks = typeof (host as { applyVisualBlockAction?: unknown })?.applyVisualBlockAction === "function"
   if (existing) {
-    return { root: existing, dispose() {} }
+    if (offersBlocks && existing.dataset.editActionsBlocks !== "true") {
+      if (owner.editActionsMount) owner.editActionsMount.dispose()
+      else existing.remove()
+      owner.editActionsMount = null
+    } else {
+      return { root: existing, dispose() {} }
+    }
   }
-  return mountEditActions({ field, getEditor, host, renderReference: renderKeyboardReference })
+  const mounted = mountEditActions({ field, getEditor, host, renderReference: renderKeyboardReference })
+  if (mounted) owner.editActionsMount = mounted
+  return mounted
 }

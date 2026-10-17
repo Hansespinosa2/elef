@@ -28,8 +28,11 @@ export interface EditActionsEditor {
   focus(): void;
 }
 
+export type EditBlockActionId = "add-block-after" | "delete-block" | "move-block-up" | "move-block-down";
+
 export interface EditActionsHost {
   applyVisualAssistInsert?: (edit: { from: number; to: number; insert: string; caret: number; selectionBefore?: number; replaced?: string }) => boolean;
+  applyVisualBlockAction?: (action: EditBlockActionId) => boolean;
 }
 
 export interface EditTriggerAction {
@@ -70,11 +73,28 @@ export const EDIT_TRIGGER_ACTIONS: readonly EditTriggerAction[] = Object.freeze(
   }),
 ]);
 
+export interface EditBlockAction {
+  readonly id: EditBlockActionId;
+  readonly label: string;
+  readonly keys: string;
+}
+
+export const EDIT_BLOCK_ACTIONS: readonly EditBlockAction[] = Object.freeze([
+  Object.freeze({ id: "add-block-after", label: "Add block below", keys: "Enter" }),
+  Object.freeze({ id: "delete-block", label: "Delete block", keys: "Backspace" }),
+  Object.freeze({ id: "move-block-up", label: "Move block up", keys: "Alt+↑" }),
+  Object.freeze({ id: "move-block-down", label: "Move block down", keys: "Alt+↓" }),
+]);
+
+export interface KeyboardReferenceOptions {
+  readonly blocks?: boolean;
+}
+
 export interface MountEditActionsOptions {
   readonly field: HTMLElement;
   readonly getEditor: () => EditActionsEditor | null;
   readonly host?: EditActionsHost | null;
-  readonly renderReference: (platform: "mac" | "other") => string;
+  readonly renderReference: (platform: "mac" | "other", options?: KeyboardReferenceOptions) => string;
   readonly platform?: "mac" | "other";
 }
 
@@ -110,12 +130,19 @@ export function mountEditActions({ field, getEditor, host = null, renderReferenc
   const rows = available.map((action) =>
     `<button type="button" role="menuitem" data-edit-actions-row="trigger:${action.id}"><span>${action.label}</span><kbd>${action.trigger}</kbd></button>`,
   );
+  // Slide-block rows appear only when the host owns block structure
+  // (presentations); documents edit flowing text and never offer them.
+  const blockActions = typeof host?.applyVisualBlockAction === "function" ? EDIT_BLOCK_ACTIONS : [];
+  for (const action of blockActions) {
+    rows.push(`<button type="button" role="menuitem" data-edit-actions-row="block:${action.id}"><span>${action.label}</span><kbd>${action.keys}</kbd></button>`);
+  }
   if (mediaOffered) rows.push(`<button type="button" role="menuitem" data-edit-actions-row="media"><span>Add image…</span></button>`);
   rows.push(`<button type="button" role="menuitem" data-edit-actions-row="keyboard-shortcuts"><span>Keyboard shortcuts…</span></button>`);
+  if (blockActions.length > 0) root.dataset.editActionsBlocks = "true";
   root.innerHTML =
     `<button type="button" class="edit-actions-button" aria-haspopup="menu" aria-expanded="false">Edit</button>` +
     `<div class="edit-actions-menu" role="menu" aria-label="Edit actions" hidden>${rows.join("")}</div>` +
-    `<dialog class="keyboard-reference" aria-labelledby="keyboard-reference-title">${renderReference(platform)}<form method="dialog"><button type="submit" class="keyboard-reference-close">Close</button></form></dialog>`;
+    `<dialog class="keyboard-reference" aria-labelledby="keyboard-reference-title">${renderReference(platform, { blocks: blockActions.length > 0 })}<form method="dialog"><button type="submit" class="keyboard-reference-close">Close</button></form></dialog>`;
   toolbar.append(root);
 
   const button = root.querySelector<HTMLButtonElement>(".edit-actions-button");
@@ -161,6 +188,12 @@ export function mountEditActions({ field, getEditor, host = null, renderReferenc
     if (row === "media") {
       closeMenu();
       mediaButton?.click();
+      return;
+    }
+    const blockAction = blockActions.find((candidate) => `block:${candidate.id}` === row);
+    if (blockAction) {
+      closeMenu();
+      host?.applyVisualBlockAction?.(blockAction.id);
       return;
     }
     const action = available.find((candidate) => `trigger:${candidate.id}` === row);

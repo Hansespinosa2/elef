@@ -15,6 +15,7 @@
 import {
   addSlide as addSlideToSource,
   blockOperationRange,
+  blockOperationStart,
   deleteSlide as deleteSlideFromSource,
   directiveLineSpan,
   exciseRanges,
@@ -1031,6 +1032,62 @@ export class PresentationEditor {
       default:
         break
     }
+  }
+
+  // Shared Edit-actions menu entry point: runs a block structure action
+  // against the caret's block. Creation and deletion restore the caret to
+  // the action site on the fresh preview; moves keep button parity (the
+  // caret stays where the preview install leaves it).
+  applyVisualBlockAction(action: "add-block-after" | "delete-block" | "move-block-up" | "move-block-down"): boolean {
+    if (this.element.dataset.editorMode === "source" || !this.canOperateOnProjection()) return false
+    const caret = this.captureCaret()
+    const located = caret && this.locateBlock(caret.blockId)
+    const slide = located && this.map?.slides?.[located.slideIndex]
+    const block = located?.block
+    if (!slide || !block) return false
+    const blocks = slide.blocks ?? []
+    const blockIndex = blocks.indexOf(block)
+    if (blockIndex === -1) return false
+    // The menu runs on a prevented mousedown (no blur), so flush
+    // in-flight keystrokes first: replaceSource commits the engine value
+    // and would otherwise drop them.
+    this.flushPendingProjectionEdits()
+    const source = this.sourceValue()
+
+    if (action === "add-block-after") {
+      const target = blocks[blockIndex + 1]
+      // Mirror insertBlock's insertion point so the caret lands at the
+      // start of the inserted "New block" text on the fresh preview.
+      const slideRange = slide.range
+      if (!slideRange) return false
+      const insertion = target ? blockOperationStart(slide, target) : slideRange.end
+      const updated = insertBlockInSource(source, slide, blockIndex + 1)
+      if (updated === null) return false
+      let caretOffset = insertion
+      if (!target) {
+        const before = source.slice(0, insertion)
+        caretOffset = insertion + (before.trim() === "" ? 0 : before.endsWith("\n") ? 1 : 2)
+      }
+      this.pendingCaretRestore = { sourceOffset: caretOffset, preferredBlockId: null }
+      this.replaceSource(updated)
+      return true
+    }
+    if (action === "delete-block") {
+      if (!this.confirm("Delete this block?")) return false
+      const span = blockOperationRange(block, slide)
+      const updated = removeBlockFromSource(source, slide, block)
+      if (updated === null) return false
+      // Post-delete the offset is a gap boundary; nearest-region
+      // resolution lands the caret at the end of the previous block.
+      if (span) this.pendingCaretRestore = { sourceOffset: span.from, preferredBlockId: null }
+      this.replaceSource(updated)
+      return true
+    }
+    const delta = action === "move-block-up" ? -1 : 1
+    const updated = moveBlockInSource(source, slide, blockIndex, blockIndex + delta)
+    if (updated === null) return false
+    this.replaceSource(updated)
+    return true
   }
 
   addSlide(index: number): void {

@@ -1175,6 +1175,43 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Slide\n\nFirst\n\nNew\n\nSecond\n", wait: 5
   end
 
+  test "Edit-actions menu adds a block below the caret block" do
+    presentation = Presentation.create!(
+      title: "Menu blocks",
+      source: "# Slide\n\nFirst\n\nSecond\n"
+    )
+
+    visit edit_presentation_path(presentation)
+    block = find(".editor-projection .slide-block", text: "First")
+    block.click
+    click_on "Edit"
+    click_on "Add block below"
+    wait_for_fresh_projection
+    assert_field "Markdown source", with: "# Slide\n\nFirst\n\nNew block\n\nSecond\n", wait: 5
+
+    # The caret restores into the inserted block; typing extends it.
+    inserted = find(".editor-projection .slide-block", text: "New block")
+    inserted_id = inserted["data-editor-block-id"]
+    Timeout.timeout(Capybara.default_max_wait_time) do
+      loop do
+        caret_inside = page.evaluate_script(<<~JAVASCRIPT)
+          (() => {
+            const target = document.querySelector("[data-editor-block-id='#{inserted_id}']");
+            const anchor = window.getSelection() ? window.getSelection().anchorNode : null;
+            const element = anchor && anchor.nodeType === Node.ELEMENT_NODE ? anchor : (anchor ? anchor.parentElement : null);
+            return Boolean(target && element && target.contains(element));
+          })()
+        JAVASCRIPT
+        break if caret_inside
+
+        sleep 0.05
+      end
+    end
+
+    page.driver.browser.action.send_keys("!").perform
+    assert_field "Markdown source", with: "# Slide\n\nFirst\n\n!New block\n\nSecond\n", wait: 5
+  end
+
   test "real visual keystrokes preserve the exact title source" do
     source = <<~MARKDOWN.chomp
       ---

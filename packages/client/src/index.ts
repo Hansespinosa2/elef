@@ -15,6 +15,7 @@ export {
 } from "./session/source_ops.js";
 export {
   ASSIST_TRIGGER_INSERTED_EVENT,
+  EDIT_BLOCK_ACTIONS,
   EDIT_TRIGGER_ACTIONS,
   clickFollowsPointer,
   mountEditActions,
@@ -23,14 +24,18 @@ export type {
   EditActionsEditor,
   EditActionsHost,
   EditActionsMount,
+  EditBlockAction,
+  EditBlockActionId,
   EditTriggerAction,
+  KeyboardReferenceOptions,
   MountEditActionsOptions,
 } from "./session/edit_actions.js";
 export {
+  KEYBOARD_REFERENCE_BLOCKS,
   KEYBOARD_REFERENCE_TRIGGERS,
   renderKeyboardReference,
 } from "./features/shortcuts/keyboard_reference.js";
-export type { KeyboardReferenceTrigger } from "./features/shortcuts/keyboard_reference.js";
+export type { KeyboardReferenceBlockKeys, KeyboardReferenceTrigger } from "./features/shortcuts/keyboard_reference.js";
 export { mountElef } from "./application/shell.js";
 export { mountNewWorkMenu } from "./application/new_work_menu_mount.js";
 export type { NewWorkMenuHandle } from "./application/new_work_menu_mount.js";

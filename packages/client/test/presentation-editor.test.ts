@@ -735,3 +735,112 @@ test("presentation assist insert shifts the map and patches the canvas block", (
   assert.equal(editor.map?.source_length, 21);
   assert.deepEqual(editor.pendingCaretRestore, { sourceOffset: 15, preferredBlockId: "b2" });
 });
+
+test("menu block actions run against the caret block with caret restore", () => {
+  const regions = () => ([
+    { id: "r1", block_id: "b1", kind: "heading", editable: true, content_range: { start: 0, end: 7 } },
+    { id: "r2", block_id: "b2", kind: "paragraph", editable: true, content_range: { start: 9, end: 14 } },
+  ]);
+
+  // Add below a mid-slide block inserts before the next block's start.
+  {
+    const { form } = mountForm();
+    const editorState = fakeEditor();
+    const map = testMap();
+    map.editable_regions = regions();
+    const mount = mountEditor(form, map, editorState);
+    mount.editor.lastProjectionCaret = { blockId: "b1", visibleOffset: 0 };
+
+    assert.equal(mount.editor.applyVisualBlockAction("add-block-after"), true);
+    assert.equal(editorState.value, `${SOURCE.slice(0, 9)}New block\n\n${SOURCE.slice(9)}`);
+    assert.deepEqual(mount.editor.pendingCaretRestore, { sourceOffset: 9, preferredBlockId: null });
+    mount.destroy();
+  }
+
+  // Add below the last block accounts for the joining newline.
+  {
+    const { form } = mountForm();
+    const editorState = fakeEditor();
+    const map = testMap();
+    map.editable_regions = regions();
+    const mount = mountEditor(form, map, editorState);
+    mount.editor.lastProjectionCaret = { blockId: "b2", visibleOffset: 5 };
+
+    assert.equal(mount.editor.applyVisualBlockAction("add-block-after"), true);
+    assert.ok(editorState.value.includes("First\n\n\nNew block\n---"));
+    assert.deepEqual(mount.editor.pendingCaretRestore, { sourceOffset: 17, preferredBlockId: null });
+    mount.destroy();
+  }
+
+  // Delete confirms, excises the block span, and stages the action site.
+  {
+    const { form } = mountForm();
+    const editorState = fakeEditor();
+    const map = testMap();
+    map.editable_regions = regions();
+    const mount = mountEditor(form, map, editorState, true);
+    mount.editor.lastProjectionCaret = { blockId: "b2", visibleOffset: 5 };
+
+    assert.equal(mount.editor.applyVisualBlockAction("delete-block"), true);
+    assert.ok(!editorState.value.includes("First"));
+    assert.ok(editorState.value.includes("# Alpha"));
+    const restore = mount.editor.pendingCaretRestore as { sourceOffset: number; preferredBlockId: null };
+    assert.ok(restore.sourceOffset >= 0 && restore.sourceOffset <= editorState.value.length);
+    assert.equal(restore.preferredBlockId, null);
+    mount.destroy();
+  }
+
+  // Moves keep button parity: the source rewrites, the caret is untouched.
+  {
+    const { form } = mountForm();
+    const editorState = fakeEditor();
+    const map = testMap();
+    map.editable_regions = regions();
+    const mount = mountEditor(form, map, editorState);
+    mount.editor.lastProjectionCaret = { blockId: "b1", visibleOffset: 0 };
+
+    assert.equal(mount.editor.applyVisualBlockAction("move-block-down"), true);
+    assert.ok(editorState.value.indexOf("First") < editorState.value.indexOf("# Alpha"));
+    assert.equal(mount.editor.pendingCaretRestore ?? null, null);
+    mount.destroy();
+  }
+
+  // Declined confirms, source mode, and an unresolvable caret refuse.
+  {
+    const { form } = mountForm();
+    const editorState = fakeEditor();
+    const map = testMap();
+    map.editable_regions = regions();
+    const mount = mountEditor(form, map, editorState, false);
+    mount.editor.lastProjectionCaret = { blockId: "b2", visibleOffset: 5 };
+
+    assert.equal(mount.editor.applyVisualBlockAction("delete-block"), false);
+    assert.deepEqual(editorState.commits, []);
+    mount.destroy();
+  }
+  {
+    const { form } = mountForm();
+    (form as unknown as HTMLElement).dataset.editorMode = "source";
+    const editorState = fakeEditor();
+    const map = testMap();
+    map.editable_regions = regions();
+    const mount = mountEditor(form, map, editorState);
+    mount.editor.lastProjectionCaret = { blockId: "b2", visibleOffset: 5 };
+
+    assert.equal(mount.editor.applyVisualBlockAction("add-block-after"), false);
+    assert.deepEqual(editorState.commits, []);
+    mount.destroy();
+  }
+  {
+    const { form } = mountForm();
+    const editorState = fakeEditor();
+    const map = testMap();
+    map.editable_regions = regions();
+    const mount = mountEditor(form, map, editorState);
+    mount.editor.lastProjectionCaret = undefined;
+
+    assert.equal(mount.editor.applyVisualBlockAction("add-block-after"), false);
+    assert.deepEqual(editorState.commits, []);
+    mount.destroy();
+  }
+});

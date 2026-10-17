@@ -219,3 +219,37 @@ test("the reference renders every registry action plus the editor triggers", () 
   }
   assert.ok(html.includes("Ctrl+S"));
 });
+
+test("block rows render only when the host owns block structure", () => {
+  const field = shell({ controllers: [], media: false });
+  const { editor } = fakeEditor();
+  const plain = mountEditActions({ field, getEditor: () => editor, renderReference: renderKeyboardReference });
+  assert.ok(plain);
+  assert.deepEqual(
+    [...plain.root.querySelectorAll("[data-edit-actions-row]")].map((row) => row.getAttribute("data-edit-actions-row")),
+    ["keyboard-shortcuts"],
+  );
+  assert.ok(!plain.root.querySelector("dialog.keyboard-reference")?.innerHTML.includes("Slide blocks"));
+  assert.equal(plain.root.dataset.editActionsBlocks, undefined);
+  plain.dispose();
+
+  const actions: string[] = [];
+  const host = { applyVisualBlockAction: (action: string) => { actions.push(action); return true; } };
+  const blocked = mountEditActions({ field, getEditor: () => editor, host, renderReference: renderKeyboardReference });
+  assert.ok(blocked);
+  assert.deepEqual(
+    [...blocked.root.querySelectorAll("[data-edit-actions-row]")].map((row) => row.getAttribute("data-edit-actions-row")),
+    ["block:add-block-after", "block:delete-block", "block:move-block-up", "block:move-block-down", "keyboard-shortcuts"],
+  );
+  assert.equal(blocked.root.dataset.editActionsBlocks, "true");
+  assert.equal(activeRow(blocked, "block:add-block-after").querySelector("kbd")?.textContent, "Enter");
+  assert.equal(activeRow(blocked, "block:move-block-down").querySelector("kbd")?.textContent, "Alt+↓");
+  const dialog = blocked.root.querySelector("dialog.keyboard-reference") as HTMLElement;
+  assert.ok(dialog.innerHTML.includes("Slide blocks"));
+  assert.ok(dialog.innerHTML.includes("Alt+↑ / Alt+↓"));
+
+  activeRow(blocked, "block:move-block-up").dispatchEvent(mouseEvent(field.ownerDocument, "mousedown"));
+  assert.deepEqual(actions, ["move-block-up"]);
+  assert.equal((blocked.root.querySelector(".edit-actions-menu") as HTMLElement).hidden, true);
+  blocked.dispose();
+});
