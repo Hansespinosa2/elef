@@ -12,7 +12,10 @@ const dist = (path) => new URL(`../../../../packages/editor-runtime/dist/${path}
 
 async function loadDist(path, replacements = {}) {
   let source = await readFile(dist(path), "utf8")
-  for (const [from, to] of Object.entries(replacements)) source = source.replace(from, to)
+  for (const [from, to] of Object.entries(replacements)) {
+    assert.ok(source.includes(from), `stub drift: ${path} no longer contains ${from}`)
+    source = source.replace(from, to)
+  }
   return import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 }
 
@@ -26,7 +29,7 @@ const VIM_ESCAPE_IMPORT = 'import { forwardEscapeToVim } from "../lib/vim_escape
 const visualAssistSource = await readFile(dist("lib/visual_assist.js"), "utf8")
 const VISUAL_ASSIST_6 = 'import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";'
 const VISUAL_ASSIST_LINK = 'import { mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";'
-const VISUAL_ASSIST_SHORT = 'import { assistsInMode, projectionHostFor } from "../lib/visual_assist.js";'
+const VISUAL_ASSIST_MATH = 'import { assistsInMode, placeVisualCaret, projectionHostFor } from "../lib/visual_assist.js";'
 
 function escapeEvent(overrides = {}) {
   return {
@@ -318,7 +321,7 @@ const shorthand = await loadDist("controllers/math_shorthand_controller.js", {
   'import { syntaxTree } from "@codemirror/language";': "const syntaxTree = (state) => state.tree\n",
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   'import { editorPopupOpen } from "../lib/vim_escape.js";': "const { editorPopupOpen } = globalThis.__vimEscape\n",
-  [VISUAL_ASSIST_SHORT]: visualAssistSource,
+  [VISUAL_ASSIST_MATH]: visualAssistSource,
 })
 delete globalThis.__vimEscape
 
