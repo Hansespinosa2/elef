@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises"
 import { parseHTML } from "linkedom"
 
 const source = (await readFile(new URL("../../../../../packages/editor-runtime/dist/controllers/editor_math.js", import.meta.url), "utf8"))
-  .replace('import katex from "katex"', "const katex = { renderToString: () => '<span class=katex>x^2</span>' }")
+  .replace('import { cachedKatex, loadKatex } from "../lib/katex_loader.js"', "const cachedKatex = () => ({ renderToString: () => '<span class=katex>x^2</span>' }); const loadKatex = () => Promise.resolve(cachedKatex())")
 const editorMath = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 test("active display math keeps its source delimiters and is editable immediately", () => {

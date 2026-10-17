@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 from collections import Counter
 from pathlib import Path
 
@@ -224,12 +225,25 @@ assert not missing_package_pins, (
 
 for module in math_modules:
     source = module.read_text()
-    assert re.search(r'^import katex from "katex"$', source, re.MULTILINE), (
+    # Static import, same-module dynamic import, or the shared lazy loader:
+    # all three spellings resolve the one pinned "katex" specifier.
+    assert (
+        re.search(r'^import katex from "katex"$', source, re.MULTILINE)
+        or re.search(r'import\("katex"\)', source)
+        or re.search(r'from "\.\./lib/katex_loader\.js"', source)
+    ), (
         f"{module.relative_to(ROOT)} must import the shared KaTeX module directly"
     )
     assert "globalThis.katex" not in source, (
         f"{module.relative_to(ROOT)} must not rely on a KaTeX global initialized by one runtime"
     )
+katex_loader = (ROOT / "packages/editor-runtime/src/lib/katex_loader.ts").read_text()
+assert re.search(r'import\("katex"\)', katex_loader), (
+    "packages/editor-runtime/src/lib/katex_loader.ts must lazily import the shared KaTeX module"
+)
+assert "globalThis.katex" not in katex_loader, (
+    "packages/editor-runtime/src/lib/katex_loader.ts must not rely on a KaTeX global initialized by one runtime"
+)
 assert "loadKatex" not in editor_runtime and "globalThis.katex" not in editor_runtime, (
     "Desktop bootstrap must not initialize a KaTeX global that Rails does not provide"
 )
@@ -256,7 +270,7 @@ desktop_shared_versions = {
 rails_pins = {
     name: version
     for name, version in re.findall(
-        r'^pin "([^"]+)"(?:,\s*to:\s*"[^"]+")?\s+#\s*@([0-9][^\s]*)',
+        r'^pin "([^"]+)"(?:,\s*to:\s*"[^"]+")?(?:,\s*preload:\s*false)?\s+#\s*@([0-9][^\s]*)',
         importmap,
         re.MULTILINE,
     )
@@ -287,10 +301,30 @@ def assert_same_file(left, right, description):
 
 
 katex_dist = ROOT / "node_modules/katex/dist"
-assert_same_file(
-    ROOT / "apps/web/vendor/javascript/katex.js",
-    katex_dist / "katex.mjs",
-    "Rails' browser KaTeX module must match the pinned npm package",
+# Propshaft never minifies, so the vendored browser module is the pinned
+# npm ESM build minified in place (262K vs 589K). Provenance stays
+# mechanical: exact header plus a body byte-identical to the pinned
+# esbuild's minification of the pinned npm file.
+katex_version = rails_pins.get("katex")
+katex_vendor = ROOT / "apps/web/vendor/javascript/katex.js"
+expected_katex_header = (
+    f"/* KaTeX {katex_version} ESM build (katex.mjs), minified with esbuild "
+    "--format=esm --minify. Regenerate: esbuild node_modules/katex/dist/katex.mjs "
+    "--format=esm --minify --outfile=apps/web/vendor/javascript/katex.js */\n"
+)
+katex_vendor_text = katex_vendor.read_text()
+assert katex_vendor_text.startswith(expected_katex_header), (
+    "Rails' browser KaTeX module must carry the exact pinned-version provenance header"
+)
+esbuild_bin = ROOT / "node_modules/.bin/esbuild"
+assert esbuild_bin.is_file(), "esbuild must be installed to verify the vendored KaTeX module"
+fresh_katex = subprocess.run(
+    [str(esbuild_bin), str(katex_dist / "katex.mjs"), "--format=esm", "--minify"],
+    capture_output=True, text=True, check=True, timeout=120,
+).stdout
+assert katex_vendor_text[len(expected_katex_header):] == fresh_katex, (
+    "Rails' browser KaTeX module body must be byte-identical to the pinned "
+    "esbuild's minification of the pinned npm package"
 )
 assert_same_file(
     ROOT / "apps/web/app/assets/stylesheets/katex/katex.min.css",

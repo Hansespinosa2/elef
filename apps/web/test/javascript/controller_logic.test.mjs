@@ -788,6 +788,7 @@ test("visual link routing binds on document capture and ignores idle keys", (t) 
 const metadataAssistSource = (await readFile(new URL("../../../../packages/editor-runtime/dist/lib/metadata_assist.js", import.meta.url), "utf8"))
   .replace('from "@elef/client"', `from "${import.meta.resolve("@elef/client")}"`)
   .replace('from "@elef/work-model"', `from "${import.meta.resolve("@elef/work-model")}"`)
+  .replace('from "@elef/work-model/style-vocab"', `from "${import.meta.resolve("@elef/work-model/style-vocab")}"`)
   .replace(/^export\s*\{[^}]*\}\s*;?/m, "")
 const MetadataAssistController = await loadController("metadata_assist", {
   base: sharedControllerPath,

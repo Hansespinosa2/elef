@@ -14,7 +14,7 @@ const dist = (path) =>
 const reveal = await import(dist("controllers/editor_reveal.js"))
 const moduleSource = await readFile(dist("controllers/editor_markdown.js"), "utf8")
 const source = moduleSource
-  .replace('import katex from "katex"', "const katex = { renderToString: () => '' }")
+  .replace('import { cachedKatex, loadKatex } from "../lib/katex_loader.js"', "const cachedKatex = () => ({ renderToString: () => '' }); const loadKatex = () => Promise.resolve(cachedKatex())")
 const editorMarkdown = await import(
   `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`
 )
