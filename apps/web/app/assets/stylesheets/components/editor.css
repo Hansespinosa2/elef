@@ -215,7 +215,14 @@ li.editor-reveal-marker { list-style: none; }
 .cm-live-syntax-marker { color: #404740 !important; font-style: normal !important; opacity: 1 !important; }
 .visual-editor-form[data-editor-mode="visual"] .cm-live-syntax-marker { font-size: 0; }
 .visual-editor-form[data-editor-mode="visual"] .cm-live-widget-quote-marker::after { content: "❯"; font-size: 0.9rem; }
-.editor-input-proxy { background: transparent; border: 0; color: transparent; font-size: 1px; height: 1px; left: 0; line-height: 1px; overflow: hidden; padding: 0; pointer-events: auto; position: absolute; resize: none; top: 2.4rem; width: 1px; z-index: 7; }
+/* The proxy carries the full source for form/autosave/preview reads but is
+   never an input surface. Skip rendering its contents: without this, every
+   keystroke's full-source sync re-lays-out ~2000 internal text lines inside
+   this 1px box (~50ms forced layout per key on large Works). Hidden (not
+   display:none) preserves focusability, events, and test visibility; the
+   focus override renders it while focused so direct typing still commits. */
+.editor-input-proxy { background: transparent; border: 0; color: transparent; content-visibility: hidden; contain-intrinsic-size: 1px 1px; font-size: 1px; height: 1px; left: 0; line-height: 1px; overflow: hidden; padding: 0; pointer-events: auto; position: absolute; resize: none; top: 2.4rem; width: 1px; z-index: 7; }
+.editor-input-proxy:focus { content-visibility: visible; }
 .snippet-palette {
   position: fixed;
   z-index: 20;
