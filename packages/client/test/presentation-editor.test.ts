@@ -5,6 +5,7 @@ import { parseHTML } from "linkedom";
 import {
   mountPresentationEditor,
   PresentationEditor,
+  type PresentationEditorHost,
 } from "../src/features/presentation/editor.js";
 
 // The assist-insert patch reads Node.TEXT_NODE (linkedom provides nodeType
@@ -994,14 +995,15 @@ test("client presentation editor stale sync touches only the focused block", () 
   canvas.append(second);
   form.append(canvas);
   const calls: Array<{ block: unknown; editable: boolean }> = [];
-  const deps = stubDeps();
-  deps.setProjectionBlockEditable = (block: unknown, editable: boolean) => {
-    calls.push({ block, editable });
-  };
-  const mount = mountPresentationEditor(form as unknown as Parameters<typeof mountPresentationEditor>[0], {
+  const mount = mountPresentationEditor(form as unknown as PresentationEditorHost, {
     editorMap: testMap(),
-    getEditor: () => fakeEditor() as unknown as ReturnType<Parameters<typeof mountPresentationEditor>[1]["getEditor"]>,
-    deps: deps as unknown as Parameters<typeof mountPresentationEditor>[1]["deps"],
+    getEditor: () => fakeEditor(),
+    deps: {
+      ...stubDeps(),
+      setProjectionBlockEditable: (block: unknown, editable: boolean) => {
+        calls.push({ block, editable });
+      },
+    },
     env: { ...stubEnv(), activeElement: () => second as unknown as Element },
   });
   (form as unknown as { previewController?: unknown }).previewController = { projectionFresh: false };
@@ -1025,14 +1027,15 @@ test("client presentation editor stale sync still sweeps without a focused block
   canvas.append(first);
   form.append(canvas);
   const calls: Array<{ block: unknown; editable: boolean }> = [];
-  const deps = stubDeps();
-  deps.setProjectionBlockEditable = (block: unknown, editable: boolean) => {
-    calls.push({ block, editable });
-  };
-  const mount = mountPresentationEditor(form as unknown as Parameters<typeof mountPresentationEditor>[0], {
+  const mount = mountPresentationEditor(form as unknown as PresentationEditorHost, {
     editorMap: testMap(),
-    getEditor: () => fakeEditor() as unknown as ReturnType<Parameters<typeof mountPresentationEditor>[1]["getEditor"]>,
-    deps: deps as unknown as Parameters<typeof mountPresentationEditor>[1]["deps"],
+    getEditor: () => fakeEditor(),
+    deps: {
+      ...stubDeps(),
+      setProjectionBlockEditable: (block: unknown, editable: boolean) => {
+        calls.push({ block, editable });
+      },
+    },
     env: { ...stubEnv(), activeElement: () => null },
   });
   (form as unknown as { previewController?: unknown }).previewController = { projectionFresh: false };
