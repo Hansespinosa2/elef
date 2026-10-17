@@ -28,7 +28,7 @@ class VisualPagesTest < ApplicationSystemTestCase
   SETTLE_TIMEOUT = 180
 
   PROBE_SCRIPT = <<~JAVASCRIPT.freeze
-    window.__elefPerf = { t0: performance.now(), paginatedAt: [], previewTrace: [], lastLongtaskEnd: 0, longtaskCount: 0 };
+    window.__elefPerf = { t0: performance.now(), paginatedAt: [], previewTrace: [], lastLongtaskEnd: 0, longtaskCount: 0, longtaskScripts: [] };
     window.__elefPreviewTrace = window.__elefPerf.previewTrace;
     document.addEventListener("elef:document-paginated", () => {
       window.__elefPerf.paginatedAt.push(performance.now());
@@ -38,6 +38,10 @@ class VisualPagesTest < ApplicationSystemTestCase
         for (const entry of list.getEntries()) {
           window.__elefPerf.lastLongtaskEnd = entry.startTime + entry.duration;
           window.__elefPerf.longtaskCount += 1;
+          if (window.__elefPerf.longtaskScripts.length < 60) {
+            const scripts = (entry.attribution || []).map((attr) => (attr.name || "").split("/").slice(-1)[0].slice(0, 60));
+            window.__elefPerf.longtaskScripts.push({ t: Math.round(entry.startTime), dur: Math.round(entry.duration), scripts: scripts.slice(0, 3) });
+          }
         }
       }).observe({ entryTypes: ["longtask"] });
     } catch (_error) { /* longtask unsupported; quiet gates stay permissive */ }
@@ -109,10 +113,12 @@ class VisualPagesTest < ApplicationSystemTestCase
         loadEvent: nav.loadEventEnd ?? null,
         stages,
         orphanStageStarts: Object.keys(pending),
+        paginateStats: window.__paginateStats ?? null,
         firstPaint: paint("first-paint"),
         firstContentfulPaint: paint("first-contentful-paint"),
         paginatedAt: window.__elefPerf?.paginatedAt ?? [],
         previewTrace: (window.__elefPerf?.previewTrace || []).slice(-14),
+        longtaskScripts: window.__elefPerf?.longtaskScripts ?? [],
         resourceTypes: byType,
         slowestResources: slowest,
         pages: document.querySelectorAll(".document-page").length,

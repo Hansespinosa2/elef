@@ -59,8 +59,17 @@
   content-visibility: auto;
   contain-intrinsic-size: 794px 1123px;
 }
+/* Mid-pagination seal: settled pages skip rendering unconditionally while
+   the pass continues, so overflows() costs O(one page). Unlike is-quiet
+   (auto), this also skips near-viewport pages, which auto would render.
+   Replaced by is-quiet at pass end; never present in steady state. */
+.document-page-frame.is-sealed {
+  content-visibility: hidden;
+  contain-intrinsic-size: 794px 1123px;
+}
 @media print {
   .document-page-frame.is-quiet { content-visibility: visible; }
+  .document-page-frame.is-sealed { content-visibility: visible; }
 }
 .document-page-frame > .document-page {
   bottom: auto;

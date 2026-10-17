@@ -35,14 +35,54 @@ const FLOW_TEXT_SELECTOR = "p, h1, h2, h3, h4, h5, h6, pre, li, td, th"
 const HIDDEN_TEXT_SELECTOR = ".katex, .katex-mathml, [aria-hidden='true'], [contenteditable='false']"
 const ART_ITEM_TOO_TALL = "ART_ITEM_TOO_TALL"
 
+// S4 paginate counters: overflows() is the forced-layout hot spot, so the
+// benchmark reads counts + accumulated ms from here (reset per pass).
+type PaginateStats = {
+  overflows: number
+  overflowsMs: number
+  overflowsMax: number
+  probeOverflows: number
+  probeOverflowsMs: number
+  flows: number
+  units: number
+  batches: number
+  replays: number
+}
+
+function paginateStats(): PaginateStats {
+  const host = globalThis as { __paginateStats?: PaginateStats }
+  host.__paginateStats ??= { overflows: 0, overflowsMs: 0, overflowsMax: 0, probeOverflows: 0, probeOverflowsMs: 0, flows: 0, units: 0, batches: 0, replays: 0 }
+  return host.__paginateStats
+}
+
+function resetPaginateStats(): void {
+  const stats = paginateStats()
+  stats.overflows = 0
+  stats.overflowsMs = 0
+  stats.overflowsMax = 0
+  stats.probeOverflows = 0
+  stats.probeOverflowsMs = 0
+  stats.flows = 0
+  stats.units = 0
+  stats.batches = 0
+  stats.replays = 0
+}
+
+function now(): number {
+  return typeof performance === "undefined" ? 0 : performance.now()
+}
+
 export default class extends Controller<HTMLElement> {
   static targets = ["surface"]
 
   connect() {
+    markStage("pages-connect")
     this.active = true
     this.nextFlowId = 0
     this.nextCaretTargetId = 0
     this.paginationGeneration = 0
+    this.probingDepth = 0
+    this.openPage = null
     this.resizeFrame = null
     this.reflowFrame = null
     this.reflowTimer = null
@@ -121,10 +161,13 @@ export default class extends Controller<HTMLElement> {
       else frame.style.width = `${fittedWidth}px`
     })
     // Every frame shares the same CSS width, so one layout read serves
-    // all of them: reading clientWidth per frame costs a full-document
-    // layout each (frames are bare mid-pagination, before content-visibility
-    // skipping applies). The scale feeds a transform (compositor only).
-    const firstWidth = frames[0]?.clientWidth
+    // all of them. Prefer a rendered frame: settled pages are sealed or
+    // quieted (content-visibility) and report intrinsic size rather than
+    // measured width. Falls back to the first frame once all are quiet
+    // (post-pass calls), preserving today's behavior there. The scale
+    // feeds a transform (compositor only).
+    const measured = frames.find((frame) => !frame.classList.contains("is-quiet") && !frame.classList.contains("is-sealed")) ?? frames[0]
+    const firstWidth = measured?.clientWidth
     const scale = firstWidth === undefined ? "1" : String(firstWidth / DESIGN_WIDTH)
     frames.forEach((frame: HTMLElement) => {
       frame.style.setProperty("--document-page-scale", scale)
@@ -165,6 +208,8 @@ export default class extends Controller<HTMLElement> {
     if (!this.surfaceTarget || !this.active) return
 
     markStage("paginate-start")
+    resetPaginateStats()
+    this.openPage = null
     const generation = ++this.paginationGeneration
     const caret = this.captureCaret() || this.pendingCaretRestore
     this.pendingCaretRestore = caret
@@ -179,7 +224,13 @@ export default class extends Controller<HTMLElement> {
     let currentPage = this.createPage(pages.length + 1)
     pages.push(currentPage)
 
-    this.pageUnits(blocks).forEach((unit) => {
+    // NOTE: batched appends (append N units, measure once, replay on
+    // overflow) were tried and reverted: breaks are too dense (a break
+    // every ~13 units), so 38-69% of batches replayed and the wasted
+    // full-state measures plus double DOM churn beat the savings.
+    const units = this.pageUnits(blocks)
+    paginateStats().units = units.length
+    units.forEach((unit) => {
       const hadContent = currentPage.content.childElementCount > 0
       unit.forEach((block) => currentPage.content.append(block))
       if (!this.overflows(currentPage)) return
@@ -202,6 +253,7 @@ export default class extends Controller<HTMLElement> {
       currentPage = pages.at(-1) ?? currentPage
     })
 
+    markStage("paginate-finalize-start")
     pages.forEach(({ page, number, frame }) => {
       page.setAttribute("aria-label", `Document page ${number} of ${pages.length}`)
       const pageNumber = page.querySelector(".document-page-number")
@@ -215,10 +267,15 @@ export default class extends Controller<HTMLElement> {
     this.mutationObserver?.takeRecords()
     this.paginatedOnce = true
     // Perf Q2: quiet settled frames so off-screen pages skip rendering
-    // (style, layout, paint) until near the viewport. Measuring is done
-    // by now (resizeFrames ran unquiet); the next pass rebuilds bare
-    // frames, so its measurements stay exact.
-    pages.forEach(({ frame }) => frame.classList.add("is-quiet"))
+    // (style, layout, paint) until near the viewport. Earlier pages were
+    // sealed progressively as the pass advanced (see createPage); swap
+    // seal for quiet and quiet the final open page. The next pass
+    // rebuilds bare frames, so its measurements stay exact.
+    pages.forEach(({ frame }) => {
+      frame.classList.remove("is-sealed")
+      frame.classList.add("is-quiet")
+    })
+    markStage("paginate-finalize-end")
     requestAnimationFrame(() => {
       if (!this.active || generation !== this.paginationGeneration) return
       markStage("paginate-end")
@@ -331,6 +388,16 @@ export default class extends Controller<HTMLElement> {
   }
 
   flowBlock(block: HTMLElement | undefined, pages: DocumentPage[], page: DocumentPage, keepWith: HTMLElement[] = []): void {
+    markStage("paginate-flow-start")
+    paginateStats().flows += 1
+    try {
+      this.flowBlockInner(block, pages, page, keepWith)
+    } finally {
+      markStage("paginate-flow-end")
+    }
+  }
+
+  flowBlockInner(block: HTMLElement | undefined, pages: DocumentPage[], page: DocumentPage, keepWith: HTMLElement[] = []): void {
     let remainder = block
     let currentPage = page
 
@@ -449,9 +516,13 @@ export default class extends Controller<HTMLElement> {
   artItemOverflows(block: HTMLElement, list: Element, item: Element, page: DocumentPage): boolean {
     const candidate = this.childFragment(block, list, [item])
     page.content.append(candidate)
-    const overflows = this.overflows(page)
-    page.content.removeChild(candidate)
-    return overflows
+    this.probingDepth += 1
+    try {
+      return this.overflows(page)
+    } finally {
+      this.probingDepth -= 1
+      page.content.removeChild(candidate)
+    }
   }
 
   artRoot(block: HTMLElement): HTMLElement | null {
@@ -558,6 +629,7 @@ export default class extends Controller<HTMLElement> {
     let best = 0
 
     try {
+      this.probingDepth += 1
       while (low <= high) {
         const count = Math.floor((low + high) / 2)
         cloneTarget.replaceChildren(...childClones.slice(0, count))
@@ -570,6 +642,7 @@ export default class extends Controller<HTMLElement> {
         }
       }
     } finally {
+      this.probingDepth -= 1
       page.content.removeChild(clone)
     }
 
@@ -668,6 +741,7 @@ export default class extends Controller<HTMLElement> {
     let lastLength = 0
 
     try {
+      this.probingDepth += 1
       while (low <= high) {
         const span = high - low + 1
         let index = Math.floor((low + high) / 2)
@@ -695,6 +769,7 @@ export default class extends Controller<HTMLElement> {
         if (estimated && high - low + 1 > span * 0.875) interpolate = false
       }
     } finally {
+      this.probingDepth -= 1
       page.content.removeChild(clone)
     }
 
@@ -876,6 +951,14 @@ export default class extends Controller<HTMLElement> {
   }
 
   createPage(number: number): DocumentPage {
+    // Progressive sealing: the previous page is settled (no more appends
+    // or probes will touch it), so skip its rendering unconditionally
+    // while the pass continues. overflows() then costs O(one page)
+    // instead of O(all pages so far). Measurements stay exact: page
+    // boxes are fixed-size and only the open page is ever measured.
+    // Sealed (hidden) rather than quiet (auto): auto would still render
+    // near-viewport pages. The end-of-pass loop swaps seal for quiet.
+    this.openPage?.frame.classList.add("is-sealed")
     const frame = document.createElement("div")
     frame.className = "document-page-frame"
 
@@ -897,11 +980,24 @@ export default class extends Controller<HTMLElement> {
     page.append(content, footer)
     frame.append(page)
     this.surfaceTarget.append(frame)
-    return { content, number, page, frame }
+    const created = { content, number, page, frame }
+    this.openPage = created
+    return created
   }
 
   overflows({ content }: DocumentPage): boolean {
-    return content.scrollHeight > content.clientHeight + 1
+    const stats = paginateStats()
+    const start = now()
+    const result = content.scrollHeight > content.clientHeight + 1
+    const ms = now() - start
+    stats.overflows += 1
+    stats.overflowsMs += ms
+    if (ms > stats.overflowsMax) stats.overflowsMax = ms
+    if (this.probingDepth > 0) {
+      stats.probeOverflows += 1
+      stats.probeOverflowsMs += ms
+    }
+    return result
   }
 
   focusedEditable(): boolean {
