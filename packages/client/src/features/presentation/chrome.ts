@@ -53,6 +53,11 @@ export function presentationSlideBlock({ className, attributes, content, control
   return `<div class="${className}" ${attributes}${revealAttribute}>${content}</div>${controls}`
 }
 
+export function presentationEmptyBlock({ mapped }: { mapped: { id: string; editable_region_id?: string } }): string {
+  if (!mapped.editable_region_id) return ""
+  return `<div class="slide-block slide-empty-block" data-editor-block-id="${mapped.id}" data-editor-region-id="${mapped.editable_region_id}" data-editor-source-editable="true" data-editor-empty-block="true" contenteditable="true" role="textbox" aria-label="Editable slide block" aria-multiline="true" spellcheck="true"><p><br></p></div>`
+}
+
 export function presentationEmptySlide({ index }: { index: number }): string {
   return `<div class="empty-slide"><p>Empty slide</p><button type="button" class="button secondary empty-slide-add-image" data-editor-action="media-choose-slide" data-slide-index="${index}">Add image</button></div>`
 }

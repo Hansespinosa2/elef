@@ -269,11 +269,11 @@ export function buildEditorStructure(
     const result = editorBlocks(source, range.start, range.end, metadata, index, mode, artResolution, boundaryMap)
     let blocks = result.blocks
     let regions = result.regions
-    if (mode === "document") {
-      const empty = emptyEditorBlocks(source, index, blocks)
-      blocks = [...blocks, ...empty.map(([block]) => block)].sort((left, right) => left.range.start - right.range.start)
-      regions = [...regions, ...empty.map(([, region]) => region)]
-    }
+    // Both modes edit empty paragraphs (Enter opens one): placeholders
+    // carry empty_placeholder so read-only surfaces can skip them.
+    const empty = emptyEditorBlocks(source, index, blocks)
+    blocks = [...blocks, ...empty.map(([block]) => block)].sort((left, right) => left.range.start - right.range.start)
+    regions = [...regions, ...empty.map(([, region]) => region)]
     const slideMap: MapSlide = {
       id: `slide-${index + 1}`,
       index,

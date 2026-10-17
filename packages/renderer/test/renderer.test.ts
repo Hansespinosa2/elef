@@ -246,6 +246,7 @@ test("CRLF sources keep multi-line blocks editable in visual mode", () => {
     },
     presentationBlockControls: () => "",
     slideBlock: ({ attributes, content }) => `<div ${attributes}>${content}</div>`,
+    emptyPresentationBlock: () => "",
     emptySlide: () => "",
     slideToolbar: () => "",
     slideFrame: ({ content }) => `<section>${content}</section>`,

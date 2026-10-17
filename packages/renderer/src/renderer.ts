@@ -56,6 +56,7 @@ export interface RendererChrome {
     blockCount: number
     position: SourcePosition | null
   }): string
+  emptyPresentationBlock(input: { mapped: MapBlock }): string
   slideBlock(input: { className: string; attributes: string; content: string; controls: string; revealEvent?: number | undefined }): string
   emptySlide(input: { index: number }): string
   slideToolbar(input: { index: number; slideCount: number }): string
@@ -540,9 +541,25 @@ function emptyStructuredLine(rendered: string, caretToken: string, kind: string)
 
 function renderPresentation(source: string, slides: RenderSlide[], style: EditorStyle, margin: MarginSettings, env: RenderEnv, chrome: RendererChrome): string {
   const frames = slides.map((slide, index) => {
-    const mappedBlocks = slide.blocks
+    // Positional pairing runs against non-empty blocks only; empty
+    // placeholders interleave by source position (mirroring documents)
+    // so they never shift parsed alignment.
+    const mappedBlocks = slide.blocks.filter(block => !block.empty_placeholder)
+    const emptyBlocks = slide.blocks.filter(block => block.empty_placeholder)
     const regions = new Map<string, MapRegion>(slide.editable_regions.map((region): [string, MapRegion] => [region.block_id, region]))
     const blocks = slide.parsed_blocks
+    let emptyIndex = 0
+    const flushEmptyBefore = (boundary: number): string => {
+      let markup = ""
+      let empty = emptyBlocks[emptyIndex]
+      while (empty && empty.range.start < boundary) {
+        const region = regions.get(empty.id)
+        if (region?.editable) markup += chrome.emptyPresentationBlock({ mapped: empty })
+        emptyIndex += 1
+        empty = emptyBlocks[emptyIndex]
+      }
+      return markup
+    }
     const renderBlock = (
       block: ParsedBlock,
       blockIndex: number,
@@ -551,6 +568,7 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
       { wrapInItem = false, wrapInArtRegion = false }: { wrapInItem?: boolean; wrapInArtRegion?: boolean } = {}
     ): string => {
       const mapped = mappedBlocks[blockIndex]
+      const prefix = flushEmptyBefore(mapped?.range.start ?? Number.POSITIVE_INFINITY)
       const region = mapped ? regions.get(mapped.id) : undefined
       const sourceMatches = mapped !== undefined && equivalentMarkdown(mapped.markdown, block.markdown)
       const valid = mapped !== undefined && region !== undefined && sourceMatches && mapped.editable_region_id === region.id && region.block_id === mapped.id
@@ -563,12 +581,15 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
       const content = valid && mapped !== undefined && mapped.kind === "image"
         ? chrome.mediaFigure({ rendered, alt: /^\s*!\[([^\]]*)\]/.exec(block.markdown)?.[1] || "" })
         : rendered
-      const controls = valid ? chrome.presentationBlockControls({ slideIndex: index, blockIndex, blockCount: blocks.length, position: block.position }) : ""
+      // Controls address the full mapped list (placeholders included):
+      // the client resolves blocks from the same map.
+      const mappedIndex = mapped ? slide.blocks.indexOf(mapped) : blockIndex
+      const controls = valid ? chrome.presentationBlockControls({ slideIndex: index, blockIndex: mappedIndex, blockCount: slide.blocks.length, position: block.position }) : ""
       const blockMarkup = chrome.slideBlock({ className, attributes, content, controls, revealEvent: block.reveal_event })
       const markup = wrapInArtRegion
         ? `<div class="slide-region-block ${slidePositionClasses(block.position, vertical)}">${blockMarkup}</div>`
         : blockMarkup
-      return wrapInItem ? `<div class="slide-block-item">${markup}</div>` : markup
+      return prefix + (wrapInItem ? `<div class="slide-block-item">${markup}</div>` : markup)
     }
     const renderPlacedBlocks = (
       placedBlocks: ParsedBlock[],
@@ -607,6 +628,7 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
         wrapArtBlocksInGroupsOnly: true
       })
     const empty = blocks.length === 0 ? chrome.emptySlide({ index }) : ""
+    const trailingEmpty = flushEmptyBefore(Number.POSITIVE_INFINITY)
     const toolbar = chrome.slideToolbar({ index, slideCount: slides.length })
     const topMargin = margin.section || margin.subsection
       ? `<div class="slide-margin slide-margin-top" aria-hidden="true">${margin.subsection ? `<span class="slide-margin-subsection">${escapeHtml(slide.subsection || "")}</span>` : ""}${margin.section ? `<span class="slide-margin-section">${escapeHtml(slide.section || "")}</span>` : ""}</div>`
@@ -615,7 +637,7 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
       ? `<div class="slide-margin slide-margin-bottom" aria-hidden="true">${margin.slide_count ? `<span class="slide-margin-count">${index + 1} / ${slides.length}</span>` : ""}${margin.footnote && slide.footnote ? `<span class="slide-margin-footnote" aria-label="Footnote"><span class="slide-margin-footnote-marker">*</span><span class="slide-margin-footnote-text">${renderMarkdownBlock(slide.footnote, env)}</span></span>` : ""}</div>`
       : ""
     const frameArtHost = !slide.title && contentBlocks.some((block) => block.art)
-    return chrome.slideFrame({ index, layout: slide.layout, toolbar, topMargin, content: `${titleMarkup}${slideContent}${empty}`, bottomMargin, artHost: frameArtHost, revealEventCount: slide.reveal_event_count })
+    return chrome.slideFrame({ index, layout: slide.layout, toolbar, topMargin, content: `${titleMarkup}${slideContent}${trailingEmpty}${empty}`, bottomMargin, artHost: frameArtHost, revealEventCount: slide.reveal_event_count })
   }).join("")
   const artController = slides.some((slide) => slide.blocks.some((block) => block.art))
   return chrome.presentationRoot({ style, inner: frames, artController })
@@ -636,6 +658,7 @@ export const bareChrome: RendererChrome = {
   presentationBlockAttributes: () => "",
   presentationBlockControls: () => "",
   slideBlock: ({ className, content, revealEvent }) => `<div class="${className}"${revealEvent === undefined ? "" : ` data-elef-reveal-event="${revealEvent}"`}>${content}</div>`,
+  emptyPresentationBlock: () => "",
   emptySlide: () => "",
   slideToolbar: () => "",
   slideFrame: ({ layout, topMargin, content, bottomMargin, artHost, revealEventCount }) => `<section class="slide slide-${layout}"${(revealEventCount ?? 0) > 0 ? ` data-elef-reveal-event-count="${revealEventCount}"` : ""}>${topMargin}<div class="slide-content"${artHost ? ` data-art-host="fixed" data-art-overfull="false"` : ""}>${content}</div>${bottomMargin}</section>`,

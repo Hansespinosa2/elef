@@ -1128,6 +1128,53 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Slide\n\nInitial text $x=4$", wait: 5
   end
 
+  test "enter at the end of a presentation block opens an editable empty block" do
+    presentation = Presentation.create!(
+      title: "Keys",
+      source: "# Slide\n\nFirst\n\nSecond\n"
+    )
+
+    visit edit_presentation_path(presentation)
+    block = find(".editor-projection .slide-block", text: "First")
+    block.click
+
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection.removeAllRanges();
+      selection.addRange(range);
+    JAVASCRIPT
+    block.send_keys(:enter)
+    wait_for_fresh_projection
+    assert_field "Markdown source", with: "# Slide\n\nFirst\n\n\n\nSecond\n", wait: 5
+    empty = find(".editor-projection .slide-block[data-editor-empty-block='true']")
+
+    # The caret restore lands on a frame after the fresh preview installs;
+    # wait for the selection to arrive before typing into the new block.
+    empty_id = empty["data-editor-block-id"]
+    Timeout.timeout(Capybara.default_max_wait_time) do
+      loop do
+        caret_in_empty = page.evaluate_script(<<~JAVASCRIPT)
+          (() => {
+            const empty = document.querySelector("[data-editor-block-id='#{empty_id}']");
+            const anchor = window.getSelection() ? window.getSelection().anchorNode : null;
+            const element = anchor && anchor.nodeType === Node.ELEMENT_NODE ? anchor : (anchor ? anchor.parentElement : null);
+            return Boolean(empty && element && empty.contains(element));
+          })()
+        JAVASCRIPT
+        break if caret_in_empty
+
+        sleep 0.05
+      end
+    end
+
+    page.driver.browser.action.send_keys("New").perform
+    assert_field "Markdown source", with: "# Slide\n\nFirst\n\nNew\n\nSecond\n", wait: 5
+  end
+
   test "real visual keystrokes preserve the exact title source" do
     source = <<~MARKDOWN.chomp
       ---

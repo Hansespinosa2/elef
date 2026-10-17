@@ -791,6 +791,10 @@ export class PresentationEditor {
     if (this.deps.handleMathKeydown(event, this.canvas(), () => this.flushPendingProjectionEdits())) return
     if (this.deps.moveCaretBetweenBlocks(event, this.canvas())) return
     if (keyBlock && keyCanvas?.contains(keyBlock) && this.routeKeymapKey(event, keyBlock)) return
+    if (event.key === "Enter" && !event.shiftKey) {
+      this.enterAtBlockEnd(event)
+      return
+    }
     if (!["Backspace", "Delete"].includes(event.key)) return
 
     const selection = this.getSelection()
@@ -818,6 +822,41 @@ export class PresentationEditor {
     const to = span.to
     const updated = this.deps.removeEmptyBlockSource(source, from, to)
     if (updated !== source) this.replaceSource(updated)
+  }
+
+  // Enter at the end of a plain paragraph or heading opens a new
+  // empty block below (mid-block Enter already splits through the
+  // native path, and lists/quotes/code keep their own flows). Without
+  // this the trailing empty paragraph trims away and Enter looks dead.
+  enterAtBlockEnd(event: ProjectionKeyEvent): void {
+    const selection = this.getSelection()
+    if (!selection?.isCollapsed) return
+    const focusNode = selection.focusNode
+    const node = focusNode
+      ? (focusNode.nodeType === this.Node.ELEMENT_NODE ? focusNode : focusNode.parentElement) as Element | null
+      : null
+    const blockElement = node?.closest?.("[data-editor-block-id][contenteditable='true']")
+    const canvas = this.canvas()
+    if (!blockElement || !canvas?.contains(blockElement) || !this.editorController) return
+    const blockId = (blockElement as HTMLElement).dataset.editorBlockId
+    const region = this.regionForBlock(blockId)
+    if (!region || !["paragraph", "heading"].includes(region.kind ?? "")) return
+    const caret = this.deps.visibleOffsetAtPoint(blockElement, selection.focusNode, selection.focusOffset) ?? 0
+    if (caret < visibleBlockText(blockElement).length) return
+
+    event.preventDefault()
+    this.flushPendingProjectionEdits()
+    const source = this.sourceValue()
+    const contentStart = region.content_range.start
+    const contentEnd = region.content_range.end
+    const before = source.slice(contentStart, contentEnd).replace(/[ \t]+$/, "")
+    const updated = source.slice(0, contentStart) + before + "\n\n" + source.slice(contentEnd)
+    if (updated === source) return
+    this.pendingCaretRestore = { sourceOffset: contentStart + before.length + 2, preferredBlockId: null }
+    this.replaceSource(updated)
+    // Preview installs hold while an editable has focus; yield it so the
+    // new block installs and the pending restore lands the caret there.
+    ;(blockElement as HTMLElement).blur()
   }
 
   alignmentChanged(event: ProjectionEvent): void {
