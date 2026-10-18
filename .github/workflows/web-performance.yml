@@ -43,6 +43,9 @@ jobs:
           cache-dependency-path: package-lock.json
       - name: Install Rails-owned frontend dependencies
         run: npm ci
+      - name: Build the shared packages
+        # dist/ is untracked; benchmark the current sources on fresh runners.
+        run: npm run build:packages
       - name: Record web performance over twenty samples per fixture
         env:
           RAILS_ENV: test
