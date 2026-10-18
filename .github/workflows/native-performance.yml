@@ -62,8 +62,7 @@ jobs:
         run: bin/rails tailwindcss:build
       - name: Build the shared packages
         # dist/ is built, never committed: every lane builds before consuming.
-        # client/renderer/editor-runtime form a build-time cycle, so the exact
-        # bootstrap order inside `npm run build:packages` matters; call it whole.
+        # Use the complete topological build before measuring either host.
         run: npm run build:packages
       - name: Build the release binary with the measurement hooks
         # Dev profile + Dev e2e config with matching features: the benchmark

@@ -1,6 +1,8 @@
 name: Web performance (non-gating)
 
 on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches:
       - dev
@@ -10,6 +12,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: web-performance-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   web-performance:
