@@ -230,12 +230,8 @@ export function renderInlineMath(element: Element | null): number {
 
     const pointFor = (offset: number | null): [Node, number] | null => {
       if (offset === null) return null
-      const displayMathAtEnd = segments.find((candidate) => candidate.type === "math" && candidate.displayMode && candidate.to === offset)
-      if (displayMathAtEnd) {
-        const parent = displayMathAtEnd.node.parentNode as Node
-        return [parent, [...parent.childNodes].indexOf(displayMathAtEnd.node) + 1]
-      }
-
+      // appendText keeps an empty text segment after completed math.
+      // Prefer it for insertion, including display math at block end.
       const segment = segments.find((candidate) => candidate.type === "text" && offset >= candidate.from && offset <= candidate.to)
       if (segment) return [segment.node, offset - segment.from]
 

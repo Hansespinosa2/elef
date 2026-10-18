@@ -135,3 +135,41 @@ test("inline math renders through the imported KaTeX module without a global", (
     delete globalThis.window
   }
 })
+
+test("completing display math leaves an insertion text node outside the atom", async () => {
+  const { parseHTML } = await import("linkedom")
+  for (const source of ["$$x^2$$", "\\[x^2\\]"]) {
+    const { document } = parseHTML("<div><p></p></div>")
+    const block = document.querySelector("div")
+    const paragraph = block.querySelector("p")
+    const sourceNode = document.createTextNode(source)
+    paragraph.append(sourceNode)
+    const selection = {
+      isCollapsed: true,
+      anchorNode: sourceNode, focusNode: sourceNode,
+      anchorOffset: source.length, focusOffset: source.length,
+      setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset) {
+        Object.assign(this, { anchorNode, anchorOffset, focusNode, focusOffset })
+      }
+    }
+    const previous = Object.fromEntries(["document", "NodeFilter", "window"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
+    Object.assign(globalThis, { document, NodeFilter: { SHOW_TEXT: 4 }, window: { getSelection: () => selection } })
+    try {
+      assert.equal(editorMarkdown.renderInlineMath(block), 1)
+      const atom = block.querySelector("[data-editor-math-source]")
+      assert.ok(atom)
+      assert.equal(selection.focusNode.nodeType, 3)
+      assert.equal(selection.focusNode.previousSibling, atom)
+      assert.equal(selection.focusOffset, 0)
+      // Model native insertion at the returned text caret and reconcile it.
+      selection.focusNode.textContent = " after"
+      assert.equal(atom.textContent, "x^2")
+      assert.equal(editorMarkdown.markdownForVisibleText(source, "", "paragraph", block, { documentMode: true }), `${source} after`)
+    } finally {
+      for (const [key, descriptor] of Object.entries(previous)) {
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+        else delete globalThis[key]
+      }
+    }
+  }
+})

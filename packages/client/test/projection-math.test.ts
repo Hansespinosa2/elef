@@ -50,16 +50,18 @@ test("mathEndPlacement puts the caret after a whole-block rendered atom", () => 
   const point = mathEndPlacement([fragment], "$x$", 3);
   assert.ok(point);
   assert.equal(point.fragment, fragment);
-  assert.equal(point.node, fragment);
-  assert.equal(point.offset, 1);
+  assert.equal(point.node.nodeType, 3);
+  assert.equal(point.node.previousSibling, fragment.querySelector("[data-editor-math-source]"));
+  assert.equal(point.offset, 0);
 });
 
 test("mathEndPlacement puts the caret after an active span", () => {
   const fragment = block(`${ACTIVE}`);
   const point = mathEndPlacement([fragment], "$x$", 3);
   assert.ok(point);
-  assert.equal(point.node, fragment);
-  assert.equal(point.offset, 1);
+  assert.equal(point.node.nodeType, 3);
+  assert.equal(point.node.previousSibling, fragment.querySelector("[data-editor-math-active]"));
+  assert.equal(point.offset, 0);
 });
 
 test("pairing verifies active spans against live text, not the stale record", () => {
@@ -68,8 +70,9 @@ test("pairing verifies active spans against live text, not the stale record", ()
   const grown = block(`<span class="editor-math-active" data-editor-math-active="true" data-editor-math-source="x" contenteditable="true">$x=3$</span>`);
   const point = mathEndPlacement([grown], "$x=3$", 5);
   assert.ok(point);
-  assert.equal(point.node, grown);
-  assert.equal(point.offset, 1);
+  assert.equal(point.node.nodeType, 3);
+  assert.equal(point.node.previousSibling, grown.querySelector("[data-editor-math-active]"));
+  assert.equal(point.offset, 0);
   // Diverged text (stale span) still refuses.
   assert.equal(mathEndPlacement([grown], "$y=3$", 5), null);
 });
@@ -92,8 +95,31 @@ test("mathEndPlacement pairs the second of two maths mid-block", () => {
   assert.ok(point);
   const span = fragment.querySelectorAll("[data-editor-math-source]")[1] as unknown as Element;
   assert.ok(span?.parentNode);
-  assert.equal(point.node, span.parentNode);
-  assert.equal(point.offset, Array.prototype.indexOf.call(span.parentNode.childNodes, span) + 1);
+  assert.equal(point.node, span.nextSibling);
+  assert.equal(point.node.textContent, " c");
+  assert.equal(point.offset, 0);
+});
+
+test("math end insertion reuses its trailing text node without changing the atom", () => {
+  const fragment = block(RENDERED);
+  const atom = fragment.querySelector("[data-editor-math-source]");
+  const point = mathEndPlacement([fragment], "$x$", 3);
+  assert.ok(point);
+  assert.equal(mathEndPlacement([fragment], "$x$", 3)?.node, point.node);
+  assert.equal(fragment.childNodes.length, 2);
+  point.node.textContent = " after";
+  assert.equal(atom?.textContent, "x");
+  assert.equal(atom?.nextSibling?.textContent, " after");
+});
+
+test("math end placement inserts text between adjacent protected atoms", () => {
+  const second = '<img data-editor-image-source="true" src="x">';
+  const fragment = block(RENDERED + second);
+  const atoms = [...fragment.querySelectorAll("[data-editor-math-source], img")];
+  const point = mathEndPlacement([fragment], "$x$![img](x)", 3);
+  assert.ok(point);
+  assert.equal(point.node.previousSibling, atoms[0]);
+  assert.equal(point.node.nextSibling, atoms[1]);
 });
 
 test("mathEndPlacement refuses interior offsets, stale spans, and ambiguity", () => {

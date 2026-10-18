@@ -102,9 +102,15 @@ export function mathEndPlacement(
   if (!fragment) return null
   const parent = pair.span.parentNode
   if (!parent) return null
-  const index = Array.prototype.indexOf.call(parent.childNodes, pair.span)
-  if (index === -1) return null
-  return { fragment, node: parent, offset: index + 1 }
+  // Native insertion needs an editable text position outside the atom.
+  // An element-offset caret beside contenteditable=false math can leave
+  // browser typing attached to the atom instead of the following prose.
+  let after = pair.span.nextSibling
+  if (!after || after.nodeType !== Node.TEXT_NODE) {
+    after = pair.span.ownerDocument.createTextNode("")
+    parent.insertBefore(after, pair.span.nextSibling)
+  }
+  return { fragment, node: after, offset: 0 }
 }
 
 // Source match for a caret inside an active math span, or null when the
