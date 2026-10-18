@@ -843,6 +843,10 @@ export class EditorEngine {
   }
 
   forwardProxyKeydown(event: KeyboardEvent): void {
+    // A visual assist can consume this field event on document capture.
+    // Replaying it after the palette closes would execute the engine's
+    // ordinary Tab/Enter binding as a second action.
+    if (event.defaultPrevented) return
     // WebDriver and assistive tooling may still address the form field. Let
     // printable input take the native textarea path; its input event will
     // update CodeMirror without losing characters from a long fill.

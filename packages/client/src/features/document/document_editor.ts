@@ -810,6 +810,7 @@ export class DocumentEditor {
   }
 
   blockKeydown(event: DocumentProjectionKeyEvent): void {
+    if (event.defaultPrevented) return
     if (this.pendingProjectionFrame || this.pendingProjectionEdits?.size) {
       this.flushPendingProjectionEdits()
     }

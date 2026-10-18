@@ -43,6 +43,20 @@ function withActiveElement(activeElement: unknown, run: () => void) {
   }
 }
 
+test("document leaves assist-consumed keys out of block handling", () => {
+  const { editor, projection } = mountDocument();
+  const block = projection.querySelector("[data-editor-block-id]");
+  let mathKeys = 0;
+  editor.deps.handleMathKeydown = () => { mathKeys += 1; return false; };
+  editor.deps.moveCaretBetweenBlocks = () => false;
+  editor.blockKeydown({
+    key: "Tab", target: block, defaultPrevented: true,
+    isComposing: false, altKey: false, ctrlKey: false, metaKey: false, shiftKey: false,
+    preventDefault() {},
+  });
+  assert.equal(mathKeys, 0);
+});
+
 test("document editor stale sync touches only the focused block", () => {
   // T1: while a projection block holds DOM focus, preview-stale must not
   // re-sweep every block (measured 400-850ms on 100-page fixtures); only

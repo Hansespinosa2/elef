@@ -114,6 +114,7 @@ export interface ProjectionEvent {
 
 export interface ProjectionKeyEvent {
   readonly key: string
+  readonly defaultPrevented?: boolean
   readonly target: EventTarget | null | undefined
   readonly isComposing: boolean
   readonly altKey: boolean
@@ -789,6 +790,7 @@ export class PresentationEditor {
   }
 
   blockKeydown(event: ProjectionKeyEvent): void {
+    if (event.defaultPrevented) return
     if (this.pendingProjectionFrame || this.pendingProjectionEdits?.size) {
       this.flushPendingProjectionEdits()
     }

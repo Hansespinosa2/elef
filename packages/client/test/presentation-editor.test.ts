@@ -664,6 +664,27 @@ test("presentation blockKeydown wires shortcuts after Vim", () => {
   mount.destroy();
 });
 
+test("presentation leaves an assist-consumed Tab out of its engine keymap", () => {
+  const { mount, editor, block } = syncFixture();
+  (block as unknown as { dispatchEvent: unknown }).dispatchEvent = () => true;
+  const event = vimKeyEvent(block as unknown as Element, "Tab");
+  // An assist palette accepts on document capture before the form's
+  // block handler. Its insertion must be the only edit from this Tab.
+  editor.value = "See [[Alpha]]";
+  event.preventDefault();
+  editor.runKeymap = (key) => {
+    editor.keymapCalls.push(key.key);
+    editor.value += "  ";
+    return true;
+  };
+
+  mount.editor.blockKeydown(event);
+
+  assert.equal(editor.value, "See [[Alpha]]");
+  assert.deepEqual(editor.keymapCalls, []);
+  mount.destroy();
+});
+
 test("presentation suppressed block input clears the flag without reconciling", () => {
   const { mount, block } = syncFixture();
   mount.editor.suppressProjectionInput = true;
