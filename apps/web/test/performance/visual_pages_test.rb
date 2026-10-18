@@ -5,8 +5,8 @@ require "fileutils"
 
 # Visual-editor page benchmark for the two frozen 100-page fixtures.
 #
-# This file is NOT part of the default system suite (test/performance is not
-# globbed by `bin/rails test test/system`); run it explicitly:
+# Benchmarks register only in an explicit measurement mode. Rails otherwise
+# discovers test/performance during its ordinary recursive unit run.
 #
 #   ELEF_PERF_MODE=calibrate ELEF_PERF_SOURCE=/path/to.md \
 #     bin/rails test test/performance/visual_pages_test.rb
@@ -14,7 +14,7 @@ require "fileutils"
 # Modes:
 # - calibrate: load ELEF_PERF_SOURCE once, wait for settled pagination, print
 #   a PERF_CALIBRATE JSON line (page count, DOM size, math/image status).
-# - measure (default): full 20-sample open/input benchmark, writes a JSON
+# - measure: full 20-sample open/input benchmark, writes a JSON
 #   report (ELEF_PERF_REPORT path or /tmp) and prints a summary.
 #
 # Reference layout (recorded in the report): headless Chrome, 1400x1000,
@@ -554,7 +554,7 @@ class VisualPagesTest < ApplicationSystemTestCase
       done = page.evaluate_script(
         "(() => { const el = document.querySelectorAll('#{selector}')[#{index}];" \
         " const pane = el.closest('.editor-projection.preview-pane');" \
-        " const r = el.getBoundingClientRect();" \
+        " const r = (el.querySelector('math') || el).getBoundingClientRect();" \
         " const dy = (r.top + Math.min(r.height, 48) / 2) - #{line_y};" \
         " if (Math.abs(dy) < 8) return true;" \
         " if (pane) pane.scrollTop += dy; else window.scrollBy(0, dy);" \
@@ -566,7 +566,7 @@ class VisualPagesTest < ApplicationSystemTestCase
     end
     page.evaluate_script(
       "(() => { const el = document.querySelectorAll('#{selector}')[#{index}];" \
-      " const r = el.getBoundingClientRect();" \
+      " const r = (el.querySelector('math') || el).getBoundingClientRect();" \
       " return [Math.round(r.left + Math.min(r.width, 240) / 2), Math.round(r.top + Math.min(r.height, 48) / 2)]; })()"
     )
   end
@@ -946,8 +946,6 @@ class VisualPagesTest < ApplicationSystemTestCase
   end
 
   test "measure visual page benchmarks" do
-    skip "measure mode only" if ENV["ELEF_PERF_MODE"] == "calibrate"
-
     report = {
       generated_at: Time.now.utc.iso8601,
       budgets: { open_p95_ms: 3000, input_p95_ms: 50, stall_ms: 100 },
@@ -1005,10 +1003,9 @@ class VisualPagesTest < ApplicationSystemTestCase
         assert_equal 0, stats[:timeouts], "#{name}/#{category}: no probe timeouts (#{stats[:samples].inspect})"
       end
     end
-  end
+  end if ENV["ELEF_PERF_MODE"] == "measure"
 
   test "calibrate fixture page count under the reference layout" do
-    skip "calibrate mode only" unless ENV["ELEF_PERF_MODE"] == "calibrate"
 
     source_path = ENV.fetch("ELEF_PERF_SOURCE")
     source = File.read(source_path)
@@ -1023,5 +1020,5 @@ class VisualPagesTest < ApplicationSystemTestCase
       breakdown: breakdown
     })}"
     assert breakdown["pages"] >= 1
-  end
+  end if ENV["ELEF_PERF_MODE"] == "calibrate"
 end

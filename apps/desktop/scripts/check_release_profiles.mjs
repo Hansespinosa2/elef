@@ -51,6 +51,7 @@ const devClientInputs = metafileInputs(verification.package_metafiles.client.dev
 const stableEditorInputs = metafileInputs(verification.package_metafiles["editor-runtime"].stable, "packages/editor-runtime")
 const devEditorInputs = metafileInputs(verification.package_metafiles["editor-runtime"].dev, "packages/editor-runtime")
 const stableWorkModelInputs = metafileInputs(verification.package_metafiles["work-model"].stable, "packages/work-model")
+const composedRendererInputs = metafileInputs("packages/editor-runtime/dist/composed_renderer.metafile.json", "packages/editor-runtime")
 
 function packageMetafiles(modulePath) {
   if (modulePath.startsWith("packages/client/src/")) {
@@ -134,11 +135,13 @@ for (const dist of [
   "packages/client/dist/port-session.js",
   "packages/client/dist/sanitize.js",
   "packages/client/dist/vim-preferences.js",
-  "packages/work-model/dist/document-map.js",
   "packages/work-model/dist/document-transforms.js"
 ]) {
   assert.ok(stableInputs.has(dist), `Stable desktop bundle lost the shared input ${dist}`)
 }
+// Document structure is consumed by the canonical renderer artifact, which
+// Stable copies byte-identically above; the source engine uses style-vocab.
+assert.ok(composedRendererInputs.has("packages/work-model/dist/document-map.js"), "Stable's canonical renderer lost shared document structure")
 for (const dist of [
   "packages/editor-runtime/dist/index.js",
   "packages/client/dist/elef-client.js",

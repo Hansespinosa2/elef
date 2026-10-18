@@ -60,6 +60,7 @@ jobs:
           PGUSER: postgres
           PGPASSWORD: postgres
           PGTESTDATABASE: elef_test
+          ELEF_PERF_MODE: measure
           ELEF_PERF_REPORT: ${{ github.workspace }}/web-performance.json
           ELEF_PERF_RUNNER: ${{ runner.name }} (${{ runner.os }}/${{ runner.arch }})
         working-directory: apps/web

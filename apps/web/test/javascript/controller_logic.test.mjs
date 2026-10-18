@@ -284,6 +284,27 @@ test("document pagination waits for both fonts and images, including failed imag
   } finally { harness.dispose() }
 })
 
+test("queued image load events do not repeat a pass that measured all completed images", () => {
+  const harness = paginationHarness()
+  try {
+    const first = harness.image()
+    const second = harness.image()
+    harness.controller.connect()
+    // Shared image fetches complete together, before each element's load
+    // event is dispatched. The first event can therefore unlock a pass
+    // that already measures the second image at its final dimensions.
+    first.complete = true
+    second.complete = true
+    first.settle()
+    assert.equal(harness.passes, 1)
+    let schedules = 0
+    harness.controller.schedulePagination = () => { schedules++ }
+    second.settle()
+    assert.equal(schedules, 0)
+    assert.equal(harness.controller.watchedImages.size, 0)
+  } finally { harness.dispose() }
+})
+
 test("font-ready microtask does not repeat an image-triggered first pass", async () => {
   let resolveFonts
   const fonts = { status: "loading", ready: new Promise(resolve => { resolveFonts = resolve }) }

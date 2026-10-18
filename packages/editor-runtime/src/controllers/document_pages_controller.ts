@@ -165,9 +165,12 @@ export default class extends Controller<HTMLElement> {
   // A post-first-pass image arrival repaginates (late images previously
   // overflowed their pages silently).
   watchSurfaceImages(): void {
-    // Preview replacement can detach pending images before they settle.
+    // A shared fetch can complete several images before their individual
+    // load events dispatch. Retire every completed watcher before measuring
+    // so queued events cannot repaginate dimensions already included in the
+    // pass. Preview replacement can also detach pending images.
     for (const [element, cleanup] of this.watchedImages) {
-      if (!this.surfaceTarget.contains(element)) cleanup()
+      if (element.complete || !this.surfaceTarget.contains(element)) cleanup()
     }
     const images = this.surfaceTarget.querySelectorAll("img")
     for (const image of images) {
@@ -274,6 +277,7 @@ export default class extends Controller<HTMLElement> {
 
   paginate(): void {
     if (!this.surfaceTarget || !this.active) return
+    this.watchSurfaceImages()
     if (!this.paginatedOnce) this.firstPassWithoutFonts = document.fonts?.status === "loading"
 
     markStage("paginate-start")
