@@ -30,6 +30,10 @@
       "types": "./src/slide_position_layout.ts",
       "default": "./dist/slide-position-layout.js"
     },
+    "./math-source": {
+      "types": "./src/math_source.ts",
+      "default": "./dist/math-source.js"
+    },
     "./style-vocab": {
       "types": "./src/style_vocab.ts",
       "default": "./dist/style-vocab.js"

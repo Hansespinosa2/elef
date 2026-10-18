@@ -35,6 +35,20 @@ test("scanMathMatches counts backslash parity at the close", () => {
   assert.deepEqual(scanMathMatches("$\\$x$"), [{ start: 0, end: 5, interior: "\\$x" }]);
 });
 
+test("math pairing recognizes mixed bracket and dollar spans without code false positives", () => {
+  const source = "`$code$` \\(x\\) $y$ \\[\nz\n\\]";
+  const fragment = block(
+    '<code>$code$</code> <span data-editor-math-source="x">x</span> ' +
+    '<span data-editor-math-source="y">y</span> ' +
+    '<span data-editor-math-source="\nz\n">z</span>'
+  );
+  const spans = [...fragment.querySelectorAll("[data-editor-math-source]")] as unknown as Element[];
+  const pairs = pairMathSpans(spans, source);
+  assert.ok(pairs);
+  assert.deepEqual(pairs.map(({ match }) => source.slice(match.start, match.end)), ["\\(x\\)", "$y$", "\\[\nz\n\\]"]);
+  assert.equal(mathEndPlacement([fragment], source, source.length)?.node.previousSibling, spans[2]);
+});
+
 function block(html: string): Element {
   const { document } = parseHTML(`<div data-editor-block-id="b1" contenteditable="true">${html}</div>`);
   const element = document.querySelector("[data-editor-block-id]");

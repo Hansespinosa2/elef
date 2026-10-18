@@ -1,11 +1,7 @@
 import { cachedKatex, loadKatex } from "../lib/katex_loader.js"
 import type { RevealActives, RevealToken } from "./editor_reveal.js"
 
-// Dollar-math content consumes escape pairs atomically, mirroring the
-// reader's parity-counted close search: a `$` preceded by an odd run of
-// backslashes is escaped text, not a boundary, so `$\$` is literal and
-// `$a\\$` (even run) is math holding `a\`.
-const INLINE_MATH = /(?<!\\)\\\[([\s\S]+?)\\\]|(?<!\\)\$\$((?:[^\\]|\\[\s\S])+?)\$\$(?!\$)|(?<!\\)\\\(([^\r\n]+?)\\\)|(?<![\\$])\$(?!\$|\s)((?:[^$\\\r\n]|\\[^\r\n])+?)(?<!\s)\$(?!\$)/g
+import { mathSourceAt, scanMathSource } from "@elef/work-model/math-source"
 
 export interface InlineToken {
   length: number;
@@ -145,7 +141,7 @@ export function renderInlineMath(element: Element | null): number {
 
   let renderedCount = 0
   textNodes.forEach((node) => {
-    const matches = [...(node.textContent ?? "").matchAll(new RegExp(INLINE_MATH.source, "g"))]
+    const matches = scanMathSource(node.textContent ?? "").filter((math) => math.interior !== "")
     if (matches.length === 0) return
 
     const selection = window.getSelection()
@@ -162,14 +158,14 @@ export function renderInlineMath(element: Element | null): number {
     }
 
     matches.forEach((match) => {
-      const from = match.index ?? 0
-      const to = from + (match[0] ?? "").length
+      const from = match.start
+      const to = match.end
       appendText(cursor, from)
 
-      const expression = match[1] ?? match[2] ?? match[3] ?? match[4] ?? ""
-      const displayMode = match[1] !== undefined || match[2] !== undefined
-      const openDelimiter = match[1] !== undefined ? "\\[" : match[2] !== undefined ? "$$" : match[3] !== undefined ? "\\(" : "$"
-      const closeDelimiter = match[1] !== undefined ? "\\]" : match[2] !== undefined ? "$$" : match[3] !== undefined ? "\\)" : "$"
+      const expression = match.interior
+      const displayMode = match.display
+      const openDelimiter = match.open
+      const closeDelimiter = match.close
 
       if (selection?.isCollapsed && selection.anchorNode === node && typeof anchorOffset === "number" &&
         anchorOffset >= from + openDelimiter.length && anchorOffset <= to - closeDelimiter.length) {
@@ -183,7 +179,7 @@ export function renderInlineMath(element: Element | null): number {
         activeMath.contentEditable = "true"
         activeMath.spellcheck = false
 
-        const activeText = document.createTextNode(match[0])
+        const activeText = document.createTextNode((node.textContent ?? "").slice(from, to))
         activeMath.append(activeText)
         fragment.append(activeMath)
         segments.push({ from, to, node: activeMath, textNode: activeText, type: "active-math" })
@@ -883,18 +879,9 @@ function inlineTokenAt(source: string, formatBudget: FormatBudget | null = null,
     if (match) return { length: (match[0] ?? "").length, content: match[2] ?? "", contentOffset: 1, kind: "format", formatType: "emphasis" }
   }
 
-  match = source.match(/^\\\[([\s\S]+?)\\\]/)
-  if (match) return { length: (match[0] ?? "").length, content: match[1] ?? "", kind: "math" }
-
-  match = source.match(/^\\\(([^\r\n]+?)\\\)/)
-  if (match) return { length: (match[0] ?? "").length, content: match[1] ?? "", kind: "math" }
-
-  match = source.match(/^\$\$((?:[^\\]|\\[\s\S])+?)\$\$(?!\$)/)
-  if (match) return { length: (match[0] ?? "").length, content: match[1] ?? "", kind: "math" }
-
-  if (previousCharacter !== "$") {
-    match = source.match(/^\$(?!\$)(?!\s)((?:[^$\\\r\n]|\\[^\r\n])+?)(?<!\s)\$(?!\$)/)
-    if (match) return { length: (match[0] ?? "").length, content: match[1] ?? "", kind: "math" }
+  const math = mathSourceAt(source)
+  if (math && math.interior !== "" && (math.open !== "$" || previousCharacter !== "$")) {
+    return { length: math.end, content: math.interior, kind: "math" }
   }
 
   return null

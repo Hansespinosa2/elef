@@ -51,6 +51,7 @@ pin "@elef/work-model/document-transforms", to: "work-model/dist/document-transf
 pin "@elef/work-model/art-source", to: "work-model/dist/art-source.js", preload: false # renderer/export paths only; fetch on demand
 pin "@elef/work-model/slide-position-layout", to: "work-model/dist/slide-position-layout.js", preload: false # export paths only; fetch on demand
 pin "@elef/work-model/style-vocab", to: "work-model/dist/style-vocab.js" # dependency-free vocab + front-matter read/write (open-path safe)
+pin "@elef/work-model/math-source", to: "work-model/dist/math-source.js"
 pin "@elef/editor-runtime", to: "editor-runtime/dist/index.js"
 pin "@elef/editor-runtime/editor-chrome", to: "editor-runtime/dist/preview_chrome.js"
 pin "@elef/editor-runtime/art-layout", to: "editor-runtime/dist/lib/art_layout.js", preload: false # unreferenced on web today; fetch on demand

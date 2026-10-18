@@ -4,6 +4,7 @@ import MarkdownIt from "markdown-it"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
 import { buildEditorStructure, createDocumentLinkResolver, parseDocumentLinkAt } from "@elef/work-model"
+import { mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
 import { analyzeArtList, ART_DIAGNOSTICS } from "@elef/work-model/art-source"
 import { slidePositionClasses, slidePositionLayout } from "@elef/work-model/slide-position-layout"
 import type {
@@ -227,46 +228,35 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
 markdown.inline.ruler.before("escape", "elef_bracket_math", (state, silent) => {
   const source = state.src
   const start = state.pos
-  if (source[start] === "\\" && source[start + 1] === "$" && !isEscaped(source, start)) {
+  if (source[start] === "\\" && source[start + 1] === "$" && !sourceIsEscaped(source, start)) {
     if (silent) return true
     const token = state.push("text", "", 0)
     token.content = "\\$"
     state.pos += 2
     return true
   }
-  if (source[start] !== "\\" || (source[start + 1] !== "(" && source[start + 1] !== "[")) return false
-  if (isEscaped(source, start)) return false
-  const open = source.slice(start, start + 2)
-  const closeDelimiter = open === "\\(" ? "\\)" : "\\]"
-  const close = findMathClose(source, start + 2, closeDelimiter)
-  if (close < 0) return false
+  if (source[start] !== "\\") return false
+  const math = mathSourceAt(source, start)
+  if (!math) return false
   const env = asRenderEnv(state.env)
-  const expression = source.slice(start + 2, close)
   if (silent) return true
   const token = state.push("html_inline", "", 0)
-  token.content = renderMath(expression, open === "\\[", open, closeDelimiter, env.chrome)
-  state.pos = close + 2
+  token.content = renderMath(math.interior, math.display, math.open, math.close, env.chrome)
+  state.pos = math.end
   return true
 })
 
 markdown.inline.ruler.after("backticks", "elef_math", (state, silent) => {
   const source = state.src
   const start = state.pos
-  const marker = source[start]
-  if (marker !== "$" || isEscaped(source, start)) return false
-  const display = source[start + 1] === "$"
-  const delimiter = display ? "$$" : "$"
-  if (!display && /\s/.test(source[start + 1] || "")) return false
-  const close = findMathClose(source, start + delimiter.length, delimiter)
-  if (close < 0) return false
+  if (source[start] !== "$") return false
+  const math = mathSourceAt(source, start)
+  if (!math) return false
   const env = asRenderEnv(state.env)
-  const expression = source.slice(start + delimiter.length, close)
-  if (!display && (!expression || /\s$/.test(expression))) return false
   if (silent) return true
-
   const token = state.push("html_inline", "", 0)
-  token.content = renderMath(expression, display, delimiter, delimiter, env.chrome)
-  state.pos = close + delimiter.length
+  token.content = renderMath(math.interior, math.display, math.open, math.close, env.chrome)
+  state.pos = math.end
   return true
 })
 
@@ -738,21 +728,6 @@ function stripUnsafeMarkdownLinks(text: string): string {
     pattern.lastIndex = cursor
   }
   return cursor === 0 ? text : result + text.slice(cursor)
-}
-
-function findMathClose(source: string, from: number, delimiter: string): number {
-  let index = from
-  while ((index = source.indexOf(delimiter, index)) >= 0) {
-    if (!isEscaped(source, index) && (delimiter !== "$" || source[index + 1] !== "$" && source[index - 1] !== "$")) return index
-    index += delimiter.length
-  }
-  return -1
-}
-
-function isEscaped(source: string, index: number): boolean {
-  let slashes = 0
-  for (let cursor = index - 1; cursor >= 0 && source[cursor] === "\\"; cursor -= 1) slashes += 1
-  return slashes % 2 === 1
 }
 
 function escapeHtml(value: unknown): string {

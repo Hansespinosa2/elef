@@ -2,7 +2,8 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
-const moduleSource = await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/editor_markdown.js", import.meta.url), "utf8")
+const originalModuleSource = await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/editor_markdown.js", import.meta.url), "utf8")
+const moduleSource = originalModuleSource.replaceAll('"@elef/work-model/math-source"', JSON.stringify(import.meta.resolve("@elef/work-model/math-source")))
 const source = moduleSource.replace('import { cachedKatex, loadKatex } from "../lib/katex_loader.js"', "const cachedKatex = () => ({ renderToString: () => '' }); const loadKatex = () => Promise.resolve(cachedKatex())")
 const editorMarkdown = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 

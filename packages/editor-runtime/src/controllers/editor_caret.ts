@@ -1,6 +1,4 @@
-// Math content consumes escape pairs atomically (reader parity): an
-// odd-backslash `$` is escaped text, not a boundary.
-const MARKDOWN_MATH = /^\$\$(?:[^\\]|\\[\s\S])+?\$\$|^\$(?!\$)(?:[^$\\\r\n]|\\[^\r\n])+?\$(?!\$)/
+import { scanMathSource } from "@elef/work-model/math-source"
 
 export function visibleOffsetAtPoint(root: Node, target: Node, offset: number): number | null {
   let visibleOffset = 0
@@ -263,6 +261,7 @@ function domSubOffset(nodeText: string, visibleOffset: number, raw = false): num
 }
 
 function markdownPositionMap(source: string): { sourceToVisible: number[]; visibleToSource: number[] } {
+  const maths = new Map(scanMathSource(source).map((math) => [math.start, math]))
   const sourceToVisible = new Array<number>(source.length + 1).fill(0)
   const visibleToSource = [0]
   let sourceIndex = 0
@@ -320,9 +319,9 @@ function markdownPositionMap(source: string): { sourceToVisible: number[]; visib
       continue
     }
 
-    const math = rest.match(MARKDOWN_MATH)
+    const math = maths.get(sourceIndex)
     if (math) {
-      skip(sourceIndex + (math[0] ?? "").length)
+      skip(math.end)
       continue
     }
 

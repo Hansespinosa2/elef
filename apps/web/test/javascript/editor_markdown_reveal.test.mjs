@@ -12,7 +12,8 @@ import { parseHTML } from "linkedom"
 const dist = (path) =>
   new URL(`../../../../packages/editor-runtime/dist/${path}`, import.meta.url)
 const reveal = await import(dist("controllers/editor_reveal.js"))
-const moduleSource = await readFile(dist("controllers/editor_markdown.js"), "utf8")
+const originalModuleSource = await readFile(dist("controllers/editor_markdown.js"), "utf8")
+const moduleSource = originalModuleSource.replaceAll('"@elef/work-model/math-source"', JSON.stringify(import.meta.resolve("@elef/work-model/math-source")))
 const source = moduleSource
   .replace('import { cachedKatex, loadKatex } from "../lib/katex_loader.js"', "const cachedKatex = () => ({ renderToString: () => '' }); const loadKatex = () => Promise.resolve(cachedKatex())")
 const editorMarkdown = await import(

@@ -12,11 +12,7 @@
 // offsets from the match start (identity), instead of collapsing every
 // in-span position to the match end.
 
-// Mirror: packages/editor-runtime/src/controllers/editor_caret.ts
-// MARKDOWN_MATH. Same match semantics (inline `$...$` confined to one
-// line, display `$$...$$` spanning lines, escape pairs atomic) so
-// pairing agrees with the position map about what counts as math.
-const MATH_PATTERN = /\$\$((?:[^\\]|\\[\s\S])+?)\$\$|\$(?!\$)((?:[^$\\\r\n]|\\[^\r\n])+?)\$(?!\$)/g
+import { scanMathSource } from "@elef/work-model/math-source"
 
 export interface MathMatch {
   start: number
@@ -25,18 +21,10 @@ export interface MathMatch {
 }
 
 export function scanMathMatches(source: string): MathMatch[] {
-  const matches: MathMatch[] = []
-  MATH_PATTERN.lastIndex = 0
-  let match: RegExpExecArray | null
-  while ((match = MATH_PATTERN.exec(source)) !== null) {
-    const full = match[0] ?? ""
-    if (full.length === 0) {
-      MATH_PATTERN.lastIndex += 1
-      continue
-    }
-    matches.push({ start: match.index, end: match.index + full.length, interior: match[1] ?? match[2] ?? "" })
-  }
-  return matches
+  // Empty pairs remain editor placeholders, owned by the existing
+  // active-empty-math path rather than canonical atom pairing.
+  return scanMathSource(source).filter((match) => match.interior !== "")
+    .map(({ start, end, interior }) => ({ start, end, interior }))
 }
 
 export interface MathPair {
