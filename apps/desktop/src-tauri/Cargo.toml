@@ -31,14 +31,20 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri = { version = "=2.12.1", features = [] }
-tauri-plugin-dialog = "=2.4.0"
+tauri-plugin-dialog = { path = "vendor/tauri-plugin-dialog" }
 tauri-plugin-process = "=2.3.1"
-tauri-plugin-single-instance = "=2.3.4"
 tauri-plugin-updater = { version = "2", default-features = false, features = ["rustls-tls", "system-proxy"] }
 tauri-plugin-wdio = { version = "=1.4.0", optional = true }
 tauri-plugin-wdio-webdriver = { version = "=1.4.0", optional = true }
+tracing = "0.1"
 tempfile = "3"
 url = "2"
 
 [dev-dependencies]
 tauri = { version = "=2.12.1", features = ["test"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = { version = "6", default-features = false, features = ["tokio", "service", "proxy"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows-sys = { version = "0.60", features = ["Win32_System_Threading", "Win32_System_DataExchange", "Win32_Foundation", "Win32_UI_WindowsAndMessaging", "Win32_Security", "Win32_System_LibraryLoader", "Win32_Graphics_Gdi"] }
