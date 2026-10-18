@@ -13,6 +13,20 @@ import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditor
 import { CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client"
 import type { ExportMenuHandle, ExportMenuProps, GraphController, LibraryPaletteCommand } from "@elef/client"
 
+interface OpenedEditor {
+  setSelectionRange(anchor: number): void;
+  focus(): void;
+  projectionController(): { restoreCaret(sourceOffset: number): boolean } | null | undefined;
+}
+
+export function focusOpenedEditor(editor: OpenedEditor | null | undefined, mode: string): boolean {
+  if (!editor) return false
+  editor.setSelectionRange(0)
+  if (mode === "visual") return editor.projectionController()?.restoreCaret(0) === true
+  editor.focus()
+  return true
+}
+
 export interface WorkFolder {
   id: string;
   name: string;
@@ -874,15 +888,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // come. Restore the toggle from the installed preview so the awaited
       // render cannot leave Visual permanently disabled.
       if (visualButton && desktopFeatures.visualEditing) enableVisualModeFromInstalledPreview(elements.editorForm)
-      // Caret-at-0 parity with a fresh open: park the Source caret at
-      // position 0 and move DOM focus into it, so typing and Vim navigation
-      // work immediately without a click. This runs last so no later open
-      // step (preview refresh, toggle restore) can leave a stale caret or
-      // steal focus; same-mode opens otherwise keep the invoking library
-      // surface focused because setEditingMode early-returns above.
-      const openedEditor = editorFor(elements.editorField)
-      openedEditor?.setSelectionRange(0)
-      openedEditor?.focus()
+      // Focus the active presentation after the installed preview is ready.
+      // Visual mode places the native caret in rendered text; source-only
+      // profiles retain CodeMirror focus. Same-mode opens otherwise leave
+      // focus on the invoking library surface.
+      focusOpenedEditor(editorFor(elements.editorField), elements.editorForm.dataset.editorMode || "source")
       return true
     } catch (error) {
       showError(error)

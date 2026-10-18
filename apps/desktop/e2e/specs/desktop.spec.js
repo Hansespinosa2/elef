@@ -1090,6 +1090,24 @@ class DesktopEditorUi {
     })
   }
 
+  async assertCaretAtStartOnOpen() {
+    const mode = await $("#desktop-editor-form").getAttribute("data-editor-mode")
+    if (mode === "source") return this.assertSourceCaretAtStartOnOpen()
+    await browser.waitUntil(async () => browser.execute(() => {
+      const first = document.querySelector("#desktop-preview [data-editor-block-id][contenteditable='true']")
+      const selection = window.getSelection()
+      if (!first || document.activeElement !== first || !selection?.isCollapsed
+          || !selection.focusNode || !first.contains(selection.focusNode)) return false
+      const prefix = document.createRange()
+      prefix.selectNodeContents(first)
+      prefix.setEnd(selection.focusNode, selection.focusOffset)
+      return prefix.toString().length === 0
+    }), {
+      timeout: 5_000,
+      timeoutMsg: "The visual editor did not open with its caret in the first rendered passage"
+    })
+  }
+
   async typeEmptyDisplayMath(mode) {
     await browser.execute(() => window.focus())
     focusDesktopWindow()
@@ -2340,14 +2358,14 @@ describe("desktop binary workflows and native boundaries", () => {
     await library.assertWorkAbsent(title)
   })
 
-  it("opens a library work with the source caret at 0 and focused", async () => {
+  it("opens a library work with the caret at the start of its active editor", async () => {
     const ui = new DesktopEditorUi()
     await ui.openWork()
     await ui.captureCaretAutofocusShot("library-open")
-    await ui.assertSourceCaretAtStartOnOpen()
+    await ui.assertCaretAtStartOnOpen()
   })
 
-  it("creates a work from the New menu with the source caret at 0 and focused", async () => {
+  it("creates a work from the New menu with the caret at the start of its active editor", async () => {
     const library = new DesktopLibraryUi()
     await library.openLibrary()
     await $(".new-work-trigger").click()
@@ -2361,7 +2379,7 @@ describe("desktop binary workflows and native boundaries", () => {
       title = await $("#desktop-editor-title").getValue()
       const ui = new DesktopEditorUi()
       await ui.captureCaretAutofocusShot("direct-create-open")
-      await ui.assertSourceCaretAtStartOnOpen()
+      await ui.assertCaretAtStartOnOpen()
     } finally {
       if (title) {
         await library.openLibrary()
