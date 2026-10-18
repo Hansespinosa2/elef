@@ -62,7 +62,10 @@ const MathShortcutPaletteController = await loadController("math_shortcut_palett
     "./snippet_stops.js": "const snippetStopsEffect = { of: (stops) => stops }\n"
   }
 })
-const DocumentPagesController = await loadController("document_pages", { base: sharedControllerPath })
+const DocumentPagesController = await loadController("document_pages", {
+  base: sharedControllerPath,
+  overrides: { "../lib/stage_marks.js": "const markStage = () => {}\n" }
+})
 const LineageGraphController = await loadController("lineage_graph")
 const MermaidDiagramsController = await loadController("mermaid_diagrams", {
   base: sharedControllerPath,
@@ -216,6 +219,141 @@ test("document page units keep a heading with its following block and source anc
     [anchorBefore, heading, followingParagraph],
     [anchorAfter, nextParagraph]
   ])
+})
+
+function paginationHarness(fonts = { status: "loaded", ready: Promise.resolve() }) {
+  const images = []
+  const surface = {
+    dataset: {},
+    querySelectorAll() { return images },
+    contains(image) { return images.includes(image) },
+    addEventListener() {}, removeEventListener() {}
+  }
+  const restoreDocument = replaceGlobal("document", { fonts })
+  const restoreWindow = replaceGlobal("window", { addEventListener() {}, removeEventListener() {} })
+  const restoreFrame = replaceGlobal("cancelAnimationFrame", () => {})
+  const controller = new DocumentPagesController()
+  let passes = 0
+  Object.assign(controller, {
+    element: { closest() { return null } }, surfaceTarget: surface,
+    paginate() {
+      if (!this.paginatedOnce) this.firstPassWithoutFonts = fonts.status === "loading"
+      passes++; this.paginatedOnce = true
+    },
+    focusedEditable() { return true }
+  })
+  function image() {
+    const handlers = new Map()
+    const element = {
+      complete: false,
+      addEventListener(type, listener) { handlers.set(type, listener) },
+      removeEventListener(type, listener) { if (handlers.get(type) === listener) handlers.delete(type) },
+      settle(type = "load") { this.complete = true; handlers.get(type)?.() },
+      handlers
+    }
+    images.push(element)
+    return element
+  }
+  return {
+    controller, images, image, get passes() { return passes },
+    dispose() { controller.disconnect(); restoreFrame(); restoreWindow(); restoreDocument() }
+  }
+}
+
+test("document pagination waits for both fonts and images, including failed images", async () => {
+  let resolveFonts
+  const fonts = { status: "loading", ready: new Promise(resolve => { resolveFonts = resolve }) }
+  const harness = paginationHarness(fonts)
+  try {
+    const first = harness.image()
+    const broken = harness.image()
+    harness.controller.connect()
+    assert.equal(harness.passes, 0)
+    first.settle()
+    assert.equal(harness.passes, 0)
+    fonts.status = "loaded"
+    resolveFonts()
+    await Promise.resolve()
+    assert.equal(harness.passes, 0)
+    broken.settle("error")
+    assert.equal(harness.passes, 1)
+    assert.equal(harness.controller.resourceTimer, null)
+    assert.equal(first.handlers.size, 0)
+    assert.equal(broken.handlers.size, 0)
+    assert.equal(harness.controller.watchedImages.size, 0)
+  } finally { harness.dispose() }
+})
+
+test("font-ready microtask does not repeat an image-triggered first pass", async () => {
+  let resolveFonts
+  const fonts = { status: "loading", ready: new Promise(resolve => { resolveFonts = resolve }) }
+  const harness = paginationHarness(fonts)
+  try {
+    const image = harness.image()
+    harness.controller.connect()
+    let schedules = 0
+    harness.controller.schedulePagination = () => { schedules++ }
+    fonts.status = "loaded"
+    resolveFonts()
+    image.settle()
+    await Promise.resolve()
+    assert.equal(harness.passes, 1)
+    assert.equal(schedules, 0)
+  } finally { harness.dispose() }
+})
+
+test("resource timeout permits first paint and late fonts request a new pass", async () => {
+  let timeout
+  const restoreTimeout = replaceGlobal("setTimeout", callback => { timeout = callback; return 1 })
+  const restoreClear = replaceGlobal("clearTimeout", () => {})
+  let resolveFonts
+  const fonts = { status: "loading", ready: new Promise(resolve => { resolveFonts = resolve }) }
+  const harness = paginationHarness(fonts)
+  try {
+    harness.controller.connect()
+    assert.equal(harness.passes, 0)
+    timeout()
+    assert.equal(harness.passes, 1)
+    assert.equal(harness.controller.resourceTimer, null)
+    let schedules = 0
+    harness.controller.schedulePagination = () => { schedules++ }
+    fonts.status = "loaded"
+    resolveFonts()
+    await Promise.resolve()
+    assert.equal(schedules, 1)
+  } finally { harness.dispose(); restoreTimeout(); restoreClear() }
+})
+
+test("document pagination watches images installed after first pass even while editing", () => {
+  const harness = paginationHarness()
+  try {
+    harness.controller.connect()
+    assert.equal(harness.passes, 1)
+    const image = harness.image()
+    harness.controller.schedulePagination()
+    assert.equal(image.handlers.size, 2)
+    let schedules = 0
+    harness.controller.schedulePagination = () => { schedules++ }
+    image.settle()
+    assert.equal(schedules, 1)
+    assert.equal(image.handlers.size, 0)
+  } finally { harness.dispose() }
+})
+
+test("document image watchers are removed on replacement and disconnect", () => {
+  const harness = paginationHarness()
+  try {
+    const replaced = harness.image()
+    harness.controller.connect()
+    harness.images.length = 0
+    const current = harness.image()
+    harness.controller.schedulePagination()
+    assert.equal(replaced.handlers.size, 0)
+    assert.equal(current.handlers.size, 2)
+    harness.controller.disconnect()
+    assert.equal(current.handlers.size, 0)
+    assert.equal(harness.controller.watchedImages.size, 0)
+  } finally { harness.dispose() }
 })
 
 test("lineage layout places a continuation in the next column of its parent's lane", () => {

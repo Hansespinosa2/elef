@@ -176,6 +176,31 @@ test("preview installs without a visual editor land read-only instead of disconn
   }
 })
 
+test("image preloads share pending requests, release head nodes, and retry after failure", () => {
+  const { document, Event } = parseHTML("<html><head></head><body><div id='preview'></div></body></html>")
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "document")
+  Object.defineProperty(globalThis, "document", { configurable: true, value: document })
+  const preview = document.querySelector("#preview")
+  const html = '<img src="/assets/figure.svg"><img src="/assets/figure.svg"><img src="data:image/png;base64,AAAA"><img src="blob:local-image">'
+  try {
+    installPreviewHtml(preview, html)
+    installPreviewHtml(preview, html)
+    assert.equal(document.head.querySelectorAll('link[rel="preload"]').length, 1)
+    const failed = document.head.querySelector("link")
+    assert.equal(failed.getAttribute("as"), "image")
+    assert.equal(failed.getAttribute("href"), "/assets/figure.svg")
+    failed.dispatchEvent(new Event("error"))
+    assert.equal(document.head.children.length, 0)
+    installPreviewHtml(preview, html)
+    assert.equal(document.head.children.length, 1)
+    document.head.querySelector("link").dispatchEvent(new Event("load"))
+    assert.equal(document.head.children.length, 0)
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "document", previous)
+    else delete globalThis.document
+  }
+})
+
 test("Stable source-only mounts render installed preview blocks read-only", () => {
   const { root } = mount({
     kind: "document",

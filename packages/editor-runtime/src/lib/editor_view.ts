@@ -168,13 +168,48 @@ export interface DesktopFeatures {
   documentLinks?: boolean | undefined;
 }
 
+// Share in-flight fetches across installs without retaining completed media
+// or failed URLs for the lifetime of a desktop session.
+const pendingImagePreloads = new WeakMap<Document, Map<string, HTMLLinkElement>>()
+
 export function installPreviewHtml(container: Element, html: string): void {
   const mediaBaseUrl = container.closest("form")?.dataset.mediaAssetBaseUrlValue || ""
   installSanitizedPreview(container, html, { mediaBaseUrl })
-  // Managed projections re-sync editability on elef:preview-updated; an
-  // unmanaged projection (no visual-editor target) would otherwise keep the
-  // installed contenteditable shells live with nothing to propagate edits.
+  // This invariant also applies to detached/headless preview installs.
   if (!container.hasAttribute("data-visual-editor-target")) markProjectionBlocksReadOnly(container)
+  // Start image fetches without rendering: the pre-pagination gate
+  // defers skipped-subtree image loads until paginate-start, which is too
+  // late to measure. Preloads use the installed (media-rebased, absolute)
+  // srcs so they hit the same cache entries the img elements will read;
+  // the fonts+images first-pass wait observes their completion. Lifting
+  // the gate here instead would render the whole unpaginated tree during
+  // the async install-to-paginate gap (pure waste: pagination rebuilds it
+  // immediately), so the gate stays until is-paginated flips at pass start.
+  // Links always go to the live document head: install containers may be
+  // detached template content whose owner document has no head.
+  const liveHead = typeof document === "undefined" ? null : document.head
+  if (!liveHead) return
+  const liveDoc = liveHead.ownerDocument
+  const pending = pendingImagePreloads.get(liveDoc) ?? new Map<string, HTMLLinkElement>()
+  pendingImagePreloads.set(liveDoc, pending)
+  for (const image of container.querySelectorAll("img[src]")) {
+    const src = image.getAttribute("src") || ""
+    if (src === "" || src.startsWith("data:") || src.startsWith("blob:") || pending.has(src)) continue
+    const link = liveDoc.createElement("link")
+    link.rel = "preload"
+    link.setAttribute("as", "image")
+    link.href = src
+    const settled = () => {
+      link.removeEventListener("load", settled)
+      link.removeEventListener("error", settled)
+      pending.delete(src)
+      link.remove()
+    }
+    link.addEventListener("load", settled)
+    link.addEventListener("error", settled)
+    pending.set(src, link)
+    liveHead.appendChild(link)
+  }
 }
 
 export function mountEditorHosts(root: Document | null | undefined = globalThis.document): void {

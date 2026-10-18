@@ -67,9 +67,27 @@
   content-visibility: hidden;
   contain-intrinsic-size: 794px 1123px;
 }
+/* Pre-pagination gate (editor only): the server-rendered projection sits
+   unpaginated in the surface until the first pass. auto keeps eval-time
+   forced layouts (CodeMirror's initial measure via vim cursor draw) to
+   near-viewport content instead of all ~46K nodes. paginate() adds
+   is-paginated at pass start and rebuilds synchronously in the same
+   block, so the browser never renders the unpaginated tree; the first
+   pass additionally awaits fonts AND images (see document_pages
+   connect), and installs preload image URLs without rendering (see
+   installPreviewHtml) so deferred fetches start early. Every other
+   pre-flip path (sanitize, install, editability-sync, block collection)
+   is DOM-only, and resizeFrames short-circuits with no frames. Reader
+   surfaces are never gated (no editor measure there). No intrinsic
+   size: one scrollbar adjustment at pass start, pre-settle and
+   pre-interaction. */
+.document-editor-projection .document-surface:not(.is-paginated) {
+  content-visibility: auto;
+}
 @media print {
   .document-page-frame.is-quiet { content-visibility: visible; }
   .document-page-frame.is-sealed { content-visibility: visible; }
+  .document-editor-projection .document-surface:not(.is-paginated) { content-visibility: visible; }
 }
 .document-page-frame > .document-page {
   bottom: auto;

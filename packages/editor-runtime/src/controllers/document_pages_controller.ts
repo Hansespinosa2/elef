@@ -87,7 +87,11 @@ export default class extends Controller<HTMLElement> {
     this.reflowFrame = null
     this.reflowTimer = null
     this.paginatedOnce = false
-    this.fontTimer = null
+    this.firstPassWithoutFonts = false
+    const connection = {}
+    this.resourceConnection = connection
+    this.resourceTimer = null
+    this.watchedImages = new Map<HTMLImageElement, () => void>()
     this.boundResize = () => this.resizeFrames()
     this.form = this.element.closest(".visual-editor-form")
     this.modeChangedHandler = () => this.resizeFrames()
@@ -103,33 +107,92 @@ export default class extends Controller<HTMLElement> {
     this.surfaceTarget.dataset.documentPagesSettled = "false"
     this.mutationObserver?.observe(this.surfaceTarget, { childList: true, characterData: true, subtree: true })
 
-    // Fonts-first single pagination: webfont arrival shifts every line
-    // box, so a pre-fonts pass is always thrown away (2.0s mixed /
-    // 4.7s math of the cold-open profile). When fonts are still
-    // loading, await them before the first pass instead of paginating
-    // twice; a timeout keeps a slow font host from holding the page
-    // hostage (the late pass then repaginates once fonts land, as
-    // before). Cached fonts paginate immediately with no second pass.
-    if (!document.fonts?.ready || document.fonts.status === "loaded") {
+    // Resources-first single pagination: webfont arrival shifts every line
+    // box and unloaded images measure at zero height, so a pre-resources
+    // pass is always thrown away (2.0s mixed / 4.7s math of the cold-open
+    // profile). When fonts or surface images are still loading, await
+    // them before the first pass instead of paginating twice; a timeout
+    // keeps a slow host from holding the page hostage (the late pass
+    // then repaginates once resources land, as before). Cached resources
+    // paginate immediately with no second pass.
+    this.watchSurfaceImages()
+    if (this.resourcesReady()) {
       this.paginate()
     } else {
       const firstPass = () => {
+        this.resourceTimer = null
         if (this.paginatedOnce || !this.active) return
         this.paginate()
       }
-      this.fontTimer = setTimeout(firstPass, 3000)
-      document.fonts.ready.then(() => {
-        clearTimeout(this.fontTimer)
-        this.fontTimer = null
+      this.resourceTimer = setTimeout(firstPass, 3000)
+      document.fonts?.ready.then(() => {
+        if (!this.active || this.resourceConnection !== connection) return
+        if (this.paginatedOnce) {
+          if (this.firstPassWithoutFonts) this.schedulePagination()
+        }
+        else this.maybeFirstPass()
+      })
+    }
+  }
+
+  // True when the first pass may measure: fonts settled (or unsupported)
+  // and every surface image finished loading (error counts: broken
+  // images render deterministically at their alt box).
+  resourcesReady(): boolean {
+    const fonts = (typeof document === "undefined" ? undefined : document.fonts) as FontFaceSet | undefined
+    if (fonts && fonts.status !== "loaded") return false
+    const images = this.surfaceTarget.querySelectorAll("img")
+    for (const image of images) {
+      if (!(image as HTMLImageElement).complete) return false
+    }
+    return true
+  }
+
+  // Re-check the first-pass gate after any resource trigger (font ready,
+  // image load/error, surface mutation from install). Clears the timeout
+  // once resources settle so the late pass never double-fires.
+  maybeFirstPass(): void {
+    if (this.paginatedOnce || !this.active) return
+    this.watchSurfaceImages()
+    if (!this.resourcesReady()) return
+    clearTimeout(this.resourceTimer)
+    this.resourceTimer = null
+    this.paginate()
+  }
+
+  // Image triggers are idempotent: newly installed images get listeners
+  // on the next mutation recheck; fired listeners drop out of the set.
+  // A post-first-pass image arrival repaginates (late images previously
+  // overflowed their pages silently).
+  watchSurfaceImages(): void {
+    // Preview replacement can detach pending images before they settle.
+    for (const [element, cleanup] of this.watchedImages) {
+      if (!this.surfaceTarget.contains(element)) cleanup()
+    }
+    const images = this.surfaceTarget.querySelectorAll("img")
+    for (const image of images) {
+      const element = image as HTMLImageElement
+      if (element.complete || this.watchedImages.has(element)) continue
+      const cleanup = () => {
+        element.removeEventListener("load", settled)
+        element.removeEventListener("error", settled)
+        this.watchedImages.delete(element)
+      }
+      const settled = () => {
+        cleanup()
         if (!this.active) return
         if (this.paginatedOnce) this.schedulePagination()
-        else firstPass()
-      })
+        else this.maybeFirstPass()
+      }
+      this.watchedImages.set(element, cleanup)
+      element.addEventListener("load", settled, { once: true })
+      element.addEventListener("error", settled, { once: true })
     }
   }
 
   disconnect() {
     this.active = false
+    this.resourceConnection = null
     window.removeEventListener("resize", this.boundResize)
     this.form?.removeEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.surfaceTarget.removeEventListener("focusout", this.boundFocusOut)
@@ -138,8 +201,9 @@ export default class extends Controller<HTMLElement> {
     cancelAnimationFrame(this.resizeFrame)
     cancelAnimationFrame(this.reflowFrame)
     clearTimeout(this.reflowTimer)
-    clearTimeout(this.fontTimer)
-    this.fontTimer = null
+    clearTimeout(this.resourceTimer)
+    this.resourceTimer = null
+    for (const cleanup of this.watchedImages.values()) cleanup()
   }
 
   resizeFrames(): void {
@@ -182,10 +246,14 @@ export default class extends Controller<HTMLElement> {
 
   schedulePagination(): void {
     if (!this.active) return
-    // Pre-first-pass schedules are subsumed by the coming first pass,
-    // which paginates live content (this also preserves fonts-first
-    // single pagination when the user interacts during the font wait).
-    if (!this.paginatedOnce) return
+    this.watchSurfaceImages()
+    // Pre-first-pass schedules re-check the resources gate (install
+    // swaps in new images; user interaction during the wait must not
+    // force an early pass). The gate keeps single pagination.
+    if (!this.paginatedOnce) {
+      this.maybeFirstPass()
+      return
+    }
     this.surfaceTarget.dataset.documentPagesSettled = "false"
     if (this.focusedEditable()) {
       clearTimeout(this.reflowTimer)
@@ -206,6 +274,7 @@ export default class extends Controller<HTMLElement> {
 
   paginate(): void {
     if (!this.surfaceTarget || !this.active) return
+    if (!this.paginatedOnce) this.firstPassWithoutFonts = document.fonts?.status === "loading"
 
     markStage("paginate-start")
     resetPaginateStats()
