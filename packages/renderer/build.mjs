@@ -20,9 +20,9 @@ await build({
   legalComments: "none"
 })
 
-// Composed ESM entry (export flows): the same bare-projection-plus-chrome
-// composition as the shipped bundle, for TypeScript consumers that need
-// byte-identical output with the server without loading the IIFE global.
+// Bare ESM entry (export flows): plain structural wrappers with no editor
+// chrome, for TypeScript consumers. Chrome composition lives in the
+// editor-runtime-owned composed entry, never here.
 await build({
   entryPoints: [path.join(packageRoot, "src/projection.ts")],
   bundle: true,
@@ -34,24 +34,10 @@ await build({
   legalComments: "none"
 })
 
-// Shipped IIFE bundle (MiniRacer, workers, importmap): bare projection
-// composed with editor chrome. Same esbuild surface as the former host-owned
-// renderer build script; only the entry and output moved home.
-const output = path.join(dist, "elef-renderer.bundle.js")
-await build({
-  entryPoints: [path.join(packageRoot, "src/renderer_global.ts")],
-  bundle: true,
-  format: "iife",
-  target: "es2022",
-  outfile: output,
-  minify: true,
-  legalComments: "none"
-})
-
 // Keep Highlight.js's PHP whitespace template semantically intact without
 // emitting a physical tab at end-of-line in the checked-in bundle.
 const rawWhitespace = "[ \t\n"
-for (const artifact of ["elef-renderer.js", "projection.js", "elef-renderer.bundle.js"]) {
+for (const artifact of ["elef-renderer.js", "projection.js"]) {
   const artifactPath = path.join(dist, artifact)
   const bundle = await readFile(artifactPath, "utf8")
   const occurrences = bundle.split(rawWhitespace).length - 1
@@ -59,4 +45,4 @@ for (const artifact of ["elef-renderer.js", "projection.js", "elef-renderer.bund
   await writeFile(artifactPath, bundle.replace(rawWhitespace, "[ \\t\n"))
 }
 
-console.log("packages/renderer: dist/elef-renderer.js + dist/projection.js + dist/elef-renderer.bundle.js built")
+console.log("packages/renderer: dist/elef-renderer.js + dist/projection.js built (bare entries; the composed IIFE lives in packages/editor-runtime)")

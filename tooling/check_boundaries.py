@@ -9,10 +9,11 @@ Rules (constitution section 4, Phase 01 plan section 8):
       may import beneath its public entry (src/index). Enforced repo-wide:
       packages, both hosts, apps/web/test, apps/desktop/e2e and tests/.
   R12 editor-runtime is a narrowed boot API (ADR-011): editor-runtime
-      sources import only relative sources, @elef/client, @elef/work-model,
-      @elef/contracts and the pinned editor vendor modules; no package
-      imports @elef/editor-runtime except the renderer seam
-      @elef/editor-runtime/editor-chrome; no importer names an
+      sources import only relative sources, @elef/client, @elef/renderer,
+      @elef/work-model, @elef/contracts and the pinned editor vendor
+      modules; no package imports @elef/editor-runtime (the renderer
+      composition entry lives inside editor-runtime, so the former
+      renderer seam is retired); no importer names an
       @elef/editor-runtime subpath beyond the package's exported
       subpaths (read from its export map: editor-chrome, test-internals).
   R13 package sources are TypeScript: zero *.js files under packages/*/src.
@@ -354,13 +355,6 @@ def check_client_isolation() -> list[str]:
     return violations
 
 
-# The authorized renderer seam (frozen phase-12 plan, fixed cross-stream seam:
-# S1 creates @elef/editor-runtime/editor-chrome exporting editorChrome,
-# S4 consumes it for the renderer bundle entry). Only the renderer package
-# may import editor-runtime, and only through this seam.
-RENDERER_RUNTIME_SEAM = "@elef/editor-runtime/editor-chrome"
-
-
 def editor_runtime_exported_subpaths() -> frozenset[str]:
     # R12 pins the narrowed boot API to the package's own export map, so a
     # reviewed new entry (editor-chrome, test-internals) is allowed without
@@ -373,6 +367,7 @@ def editor_runtime_exported_subpaths() -> frozenset[str]:
     )
 EDITOR_RUNTIME_ALLOWED_BARE = (
     "@elef/client",
+    "@elef/renderer",
     "@elef/work-model",
     "@elef/contracts",
     "@hotwired/stimulus",
@@ -382,8 +377,10 @@ EDITOR_RUNTIME_ALLOWED_BARE = (
     "@replit/codemirror-vim",
     "katex",
 )
-# Packages that must never consume editor-runtime (contracts is covered by R1).
-RUNTIME_REVERSE_PACKAGES = ("client", "work-model", "renderer")
+# Packages that must never consume editor-runtime (contracts is covered by R1;
+# renderer needs no entry: R6 already pins its closure to relative sources,
+# @elef/work-model and vendors, and the composed entry lives in editor-runtime).
+RUNTIME_REVERSE_PACKAGES = ("client", "work-model")
 
 
 def ts_sources(package: str) -> list[Path]:
@@ -422,8 +419,6 @@ def check_editor_runtime_direction() -> list[str]:
         for source in ts_sources(package):
             for specifier in specifiers(source):
                 if not specifier.startswith("@elef/editor-runtime"):
-                    continue
-                if package == "renderer" and specifier == RENDERER_RUNTIME_SEAM:
                     continue
                 violations.append(
                     f"R12 reverse dependency on editor-runtime: {source.relative_to(ROOT)} -> {specifier}"

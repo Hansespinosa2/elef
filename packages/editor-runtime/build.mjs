@@ -100,6 +100,33 @@ await bundle(join(here, "src", "index.stable.ts"), join(here, "dist", "index.sta
   plugins: [stableProfileAlias]
 })
 
+// Editor-runtime-owned renderer composition (MiniRacer, workers,
+// importmap): bare @elef/renderer projection composed with package-owned
+// editor chrome. Self-contained IIFE (external: []) so MiniRacer can eval
+// the file directly; same surface as the former renderer-owned entry, only
+// the entry and output moved home. Excluded from the per-file transpile
+// below (see `bundled`): the IIFE owns dist/composed_renderer.js.
+const composedOutput = join(here, "dist", "composed_renderer.js")
+await esbuild.build({
+  entryPoints: [join(here, "src", "composed_renderer.ts")],
+  bundle: true,
+  format: "iife",
+  target: "es2022",
+  outfile: composedOutput,
+  minify: true,
+  legalComments: "none",
+  external: [],
+  logLevel: "warning"
+})
+
+// Keep Highlight.js's PHP whitespace template semantically intact without
+// emitting a physical tab at end-of-line in the checked-in bundle.
+const composedBundle = readFileSync(composedOutput, "utf8")
+const rawWhitespace = "[ \t\n"
+const composedOccurrences = composedBundle.split(rawWhitespace).length - 1
+if (composedOccurrences !== 1) throw new Error(`Expected one Highlight.js whitespace template, found ${composedOccurrences}.`)
+writeFileSync(composedOutput, composedBundle.replace(rawWhitespace, "[ \\t\n"))
+
 for (const entry of ["index.js", "preview_chrome.js", "test_internals.js", "worker.js"]) {
   const output = readFileSync(join(here, "dist", entry), "utf8")
   if (/(?:from\s*|import\()\s*["']\.\.?\//.test(output)) {
@@ -129,7 +156,7 @@ function entries(dir) {
 }
 
 const bundled = new Set(
-  ["index.ts", "index.stable.ts", "preview_chrome.ts", "test_internals.ts"].map((name) => join(here, "src", name))
+  ["index.ts", "index.stable.ts", "preview_chrome.ts", "test_internals.ts", "composed_renderer.ts"].map((name) => join(here, "src", name))
     .concat(join(here, "src", "lib", "renderer_worker.ts"))
 )
 await esbuild.build({

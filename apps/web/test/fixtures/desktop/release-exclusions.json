@@ -99,8 +99,8 @@
       "proof": "served to the Stable desktop bundle as the shared dist/sanitize.js input"
     },
     {
-      "module": "packages/renderer/dist/elef-renderer.bundle.js",
-      "reason": "Canonical renderer artifact: the Stable desktop copies it byte-identically. Its pure link helpers are renderer internals used by both profiles, not desktop graph wiring.",
+      "module": "packages/editor-runtime/dist/composed_renderer.js",
+      "reason": "Canonical composed renderer artifact: the Stable desktop copies it byte-identically. Its pure link helpers are renderer internals used by both profiles, not desktop graph wiring.",
       "proof": "byte-identical between the package dist and the Stable desktop asset"
     },
     {

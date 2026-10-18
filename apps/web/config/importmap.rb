@@ -32,7 +32,7 @@ pin "crelt" # @1.0.7
 pin "style-mod" # @4.1.4
 pin "w3c-keyname" # @2.2.8
 pin "katex", to: "katex.js", preload: false # @0.18.7 ESM build, esbuild-minified in place (262K vs 589K); deferred: live math loads it post-settle, never on open
-pin "elef-renderer", to: "renderer/dist/elef-renderer.bundle.js", preload: false # client-shell pages only; fetch on mount
+pin "elef-renderer", to: "editor-runtime/dist/composed_renderer.js", preload: false # client-shell pages only; fetch on mount
 pin "mermaid", to: "mermaid.min.js", preload: false # @11.17.2 classic script injected only when diagrams exist; never blanket-fetch 3.5MB
 
 pin "@elef/client", to: "client/dist/elef-client.js"

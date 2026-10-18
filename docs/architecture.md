@@ -99,13 +99,13 @@ A new package, crate, or top-level directory must pass this admission test in wr
 
 These hold everywhere and are machine-checked (`tooling/check_boundaries.py`, `apps/web/script/check_frontend_ownership.py`):
 
-- imports point one way: contracts ← client, work-model ← renderer ← client ← editor-runtime ← hosts (editor-runtime additionally imports work-model directly); the single reviewed exception is the renderer → editor-runtime editor-chrome seam (pinned by R12); nothing else imports upward;
+- imports point one way: contracts ← client, work-model ← renderer ← client ← editor-runtime ← hosts (editor-runtime additionally imports work-model and renderer directly); the renderer stays bare, and editor-runtime composes it with editor chrome in `src/composed_renderer.ts`;
 - `contracts` is dependency-free and frozen; `work-model` is pure (no DOM, no I/O, no host);
 - `local-store` never touches Tauri; Tauri commands stay inside `apps/desktop/frontend/src` adapters;
 - Rails code never imports desktop files or Tauri APIs; desktop code never imports Rails-host JavaScript; the desktop never duplicates shareable views, styles, controllers, or workflows;
 - no package reaches into another package's internals (public entry points only);
 - Work syntax is interpreted exactly once, in `work-model` (rule R8);
-- `editor-runtime` is a narrowed boot API: packages never import it except the renderer seam `editor-chrome`, and no importer names a subpath beyond its exports (rule R12);
+- `editor-runtime` is a narrowed boot API: other packages never import it, and no host importer names a subpath beyond its exports (rule R12);
 - TypeScript lives in packages only: host JavaScript stays thin glue, typed at the seams through contracts ports and package APIs. Host code that grows real logic moves to its owning package instead of being converted in place;
 - source writes are atomic with fingerprint checks; see the [desktop data format](desktop/data-format.md) and [ADR-008](desktop/adr/008-safe-writes-and-conflict-detection.md).
 

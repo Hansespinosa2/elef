@@ -6,8 +6,9 @@
 // (features/export/pptx), so both hosts emit the same PPTX bytes for the
 // same Work. Remote images stay URLs in the model: the shared engine embeds
 // them at prepareMedia time, matching the server, which inlines them before
-// serving. Blocks render through @elef/renderer/projection (the same
-// chrome-composed render the server bundle uses), never the bare entry.
+// serving. Blocks render through @elef/renderer/projection (the bare
+// render, matching the server's `bare: true` export path), never the
+// composed entry: export models carry no editor chrome on either host.
 // This module ships as the deferred @elef/client/pptx-model entry,
 // never in the boot barrel: the projection (KaTeX, highlight.js,
 // markdown-it) stays out of the boot entry like preview-core.

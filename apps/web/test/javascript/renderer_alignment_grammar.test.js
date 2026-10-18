@@ -6,7 +6,7 @@ import { parseHTML } from "linkedom"
 
 const sandbox = vm.createContext({})
 vm.runInContext(
-  await readFile(new URL("../../../../packages/renderer/dist/elef-renderer.bundle.js", import.meta.url), "utf8"),
+  await readFile(new URL("../../../../packages/editor-runtime/dist/composed_renderer.js", import.meta.url), "utf8"),
   sandbox
 )
 const { renderPreview } = sandbox.ElefRenderer
