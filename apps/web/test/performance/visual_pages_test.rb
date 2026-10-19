@@ -26,14 +26,10 @@ class VisualPagesTest < ApplicationSystemTestCase
   ASSETS_DIR = File.join(FIXTURE_DIR, "assets").freeze
   OPEN_SAMPLES = 20
   SETTLE_TIMEOUT = 180
-  # Every KaTeX family the math stack can request. document.fonts.status lies
-  # for faces that never started loading, so opens await these explicitly;
-  # otherwise cold samples measure fallback metrics and warm ones webfonts.
-  KATEX_FAMILIES = %w[
-    KaTeX_Main KaTeX_AMS KaTeX_Caligraphic KaTeX_Script KaTeX_Fraktur
-    KaTeX_SansSerif KaTeX_Typewriter KaTeX_Size1 KaTeX_Size2 KaTeX_Size3
-    KaTeX_Size4
-  ].freeze
+  # Fail loud if any webfont 404s: silent fallback would paginate math
+  # differently per machine with no signal. Checked synchronously per open;
+  # never via async script (repeated async evaluate calls destabilize the
+  # driver over long runs and hang input benchmarks with script timeouts).
 
   PROBE_SCRIPT = <<~JAVASCRIPT.freeze
     window.__elefPerf = { t0: performance.now(), paginatedAt: [], previewTrace: [], lastLongtaskEnd: 0, longtaskCount: 0, longtaskScripts: [] };
@@ -182,7 +178,6 @@ class VisualPagesTest < ApplicationSystemTestCase
   def measure_open(document, gate_images: true)
     t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     visit edit_document_path(document)
-    await_math_fonts
     state = nil
     deadline = t0 + SETTLE_TIMEOUT
     loop do
@@ -196,25 +191,13 @@ class VisualPagesTest < ApplicationSystemTestCase
       sleep 0.1
     end
     wall = Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0
+    assert_math_fonts_loaded
     [wall, page.evaluate_script(BREAKDOWN_SCRIPT)]
   end
 
-  def await_math_fonts
-    errors = page.evaluate_async_script(<<~JAVASCRIPT)
-      ((done) => {
-        const families = #{KATEX_FAMILIES.to_json};
-        const styles = ["16px", "bold 16px", "italic 16px", "bold italic 16px"];
-        const loads = families.flatMap((family) => styles.map((style) => {
-          const face = `${style} "${family}"`;
-          return document.fonts.load(face).catch(() => []);
-        }));
-        Promise.all(loads).then(() => {
-          const failed = [...document.fonts]
-            .filter((face) => face.status === "error")
-            .map((face) => face.family);
-          done(failed);
-        });
-      })(arguments[arguments.length - 1])
+  def assert_math_fonts_loaded
+    errors = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.fonts].filter((face) => face.status === "error").map((face) => face.family)
     JAVASCRIPT
     raise "KaTeX webfonts failed to load: #{errors.uniq.join(", ")}" if errors && !errors.empty?
   end
