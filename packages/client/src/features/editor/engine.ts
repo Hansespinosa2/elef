@@ -452,12 +452,18 @@ export class EditorEngine {
       this.projectionController()?.restoreSelections?.()
     }
     if (event instanceof KeyboardEvent) {
-      const movesSelection = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)
+      const movesSelection = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Tab"].includes(event.key)
       const selectsAll = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a"
       if (!movesSelection && !selectsAll) return
     }
     this.resolveProjectionNavigation()
     if (event.type === "input") {
+      // Engine-driven visual keys dispatch a synthetic input while the
+      // block DOM still shows old text. Only the author's own edits count
+      // as surface navigation: trusting the synthetic event reads the
+      // lossy native caret over the exact engine head at mode switch and
+      // can collapse a ranged selection onto a fabricated offset.
+      if (!event.isTrusted) return
       this.projectionNavigationOccurred = true
       return
     }
