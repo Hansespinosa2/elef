@@ -1,5 +1,13 @@
 .document-reader { width: 100%; }
 .document-surface { color: var(--oradia-paper-ink); font-family: var(--oradia-sans); }
+/* MathML elements carry no KaTeX classes, so without this they inherit the
+   body stack and symbols missing from it fall back per-glyph to whatever the
+   OS provides (DejaVu on CI, assorted local fonts), paginating math
+   differently per machine. Route every math glyph through the vendored KaTeX
+   webfonts first; Main stays first so currently covered glyphs do not move. */
+math, mi, mo, mn, mtext {
+  font-family: KaTeX_Main, KaTeX_AMS, KaTeX_Caligraphic, KaTeX_Script, KaTeX_Fraktur, KaTeX_SansSerif, KaTeX_Typewriter, KaTeX_Size1, "Times New Roman", serif;
+}
 .document-surface.is-paginated { background: transparent; border: 0; box-shadow: none; display: grid; gap: 24px; padding: 0; }
 .document-surface h1, .document-surface h2, .document-surface h3, .document-surface h4, .document-surface h5, .document-surface h6 { color: var(--document-heading-ink); margin-top: 0; }
 .document-surface h1 { font-size: 48px; line-height: 1.05; margin-bottom: 24px; }

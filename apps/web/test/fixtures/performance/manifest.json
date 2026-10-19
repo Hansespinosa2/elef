@@ -57,8 +57,8 @@
       "images": 0,
       "lists": 0,
       "headings": 159,
-      "rendered_pages": 86,
-      "rendered_dom_nodes": 45870,
+      "rendered_pages": 91,
+      "rendered_dom_nodes": 45880,
       "rendered_katex": 1264,
       "rendered_math_errors": 0
     }
@@ -70,7 +70,7 @@
     "assets/perf-4.svg": "6f2c6ea0909c240a741a5134ffa1d46bf04a08f160179b6c3a9d9ed8676d9e4e"
   },
   "recalibration": {
-    "reason": "S1 KaTeX output switched html -> mathml: fewer DOM nodes per equation with different metrics, so identical frozen sources paginate to 98/86 under the reference layout. Source sha256 pins unchanged; counts re-measured via ELEF_PERF_MODE=calibrate (stable across runs; every measure sample must reproduce them exactly).",
+    "reason": "S1 KaTeX output switched html -> mathml: fewer DOM nodes per equation with different metrics, so identical frozen sources paginate to 98/86 under the reference layout. S2 MathML elements route through the vendored KaTeX webfont stack (documents.css) instead of per-glyph system fallback, which paginated math differently per machine (86 locally vs 90 on CI). S3 Size1 preload converges cold opens with warm ones at 91 (cold samples otherwise paginate large operators in fallback metrics and never redo). Source sha256 pins unchanged; counts re-measured via ELEF_PERF_MODE=calibrate (stable across runs; every measure sample must reproduce them exactly).",
     "renderer": "katex output mathml, throwOnError, locally served webfonts"
   }
 }
