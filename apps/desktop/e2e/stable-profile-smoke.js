@@ -100,5 +100,8 @@ export async function runStableProfileSmoke(env) {
     "the Stable export must preserve the edited source byte-for-byte"
   )
   assert.ok(existsSync(path.join(exportedWork, "elef.json")), "the Stable export must carry the work manifest")
-  rmSync(scratch, { recursive: true, force: true })
+  // The scratch holds the app's XDG cache dir: Mesa/WebKit can still flush
+  // shader-cache files while the tree is being removed (ENOTEMPTY rmdir).
+  // Retry the removal instead of failing an otherwise green run.
+  rmSync(scratch, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 })
 }
