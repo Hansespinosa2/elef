@@ -63,21 +63,18 @@ jobs:
           sudo fc-cache -f >/dev/null
           fc-match "sans-serif" | grep -q "Liberation Sans"
           fc-match "serif" | grep -q "Liberation Serif"
-      - name: Record web performance over twenty samples per fixture
-        env:
-          RAILS_ENV: test
-          PARALLEL_WORKERS: "1"
-          PGHOST: 127.0.0.1
-          PGUSER: postgres
-          PGPASSWORD: postgres
-          PGTESTDATABASE: elef_test
-          ELEF_PERF_MODE: measure
-          ELEF_PERF_REPORT: ${{ github.workspace }}/web-performance.json
-          ELEF_PERF_RUNNER: ${{ runner.name }} (${{ runner.os }}/${{ runner.arch }})
-        working-directory: apps/web
+      - name: Dump CI font inventory (diagnostic)
         run: |
-          bin/rails db:test:prepare
-          bin/rails test test/performance/visual_pages_test.rb -n test_measure_visual_page_benchmarks
+          echo "=== fc-match sorts ==="
+          fc-match -s "sans-serif" | head -8
+          fc-match -s "serif" | head -8
+          fc-match -s "monospace" | head -8
+          fc-match "Georgia"
+          echo "=== installed font families ==="
+          fc-list : family | sort -u | head -100
+          echo "=== liberation files ==="
+          fc-list "Liberation Sans" file | head -5
+          dpkg -l | grep -iE "fonts-|fontconfig" | head -30
       - name: Preserve web performance report
         if: always()
         uses: actions/upload-artifact@v7
