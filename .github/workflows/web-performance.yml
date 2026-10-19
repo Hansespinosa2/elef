@@ -63,6 +63,11 @@ jobs:
           sudo fc-cache -f >/dev/null
           fc-match "sans-serif" | grep -q "Liberation Sans"
           fc-match "serif" | grep -q "Liberation Serif"
+          echo "--- elef perf font snapshot ---"
+          for family in sans-serif serif monospace system-ui ui-sans-serif Georgia "Times New Roman" Arial; do
+            printf "%-16s => " "$family"; fc-match "$family" || true
+          done
+          echo "installed: Liberation=$(fc-list | grep -ci liberation) DejaVu=$(fc-list | grep -ci dejavu) Noto=$(fc-list | grep -ci noto) Ubuntu=$(fc-list | grep -ci ubuntu)"
       - name: Record web performance over twenty samples per fixture
         env:
           RAILS_ENV: test
