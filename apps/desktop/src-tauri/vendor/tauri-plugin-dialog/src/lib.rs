@@ -103,7 +103,7 @@ impl<R: Runtime> Dialog<R> {
     ///   .setup(|app| {
     ///     app.dialog()
     ///       .message("Are you sure?")
-    ///       .buttons(MessageDialogButtons::OkCancelCustom("Yes", "No"))
+    ///       .buttons(MessageDialogButtons::OkCancelCustom("Yes".to_string(), "No".to_string()))
     ///       .show(|yes| {
     ///         println!("user said {}", if yes { "yes" } else { "no" });
     ///       });
@@ -144,7 +144,7 @@ impl<R: Runtime> Dialog<R> {
     ///     std::thread::spawn(move || {
     ///       let yes = handle.dialog()
     ///         .message("Are you sure?")
-    ///         .buttons(MessageDialogButtons::OkCancelCustom("Yes", "No"))
+    ///         .buttons(MessageDialogButtons::OkCancelCustom("Yes".to_string(), "No".to_string()))
     ///         .blocking_show();
     ///     });
     ///

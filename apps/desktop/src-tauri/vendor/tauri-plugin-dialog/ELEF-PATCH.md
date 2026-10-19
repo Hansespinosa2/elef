@@ -15,6 +15,10 @@ dependencies. That chain otherwise leaves unmaintained `zvariant`,
 The existing GTK backend stays enabled; no audit policy or capability is relaxed.
 `MessageDialogKind` derives its existing `Default::Info` implementation to
 pass current clippy without a lint suppression; its value is unchanged.
+The two `Dialog::message` doc examples convert their custom button labels
+with `.to_string()`: upstream passes `&str` literals to the
+`OkCancelCustom(String, String)` variant, which never compiles, and Elef
+runs doctests. Docs only; no runtime behavior changes.
 
 This is a patched third-party dependency of the desktop host. It participates
 in the existing workspace formatting, lint and compilation checks; formatting
