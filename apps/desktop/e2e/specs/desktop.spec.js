@@ -969,6 +969,15 @@ class DesktopEditorUi {
       ;(async () => {
         let outcome
         try {
+          // Work-open focuses the active visual passage, and while a
+          // passage carries the native caret the input bridge tracks the
+          // engine selection from it — programmatic cursor moves would be
+          // clobbered back. This scenario asserts gutter tracking of the
+          // CodeMirror cursor, so hand the caret to the editor first
+          // (mirroring the web system test's unfocused-passage setup).
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+          window.getSelection()?.removeAllRanges()
+          editor.view.focus()
           editor.loadDocument("One\ntwo\nthree\nfour")
           editor.setSelectionRange(0)
           await twoFrames()
