@@ -91,12 +91,23 @@ class PresentationsTest < ApplicationSystemTestCase
   # Changes a block's alignment through its hover pill: focusing the block
   # reveals the pill (hover reveal is pinned separately in art_test.rb).
   def select_block_alignment(slide_index, block_index, value)
-    shell = first(
-      "select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']",
-      visible: :all
-    ).find(:xpath, "./ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' slide-block-shell ')][1]")
-    shell.find(".slide-block").click
-    find("select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']").select(value)
+    # Focusing the block can trigger an async re-projection that replaces
+    # the pill between find and select; re-resolve bounded times (same
+    # idiom as type_visual_text). Callers still assert the resulting
+    # source and slide positions, so a retry never masks a lost update.
+    attempts = 0
+    begin
+      shell = first(
+        "select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']",
+        visible: :all
+      ).find(:xpath, "./ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' slide-block-shell ')][1]")
+      shell.find(".slide-block").click
+      find("select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']").select(value)
+    rescue Selenium::WebDriver::Error::StaleElementReferenceError
+      attempts += 1
+      retry if attempts < 3
+      raise
+    end
   end
 
   def type_visual_text(selector, visible_text, replacement)

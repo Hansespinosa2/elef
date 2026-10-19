@@ -320,10 +320,12 @@ class VisualRevealTest < ApplicationSystemTestCase
     assert_selector ".editor-inline-active", count: 2, wait: 5
     page.driver.browser.action.send_keys(:backspace).perform
     assert_equal "First *ab* last.\n", engine_source
-    # The restored caret reveals the surviving emphasis locally. Once it
-    # leaves the passage, the same source must regain reader appearance.
-    page.execute_script("document.activeElement?.blur()")
-    wait_for_fresh_projection
+    # The restored caret reveals the surviving emphasis locally.
+    assert_selector ".document-editor-block", text: "First *ab* last.", wait: 10
+    # Moving the caret out of the passage restores reader appearance for
+    # the same source (blur alone keeps the selection inside the passage,
+    # so it must not clear the reveal).
+    place_caret_in(".document-editor-block p", child_index: 0, offset: 1)
     assert_selector ".document-editor-block", text: "First ab last.", wait: 10
   end
 

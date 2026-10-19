@@ -29,6 +29,13 @@ test("shared rendering styles preserve slide layouts and document typography", a
     const measured = {}
     for (const [target, css] of Object.entries(styles)) {
       await page.setContent(`<style>${css}\n*{box-sizing:border-box}body{margin:0}.fixture-root{width:1280px}</style><div class="fixture-root">${html}</div>`)
+      // Steady-state simulation: paginate() adds is-paginated synchronously
+      // at pass start and never removes it, so the pre-pagination gate
+      // (content-visibility:auto with no intrinsic size) never paints at
+      // runtime — but in this static page it makes measurement racy. Mark
+      // the surface paginated to measure the state users actually see.
+      // Frames stay unsealed so their layout stays genuinely measured.
+      await page.evaluate(() => { document.querySelector(".document-surface")?.classList.add("is-paginated") })
       measured[target] = await page.evaluate(() => {
         const selectors = [".slide-frame", ".slide", ".slide h1", ".slide p", ".slide-regions", ".document-surface", ".document-surface h1", ".document-surface p"]
         const styles = Object.fromEntries(selectors.flatMap(selector => {
