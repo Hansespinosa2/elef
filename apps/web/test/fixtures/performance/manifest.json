@@ -19,7 +19,7 @@
     "browser": "Chromium 152.0.7977.82 (Arch Linux build), headless",
     "theme": "light",
     "typography": "modern",
-    "fonts": "document.fonts.status settled to loaded; KaTeX webfonts served locally",
+    "fonts": "document.fonts.status settled to loaded; KaTeX webfonts served locally; generic sans-serif/serif resolve to Liberation Sans/Serif (reference-fonts.conf; Ubuntu runners otherwise prefer DejaVu/Noto and paginate differently)",
     "images": "attached blobs (web, matched by basename) or work-folder images/ (desktop)",
     "line_endings": "LF"
   },
