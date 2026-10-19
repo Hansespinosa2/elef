@@ -142,7 +142,7 @@ export function mountEditActions({ field, getEditor, host = null, renderReferenc
   root.innerHTML =
     `<button type="button" class="edit-actions-button" aria-haspopup="menu" aria-expanded="false">Edit</button>` +
     `<div class="edit-actions-menu" role="menu" aria-label="Edit actions" hidden>${rows.join("")}</div>` +
-    `<dialog class="keyboard-reference" aria-labelledby="keyboard-reference-title">${renderReference(platform, { blocks: blockActions.length > 0 })}<form method="dialog"><button type="submit" class="keyboard-reference-close">Close</button></form></dialog>`;
+    `<dialog class="keyboard-reference" aria-labelledby="keyboard-reference-title">${renderReference(platform, { blocks: blockActions.length > 0 })}<button type="button" class="keyboard-reference-close">Close</button></dialog>`;
   toolbar.append(root);
 
   const button = root.querySelector<HTMLButtonElement>(".edit-actions-button");
@@ -234,6 +234,14 @@ export function mountEditActions({ field, getEditor, host = null, renderReferenc
     closeMenu();
   };
   const onDialogClose = () => button.focus();
+  // The dialog lives inside the editor form, where a nested form would be
+  // dropped by the parser and a submit button would submit the work. Close
+  // explicitly instead; native close() still fires the "close" refocus above.
+  const closeButton = dialog.querySelector<HTMLButtonElement>(".keyboard-reference-close");
+  const onCloseClick = () => {
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  };
 
   button.addEventListener("click", onButtonClick);
   menu.addEventListener("mousedown", onRowMouseDown);
@@ -241,6 +249,7 @@ export function mountEditActions({ field, getEditor, host = null, renderReferenc
   menu.addEventListener("keydown", onMenuKeydown);
   owner.addEventListener("pointerdown", onOutsidePointerDown, true);
   dialog.addEventListener("close", onDialogClose);
+  closeButton?.addEventListener("click", onCloseClick);
 
   return {
     root,
@@ -251,6 +260,7 @@ export function mountEditActions({ field, getEditor, host = null, renderReferenc
       menu.removeEventListener("keydown", onMenuKeydown);
       owner.removeEventListener("pointerdown", onOutsidePointerDown, true);
       dialog.removeEventListener("close", onDialogClose);
+      closeButton?.removeEventListener("click", onCloseClick);
       root.remove();
     },
   };

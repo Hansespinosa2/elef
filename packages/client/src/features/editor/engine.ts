@@ -1053,8 +1053,20 @@ export class EditorEngine {
       const gutter = this.view.dom.querySelector(".cm-lineNumbers")
       if (!gutter) return
 
-      this.view.dispatch({
-        effects: this.lineNumbersCompartment.reconfigure(this.createLineNumbersExtension())
+      // Sync gutter text directly instead of reconfiguring the compartment:
+      // a per-selection extension rebuild does not reliably re-render on
+      // WebKit (desktop e2e vim-relative-line-numbers reads stale values),
+      // while this DOM sync is green there and everywhere else. Numbers
+      // still come from the shared formatLineNumber helper, so the
+      // compartment's initial render and this refresh cannot disagree.
+      const contentLeft = this.view.contentDOM.getBoundingClientRect().left + 1
+      gutter.querySelectorAll(".cm-gutterElement").forEach((element) => {
+        if (!(element instanceof HTMLElement) || element.style.visibility === "hidden") return
+        const rect = element.getBoundingClientRect()
+        const position = this.view.posAtCoords({ x: contentLeft, y: rect.top + rect.height / 2 })
+        if (position === null) return
+        const line = this.view.state.doc.lineAt(position).number
+        element.textContent = formatLineNumber(line, this.view.state, this.lineNumberMode)
       })
     })
   }

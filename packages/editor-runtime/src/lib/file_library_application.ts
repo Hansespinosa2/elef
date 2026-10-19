@@ -1230,7 +1230,19 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       showNotice("Open a presentation Work to start presentation mode.")
       return
     }
-    if (!(await elements.editorForm.previewController?.refresh())) {
+    const preview = elements.editorForm.previewController
+    if (!preview) {
+      showNotice("Render the presentation before starting presentation mode.", "error")
+      return
+    }
+    // Work-open focuses the active passage, so the projection is usually
+    // still editing here — and refresh defers while editing, reporting
+    // failure for an up-to-date render. Blur first (same as openWorkNow):
+    // the focusout handler installs any pending projection, and the task
+    // boundary lets that microtask land before the refresh below runs.
+    preview.finishEditing()
+    await new Promise(resolve => setTimeout(resolve, 0))
+    if (!(await preview.refresh())) {
       showNotice("Render the presentation before starting presentation mode.", "error")
       return
     }

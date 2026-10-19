@@ -1128,6 +1128,27 @@ class DesktopEditorUi {
       if (!focus?.active || !focus.selectionInsideBlock) {
         throw new Error(`The visual editor did not receive focus before native typing: ${JSON.stringify(focus)}`)
       }
+      // Vim persists across scenarios in this shared session: in visual
+      // normal mode "$" is a motion and inserts nothing (by design, same
+      // as source mode). Enter insert mode first, mirroring the source
+      // branch below; before the display-math key listener attaches so
+      // the "i" press stays out of the expected key sequence.
+      const visualVimState = await browser.execute(() => {
+        const editor = document.querySelector("#desktop-editor-field")?.editorController
+        return {
+          enabled: editor?.vimEnabled === true,
+          insertMode: editor?.vimMode?.startsWith("insert") === true
+        }
+      })
+      if (visualVimState.enabled && !visualVimState.insertMode) {
+        typeNativeText("i", { activate: false })
+        await browser.waitUntil(async () => browser.execute(() =>
+          document.querySelector("#desktop-editor-field")?.editorController?.vimMode?.startsWith("insert") === true
+        ), {
+          timeout: 5_000,
+          timeoutMsg: "The visual editor did not enter Vim insert mode before display-math input"
+        })
+      }
     } else {
       target = await $("#work-source-editor .cm-content")
       await target.waitForDisplayed()

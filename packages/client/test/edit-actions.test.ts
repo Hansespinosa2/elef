@@ -209,6 +209,28 @@ test("the reference row opens the keyboard reference dialog", () => {
   mounted.dispose();
 });
 
+test("the reference Close button closes without submitting its outer form", () => {
+  const field = shell({});
+  const { editor } = fakeEditor();
+  const mounted = mountEditActions({ field, getEditor: () => editor, platform: "mac", renderReference: renderKeyboardReference });
+  assert.ok(mounted);
+
+  activeRow(mounted, "keyboard-shortcuts").dispatchEvent(
+    mouseEvent(field.ownerDocument, "mousedown"),
+  );
+
+  const dialog = mounted.root.querySelector("dialog.keyboard-reference") as HTMLElement;
+  assert.equal(dialog.hasAttribute("open"), true);
+  const close = dialog.querySelector(".keyboard-reference-close") as HTMLButtonElement;
+  // The dialog renders inside the editor form, where the parser drops a
+  // nested form: a submit-typed Close would submit the work instead of
+  // dismissing the reference.
+  assert.equal(close.getAttribute("type"), "button");
+  close.dispatchEvent(mouseEvent(field.ownerDocument, "click"));
+  assert.equal(dialog.hasAttribute("open"), false);
+  mounted.dispose();
+});
+
 test("the reference renders every registry action plus the editor triggers", () => {
   const html = renderKeyboardReference("other");
   for (const action of SHORTCUT_ACTIONS) {
