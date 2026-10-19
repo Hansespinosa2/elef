@@ -190,6 +190,21 @@ class VimEditorTest < ApplicationSystemTestCase
     page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
   end
 
+  test "Vim visual mode keeps the empty engine panels hidden and the projection in view" do
+    document = Document.create!(title: "Vim panels", source: "A *warm* word.")
+    visit edit_document_path(document)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector ".editor-projection .document-editor-block", wait: 10
+    # CodeMirror copies editor theme classes onto the custom panel container;
+    # JS-injected theme rules must not paint the empty container over the page.
+    assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.visual-engine-panels')).display")
+    projection_top = page.evaluate_script("document.querySelector('.editor-projection').getBoundingClientRect().top")
+    assert_operator projection_top, :<, page.evaluate_script("window.innerHeight")
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
   test "Vim visual mode highlights horizontal selections with the Aradia palette" do
     document = Document.create!(title: "Visual selection", source: "abcdef\nsecond line")
     visit settings_path

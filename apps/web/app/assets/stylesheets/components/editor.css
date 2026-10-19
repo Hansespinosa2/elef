@@ -370,8 +370,12 @@ li.editor-reveal-marker { list-style: none; }
 .keyboard-reference-close:hover { background: var(--oradia-slate-700); }
 
 /* Engine panels mount beside the toolbar while visual passages own the caret. */
+/* CodeMirror copies the editor theme classes onto a custom panel container
+   (PanelGroup#syncClasses), so JS-injected theme rules can outrank the plain
+   :empty selector and paint an empty container as a dark flex box. Empty
+   chrome must never render: keep the important. */
 .visual-engine-panels:empty,
-.visual-editor-form[data-editor-mode="source"] .visual-engine-panels { display: none; }
+.visual-editor-form[data-editor-mode="source"] .visual-engine-panels { display: none !important; }
 .visual-engine-panels { background: var(--oradia-slate-950); border-radius: 0.5rem; color: var(--oradia-ink); margin-block: 0.5rem; position: relative; z-index: 8; }
 .visual-engine-panels .cm-panel { padding: 0.65rem; }
 .visual-engine-panels input { background: var(--oradia-slate-800); border: 1px solid var(--oradia-line); border-radius: 0.3rem; color: inherit; padding: 0.25rem 0.4rem; }
