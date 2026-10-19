@@ -140,6 +140,10 @@ class VisualPagesTest < ApplicationSystemTestCase
   JAVASCRIPT
 
   def install_perf_probes
+    # Restarting the Selenium driver bypasses Capybara's initial screen
+    # sizing. Pin the measured viewport on every fresh browser, including
+    # input probes after the cold-open samples.
+    page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: 1400, height: 1000, deviceScaleFactor: 1, mobile: false)
     page.driver.browser.execute_cdp(
       "Page.addScriptToEvaluateOnNewDocument", source: PROBE_SCRIPT
     )

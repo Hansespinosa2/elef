@@ -302,7 +302,12 @@ test("structural source operations commit through the bound session", async () =
   // plus the suppress+render typing branch and the display-math positional
   // patch)…
   assert.equal((clientEditor.match(/\.commitSource\(/g) || []).length, 2)
-  assert.equal((clientEditor.match(/\.replaceRange\(/g) || []).length, 4)
+  // A native cross-block selection is one precise ranged edit, rather
+  // than a whole-buffer structural replacement. Admit that exact route
+  // separately and retain the existing guard on every other direct call.
+  const crossBlockPatch = "editor.replaceRange(ranged.insert, ranged.from, ranged.to)"
+  assert.equal(clientEditor.split(crossBlockPatch).length - 1, 1)
+  assert.equal((clientEditor.replace(crossBlockPatch, "").match(/\.replaceRange\(/g) || []).length, 4)
   assert.match(visualEditor, /new DocumentEditor\(/)
   assert.equal((documentEditor.match(/\.commitSource\(/g) || []).length, 3)
   assert.match(overview, /new SlideOverview\(/)

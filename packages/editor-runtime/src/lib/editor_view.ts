@@ -61,11 +61,10 @@ const EDITOR_VIEW = `
           <div class="snippet-palette" data-mermaid-assist-target="palette" hidden role="listbox" aria-label="Mermaid suggestions"></div>
           <div class="snippet-palette" data-metadata-assist-target="palette" hidden role="listbox" aria-label="Metadata suggestions"></div>
           <div class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div>
-          <p class="field-hint editor-mode-hint">Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type <code>/trigger</code> for document structures and <code>:align</code> or <code>:footnote</code> for Elef directives. Type <code>[[</code> to link another document. In math, type <code>@a</code>, <code>@frac</code>, or <code>@gather</code>; Tab walks multi-slot expressions. Type <code>/diagram</code> to open Mermaid Assist. Math transforms such as <code>$x.b.vec.t$</code> commit with Enter or Tab.</p>
+          <p class="field-hint editor-mode-hint">Edit directly on the page. Type / for blocks or @ inside math.</p>
         </div>
 
         <div class="presentation-editor-tools" aria-label="Presentation editing tools" data-editor-view-target="presentationTools">
-          <span class="presentation-editor-help">Edit slide text directly. Use the controls on each slide for structure and positioning.</span>
         </div>
         <section class="slide-overview" aria-labelledby="slide-overview-heading" data-editor-view-target="slideOverview">
           <div class="slide-overview-heading-row">
@@ -411,15 +410,9 @@ export function configureEditorKind(root: Element | null, kind: string, {
   sourceInput.dataset.action = [...actions].join(" ")
 
   const hint = root.querySelector(".editor-mode-hint") as Element
-  if (visualEditingEnabled && documentLinksEnabled) {
-    hint.textContent = isDocument
-      ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist."
-      : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab."
-  } else if (isDocument) {
-    hint.textContent = "Markdown source stays canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist."
-  } else {
-    hint.textContent = "Markdown source stays canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab."
-  }
+  hint.textContent = visualEditingEnabled
+    ? `Edit directly on the page. Type / for blocks${documentLinksEnabled ? ", [[ for links" : ""}, or @ inside math.`
+    : "Write in Markdown. Type / for blocks or @ inside math."
   ;(root.querySelector('[data-editor-view-target="mediaButton"]') as Element).textContent = isDocument ? "Add image" : "Add image or MP4"
   ;(root.querySelector('[data-editor-view-target="mediaInput"]') as Element).setAttribute("accept", isDocument ? "image/*" : "image/*,video/mp4")
   const presentationTools = root.querySelector('[data-editor-view-target="presentationTools"]') as HTMLElement | null

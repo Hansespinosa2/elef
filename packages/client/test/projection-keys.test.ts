@@ -74,6 +74,8 @@ function stubHost(editor: ProjectionKeyEditor | null) {
     suppressedDuringDispatch: null as boolean | null,
     flushed: 0,
     restored: [] as Array<[number, string | null]>,
+    restoredRanges: [] as Array<[number, number, string | null]>,
+    selectionsRestored: 0,
     dispatched: [] as string[],
     flushPendingProjectionEdits: () => {
       host.flushed += 1;
@@ -81,6 +83,14 @@ function stubHost(editor: ProjectionKeyEditor | null) {
     restoreCaret: (sourceOffset: number, preferredBlockId: string | null) => {
       host.restored.push([sourceOffset, preferredBlockId]);
       return true;
+    },
+    restoreSelection: (anchor: number, head: number, preferredBlockId: string | null) => {
+      host.restoredRanges.push([anchor, head, preferredBlockId]);
+      return true;
+    },
+    refreshVimNormalCaret: () => {},
+    restoreSelections: () => {
+      host.selectionsRestored += 1;
     },
     block: null as unknown as Element,
   };
@@ -96,6 +106,8 @@ function stubHost(editor: ProjectionKeyEditor | null) {
   return host as unknown as ProjectionKeyHost & {
     flushed: number;
     restored: Array<[number, string | null]>;
+    restoredRanges: Array<[number, number, string | null]>;
+    selectionsRestored: number;
     dispatched: string[];
     suppressedDuringDispatch: boolean | null;
     block: Element;
@@ -171,7 +183,7 @@ test("source-changing Vim commands schedule a refresh with caret restoration", (
   assert.deepEqual(host.dispatched, ["input"]);
 });
 
-test("multi-range Vim outcomes collapse to the main head", () => {
+test("multi-range Vim outcomes survive and repaint on the projection", () => {
   const editor = stubEditor({ selectionHead: 4 });
   editor.handleVimKey = () => {
     (editor as unknown as { selectionRangeCount: number }).selectionRangeCount = 3;
@@ -180,8 +192,9 @@ test("multi-range Vim outcomes collapse to the main head", () => {
   const host = stubHost(editor);
 
   assert.equal(routeProjectionVimKey(host, keyEvent("v"), host.block), true);
-  assert.deepEqual(editor.rangesSet, [[4, 4]]);
+  assert.deepEqual(editor.rangesSet, []);
   assert.deepEqual(host.restored, [[4, "b1"]]);
+  assert.equal(host.selectionsRestored, 1);
 });
 
 test("declined plain Vim keys swallow except navigation", () => {
@@ -271,7 +284,7 @@ test("unbound Alt combinations fall through to native input", () => {
   assert.equal(event.defaultPrevented, false);
 });
 
-test("multi-range keymap outcomes collapse to the main head", () => {
+test("multi-range keymap outcomes survive and repaint on the projection", () => {
   const editor = stubEditor({ selectionHead: 4 });
   editor.runKeymap = () => {
     (editor as unknown as { selectionRangeCount: number }).selectionRangeCount = 2;
@@ -280,11 +293,26 @@ test("multi-range keymap outcomes collapse to the main head", () => {
   const host = stubHost(editor);
 
   assert.equal(routeProjectionKeymapKey(host, keyEvent("ArrowUp", { metaKey: true, altKey: true }), host.block), true);
-  assert.deepEqual(editor.rangesSet, [[4, 4]]);
+  assert.deepEqual(editor.rangesSet, []);
   assert.deepEqual(host.restored, [[4, "b1"]]);
+  assert.equal(host.selectionsRestored, 1);
 });
 
-test("panel-anchored shortcuts stay native", () => {
+test("multi-range structural keys route through the shared keymap", () => {
+  for (const key of ["Backspace", "Delete", "Enter"]) {
+    const editor = stubEditor({ selectionHead: 4, selectionRangeCount: 2, runKeymap: () => true });
+    const host = stubHost(editor);
+    assert.equal(routeProjectionKeymapKey(host, keyEvent(key), host.block), true);
+    assert.deepEqual(host.restored, [[4, "b1"]]);
+  }
+
+  const editor = stubEditor({ selectionHead: 4 });
+  editor.runKeymap = () => true;
+  const host = stubHost(editor);
+  assert.equal(routeProjectionKeymapKey(host, keyEvent("Backspace"), host.block), false);
+});
+
+test("panel and completion shortcuts use the engine keymap", () => {
   const events = [
     keyEvent("f", { metaKey: true }),
     keyEvent("f", { ctrlKey: true }),
@@ -293,10 +321,10 @@ test("panel-anchored shortcuts stay native", () => {
     keyEvent(" ", { ctrlKey: true }),
   ];
   for (const event of events) {
-    const editor = stubEditor();
+    const editor = stubEditor({ runKeymap: () => true });
     const host = stubHost(editor);
-    assert.equal(routeProjectionKeymapKey(host, event, host.block), false);
-    assert.deepEqual(editor.keymapCalls, []);
+    assert.equal(routeProjectionKeymapKey(host, event, host.block), true);
+    assert.equal(event.defaultPrevented, true);
   }
 });
 
@@ -362,7 +390,7 @@ test("source-changing shortcuts schedule a refresh with caret restoration", () =
   assert.deepEqual(host.dispatched, ["input"]);
 });
 
-test("ranged keymap outcomes restore the prior selection and keep native behavior", () => {
+test("ranged keymap outcomes paint the engine range on the projection", () => {
   const editor = stubEditor({ selectionStart: 2, selectionEnd: 2, selectionHead: 2 });
   editor.runKeymap = () => {
     editor.setSelectionRange(0, 5);
@@ -371,25 +399,29 @@ test("ranged keymap outcomes restore the prior selection and keep native behavio
   const host = stubHost(editor);
   const event = keyEvent("a", { metaKey: true });
 
-  assert.equal(routeProjectionKeymapKey(host, event, host.block), false);
-  assert.equal(event.defaultPrevented, false);
-  assert.deepEqual(editor.rangesSet, [[0, 5], [2, 2]]);
-  assert.deepEqual(host.restored, []);
+  assert.equal(routeProjectionKeymapKey(host, event, host.block), true);
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(editor.rangesSet, [[0, 5]]);
+  assert.deepEqual(host.restored, [[5, "b1"]]);
+  assert.deepEqual(host.restoredRanges, [[0, 5, "b1"]]);
+  assert.equal(host.selectionsRestored, 1);
 });
 
-test("ranged keymap outcomes preserve reversed selections when restoring", () => {
+test("ranged keymap outcomes preserve reversed selections when painting", () => {
   const editor = stubEditor({ selectionStart: 5, selectionEnd: 9, selectionHead: 5 });
   editor.runKeymap = () => {
-    editor.setSelectionRange(0, 5);
+    editor.setSelectionRange(5, 0);
     return true;
   };
   const host = stubHost(editor);
 
-  assert.equal(routeProjectionKeymapKey(host, keyEvent("a", { metaKey: true }), host.block), false);
-  assert.deepEqual(editor.rangesSet, [[0, 5], [9, 5]]);
+  assert.equal(routeProjectionKeymapKey(host, keyEvent("a", { metaKey: true }), host.block), true);
+  assert.deepEqual(editor.rangesSet, [[5, 0]]);
+  assert.deepEqual(host.restored, [[0, "b1"]]);
+  assert.deepEqual(host.restoredRanges, [[5, 0, "b1"]]);
 });
 
-test("occurrence selection swallows instead of opening the bookmark dialog", () => {
+test("occurrence selection routes through the engine keymap and paints", () => {
   const editor = stubEditor({ selectionStart: 2, selectionEnd: 2, selectionHead: 2 });
   editor.runKeymap = () => {
     editor.setSelectionRange(2, 5);
@@ -400,8 +432,10 @@ test("occurrence selection swallows instead of opening the bookmark dialog", () 
 
   assert.equal(routeProjectionKeymapKey(host, event, host.block), true);
   assert.equal(event.defaultPrevented, true);
-  assert.deepEqual(editor.rangesSet, [[2, 5], [5, 5]]);
+  assert.deepEqual(editor.rangesSet, [[2, 5]]);
   assert.deepEqual(host.restored, [[5, "b1"]]);
+  assert.deepEqual(host.restoredRanges, [[2, 5, "b1"]]);
+  assert.equal(host.selectionsRestored, 1);
 });
 
 test("keymap routing flushes pending projection edits first", () => {
@@ -411,4 +445,14 @@ test("keymap routing flushes pending projection edits first", () => {
   host.pendingProjectionEdits = { size: 1 };
   assert.equal(routeProjectionKeymapKey(host, keyEvent("z", { metaKey: true }), host.block), true);
   assert.equal(host.flushed, 1);
+});
+
+
+test("opening an engine panel preserves its input focus", () => {
+  const editor = stubEditor({ runKeymap: () => true, projectionPanelFocused: true });
+  const host = stubHost(editor);
+  const event = keyEvent("f", { ctrlKey: true });
+  assert.equal(routeProjectionKeymapKey(host, event, host.block), true);
+  assert.equal(event.defaultPrevented, true);
+  assert.deepEqual(host.restored, []);
 });

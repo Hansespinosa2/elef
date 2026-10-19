@@ -2,7 +2,7 @@
 import { createDocumentState } from "./document_state.js"
 import { Compartment, EditorState } from "@codemirror/state"
 import type { ChangeSet, Extension } from "@codemirror/state"
-import { EditorView, lineNumbers, runScopeHandlers } from "@codemirror/view"
+import { EditorView, lineNumbers, panels, runScopeHandlers } from "@codemirror/view"
 import type { ViewUpdate } from "@codemirror/view"
 import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
 import { basicSetup } from "codemirror"
@@ -144,6 +144,10 @@ export class EditorEngine {
     this.metadataVisible = readMetadataVisible()
     this.initialSource = this.readInitialSource()
     this.lineSeparator = detectLineSeparator(this.initialSource)
+    this.panelCompartment = new Compartment()
+    this.visualPanels = document.createElement("div")
+    this.visualPanels.className = "visual-engine-panels"
+    this.element.appendChild(this.visualPanels)
     this.vimCompartment = new Compartment()
     this.lineNumbersCompartment = new Compartment()
     this.updateVisualSurfaceGeometry = () => this.syncVisualSurfaceGeometry()
@@ -159,6 +163,7 @@ export class EditorEngine {
     this.surfaceTarget.addEventListener("click", this.handleSurfaceClick = (event: MouseEvent) => this.focusFromSurface(event))
 
     this.documentExtensions = [
+      this.panelCompartment.of(panels()),
       this.vimCompartment.of(this.vimEnabled ? vim() : []),
       this.lineNumbersCompartment.of(this.createLineNumbersExtension()),
       ...basicSetup.slice(1),
@@ -255,6 +260,7 @@ export class EditorEngine {
     this.view?.dom.removeEventListener("keydown", this.handleEscapeTabFocus)
     this.unbindVimEvents()
     this.view?.destroy()
+    this.visualPanels?.remove()
     if (this.element.editorController === this) delete this.element.editorController
   }
 
@@ -373,6 +379,8 @@ export class EditorEngine {
     const preferredBlockId = visualCaret?.blockId ?? null
 
     this.editingMode = nextMode
+    this.view.dispatch({ effects: this.panelCompartment.reconfigure(panels(nextMode === "visual"
+      ? { topContainer: this.visualPanels, bottomContainer: this.visualPanels } : {})) })
     if (nextMode === "visual" && previousMode !== "visual") {
       this.projectionNavigationOccurred = false
       this.pendingProjectionInteraction = null
@@ -439,6 +447,10 @@ export class EditorEngine {
     if (this.editingMode !== "visual" || !(event.target instanceof Element)) return
     const projection = event.target.closest(".editor-projection")
     if (!projection || !this.form?.contains(projection)) return
+    if (event.type === "pointerdown" && this.selectionRangeCount > 1) {
+      this.setSelectionRange(this.selectionHead)
+      this.projectionController()?.restoreSelections?.()
+    }
     if (event instanceof KeyboardEvent) {
       const movesSelection = ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown"].includes(event.key)
       const selectsAll = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "a"
@@ -526,6 +538,18 @@ export class EditorEngine {
     return this.view.state.selection.ranges.length
   }
 
+  get selectionRanges(): Array<{ anchor: number; head: number }> {
+    return this.view.state.selection.ranges.map(({ anchor, head }) => ({ anchor, head }))
+  }
+
+  replaceSelectionText(insert: string): void {
+    if (this.destroyed || !this.view) return
+    this.view.dispatch({
+      ...this.view.state.replaceSelection(this.toEditorLineEndings(insert)),
+      userEvent: "input"
+    })
+  }
+
   // Routes one visual-mode key through the live Vim machinery, mirroring
   // the vim extension's own keydown flow (vimKeyFromEvent mapping, status
   // accumulation, multiSelectHandleKey with the "user" origin). Returns
@@ -574,6 +598,10 @@ export class EditorEngine {
   }): boolean {
     if (this.destroyed || !this.view) return false
     return runScopeHandlers(this.view, event as KeyboardEvent, "editor")
+  }
+
+  get projectionPanelFocused(): boolean {
+    return this.editingMode === "visual" && Boolean(this.visualPanels?.contains(document.activeElement))
   }
 
   focus(): void {
@@ -683,6 +711,17 @@ export class EditorEngine {
 
   handleUpdate(update: ViewUpdate): void {
     this.reportLivePreviewState(update.state)
+    if (update.selectionSet && this.projectionPanelFocused) {
+      const field = document.activeElement as HTMLElement
+      const { anchor, head } = update.state.selection.main
+      queueMicrotask(() => {
+        if (this.destroyed || !this.visualPanels.contains(field)) return
+        const projection = this.projectionController()
+        projection?.restoreCaret?.(head, null)
+        projection?.restoreSelection?.(anchor, head, null)
+        field.focus({ preventScroll: true })
+      })
+    }
     if (update.selectionSet) {
       this.element.dispatchEvent(new Event("elef:editor-selection-change"))
       this.revealFrontmatterOnEntry(update.state)

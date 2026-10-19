@@ -36,7 +36,12 @@ class MediaPdfExportTest < ApplicationSystemTestCase
       image_selector = model == Document ? ".document-print img.presentation-media" : ".presentation-print img.presentation-media"
       assert_selector image_selector
       assert_operator page.evaluate_script("document.querySelector(#{image_selector.to_json}).naturalWidth"), :>, 0
-      assert_selector ".katex-html", minimum: 1, visible: :all
+      # The shared renderer uses native MathML in readers and print views.
+      # Assert the visible equation and its TeX annotation, not KaTeX's
+      # former HTML fallback tree.
+      assert_selector ".katex math", minimum: 1
+      assert_selector '.katex math annotation[encoding="application/x-tex"]', text: '\bar{x}', visible: :all
+      assert_selector ".katex math mover mi", text: "x"
       assert_no_text '$\\bar{x}$'
       if model == Presentation
         assert_equal "rgb(37, 42, 39)", page.evaluate_script("getComputedStyle(document.querySelector('.presentation-print .slide')).color")

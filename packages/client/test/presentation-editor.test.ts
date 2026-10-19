@@ -139,6 +139,7 @@ function stubDeps() {
     handleMathKeydown: () => false,
     syncActiveMath: (_element: unknown, flush: () => void) => flush(),
     syncActiveInline: () => {},
+    inlinePointForSourceOffset: () => null,
     setProjectionBlockEditable: () => {},
   };
 }
@@ -388,6 +389,7 @@ function syncFixture({ editable = true, collapsed = true }: { editable?: boolean
       ...stubDeps(),
       syncActiveMath: () => {},
       syncActiveInline: () => {},
+    inlinePointForSourceOffset: () => null,
       visibleOffsetAtPoint: () => 2,
       sourceOffsetForVisibleOffset: (_source: string, offset: number) => offset,
       visibleOffsetForSourceOffset: (source: string) => source.length,
@@ -466,6 +468,35 @@ test("presentation flush discards pending edits whose base no longer matches", (
 
   assert.equal(editor.value, `${"x".repeat(9)}First!${"x".repeat(5)}`);
   assert.equal(mount.editor.pendingProjectionEdits!.size, 0);
+  mount.destroy();
+});
+
+test("presentation cross-block beforeinput commits one source edit before the DOM can mutate", () => {
+  const { mount, editor, block } = syncFixture();
+  const second = block.ownerDocument.createElement("div");
+  second.dataset.editorBlockId = "b2"; second.textContent = "Last";
+  second.setAttribute("contenteditable", "true");
+  block.setAttribute("contenteditable", "true");
+  block.parentElement?.append(second);
+  editor.value = "First\n\nLast";
+  mount.editor.map!.editable_regions = [
+    { id: "r1", block_id: "b1", kind: "paragraph", editable: true, content_range: { start: 0, end: 5 } },
+    { id: "r2", block_id: "b2", kind: "paragraph", editable: true, content_range: { start: 7, end: 11 } },
+  ];
+  mount.editor.getSelection = () => ({
+    isCollapsed: false, anchorNode: block.firstChild, anchorOffset: 3, focusNode: second.firstChild, focusOffset: 2,
+  }) as unknown as Selection;
+  mount.editor.deps.visibleOffsetAtPoint = (_block, _node, offset) => offset;
+  const changes: unknown[] = [];
+  editor.replaceRange = (insert, from, to) => {
+    changes.push({ insert, from, to }); editor.value = editor.value.slice(0, from) + insert + editor.value.slice(to);
+  };
+  let prevented = false;
+  mount.editor.projectionBeforeinput({ target: block, inputType: "insertText", data: "X", preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
+  assert.equal(editor.value, "FirXst");
+  assert.deepEqual(changes, [{ insert: "X", from: 3, to: 9 }]);
+  assert.deepEqual(mount.editor.pendingCaretRestore, { sourceOffset: 4, preferredBlockId: null });
   mount.destroy();
 });
 
@@ -1067,5 +1098,107 @@ test("client presentation editor stale sync still sweeps without a focused block
   assert.equal(calls.length, 1);
   assert.equal(calls[0]?.block, first);
   assert.equal(calls[0]?.editable, false);
+  mount.destroy();
+});
+
+function fakeSelectionCanvas(existing: { remove(): void } | null = null) {
+  const appended: Array<{ className: string; children: unknown[] }> = [];
+  const canvas = {
+    ownerDocument: {
+      createRange: () => ({
+        setStart() {},
+        setEnd() {},
+        getClientRects: () => [{ left: 0, top: 0, width: 5, height: 10 }],
+      }),
+      createElement: () => {
+        const children: unknown[] = [];
+        return {
+          className: "",
+          style: { cssText: "" },
+          children,
+          setAttribute() {},
+          append: (child: unknown) => {
+            children.push(child);
+          },
+        };
+      },
+    },
+    querySelector: () => existing,
+    append: (child: { className: string; children: unknown[] }) => {
+      appended.push(child);
+    },
+  };
+  return { canvas: canvas as unknown as Element, appended };
+}
+
+function multiRangeEditor(ranges: Array<{ anchor: number; head: number }>) {
+  const editor = fakeEditor();
+  (editor as unknown as { selectionRanges: Array<{ anchor: number; head: number }> }).selectionRanges = ranges;
+  editor.selectionRangeCount = ranges.length;
+  return editor;
+}
+
+function stubCanvasPoints(mount: { editor: PresentationEditor }, mapped: number[]) {
+  mount.editor.selectionPointForSourceOffset = (offset: number) => {
+    mapped.push(offset);
+    return {
+      element: {} as unknown as HTMLElement,
+      node: { offset } as unknown as Node,
+      offset,
+      visibleOffset: offset,
+      blockId: "b2",
+    };
+  };
+}
+
+test("presentation restoreSelections paints every engine range through the caret point machinery", () => {
+  const { form } = mountForm();
+  const mount = mountEditor(form, testMap(), multiRangeEditor([{ anchor: 9, head: 12 }, { anchor: 14, head: 14 }]));
+  const { canvas, appended } = fakeSelectionCanvas();
+  mount.editor.canvasElement = canvas;
+  const mapped: number[] = [];
+  stubCanvasPoints(mount, mapped);
+
+  mount.editor.restoreSelections();
+
+  assert.deepEqual(mapped, [9, 12, 14, 14]);
+  assert.equal(appended.length, 1);
+  assert.equal(appended[0]?.className, "elef-projection-selections");
+  assert.equal(appended[0]?.children.length, 2);
+  mount.destroy();
+});
+
+test("presentation restoreSelections clears the stale layer for a single range", () => {
+  const { form } = mountForm();
+  const mount = mountEditor(form, testMap(), multiRangeEditor([{ anchor: 9, head: 9 }]));
+  let removed = 0;
+  const { canvas, appended } = fakeSelectionCanvas({ remove: () => { removed += 1; } });
+  mount.editor.canvasElement = canvas;
+  const mapped: number[] = [];
+  stubCanvasPoints(mount, mapped);
+
+  mount.editor.restoreSelections();
+
+  assert.equal(removed, 1);
+  assert.equal(appended.length, 0);
+  assert.deepEqual(mapped, []);
+  mount.destroy();
+});
+
+test("presentation restoreSelections clears without mapping in source mode", () => {
+  const { form } = mountForm();
+  form.setAttribute("data-editor-mode", "source");
+  const mount = mountEditor(form, testMap(), multiRangeEditor([{ anchor: 9, head: 12 }, { anchor: 29, head: 35 }]));
+  let removed = 0;
+  const { canvas, appended } = fakeSelectionCanvas({ remove: () => { removed += 1; } });
+  mount.editor.canvasElement = canvas;
+  mount.editor.selectionPointForSourceOffset = () => {
+    throw new Error("source mode must not map selection points");
+  };
+
+  mount.editor.restoreSelections();
+
+  assert.equal(removed, 1);
+  assert.equal(appended.length, 0);
   mount.destroy();
 });

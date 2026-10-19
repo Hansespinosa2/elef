@@ -1090,14 +1090,7 @@ class PresentationsTest < ApplicationSystemTestCase
     )
 
     visit edit_presentation_path(presentation)
-    page.execute_script(<<~JAVASCRIPT)
-      const heading = [...document.querySelectorAll('.editor-projection .slide-block')].find((block) => block.innerText.includes('Styled'));
-      heading.focus();
-      const strong = heading.querySelector('strong');
-      if (strong) strong.textContent = 'Visual';
-      else heading.textContent = heading.textContent.replace('Styled', 'Visual');
-      heading.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Visual' }));
-    JAVASCRIPT
+    type_visual_text(".slide-block", "Styled", "Visual")
     assert_field "Markdown source", with: "# **Visual** work\n\nBefore $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
     page.execute_script("document.activeElement.blur()")
     wait_for_fresh_projection

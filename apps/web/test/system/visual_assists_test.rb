@@ -190,4 +190,23 @@ class VisualAssistsTest < ApplicationSystemTestCase
     assert_no_selector '[data-edit-actions-row="trigger:link"]'
     assert_selector '[data-edit-actions-row="keyboard-shortcuts"]'
   end
+  test "visual find uses the engine search panel in both work kinds" do
+    [Document, Presentation].each do |model|
+      source = "# Search\n\nA *warm* word.\n\nAnother warm word."
+      work = model.create!(title: "Search", source: source)
+      visit model == Document ? edit_document_path(work) : edit_presentation_path(work)
+      assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
+      block = find(".editor-projection [contenteditable='true']", text: "Another warm word.")
+      block.click
+      block.send_keys([RUBY_PLATFORM.match?(/darwin/) ? :meta : :control, "f"])
+      field = find('.visual-engine-panels input[name="search"]')
+      field.set("warm")
+      field.send_keys(:enter)
+      assert_selector '.visual-engine-panels input[name="search"]:focus'
+      assert_equal "visual", page.evaluate_script("document.querySelector('form.visual-editor-form').dataset.editorMode")
+      assert_field "Markdown source", with: source
+      assert page.evaluate_script("window.getSelection().toString().includes('warm')")
+    end
+  end
+
 end

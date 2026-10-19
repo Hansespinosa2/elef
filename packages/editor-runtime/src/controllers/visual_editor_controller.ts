@@ -83,6 +83,14 @@ export default class extends Controller {
     return this.editor.restoreCaret(sourceOffset, preferredBlockId)
   }
 
+  restoreSelection(anchor: number, head: number, preferredBlockId: string | null) {
+    return this.editor.restoreSelection(anchor, head, preferredBlockId)
+  }
+
+  restoreSelections() {
+    return this.editor.restoreSelections()
+  }
+
   applyVisualAssistInsert(edit: any) {
     return this.editor.applyVisualAssistInsert(edit)
   }

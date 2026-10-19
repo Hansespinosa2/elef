@@ -301,10 +301,7 @@ class VisualRevealTest < ApplicationSystemTestCase
     assert_selector ".document-page-frame:last-child .editor-inline-active", wait: 5
   end
 
-  test "cross-block deletion commits faithfully per block" do
-    # Cross-block range deletion rides the pre-existing per-block bridge
-    # (block merging is a known unlanded increment); revelation only
-    # owes faithful per-block commits with no lost block anchors.
+  test "cross-block deletion replaces the complete selected source range" do
     document = Document.create!(title: "Reveal", source: "First *aa* end.\n\nStart *bb* last.\n")
     visit edit_document_path(document)
     wait_for_fresh_projection
@@ -312,6 +309,7 @@ class VisualRevealTest < ApplicationSystemTestCase
     page.execute_script(<<~JAVASCRIPT)
       (() => {
         const ems = document.querySelectorAll(".document-editor-block em");
+        ems[0].closest("[contenteditable='true']").focus({ preventScroll: true });
         const range = document.createRange();
         range.setStart(ems[0].firstChild, 1);
         range.setEnd(ems[1].firstChild, 1);
@@ -320,11 +318,13 @@ class VisualRevealTest < ApplicationSystemTestCase
       })()
     JAVASCRIPT
     assert_selector ".editor-inline-active", count: 2, wait: 5
-    find(".document-editor-block", text: "First").send_keys(:backspace)
-    sleep 1.0
-    assert_includes engine_source, "First"
-    assert_includes engine_source, "last."
-    assert_includes engine_source, "Start *bb* last."
+    page.driver.browser.action.send_keys(:backspace).perform
+    assert_equal "First *ab* last.\n", engine_source
+    # The restored caret reveals the surviving emphasis locally. Once it
+    # leaves the passage, the same source must regain reader appearance.
+    page.execute_script("document.activeElement?.blur()")
+    wait_for_fresh_projection
+    assert_selector ".document-editor-block", text: "First ab last.", wait: 10
   end
 
   test "blocks bound to alignment directives reveal normally" do

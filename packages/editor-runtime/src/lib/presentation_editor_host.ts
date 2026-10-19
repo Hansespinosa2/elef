@@ -11,7 +11,7 @@ import {
 } from "../controllers/editor_caret.js"
 import { markdownForVisibleText, renderInlineMath } from "../controllers/editor_markdown.js"
 import { handleMathClick, handleMathKeydown, recordMathMousedown, syncActiveMath } from "../controllers/editor_math.js"
-import { activeInlineMap, syncActiveInline } from "../controllers/editor_reveal.js"
+import { activeInlineMap, inlinePointForSourceOffset, syncActiveInline } from "../controllers/editor_reveal.js"
 import { setProjectionBlockEditable } from "./projection_editability.js"
 import { mountPresentationEditor } from "@elef/client"
 import type { DocumentEditorDeps, PresentationEditorDeps, PresentationEditorHost } from "@elef/client"
@@ -40,6 +40,7 @@ export function presentationEditorDeps(): PresentationEditorDeps {
     handleMathKeydown,
     syncActiveMath,
     syncActiveInline,
+    inlinePointForSourceOffset,
     setProjectionBlockEditable
   }
 }

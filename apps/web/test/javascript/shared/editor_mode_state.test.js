@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { EditorSelection, EditorState } from "@codemirror/state"
+import { Compartment, EditorSelection, EditorState } from "@codemirror/state"
 import { history, historyField } from "@codemirror/commands"
 import { sourceOffsetForVisibleOffset, visibleOffsetForSourceOffset } from "@elef/editor-runtime/test-internals"
 import { EditorEngine as EditorController } from "@elef/client/editor-test-internals"
@@ -45,6 +45,7 @@ function modeFixture(t, selection, visualCaret = null, source = "# Heading\n\nFi
   const controller = new EditorController(element)
   Object.assign(controller, {
     view, vim, vimEnabled: true, editingMode: "source",
+    panelCompartment: new Compartment(),
     element,
     form: { setAttribute() {}, querySelector: () => null, dispatchEvent() {}, contains: element => element === projection },
     projectionController: () => projection,

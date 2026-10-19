@@ -286,7 +286,26 @@ function activatePair(pair: RevealPair, source: string, selection: Selection | n
   const remap = (node: Node | null, offset: number): number | null => {
     if (!node) return null
     const inner = offsetInElement(element, node, offset)
-    return inner === null ? null : inner + token.open.length
+    if (inner !== null) return inner + token.open.length
+    // Selecting visible text can put an endpoint in the adjacent text
+    // node, at the same painted boundary. Keep hidden delimiters outside
+    // that selection when the construct swaps to its source span.
+    const block = element.closest("[data-editor-block-id]")
+    if (!block?.contains(node)) return null
+    const contents = doc.createRange()
+    contents.selectNodeContents(element)
+    const side = contents.comparePoint(node, offset)
+    const gap = doc.createRange()
+    if (side < 0) {
+      gap.setStart(node, offset)
+      gap.setEnd(element, 0)
+      if (gap.toString() === "") return token.open.length
+    } else if (side > 0) {
+      gap.setStart(element, element.childNodes.length)
+      gap.setEnd(node, offset)
+      if (gap.toString() === "") return slice.length - token.close.length
+    }
+    return null
   }
   const anchor = selection && selection.rangeCount > 0 ? remap(selection.anchorNode, selection.anchorOffset) : null
   const focus = selection && selection.rangeCount > 0 ? remap(selection.focusNode, selection.focusOffset) : null
@@ -315,6 +334,18 @@ function activatePair(pair: RevealPair, source: string, selection: Selection | n
     )
   }
   return span
+}
+
+// Engine motions can enter concealed delimiters with no distinct visible
+// offset. Resolve the verified source token before placing the native caret,
+// otherwise a motion lands in the preceding text and never triggers reveal.
+export function inlinePointForSourceOffset(fragments: Element[], source: string, offset: number): [Node, number] | null {
+  const pairs = pairRevealables(source, fragments.flatMap(outermostRevealables))
+  const pair = pairs?.find(({ token }) => offset >= token.start && offset < token.end)
+  if (!pair) return null
+  const span = pair.activeSpan ?? activatePair(pair, source, pair.element.ownerDocument.getSelection())
+  if (!span?.firstChild) return null
+  return [span.firstChild, Math.min(offset - pair.token.start, span.textContent?.length ?? 0)]
 }
 
 function deactivateSpan(span: HTMLElement, onFlush: (() => void) | null): void {

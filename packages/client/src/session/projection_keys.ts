@@ -27,6 +27,7 @@ export interface ProjectionKeyEditor {
   readonly selectionRangeCount: number
   readonly vimEnabled: boolean
   readonly insertMode: boolean
+  readonly projectionPanelFocused?: boolean
   setSelectionRange(anchor: number, head?: number): void
   handleVimKey(event: ProjectionKeyEventLike): boolean
   runKeymap(event: ProjectionKeyEventLike): boolean
@@ -41,6 +42,7 @@ export interface ProjectionKeyHost {
   restoreCaret(sourceOffset: number, preferredBlockId: string | null): boolean
   restoreSelection?(anchorSourceOffset: number, headSourceOffset: number, preferredBlockId: string | null): boolean
   refreshVimNormalCaret?(): void
+  restoreSelections?(): void
 }
 
 function hasModifier(event: ProjectionKeyEventLike): boolean {
@@ -56,51 +58,26 @@ function isClipboardCopy(event: ProjectionKeyEventLike): boolean {
   return (event.ctrlKey ? 1 : 0) + (event.metaKey ? 1 : 0) === 1
 }
 
-// Shortcuts whose UI anchors to the hidden engine surface stay native until
-// the completion/popup bridge lands: the find panel, find-next (which opens
-// the panel when no query exists), the goto-line dialog, and completion
-// start. Native find-in-page over the rendered Work is the better interim.
-function isPanelAnchored(event: ProjectionKeyEventLike): boolean {
-  if (!event.ctrlKey && !event.metaKey) return false
-  if (event.key === " " && event.ctrlKey && !event.metaKey && !event.altKey) return true
-  const key = event.key.toLowerCase()
-  if (key !== "f" && key !== "g") return false
-  if (key === "g" && event.altKey && !event.shiftKey) return true
-  return !event.altKey
-}
-
-// Occurrence selection would strand a ranged engine selection with no native
-// counterpart, and falling through opens the browser bookmark dialog.
-// Swallow it: the caret follows the command head instead. Ranged outcomes
-// from every other command restore the prior selection and keep native
-// behavior (select-all over the block, italic via the legacy path).
-function swallowsRangedOutcome(event: ProjectionKeyEventLike): boolean {
-  return !event.altKey && (event.ctrlKey !== event.metaKey) && !event.shiftKey
-    && event.key.toLowerCase() === "d"
-}
-
 function afterProjectionEngineKey(
   host: ProjectionKeyHost,
   editor: ProjectionKeyEditor,
   blockElement: Element,
   valueBefore: string,
 ): void {
-  // The projection shows a single caret; secondary engine ranges would act
-  // invisibly on later commands, so collapse them to the main head.
-  if (editor.selectionRangeCount > 1) editor.setSelectionRange(editor.selectionHead, editor.selectionHead)
   const head = editor.selectionHead
   const blockId = (blockElement as HTMLElement).dataset.editorBlockId ?? null
-  host.restoreCaret(head, blockId)
+  if (!editor.projectionPanelFocused) host.restoreCaret(head, blockId)
   // A ranged main selection (Vim visual) paints on the rendered text;
   // the collapsed head above stays as the fallback when either end
   // cannot map (concealed syntax) or the host has no range support.
-  if (editor.selectionStart !== editor.selectionEnd) {
+  if (editor.selectionStart !== editor.selectionEnd && !editor.projectionPanelFocused) {
     const anchor = head === editor.selectionEnd ? editor.selectionStart : editor.selectionEnd
     host.restoreSelection?.(anchor, head, blockId)
   }
   // Mode switches (normal/insert/visual) rarely move the selection, so
   // the normal-mode block cannot rely on selectionchange alone.
   host.refreshVimNormalCaret?.()
+  host.restoreSelections?.()
   if (editor.value !== valueBefore) {
     host.pendingCaretRestore = { sourceOffset: head, preferredBlockId: blockId }
     // The engine already holds the new source; the block DOM still shows
@@ -168,24 +145,11 @@ export function routeProjectionKeymapKey(
   if ((blockElement as HTMLElement).contentEditable !== "true") return false
   if (event.isComposing) return false
   const modified = hasModifier(event)
-  if (!modified && event.key !== "Tab") return false
-  if (isPanelAnchored(event)) return false
+  const multipleEdit = editor.selectionRangeCount > 1 && ["Backspace", "Delete", "Enter"].includes(event.key)
+  if (!modified && event.key !== "Tab" && !multipleEdit) return false
   if (host.pendingProjectionEdits?.size) host.flushPendingProjectionEdits()
   const valueBefore = editor.value
-  const headBefore = editor.selectionHead
-  const anchorBefore = headBefore === editor.selectionEnd ? editor.selectionStart : editor.selectionEnd
   if (!editor.runKeymap(event)) return false
-  if (editor.selectionStart !== editor.selectionEnd) {
-    if (swallowsRangedOutcome(event)) {
-      event.preventDefault()
-      const head = editor.selectionHead
-      editor.setSelectionRange(head, head)
-      afterProjectionEngineKey(host, editor, blockElement, valueBefore)
-      return true
-    }
-    editor.setSelectionRange(anchorBefore, headBefore)
-    return false
-  }
   event.preventDefault()
   afterProjectionEngineKey(host, editor, blockElement, valueBefore)
   return true

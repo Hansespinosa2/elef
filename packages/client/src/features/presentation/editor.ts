@@ -31,6 +31,8 @@ import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/p
 import { updateVimNormalCaret } from "../../session/vim_caret.js"
 import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
 import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
+import { projectionRangeEdit } from "../../session/projection_range.js"
+import { paintProjectionSelections } from "../../session/projection_selections.js"
 
 export interface EditorSourceRange {
   start: number
@@ -92,6 +94,7 @@ export interface PresentationEditorSeam {
   selectionEnd: number
   selectionHead: number
   selectionRangeCount: number
+  selectionRanges?: Array<{ anchor: number; head: number }>
   vimEnabled: boolean
   insertMode: boolean
   editingMode: string
@@ -125,6 +128,8 @@ export interface ProjectionKeyEvent {
 }
 
 export interface ProjectionBeforeinputEvent {
+  readonly cancelable?: boolean
+  preventDefault?(): void
   readonly target: EventTarget | null | undefined
   readonly inputType: string
   readonly data?: string | null | undefined
@@ -136,6 +141,7 @@ export interface ProjectionBeforeinputEvent {
 
 export interface PresentationEditorDeps {
   syncActiveMath(element: Element | null, flush: () => void): void
+  inlinePointForSourceOffset(fragments: Element[], source: string, offset: number): [Node, number] | null
   syncActiveInline(target: Element | null, getSource: (block: Element) => string | null, flush: () => void): void
   handleMathClick(event: ProjectionEvent, target: Element | null): boolean
   recordMathMousedown(event: ProjectionEvent, target: Element | null): void
@@ -315,9 +321,13 @@ export class PresentationEditor {
       this.rememberProjectionCaret()
     })
     const view = doc?.defaultView ?? null
-    on(view, "scroll", () => this.refreshVimNormalCaret(), true)
+    on(view, "scroll", () => {
+      this.refreshVimNormalCaret()
+      this.restoreSelections()
+    }, true)
     on(view, "resize", () => {
       this.refreshVimNormalCaret()
+      this.restoreSelections()
       this.placeAlignmentPills()
     })
 
@@ -360,6 +370,7 @@ export class PresentationEditor {
     this.source()?.classList.toggle("is-source-hidden", visual)
     this.syncProjectionEditability()
     this.refreshVimNormalCaret()
+    this.restoreSelections()
   }
 
   refreshVimNormalCaret(): void {
@@ -385,13 +396,14 @@ export class PresentationEditor {
 
   projectionLinkClicked(event: ProjectionEvent): void {
     if (this.deps.handleMathClick(event, this.canvas())) return
+    const link = (event.target as Element).closest?.(".editor-projection [contenteditable='true'] a")
+    const editable = link?.closest("[contenteditable='true']") as HTMLElement | null
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
     this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
-    const link = (event.target as Element).closest?.(".editor-projection [contenteditable='true'] a")
     if (!link) return
 
     event.preventDefault()
-    ;(link.closest("[contenteditable='true']") as HTMLElement | null)?.focus()
+    editable?.focus({ preventScroll: true })
   }
 
   // Precise-intent leg, shared with the document editor: caret-local
@@ -406,7 +418,7 @@ export class PresentationEditor {
     // steal a live suppression.
     this.suppressProjectionInput = false
     const editor = this.editorController
-    if (!editor || this.updatingSource || this.pendingProjectionEdits?.size) return
+    if (!editor || this.updatingSource) return
     const block = (event.target as Element | null | undefined)?.closest?.("[data-editor-block-id]") as HTMLElement | null | undefined
     const canvas = this.canvas()
     if (!block || !canvas?.contains(block)) return
@@ -415,6 +427,25 @@ export class PresentationEditor {
     if (!region) return
     const selection = this.getSelection()
     if (!selection?.anchorNode || !selection.focusNode) return
+    const ranged = projectionRangeEdit(event, canvas, selection, (endpoint, node, offset) => {
+      if (this.pendingProjectionEdits?.size) this.flushPendingProjectionEdits()
+      const endpointRegion = this.regionForBlock(endpoint.dataset.editorBlockId)
+      if (!endpointRegion) return null
+      const visible = this.deps.visibleOffsetAtPoint(endpoint, node, offset)
+      if (visible === null) return null
+      const slice = editor.value.slice(endpointRegion.content_range.start, endpointRegion.content_range.end)
+      const relative = alignVisibleOffset(slice, visibleBlockText(endpoint), visible)
+        ?? this.deps.sourceOffsetForVisibleOffset(slice, visible)
+      return endpointRegion.content_range.start + relative
+    })
+    if (ranged) {
+      event.preventDefault?.()
+      this.pendingCaretRestore = { sourceOffset: ranged.from + ranged.insert.length, preferredBlockId: null }
+      editor.replaceRange(ranged.insert, ranged.from, ranged.to)
+      ;(this.activeElement() as HTMLElement | null)?.blur()
+      return
+    }
+    if (this.pendingProjectionEdits?.size) return
     const endpointBlock = (node: Node): Element | null => {
       const element = (node.nodeType === this.Node.ELEMENT_NODE ? node : (node as ChildNode).parentElement) as Element | null
       return element?.closest?.("[data-editor-block-id]") ?? null
@@ -635,8 +666,14 @@ export class PresentationEditor {
       if (this.isProjectionFresh() === false) this.pendingCaretRestore = { sourceOffset, preferredBlockId }
       return false
     }
+    const region = this.allRegions().find((candidate) => candidate.block_id === point.blockId)
+    const inlinePoint = region ? this.deps.inlinePointForSourceOffset(
+      [point.element],
+      this.editorController.value.slice(region.content_range.start, region.content_range.end),
+      sourceOffset - region.content_range.start,
+    ) : null
     point.element.focus({ preventScroll: true })
-    this.getSelection()?.setPosition(point.node, point.offset)
+    this.getSelection()?.setPosition(inlinePoint?.[0] ?? point.node, inlinePoint?.[1] ?? point.offset)
     this.lastProjectionCaret = { blockId: point.blockId, visibleOffset: point.visibleOffset }
     return true
   }
@@ -657,6 +694,24 @@ export class PresentationEditor {
     this.deps.syncActiveMath(canvas, () => this.flushPendingProjectionEdits())
     this.deps.syncActiveInline(canvas, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     return true
+  }
+
+  // Repaints every engine selection range on the rendered slide text (see
+  // the document editor for the contract): the native selection owns the
+  // primary range, the overlay paints the rest, and a single range clears
+  // the layer. Ends map through the caret point machinery individually.
+  restoreSelections(): void {
+    const canvas = this.canvas()
+    const editor = this.editorController
+    if (!canvas || !editor) return
+    if (this.element.dataset.editorMode === "source") {
+      paintProjectionSelections(canvas, [], () => null)
+      return
+    }
+    paintProjectionSelections(canvas, editor.selectionRanges ?? [], (sourceOffset) => {
+      const point = this.selectionPointForSourceOffset(sourceOffset)
+      return point ? { node: point.node, offset: point.offset } : null
+    })
   }
 
   // Visual assist pipeline (session/projection_assist): shared with the
@@ -1377,7 +1432,10 @@ export class PresentationEditor {
       const length = region.content_range.end - region.content_range.start
       sourceOffset = region.content_range.start + Math.max(0, Math.min(pending.relativeOffset, length))
     }
-    this.scheduleFrame(() => this.restoreCaret(sourceOffset, preferredBlockId))
+    this.scheduleFrame(() => {
+      this.restoreCaret(sourceOffset, preferredBlockId)
+      this.restoreSelections()
+    })
   }
 
   editableText(element: Element): string {
