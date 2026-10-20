@@ -1,6 +1,7 @@
 // ElefHost over Tauri invoke against the desktop command surface.
 // Transport policy: the library root is a single workspace ("local"); search
-// is adapter-side substring filtering over document_graph plus work folder names;
+// is adapter-side ranked filtering with the WorkSearch weights
+// (apps/web/app/services/work_search.rb) over titles plus work sources;
 // delete is dialog-mediated in production, so automation runs with
 // deleteProgrammatic: false. Exported bytes come from the e2e harness export
 // file; import takes archive bytes through import_elef_bytes.
@@ -255,18 +256,155 @@ export function createTauriHost({ invoke, readExportFile, initialStatus, updater
     },
   };
 
+  // Offline port of the Rails WorkSearch ranking
+  // (apps/web/app/services/work_search.rb): phrase-aware clauses, diacritic-
+  // insensitive matching, per-field weights, all-clauses-must-match, 180-char
+  // context excerpts, and score/updated/title/id ordering. The desktop keeps
+  // no alias store, so the alias field is always empty — the web equivalent of
+  // a work with no aliases. Kept adapter-local: the web ranks server-side in
+  // Ruby, so a shared JS ranker would have exactly one consumer.
+  const SEARCH_WEIGHTS = { title: 120, aliases: 100, headings: 75, content: 40 };
+  const SEARCH_MAX_LIMIT = 30;
+  const SEARCH_HEADING_LINE = /^\s{0,3}#{1,6}\s+/;
+
+  function normalizeSearchText(text) {
+    return String(text ?? "")
+      .normalize("NFKD")
+      .replace(/\p{Mn}/gu, "")
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+  }
+
+  function searchClauses(query) {
+    const clauses = [];
+    const pattern = /"([^"]+)"|(\S+)/g;
+    let match;
+    while ((match = pattern.exec(query)) !== null) {
+      const clause = normalizeSearchText(match[1] ?? match[2] ?? "");
+      if (clause.trim() !== "") clauses.push(clause);
+    }
+    return clauses;
+  }
+
+  function searchContextFor(text, clause) {
+    const collapsed = String(text ?? "").replace(/\s+/g, " ").trim();
+    if (!clause) return collapsed.slice(0, 180);
+    const position = normalizeSearchText(collapsed).indexOf(clause);
+    const at = position === -1 ? 0 : position;
+    const start = Math.min(Math.max(at - 70, 0), Math.max(collapsed.length - 180, 0));
+    const snippet = collapsed.slice(start, start + 180);
+    const prefix = start > 0 ? "…" : "";
+    const suffix = start + snippet.length < collapsed.length ? "…" : "";
+    return `${prefix}${snippet}${suffix}`;
+  }
+
+  // Faithful to Ruby String#to_i (leading whitespace, optional sign, digits):
+  // non-numeric ids sort as 0, exactly as on the server.
+  function searchIdNumber(id) {
+    const match = /^\s*[+-]?\d+/.exec(String(id ?? ""));
+    return match ? Number.parseInt(match[0], 10) : 0;
+  }
+
+  function rankSearchEntries(entries, clauses) {
+    const ranked = [];
+    for (const entry of entries) {
+      const fields = {
+        title: entry.title,
+        aliases: "",
+        headings: String(entry.source ?? "")
+          .split("\n")
+          .filter((line) => SEARCH_HEADING_LINE.test(line))
+          .join("\n"),
+        content: entry.source ?? "",
+      };
+      const normalized = {
+        title: normalizeSearchText(fields.title),
+        aliases: "",
+        headings: normalizeSearchText(fields.headings),
+        content: normalizeSearchText(fields.content),
+      };
+      const fieldMatches = [];
+      let missed = false;
+      for (const clause of clauses) {
+        const field = ["title", "aliases", "headings", "content"].find((name) =>
+          normalized[name].includes(clause),
+        );
+        if (!field) {
+          missed = true;
+          break;
+        }
+        fieldMatches.push(field);
+      }
+      if (missed) continue;
+      const score = fieldMatches.reduce((sum, field) => sum + SEARCH_WEIGHTS[field], 0);
+      const counts = new Map();
+      for (const field of fieldMatches) counts.set(field, (counts.get(field) ?? 0) + 1);
+      let matchedField = fieldMatches[0];
+      for (const field of counts.keys()) {
+        if (
+          counts.get(field) > counts.get(matchedField) ||
+          (counts.get(field) === counts.get(matchedField) &&
+            SEARCH_WEIGHTS[field] > SEARCH_WEIGHTS[matchedField])
+        ) {
+          matchedField = field;
+        }
+      }
+      const contextClause =
+        clauses.find((clause) => normalized[matchedField].includes(clause)) ?? clauses[0];
+      ranked.push({
+        work: entry.work,
+        excerpt: searchContextFor(fields[matchedField], contextClause),
+        score,
+        updatedMs: entry.updatedMs,
+        titleLower: entry.title.toLowerCase(),
+        idNumber: entry.idNumber,
+      });
+    }
+    ranked.sort(
+      (a, b) =>
+        b.score - a.score ||
+        b.updatedMs - a.updatedMs ||
+        (a.titleLower < b.titleLower ? -1 : a.titleLower > b.titleLower ? 1 : 0) ||
+        b.idNumber - a.idNumber,
+    );
+    return ranked.slice(0, SEARCH_MAX_LIMIT);
+  }
+
   const searchPort = {
     async search(input) {
-      const query = input.query.toLowerCase();
+      const query = String(input.query ?? "").trim();
+      if (query === "") return { requestId: input.requestId, hits: [] };
+      const clauses = searchClauses(query);
+      if (clauses.length === 0) return { requestId: input.requestId, hits: [] };
       const workFolders = await call("list_work_folders");
       const graph = await call("document_graph").catch(() => []);
       const sources = new Map(graph.map((doc) => [String(doc.id), doc.source ?? ""]));
-      const hits = [];
+      const entries = [];
       for (const workFolder of workFolders) {
         const summaryValue = summary(workFolder);
-        const haystack = `${workFolder.name}\n${sources.get(String(workFolder.id)) ?? ""}`.toLowerCase();
-        if (haystack.includes(query)) hits.push({ work: summaryValue });
+        let source = sources.get(String(workFolder.id));
+        if (source === undefined) {
+          // document_graph covers documents only; read every other work's
+          // source directly so headings and content match for every kind.
+          try {
+            source = (await call("read_source_snapshot", { id: workFolder.id })).source ?? "";
+          } catch {
+            source = "";
+          }
+        }
+        const parsed = Date.parse(summaryValue.updatedAt);
+        entries.push({
+          work: summaryValue,
+          title: String(workFolder.name ?? ""),
+          source,
+          updatedMs: Number.isNaN(parsed) ? 0 : parsed,
+          idNumber: searchIdNumber(summaryValue.id),
+        });
       }
+      const hits = rankSearchEntries(entries, clauses).map(({ work, excerpt }) => ({
+        work,
+        excerpt,
+      }));
       return { requestId: input.requestId, hits };
     },
   };
