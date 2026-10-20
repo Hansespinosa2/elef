@@ -200,6 +200,13 @@ class VisualPagesTest < ApplicationSystemTestCase
       [...document.fonts].filter((face) => face.status === "error").map((face) => face.family)
     JAVASCRIPT
     raise "KaTeX webfonts failed to load: #{errors.uniq.join(", ")}" if errors && !errors.empty?
+    # Preload alone never flips a face to loaded (proven: math-free pages
+    # report every face unloaded); check() proves the two faces the stack
+    # needs actually arrived. Both fixtures use Main and Size1 glyphs.
+    ready = page.evaluate_script(<<~JAVASCRIPT)
+      [document.fonts.check('16px "KaTeX_Main"'), document.fonts.check('16px "KaTeX_Size1"')]
+    JAVASCRIPT
+    raise "KaTeX webfonts not ready: Main=#{ready[0].inspect} Size1=#{ready[1].inspect}" unless ready == [true, true]
   end
 
   def p50(samples)

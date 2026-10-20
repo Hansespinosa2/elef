@@ -115,6 +115,18 @@ test("Tab marks navigation only when the selection actually moved", () => {
   });
 });
 
+test("Tab marks navigation when the source changed under the snapshot", () => {
+  withHarness(({ engine, block, flushRaf }) => {
+    engine.noteProjectionNavigation(keyEvent(block, "Tab"));
+    // An edit landing before the rAF resolve leaves offsets pointing at
+    // the old source; resolving to navigation forces caret re-derivation
+    // at mode switch instead of trusting the stale snapshot.
+    Object.defineProperty(engine, "value", { value: "See docs now edited.", configurable: true });
+    flushRaf();
+    assert.equal(engine.projectionNavigationOccurred, true);
+  });
+});
+
 test("non-navigation keys still skip the snapshot", () => {
   withHarness(({ engine, block }) => {
     engine.noteProjectionNavigation(keyEvent(block, "x"));
