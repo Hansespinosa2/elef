@@ -1,5 +1,14 @@
 name: CI
 
+# What "green" means, in one place. The merge gate is the required_jobs list
+# consumed by the deployment-authorization jobs below: every listed job must
+# pass on the PR head. The plan job is shadow-only observability (it reports
+# what the affected planner would skip but skips nothing); flipping it to
+# enforcing is a deliberate owner decision, not a cleanup. slow-lane.yml
+# (full envelope on every dev push) and sqlite-compatibility.yml (weekly
+# plus dispatch sweep) re-prove merged results and are consumed by nothing:
+# they never gate a PR.
+
 on:
   workflow_dispatch:
   pull_request:
@@ -276,7 +285,7 @@ jobs:
         working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -523,7 +532,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -875,7 +884,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Re-verify the Gate A wiring and record the source SHA

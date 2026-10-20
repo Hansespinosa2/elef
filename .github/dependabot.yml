@@ -1,7 +1,22 @@
 version: 2
 updates:
 - package-ecosystem: bundler
+  directory: "/apps/web"
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 10
+- package-ecosystem: npm
   directory: "/"
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 10
+- package-ecosystem: npm
+  directory: "/apps/desktop/frontend"
+  schedule:
+    interval: weekly
+  open-pull-requests-limit: 10
+- package-ecosystem: npm
+  directory: "/apps/desktop/e2e"
   schedule:
     interval: weekly
   open-pull-requests-limit: 10
