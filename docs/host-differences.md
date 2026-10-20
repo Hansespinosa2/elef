@@ -182,16 +182,29 @@ Capability keys come from the `HostCapabilities` interface
   plus docProps timestamps; the engine sets neither), so content equality
   — not file bytes — is the proven property past the model.
 
-## HD-07 search implementation (contract-identical, locality differs)
+## HD-07 search implementation (rank parity, locality differs)
 
 - Capability: none (one `SearchPort` contract, two implementations).
 - Concrete reason: the desktop must search offline with no server to query, so
-  the Tauri adapter filters substring-side over `document_graph` plus work folder
-  names (`searchPort.search` in `createTauriHost`,
+  the Tauri adapter ranks adapter-side (`searchPort.search` in `createTauriHost`,
   `apps/desktop/frontend/src/tauri-host.js`); the web adapter queries
-  the server. Behavior is contract-identical; only the execution locality
-  differs.
-- Proof: contract conformance suite green on rails + desktop adapters.
+  the server (`WorkSearch`, `apps/web/app/services/work_search.rb`). Both run
+  the same ranking: phrase-aware clauses, diacritic-insensitive matching,
+  title 120 / alias 100 / heading 75 / content 40 weights,
+  all-clauses-must-match, 180-char context excerpts, and score/updated/title/id
+  ordering. The desktop reads document sources from `document_graph` and falls
+  back to `read_source_snapshot` for works the graph omits (presentations), so
+  headings and content match for every kind.
+- Remaining gap (no alias store on desktop): the alias field is always empty in
+  the desktop ranker because the desktop keeps no alias store (web aliases come
+  from the `document_aliases` table, including previous titles recorded on
+  rename). This is the web equivalent of a work with no aliases. Desktop users
+  cannot create aliases, so there is no alias surface on which to disclose
+  this; it is recorded here instead of in UI.
+- Proof: desktop ranking suite
+  (`apps/desktop/frontend/tests/tauri-host-search.test.js`) mirrors the server
+  suite (`apps/web/test/services/work_search_test.rb`); contract conformance
+  suite green on rails + desktop adapters.
 
 ## Explicitly not entries
 
