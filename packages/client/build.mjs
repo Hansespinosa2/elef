@@ -1,4 +1,4 @@
-// Canonical producer of the committed packages/client/dist/ artifacts: the
+// Canonical producer of the gitignored packages/client/dist/ artifacts: the
 // single-file ESM bundle both hosts consume, plus the dependency-free
 // sanitizer module the editor/settings hosts import until their slices
 // migrate. React, react-dom and the Elef runtime deps are bundled in;

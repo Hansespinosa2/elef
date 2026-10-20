@@ -1,9 +1,12 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
-const originalModuleSource = await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/editor_markdown.js", import.meta.url), "utf8")
-const moduleSource = originalModuleSource.replaceAll('"@elef/work-model/math-source"', JSON.stringify(import.meta.resolve("@elef/work-model/math-source")))
+// math_source.ts is import-free, so the suite runs the real module from
+// source through a data: URL instead of resolving the work-model bundle.
+const mathSourceUrl = `data:text/javascript;base64,${Buffer.from(await loadPackageSource("packages/work-model/src/math_source.ts")).toString("base64")}`
+const originalModuleSource = await loadPackageSource("packages/editor-runtime/src/controllers/editor_markdown.ts")
+const moduleSource = originalModuleSource.replaceAll('"@elef/work-model/math-source"', JSON.stringify(mathSourceUrl))
 assert.match(moduleSource, /^import \{ cachedKatex, loadKatex \} from "\.\.\/lib\/katex_loader\.js";/)
 assert.doesNotMatch(moduleSource, /globalThis\.katex/)
 const source = moduleSource.replace('import { cachedKatex, loadKatex } from "../lib/katex_loader.js"', "const cachedKatex = () => ({ renderToString: () => '<span class=katex>x^2</span>' }); const loadKatex = () => Promise.resolve(cachedKatex())")

@@ -1,19 +1,21 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
 import { parseHTML } from "linkedom"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
 // Differ side of visual inline revelation: the projection holds the
 // base source slice for revealed constructs so edits inside them map
 // positionally, delimiter deletions commit, and pairing mismatches
 // refuse (the batch stays in the DOM for the next flush). The host
 // resolves the verified map and injects it; the differ stays
-// dependency-free.
-const dist = (path) =>
-  new URL(`../../../../packages/editor-runtime/dist/${path}`, import.meta.url)
-const reveal = await import(dist("controllers/editor_reveal.js"))
-const originalModuleSource = await readFile(dist("controllers/editor_markdown.js"), "utf8")
-const moduleSource = originalModuleSource.replaceAll('"@elef/work-model/math-source"', JSON.stringify(import.meta.resolve("@elef/work-model/math-source")))
+// dependency-free. editor_reveal.ts and math_source.ts are import-free,
+// so the suite runs the real modules from source.
+const reveal = await import(
+  `data:text/javascript;base64,${Buffer.from(await loadPackageSource("packages/editor-runtime/src/controllers/editor_reveal.ts")).toString("base64")}`
+)
+const mathSourceUrl = `data:text/javascript;base64,${Buffer.from(await loadPackageSource("packages/work-model/src/math_source.ts")).toString("base64")}`
+const originalModuleSource = await loadPackageSource("packages/editor-runtime/src/controllers/editor_markdown.ts")
+const moduleSource = originalModuleSource.replaceAll('"@elef/work-model/math-source"', JSON.stringify(mathSourceUrl))
 const source = moduleSource
   .replace('import { cachedKatex, loadKatex } from "../lib/katex_loader.js"', "const cachedKatex = () => ({ renderToString: () => '' }); const loadKatex = () => Promise.resolve(cachedKatex())")
 const editorMarkdown = await import(

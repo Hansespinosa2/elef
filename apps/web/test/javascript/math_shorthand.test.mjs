@@ -2,6 +2,7 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 import { performance } from "node:perf_hooks"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
 async function importVendoredModule(filename, imports = {}) {
   const vendorRoot = new URL("../../vendor/javascript/", import.meta.url)
@@ -24,8 +25,8 @@ const codemirrorState = await importVendoredModule("@codemirror--state.js", {
   "@marijn/find-cluster-break": findClusterBreak.url
 })
 
-const visualAssistSource = await readFile(new URL("../../../../packages/editor-runtime/dist/lib/visual_assist.js", import.meta.url), "utf8")
-const source = (await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/math_shorthand_controller.js", import.meta.url), "utf8"))
+const visualAssistSource = await loadPackageSource("packages/editor-runtime/src/lib/visual_assist.ts")
+const source = (await loadPackageSource("packages/editor-runtime/src/controllers/math_shorthand_controller.ts"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { syntaxTree } from "@codemirror/language"', "const syntaxTree = (state) => state.tree")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
@@ -33,7 +34,7 @@ const source = (await readFile(new URL("../../../../packages/editor-runtime/dist
   .replace('import { editorPopupOpen } from "../lib/vim_escape.js"', "const editorPopupOpen = () => false")
 const math = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 globalThis.__mathTestHelpers = math
-const paletteSource = (await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/math_shortcut_palette_controller.js", import.meta.url), "utf8"))
+const paletteSource = (await loadPackageSource("packages/editor-runtime/src/controllers/math_shortcut_palette_controller.ts"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
   .replace('import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"', () => visualAssistSource)

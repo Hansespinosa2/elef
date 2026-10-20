@@ -1,11 +1,16 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
-const source = (await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/media_controller.js", import.meta.url), "utf8"))
+// editor_actions.ts is import-free, so the suite inlines the real module
+// source. document-transforms keeps resolving the real work-model bundle:
+// media drop paths expand real snippets, so this file stays in the dist
+// smoke lane for that entry (see docs/development.md).
+const editorActionsSource = await loadPackageSource("packages/editor-runtime/src/lib/editor_actions.ts")
+const source = (await loadPackageSource("packages/editor-runtime/src/controllers/media_controller.ts"))
   .replace(/^import\s+{[^}]+}\s+from\s+["']@hotwired\/stimulus["'];?\n/m, "class Controller {}\n")
   .replace('from "@elef/work-model/document-transforms"', `from "${import.meta.resolve("@elef/work-model/document-transforms")}"`)
-  .replace('from "../lib/editor_actions.js"', `from "${new URL("../../../../packages/editor-runtime/dist/lib/editor_actions.js", import.meta.url).href}"`)
+  .replace('import { bindEditorAction } from "../lib/editor_actions.js"', () => editorActionsSource)
 const mediaModule = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 const { isMediaTransferTypes, urlFromTransfer, imageTypeForFilename } = mediaModule

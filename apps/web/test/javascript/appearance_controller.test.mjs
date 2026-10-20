@@ -3,12 +3,12 @@ import test from "node:test"
 import { readFile } from "node:fs/promises"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
-const controllerPath = new URL("../../../../packages/editor-runtime/dist/controllers/appearance_controller.js", import.meta.url)
 const testPath = fileURLToPath(import.meta.url)
 const importmapPath = path.resolve(path.dirname(testPath), "../../config/importmap.rb")
 const styleVocabUrl = import.meta.resolve("@elef/work-model/style-vocab")
-const source = (await readFile(controllerPath, "utf8"))
+const source = (await loadPackageSource("packages/editor-runtime/src/controllers/appearance_controller.ts"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { withAppearanceValue } from "@elef/work-model/style-vocab"', `import { withAppearanceValue } from "${styleVocabUrl}"`)
 const appearance = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)

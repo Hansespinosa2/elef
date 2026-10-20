@@ -35,7 +35,7 @@ await build({
 })
 
 // Keep Highlight.js's PHP whitespace template semantically intact without
-// emitting a physical tab at end-of-line in the checked-in bundle.
+// emitting a physical tab at end-of-line in the built bundle.
 const rawWhitespace = "[ \t\n"
 for (const artifact of ["elef-renderer.js", "projection.js"]) {
   const artifactPath = path.join(dist, artifact)

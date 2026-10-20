@@ -97,7 +97,7 @@ Rails system tests use Selenium in headless mode. Keep browser automation headle
 
 ## Generated assets and review
 
-JavaScript tests run against locally built `dist/` bundles, which are never committed: build them once after checkout (and again after changing package sources), then run the suite. `bin/check quick` does not rebuild them; `bin/check affected` rebuilds every bundle first, so always run it before handoff:
+JavaScript unit tests transpile TypeScript package modules from source in memory (`apps/web/test/javascript/shared/package_source.mjs`), so they prove the current sources — never the last build. The explicit smoke lane still consumes shipped bundles and needs them built: the `composed_renderer` bundle suites (`renderer_fixtures`, `renderer_alignment_grammar`), any suite importing a package-entry subpath (`@elef/*/test-internals`, `@elef/client`, `@elef/work-model/*`, `@elef/renderer`), and the desktop e2e lane. `dist/` bundles are never committed: build them once after checkout (and again after changing package sources), then run the suite. `bin/check quick` does not rebuild them; `bin/check affected` rebuilds every bundle first, so always run it before handoff:
 
 ~~~sh
 npm run build:packages
