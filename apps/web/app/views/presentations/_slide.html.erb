@@ -1,0 +1,97 @@
+<% presentation_slide = local_assigns[:presentation_slide] %>
+<% presentation = local_assigns[:presentation] || @presentation %>
+<% editable = local_assigns[:editable] || false %>
+<% editor_map = local_assigns[:editor_map] %>
+<% editor_slide_map = editor_map&.dig(:slides, slide.index) %>
+<% editor_blocks = editor_slide_map&.fetch(:blocks, []) || [] %>
+<% editor_regions = editor_slide_map&.fetch(:editable_regions, []) || [] %>
+<section class="slide <%= 'presentation-slide ' if presentation_slide %>slide-<%= slide.layout %>" aria-label="Slide <%= slide.index + 1 %>"<% if slide.reveal_event_count.positive? %> data-elef-reveal-event-count="<%= slide.reveal_event_count %>"<% end %><% if editable %> data-editor-slide-id="slide-<%= slide.index + 1 %>" data-slide-index="<%= slide.index %>"<% end %>>
+  <% if editable %>
+    <div class="presentation-editor-slide-toolbar" aria-label="Slide <%= slide.index + 1 %> controls">
+      <span class="presentation-editor-slide-label">Slide <%= slide.index + 1 %></span>
+      <button type="button" data-presentation-editor-action="add-slide-after" data-slide-index="<%= slide.index %>">Add slide</button>
+      <button type="button" class="presentation-editor-add-image" data-action="click->media#chooseForSlide" data-slide-index="<%= slide.index %>">Add image</button>
+      <button type="button" data-presentation-editor-action="delete-slide" data-slide-index="<%= slide.index %>"<%= " disabled" if presentation.slides.length == 1 %>>Delete</button>
+      <button type="button" data-presentation-editor-action="move-slide-up" data-slide-index="<%= slide.index %>"<%= " disabled" if slide.index.zero? %>>Move up</button>
+      <button type="button" data-presentation-editor-action="move-slide-down" data-slide-index="<%= slide.index %>"<%= " disabled" if slide.index == presentation.slides.length - 1 %>>Move down</button>
+    </div>
+  <% end %>
+  <% if margin_settings.subsection || margin_settings.section %>
+    <div class="slide-margin slide-margin-top" aria-hidden="true">
+      <% if margin_settings.subsection %><span class="slide-margin-subsection"><%= slide.subsection %></span><% end %>
+      <% if margin_settings.section %><span class="slide-margin-section"><%= slide.section %></span><% end %>
+    </div>
+  <% end %>
+  <div class="slide-content"<% if slide.title.blank? && slide.blocks.any? { |block| block.art } %> data-art-host="fixed" data-art-overfull="false"<% end %>>
+    <% if slide.title.present? %>
+      <% title_block = editor_blocks.first %>
+      <% title_region = title_block && editor_regions.find { |region| region[:block_id] == title_block[:id] } %>
+      <% if editable %><div class="slide-block-shell slide-title-shell <%= position_classes(slide.blocks.first&.position, vertical: "top") %>"><% end %>
+      <div class="slide-title slide-block <%= position_classes(slide.blocks.first&.position, vertical: "top") %>"<% if slide.blocks.first&.reveal_event %> data-elef-reveal-event="<%= slide.blocks.first.reveal_event %>"<% end %><% if editable && title_block %> data-editor-block-id="<%= title_block[:id] %>" data-editor-region-id="<%= title_region&.dig(:id) %>" data-editor-source-editable="<%= title_region&.dig(:editable) ? "true" : "false" %>"<% if title_region&.dig(:editable) %> contenteditable="true" role="textbox" aria-label="Editable slide title" aria-multiline="true" spellcheck="true" data-action="input->presentation-editor#blockInput focus->presentation-editor#blockFocus blur->presentation-editor#blockBlur"<% else %> contenteditable="false" aria-readonly="true"<% end %><% end %>>
+        <%= render_markdown(slide.title, work: presentation) %>
+      </div>
+      <% if editable && title_block %>
+        <div class="presentation-editor-block-controls" aria-label="Block alignment">
+          <label>Align <select aria-label="Block alignment" data-presentation-editor-align data-presentation-editor-block-id="<%= title_block[:id] %>" data-slide-index="<%= slide.index %>" data-block-index="0" data-action="change->presentation-editor#alignmentChanged">
+            <% %w[top middle bottom].each do |vertical| %>
+              <% %w[left center right].each do |horizontal| %>
+                <% value = vertical == "top" ? horizontal : "#{vertical} #{horizontal}" %>
+                <option value="<%= value %>"<%= " selected" if alignment_value(slide.blocks.first.position) == value %>><%= value.titleize %></option>
+              <% end %>
+            <% end %>
+          </select></label>
+        </div>
+      <% end %>
+      <% if editable %></div><% end %>
+      <div class="slide-regions">
+        <% slide.regions.each do |region| %>
+          <% art_host = region.blocks.any? { |block| block.art } %>
+          <% placement = Source::Document.position_layout(region.blocks) %>
+          <div class="slide-region"<% if art_host %> data-art-host="fixed" data-art-overfull="false"<% end %>>
+            <% placement[:entries].each do |entry| %>
+              <% if entry[:type] == :middle %><div class="slide-middle-group<%= " flush-bottom" if entry[:flush_bottom] %>"><% elsif entry[:type] == :bottom %><div class="slide-bottom-lane"><% end %>
+              <% (entry[:start]...entry[:end]).each do |region_index| %>
+                <% block = region.blocks[region_index] %>
+                <% block_index = slide.blocks.find_index { |candidate| candidate.equal?(block) } %>
+                <% editor_block = editor_blocks[block_index] %>
+                <% editor_region = editor_block && editor_regions.find { |candidate| candidate[:block_id] == editor_block[:id] } %>
+                <%= render "presentations/slide_block", block: block, block_index: block_index, editor_block: editor_block, editor_region: editor_region, slide: slide, presentation: presentation, editable: editable, art_host: art_host, grouped_item: entry[:type] != :block, position_vertical: placement[:verticals][region_index] %>
+              <% end %>
+              <% if entry[:type] == :middle || entry[:type] == :bottom %></div><% end %>
+            <% end %>
+          </div>
+        <% end %>
+      </div>
+    <% elsif slide.blocks.empty? %>
+      <div class="empty-slide">
+        <p>Empty slide</p>
+        <% if editable %>
+          <button type="button" class="button secondary empty-slide-add-image" data-action="click->media#chooseForSlide" data-slide-index="<%= slide.index %>">Add image</button>
+        <% end %>
+      </div>
+    <% else %>
+      <% placement = Source::Document.position_layout(slide.blocks) %>
+      <% placement[:entries].each do |entry| %>
+        <% if entry[:type] == :middle %><div class="slide-middle-group<%= " flush-bottom" if entry[:flush_bottom] %>"><% elsif entry[:type] == :bottom %><div class="slide-bottom-lane"><% end %>
+        <% (entry[:start]...entry[:end]).each do |block_index| %>
+          <% block = slide.blocks[block_index] %>
+          <% editor_block = editor_blocks[block_index] %>
+          <% editor_region = editor_block && editor_regions.find { |candidate| candidate[:block_id] == editor_block[:id] } %>
+          <%= render "presentations/slide_block", block: block, block_index: block_index, editor_block: editor_block, editor_region: editor_region, slide: slide, presentation: presentation, editable: editable, art_host: block.art && entry[:type] != :block, grouped_item: entry[:type] != :block, position_vertical: placement[:verticals][block_index] %>
+        <% end %>
+        <% if entry[:type] == :middle || entry[:type] == :bottom %></div><% end %>
+      <% end %>
+    <% end %>
+  </div>
+  <% if margin_settings.slide_count || margin_settings.footnote %>
+    <div class="slide-margin slide-margin-bottom" aria-hidden="true">
+      <% if margin_settings.slide_count %><span class="slide-margin-count"><%= slide.index + 1 %> / <%= total_slides(presentation) %></span><% end %>
+      <% if margin_settings.footnote && slide.footnote.present? %>
+        <span class="slide-margin-footnote" aria-label="Footnote">
+          <span class="slide-margin-footnote-marker">*</span>
+          <span class="slide-margin-footnote-text"><%= render_markdown(slide.footnote, work: presentation) %></span>
+        </span>
+      <% end %>
+    </div>
+  <% end %>
+</section>

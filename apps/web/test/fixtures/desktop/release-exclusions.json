@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "profile": "stable",
+  "excluded_features": [
+    {
+      "id": "visual-editor",
+      "controllers": ["visual-editor", "slide-overview"],
+      "module_inputs": [
+        "packages/editor-runtime/src/controllers/visual_editor_controller.ts",
+        "packages/editor-runtime/src/controllers/slide_overview_controller.ts",
+        "packages/editor-runtime/src/lib/presentation_editor_host.ts",
+        "packages/client/src/features/document/document_editor.ts",
+        "packages/client/src/features/overview/overview.ts",
+        "packages/client/src/features/presentation/editor.ts"
+      ],
+      "ui_selectors": [
+        "#visual-mode",
+        ".presentation-editor-tools",
+        ".slide-overview",
+        ".presentation-editor-slide-toolbar",
+        ".presentation-editor-block-controls",
+        ".document-block-position-control"
+      ],
+      "proof": [
+        "bundle-absent: every module_inputs entry is absent from its package Stable metafile (Stable entries never import them; esbuild lists even tree-shaken inputs, so absence is proof of no static edge)",
+        "bundle-present-dev: the editor-runtime and client module_inputs are present in the Dev metafiles (Dev ships them; the exclusion is profile-scoped, not a deletion)",
+        "registration: every controllers entry registers only in the Dev registration source and is absent from the Stable registration source",
+        "mount: the Stable profile injects a null presentation-editor runtime, so the shared file-library application never mounts presentation visual editing",
+        "ui-negative: every ui_selectors entry is asserted unreachable by the Stable exclusions spec, and the Stable shell opens works in source mode"
+      ]
+    },
+    {
+      "id": "document-graph",
+      "controllers": [],
+      "module_inputs": [
+        "packages/editor-runtime/src/lib/document_graph_cache.ts",
+        "packages/client/src/features/graph/graphController.ts",
+        "packages/client/src/features/graph/graphLayout.ts",
+        "packages/client/src/features/graph/graphView.ts",
+        "packages/work-model/src/document_links.ts"
+      ],
+      "native_commands": ["document_graph"],
+      "ui_selectors": ["#document-graph-view"],
+      "proof": [
+        "bundle-absent: every module_inputs entry is absent from its package Stable metafile, and the Stable work-model barrel carries no document-links reference",
+        "bundle-present-dev: the editor-runtime and client module_inputs are present in the Dev metafiles; the Dev work-model barrel re-exports the link module",
+        "capability: allow-document-graph exists only in the Dev capability, never in the Stable production capability",
+        "cfg: the document_graph command, its import, and its handler registration exist only under the desktop-dev feature, and the build manifest gates it the same way",
+        "transport: the Stable file-library transport omits the graph reader while the Dev transport keeps it",
+        "ui-negative: the graph panel element is asserted absent by the Stable exclusions spec, and invoking the graph command from Stable fails"
+      ]
+    },
+    {
+      "id": "document-links",
+      "controllers": ["document-link-palette"],
+      "module_inputs": [
+        "packages/editor-runtime/src/controllers/document_link_palette_controller.ts",
+        "packages/work-model/src/document_links.ts"
+      ],
+      "ui_selectors": ["[data-document-link-palette-target]", "[aria-label='Document link suggestions']"],
+      "proof": [
+        "bundle-absent: every module_inputs entry is absent from its package Stable metafile",
+        "bundle-present-dev: the controller module is present in the Dev editor-runtime metafile and the link module is re-exported by the Dev work-model barrel",
+        "registration: document-link-palette registers only in the Dev registration source",
+        "ui-negative: typed [[ pairs literal brackets with no palette and no suggestions element, asserted by the Stable exclusions spec"
+      ]
+    }
+  ],
+  "flag_features": [
+    {
+      "id": "revisions",
+      "flag": "ELEF_ENABLE_REVISIONS",
+      "proof": [
+        "flag-boundary: the desktop default stays off in the shared flags module and the flag register, the desktop renders no revision controls, and the Stable exclusions spec pins the dataset flag false"
+      ]
+    },
+    {
+      "id": "lineage",
+      "flag": "ELEF_ENABLE_LINEAGE",
+      "proof": [
+        "flag-boundary: the desktop default stays off in the shared flags module and the flag register, no lineage controller registers on either desktop profile, and the Stable exclusions spec pins the dataset flag false"
+      ]
+    }
+  ],
+  "shared_exceptions": [
+    {
+      "module": "packages/editor-runtime/src/lib/editor_view.ts",
+      "reason": "Retained editor shell: renders the source editing surface in both profiles and removes the excluded entry points from the Stable DOM through desktopFeatures.",
+      "proof": "present in the Stable editor-runtime metafile and reachable from the Stable desktop bundle through the Stable dist"
+    },
+    {
+      "module": "packages/editor-runtime/src/controllers/editor_controller.ts",
+      "reason": "Retained source editor (CodeMirror): the Stable editing surface, including literal [[ typing.",
+      "proof": "present in the Stable editor-runtime metafile"
+    },
+    {
+      "module": "packages/client/src/ui/sanitize.ts",
+      "reason": "Retained preview sanitizer: the Stable preview renders through the shared sanitize entry.",
+      "proof": "served to the Stable desktop bundle as the shared dist/sanitize.js input"
+    },
+    {
+      "module": "packages/editor-runtime/dist/composed_renderer.js",
+      "reason": "Canonical composed renderer artifact: the Stable desktop copies it byte-identically. Its pure link helpers are renderer internals used by both profiles, not desktop graph wiring.",
+      "proof": "byte-identical between the package dist and the Stable desktop asset"
+    },
+    {
+      "module": "packages/client/dist/preview-core.js",
+      "reason": "Shared deferred card-preview renderer: profile-independent, with an identical chunk in both desktop bundles.",
+      "proof": "deferred chunk present with the same content hash in both desktop metafiles"
+    }
+  ],
+  "verification": {
+    "stable_metafile": "apps/desktop/frontend/dist/assets/app.metafile.json",
+    "dev_metafile": "apps/desktop/frontend/dist-dev/assets/app.metafile.json",
+    "stable_frontend": "apps/desktop/frontend/dist/index.html",
+    "dev_frontend": "apps/desktop/frontend/dist-dev/index.html",
+    "stable_command_acl": "apps/desktop/src-tauri/capabilities/main.json",
+    "package_metafiles": {
+      "client": {
+        "stable": "packages/client/dist/elef-client.stable.metafile.json",
+        "dev": "packages/client/dist/elef-client.metafile.json"
+      },
+      "editor-runtime": {
+        "stable": "packages/editor-runtime/dist/index.stable.metafile.json",
+        "dev": "packages/editor-runtime/dist/index.metafile.json"
+      },
+      "work-model": {
+        "stable": "packages/work-model/dist/elef-work-model.stable.metafile.json"
+      }
+    }
+  }
+}

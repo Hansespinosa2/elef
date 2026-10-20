@@ -1,5 +1,7 @@
 # Presentation media and printing
 
+Reach for when: touching slide overview, media insertion, or print/PDF output.
+
 ## Slides
 
 The slide overview appears beside the live preview in the presentation editor. Select a thumbnail, then use Add, Duplicate, Delete, or the arrow buttons to edit slide order. These actions update Markdown in one editor operation, so Undo restores the preceding source. Separators inside fenced code and initial front matter are left alone.

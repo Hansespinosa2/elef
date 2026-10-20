@@ -1,0 +1,128 @@
+<% workspace_for_command_palette = Workspace.find_by(slug: "default") %>
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= content_for(:title) || "Elef" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <%= yield :head %>
+    <link rel="icon" href="/icon.png" type="image/png">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <%= stylesheet_link_tag "tailwind", "data-turbo-track": "reload" %>
+    <%= stylesheet_link_tag "katex/katex.min", "data-turbo-track": "reload" %>
+    <%= stylesheet_link_tag "application", "data-turbo-track": "reload" %>
+    <%= javascript_importmap_tags %>
+  </head>
+  <body class="elef-app m-0 bg-[#f6f4ef] text-[#1e1c18] font-sans">
+    <header class="app-header sticky top-0 z-10 border-b border-[#ddd5c8] bg-[rgba(255,253,248,0.94)] px-[clamp(1rem,4vw,3rem)] py-4">
+      <div class="app-header-inner mx-auto flex max-w-[1440px] flex-wrap items-center gap-8">
+        <div class="app-header-identity flex shrink-0 items-center">
+          <%= link_to "Elef", root_path, class: "brand font-extrabold tracking-[-0.04em] no-underline", data: { turbo: false } %>
+        </div>
+        <nav class="app-nav mr-auto flex items-center gap-1" aria-label="Primary">
+          <%= link_to "Library", root_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[library presentations documents].include?(controller_name)}" %>
+          <%= link_to "Settings", settings_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[workspace_settings snippets math_shortcuts].include?(controller_name)}" %>
+        </nav>
+        <div class="bug-report-root" data-controller="bug-report" data-bug-report-endpoint-value="<%= bug_reports_path %>">
+          <p id="bug-report-recording-disclosure" class="bug-report-disclosure">While you use Elef, recent clicks, typed text, keys, and page paths are automatically kept in memory for up to 60 seconds to prepare bug reports. If submitted, these may be included. Review and edit the generated steps first; recognized sensitive fields are redacted.</p>
+          <button type="button" class="bug-report-trigger" data-action="bug-report#open" data-bug-report-ignore aria-haspopup="dialog" aria-controls="bug-report-dialog" aria-describedby="bug-report-recording-disclosure">Report Bug</button>
+          <dialog id="bug-report-dialog" class="bug-report-dialog" data-bug-report-target="dialog" data-bug-report-ignore data-action="close->bug-report#closed cancel->bug-report#cancel" aria-labelledby="bug-report-heading">
+            <section class="bug-report-panel">
+              <header class="bug-report-heading">
+                <div>
+                  <p class="eyebrow">Help improve Elef</p>
+                  <h2 id="bug-report-heading">Report a bug</h2>
+                </div>
+                <button type="button" class="bug-report-close" data-action="bug-report#close" aria-label="Close bug report">×</button>
+              </header>
+              <form data-bug-report-target="form" data-action="submit->bug-report#submit">
+                <p class="bug-report-intro">Review the recent reproduction steps, then describe what you expected and what happened. You can edit the generated steps before submitting.</p>
+                <div class="bug-report-error" data-bug-report-target="error" role="alert" hidden></div>
+                <div class="bug-report-field">
+                  <label for="bug-report-expected">Expected behavior</label>
+                  <textarea id="bug-report-expected" name="expected" rows="3" maxlength="10000" required data-bug-report-target="expected"></textarea>
+                </div>
+                <div class="bug-report-field">
+                  <label for="bug-report-actual">Actual behavior</label>
+                  <textarea id="bug-report-actual" name="actual" rows="3" maxlength="10000" required data-bug-report-target="actual"></textarea>
+                </div>
+                <div class="bug-report-field">
+                  <label for="bug-report-steps">Steps to reproduce</label>
+                  <textarea id="bug-report-steps" name="steps" rows="7" maxlength="20000" required data-bug-report-target="steps" aria-describedby="bug-report-steps-hint"></textarea>
+                  <p id="bug-report-steps-hint" class="field-hint">One step per line. These steps are editable and are sent with the issue.</p>
+                </div>
+                <footer class="bug-report-actions">
+                  <button type="button" class="button" data-action="bug-report#close">Cancel</button>
+                  <button type="submit" class="button primary" data-bug-report-target="submit">Create GitHub issue</button>
+                </footer>
+              </form>
+              <div class="bug-report-success" data-bug-report-target="success" role="status" hidden>
+                <p>Bug report submitted.</p>
+                <a data-bug-report-target="issueLink" target="_blank" rel="noopener noreferrer">View GitHub issue</a>
+                <div class="bug-report-actions"><button type="button" class="button primary" data-action="bug-report#close">Done</button></div>
+              </div>
+            </section>
+          </dialog>
+        </div>
+        <div class="command-palette-root" data-controller="command-palette" data-command-palette-search-url-value="<%= search_path %>" data-command-palette-settings-url-value="<%= settings_path %>" data-command-palette-theme-value="<%= workspace_for_command_palette&.default_theme || Workspace::DEFAULT_THEME %>" data-command-palette-typography-value="<%= workspace_for_command_palette&.default_typography || Workspace::DEFAULT_TYPOGRAPHY %>" data-command-palette-commands-value="<%= json_escape([
+          { id: "quick-open", label: "Search presentations and documents", description: "Find by title, alias, heading, or content", shortcutKey: "p" },
+          { id: "new-presentation", label: "New presentation", description: "Create slide-based Markdown", url: new_presentation_path },
+          { id: "new-document", label: "New document", description: "Create a continuous Markdown document", url: new_document_path },
+          { id: "new-snippet", label: "New snippet", description: "Create a reusable Markdown snippet", url: new_snippet_path },
+          { id: "change-appearance", label: "Change workspace appearance", description: "Choose a Theme or Typography default" },
+          { id: "open-settings", label: "Open settings", description: "Change workspace appearance", url: settings_path },
+          { id: "open-snippets", label: "Manage snippets", description: "Edit reusable Markdown snippets", url: snippets_path },
+          { id: "open-math-shortcuts", label: "Manage math shortcuts", description: "Edit editor math expansions", url: math_shortcuts_path },
+          { id: "library-all", label: "Open all work", description: "Browse documents and presentations", url: root_path },
+          { id: "library-documents", label: "Browse documents", description: "Open the document library", url: documents_path },
+          { id: "library-presentations", label: "Browse presentations", description: "Open the presentation library", url: presentations_path },
+          { id: "save", label: "Save current work", description: "Submit the active editor", requiresEditor: true, shortcutKey: "s" },
+          { id: "present", label: "Present work", description: "Publish and open the presentation stage", shortcutKey: "Enter" },
+          { id: "print", label: "Print / save PDF", description: "Open the print view for the current work" },
+          { id: "download-pptx", label: "Download PowerPoint", description: "Export the current presentation as .pptx" },
+          { id: "report-bug", label: "Report a bug", description: "Open the bug report dialog" },
+          { id: "load-samples", label: "Load sample works", description: "Seed the library with sample documents" },
+          { id: "slide-add", label: "Add slide", description: "Add a slide after the selected slide", requiresEditor: true },
+          { id: "slide-duplicate", label: "Duplicate slide", description: "Duplicate the selected slide", requiresEditor: true },
+          { id: "slide-delete", label: "Delete slide", description: "Delete the selected slide", requiresEditor: true },
+          { id: "slide-move-up", label: "Move slide earlier", description: "Move the selected slide earlier", requiresEditor: true },
+          { id: "slide-move-down", label: "Move slide later", description: "Move the selected slide later", requiresEditor: true },
+          { id: "toggle-vim", label: "Toggle Vim mode", description: "Change the active editor mode", requiresEditor: true },
+          { id: "vim-settings", label: "Open Vim settings", description: "Configure browser-local Vim and editor preferences", url: settings_path(anchor: "vim-settings") },
+          { id: "toggle-metadata", label: "Toggle source metadata", description: "Show or hide Markdown front matter", requiresEditor: true },
+          { id: "keyboard-shortcuts", label: "Keyboard shortcuts", description: "Open the shortcut and trigger reference", requiresEditor: true }
+        ].to_json) %>">
+          <div class="command-palette-triggers" aria-label="Open Elef tools">
+            <button type="button" class="command-palette-trigger" data-action="command-palette#openCommands" aria-label="Open command palette">Commands <kbd data-command-palette-shortcut="k">⌘K</kbd></button>
+            <button type="button" class="command-palette-trigger" data-action="command-palette#openSearch" aria-label="Search presentations and documents">Search <kbd data-command-palette-shortcut="p">⌘P</kbd></button>
+          </div>
+          <dialog class="command-palette" data-command-palette-target="dialog" data-bug-report-ignore data-action="click->command-palette#dialogClick close->command-palette#dialogClosed" aria-labelledby="command-palette-heading">
+            <div class="command-palette-panel">
+              <div class="command-palette-heading"><h2 id="command-palette-heading" data-command-palette-target="heading">Command palette</h2><button type="button" data-command-palette-target="closeButton" data-action="command-palette#closeButtonClick" aria-label="Close command palette">Esc</button></div>
+              <input type="search" autocomplete="off" placeholder="Filter commands…" data-command-palette-target="input" data-action="input->command-palette#inputChanged keydown->command-palette#keydown" aria-controls="command-palette-results" aria-describedby="command-palette-hint" aria-autocomplete="list" role="combobox" aria-expanded="true">
+              <p id="command-palette-hint" class="command-palette-hint" data-command-palette-target="hint">↑/↓ move · Enter choose · Esc close</p>
+              <div class="command-palette-filters" data-command-palette-target="filters" role="group" aria-label="Filter search by work type" hidden>
+                <button type="button" data-type="all" data-action="command-palette#setSearchType" aria-pressed="true">All work</button>
+                <button type="button" data-type="presentations" data-action="command-palette#setSearchType" aria-pressed="false">Presentations</button>
+                <button type="button" data-type="documents" data-action="command-palette#setSearchType" aria-pressed="false">Documents</button>
+              </div>
+              <div id="command-palette-results" class="command-palette-results" data-command-palette-target="results" role="listbox" aria-label="Elef commands"></div>
+              <p class="command-palette-status" data-command-palette-target="status" aria-live="polite"></p>
+            </div>
+          </dialog>
+        </div>
+        <%= render "layouts/new_work_menu" %>
+      </div>
+    </header>
+
+    <main class="app-shell mx-auto max-w-[1440px] p-[clamp(1rem,4vw,3rem)]">
+      <% flash.each do |type, message| %>
+        <p class="flash mb-4 rounded-2xl border border-[#f0d56b] bg-[#fff8d7] p-4 <%= type %>"><%= message %></p>
+      <% end %>
+      <%= yield %>
+    </main>
+  </body>
+</html>
