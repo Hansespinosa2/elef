@@ -232,6 +232,29 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
   body.printing-work.printing-presentation { page: desktop-presentation; }
   .printing-work .slide-frame { aspect-ratio: auto; width: 13.333in; height: 7.5in; overflow: hidden; break-after: page; page-break-after: always; }
   .printing-work .slide-frame:last-child { break-after: auto; page-break-after: auto; }
+  /* The desktop prints the live editor projection (scaled canvas, flex
+     slide internals, positioned blocks) while the web prints a dedicated
+     block-layout partial: neutralize the projection extras so one slide
+     fills exactly one fixed page. Chromium drops flex-column projection
+     content when fragmenting it (blank first page, clipped oversized
+     title, missing blocks), and the shell chain above the preview offsets
+     the frame past the page fold. */
+  .printing-work .slide,
+  .printing-work .slide-content,
+  .printing-work .slide-block-shell,
+  .printing-work .slide-block { display: block !important; }
+  .printing-work .editor-shell,
+  .printing-work .editor-layout,
+  .printing-work #desktop-preview,
+  .printing-work .presentation-surface,
+  .printing-work .slide-frame { margin: 0 !important; padding: 0 !important; gap: 0 !important; border: 0 !important; }
+  .printing-work main.app-shell,
+  .printing-work .work-view,
+  .printing-work #desktop-editor-form,
+  .printing-work #desktop-editor-mount { height: auto !important; min-height: 0 !important; }
+  /* Trailing editor chrome after the frames defeats :last-child, leaving
+     a blank trailing page: match the last frame by type instead. */
+  .printing-work .slide-frame:last-of-type { break-after: auto; page-break-after: auto; }
   .printing-work .slide-frame > .slide { position: static; width: 13.333in; height: 7.5in; padding: 5rem; border: 0; border-radius: 0; box-shadow: none; transform: none; overflow: hidden; }
   .printing-work .slide-frame.is-overflowing > .slide { outline: none; }
   .printing-work .slide.is-overflowing::after { display: none; }
