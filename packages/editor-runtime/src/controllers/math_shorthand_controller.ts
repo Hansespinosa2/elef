@@ -464,52 +464,6 @@ function mathShorthandInGroup(text: string, caret: number, greedyEnd: number): M
   return null
 }
 
-function splitTopLevelChainFragments(token: string): Array<{ text: string; start: number }> {
-  const fragments: Array<{ text: string; start: number }> = []
-  let depth = 0
-  let current = ""
-  let currentStart = 0
-  for (let index = 0; index < token.length; index += 1) {
-    const character = token[index] ?? ""
-    if (character === "\\") {
-      current += character + (token[index + 1] ?? "")
-      if (token[index + 1]) index += 1
-      continue
-    }
-    if (character === "{" || character === "(") {
-      if (depth === 0) {
-        fragments.push({ text: current, start: currentStart })
-        current = ""
-        currentStart = index + 1
-      } else {
-        current += character
-      }
-      depth += 1
-      continue
-    }
-    if (character === "}" || character === ")") {
-      if (depth === 0) {
-        fragments.push({ text: current, start: currentStart })
-        current = ""
-        currentStart = index + 1
-        continue
-      }
-      depth -= 1
-      if (depth === 0) {
-        fragments.push({ text: current, start: currentStart })
-        current = ""
-        currentStart = index + 1
-        continue
-      }
-      current += character
-      continue
-    }
-    current += character
-  }
-  fragments.push({ text: current, start: currentStart })
-  return fragments
-}
-
 export function mathShorthandAt(text: string, caret: number): MathShorthandMatch | null {
   if (caret < 0 || caret > text.length) return null
   if (!insideMath(text, caret)) return null
@@ -629,106 +583,6 @@ export function mathContextAt(text: string, caret: number): "display_math" | "in
   if (delimiter === null && environmentStack.length === 0) return null
   if (environmentStack.length > 0 || delimiter === "$$" || delimiter === "\\[") return "display_math"
   return "inline_math"
-}
-
-function mathContextMap(text: string): Uint8Array {
-  const contexts = new Uint8Array(text.length + 1)
-  let delimiter: string | null = null
-  let fence: { character: string; length: number } | null = null
-  let inlineCodeLength: number | null = null
-  const environmentStack: string[] = []
-  let lineStart = 0
-
-  while (lineStart <= text.length) {
-    const nextNewline = text.indexOf("\n", lineStart)
-    const lineEnd = nextNewline < 0 ? text.length : nextNewline
-    const line = text.slice(lineStart, lineEnd)
-    const fenceMatch = line.match(/^ {0,3}([\x60~]{3,})(.*)$/)
-    let skipLine = false
-
-    if (fence) {
-      if (fenceMatch && (fenceMatch[1] ?? "")[0] === fence.character && (fenceMatch[1] ?? "").length >= fence.length && /^[ \t]*$/.test(fenceMatch[2] ?? "")) fence = null
-      skipLine = true
-    } else if (fenceMatch) {
-      fence = { character: fenceMatch[1]?.[0] ?? "", length: fenceMatch[1]?.length ?? 0 }
-      skipLine = true
-    }
-
-    if (skipLine) {
-      contexts.fill(0, lineStart, lineEnd + 1)
-    } else {
-      let index = 0
-      while (index < line.length) {
-        const absolute = lineStart + index
-        const active = inlineCodeLength === null && (delimiter !== null || environmentStack.length > 0) ? 1 : 0
-        contexts[absolute] = active
-
-        if (inlineCodeLength === null && line.startsWith("\\(", index)) {
-          contexts[absolute + 1] = active
-          delimiter = delimiter === "\\)" ? null : delimiter || "\\)"
-          index += 2
-          continue
-        }
-        if (inlineCodeLength === null && line.startsWith("\\[", index)) {
-          contexts[absolute + 1] = active
-          delimiter = delimiter === "\\]" ? null : delimiter || "\\]"
-          index += 2
-          continue
-        }
-        if (inlineCodeLength === null && (line.startsWith("\\)", index) || line.startsWith("\\]", index))) {
-          contexts[absolute + 1] = active
-          const closing = line.slice(index, index + 2)
-          if (delimiter === closing) delimiter = null
-          index += 2
-          continue
-        }
-        if (line[index] === "\\") {
-          if (inlineCodeLength === null) {
-            const environment = line.slice(index).match(/^\\(begin|end)\{([^}]+)\}/)
-            if (environment && MATH_ENVIRONMENTS.has(environment[2] ?? "")) {
-              if (environment[1] === "begin") environmentStack.push(environment[2] ?? "")
-              else if (environmentStack.at(-1) === environment[2]) environmentStack.pop()
-              index += environment[0].length
-              continue
-            }
-          }
-          if (index + 1 < line.length) contexts[absolute + 1] = active
-          index += 2
-          continue
-        }
-        if (line.charCodeAt(index) === 96) {
-          let length = 1
-          while (line.charCodeAt(index + length) === 96) length += 1
-          for (let offset = 1; offset < length; offset += 1) contexts[absolute + offset] = active
-          if (inlineCodeLength === null) inlineCodeLength = length
-          else if (inlineCodeLength === length) inlineCodeLength = null
-          index += length
-          continue
-        }
-        if (inlineCodeLength !== null) {
-          index += 1
-          continue
-        }
-        if (line.startsWith("$$", index)) {
-          contexts[absolute + 1] = active
-          delimiter = delimiter === "$$" ? null : delimiter || "$$"
-          index += 2
-        } else if (line[index] === "$") {
-          delimiter = delimiter === "$" ? null : delimiter || "$"
-          index += 1
-        } else {
-          index += 1
-        }
-      }
-      contexts[lineEnd] = inlineCodeLength === null && (delimiter !== null || environmentStack.length > 0) ? 1 : 0
-    }
-
-    if (nextNewline < 0) break
-    lineStart = lineEnd + 1
-  }
-
-  contexts[text.length] = inlineCodeLength === null && (delimiter !== null || environmentStack.length > 0) ? 1 : 0
-  return contexts
 }
 
 export function insideMath(text: string, caret: number): boolean {
@@ -980,6 +834,10 @@ export default class extends Controller<HTMLElement> {
     const mathContext = editorMathContextAt(editor, caret)
     if (event.key === "$" && collapsed && chain?.status === "valid" && mathContext) {
       if (caret === chain.end && editor.value[caret] !== "$" && mathContext === "inline_math") {
+        if (this.isCancelledChain(chain)) {
+          this.pendingChain = null
+          return
+        }
         event.preventDefault()
         this.commit(chain, "$")
         return
@@ -1015,6 +873,10 @@ export default class extends Controller<HTMLElement> {
     if (!this.pendingChain || this.pendingChain.status !== "valid" || !collapsed) return
 
     if (event.key === " " || event.code === "Space" || event.key === "Enter" || event.key === "Tab") {
+      if (this.isCancelledChain(this.pendingChain)) {
+        this.pendingChain = null
+        return
+      }
       event.preventDefault()
       const suffix = event.key === " " || event.code === "Space" ? " " : event.key === "Enter" ? editor.lineSeparator : ""
       this.commit(this.pendingChain, suffix)
@@ -1071,8 +933,6 @@ export default class extends Controller<HTMLElement> {
   // shorthand decision (skip/promote/delete/chain) reads editor.selection,
   // so leaving it at replaceRange's natural collapse while the DOM caret
   // sits at `placed` diverges the two and corrupts the next keystroke.
-  // commitAll deliberately bypasses this: it runs on blur, where the
-  // pending projection install discards the mapping anyway.
   commitVisualEdit(editor: any, from: number, to: number, insert: string, caret?: number): void {
     // Pre-commit ground truth for the visual DOM patch: the caret the
     // extent centers on (promote and backspace replace a pair around it,
@@ -1103,9 +963,26 @@ export default class extends Controller<HTMLElement> {
     }
   }
 
+  isCancelledChain(chain: MathShorthandMatch | null): boolean {
+    const editor = this.editorController
+    if (!chain || chain.status !== "valid" || !editor?.value) return false
+    return this.wasChainCancelled(editor.value, chain.start, chain.end, chain.source)
+  }
+
   commit(chain: MathShorthandMatch | null, suffix = ""): boolean {
     if (!chain || chain.status !== "valid") return false
-    this.commitVisualEdit(this.editorController, chain.start, chain.end, `${chain.expansion}${suffix}`)
+    const editor = this.editorController
+    if (!editor) return false
+    const source = editor.value || ""
+    if (source.slice(chain.start, chain.end) !== chain.source) {
+      if (this.pendingChain?.start === chain.start && this.pendingChain?.end === chain.end) this.pendingChain = null
+      return false
+    }
+    if (this.wasChainCancelled(source, chain.start, chain.end, chain.source)) {
+      if (this.pendingChain?.start === chain.start && this.pendingChain?.end === chain.end) this.pendingChain = null
+      return false
+    }
+    this.commitVisualEdit(editor, chain.start, chain.end, `${chain.expansion}${suffix}`)
     this.pendingChain = null
     return true
   }
@@ -1120,59 +997,32 @@ export default class extends Controller<HTMLElement> {
     this.commit(chain)
   }
 
+  // Blur/submit commit the edited region only: the pending chain the author
+  // was typing plus the chain at the current caret (covers paste-then-blur,
+  // where no keyup recorded a pending chain). Untouched chains elsewhere in
+  // the document stay literal; keydown paths remain the commit mechanism.
   commitAll(): void {
     const editor = this.editorController
-    if (!editor?.value) return
-    const source = editor.value
-    const chainPattern = /(?:@[A-Za-z][A-Za-z0-9]*|\\[A-Za-z]+|[A-Za-z])[A-Za-z0-9.@\\{}()_^-]*/g
-    const matches = [...source.matchAll(chainPattern)]
-    const contexts = mathContextMap(source)
-    const changes: Array<{ from: number; to: number; insert: string }> = []
-
-    for (const match of matches) {
-      const from = match.index ?? 0
-      const token = match[0] ?? ""
-      const to = from + token.length
-      if (!contexts[to]) continue
-      const chain = parseMathShorthand(token)
-      const split = splitTopLevelModifiers(token)
-      if (
-        chain?.status === "valid" &&
-        (split.names.length > 0 || chain.nestedChain) &&
-        chain.expansion !== token &&
-        !this.wasChainCancelled(source, from, to, token)
-      ) {
-        changes.push({ from, to, insert: chain.expansion })
-        continue
-      }
-      if (token.includes(".") && /[{}()]/.test(token)) this.commitGroupChains(source, contexts, token, from, changes)
+    if (!editor) return
+    const candidates: MathShorthandMatch[] = []
+    const pending = this.pendingChain
+    if (pending?.status === "valid") candidates.push(pending)
+    let atCaret: MathShorthandMatch | null = null
+    try {
+      atCaret = mathShorthandAtEditor(editor, editor.selectionStart)
+    } catch {
+      atCaret = null
     }
-
-    if (changes.length) editor.replaceRanges(changes)
-  }
-
-  commitGroupChains(source: string, contexts: Uint8Array, token: string, base: number, changes: Array<{ from: number; to: number; insert: string }>): void {
-    const fragments = splitTopLevelChainFragments(token)
-    if (fragments.length < 2) return
-    for (const fragment of fragments) {
-      if (!fragment.text.includes(".")) continue
-      const from = base + fragment.start
-      const to = from + fragment.text.length
-      const chain = parseMathShorthand(fragment.text)
-      if (chain?.status === "valid") {
-        if (contexts[to]) {
-          const split = splitTopLevelModifiers(fragment.text)
-          if (
-            (split.names.length > 0 || chain.nestedChain) &&
-            chain.expansion !== fragment.text &&
-            !this.wasChainCancelled(source, from, to, fragment.text)
-          ) {
-            changes.push({ from, to, insert: chain.expansion })
-          }
-        }
-        continue
-      }
-      this.commitGroupChains(source, contexts, fragment.text, from, changes)
+    if (atCaret?.status === "valid" && (atCaret.start !== pending?.start || atCaret.end !== pending?.end)) {
+      candidates.push(atCaret)
+    }
+    candidates.sort((left, right) => right.start - left.start)
+    const seen = new Set<string>()
+    for (const chain of candidates) {
+      const key = `${chain.start}:${chain.end}:${chain.source}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      this.commit(chain)
     }
   }
 

@@ -545,20 +545,18 @@ test("innermostMathChainWindow bounds the enclosing group or stays null", () => 
   assert.equal(math.innermostMathChainWindow("$\\{x.bar$", 8), null)
 })
 
-test("commits canonical atom chains on an explicit whole-editor commit", () => {
-  const editor = {
-    value: "$\\mathbf{x}.t$ and $\\vec{y}.inv$",
-    replaceRanges(changes) {
-      for (const change of [...changes].sort((left, right) => right.from - left.from)) {
-        this.value = `${this.value.slice(0, change.from)}${change.insert}${this.value.slice(change.to)}`
-      }
-    }
-  }
-  const controller = new math.default()
-  controller.editorController = editor
-  controller.commitAll()
+test("commitAll commits only the edited region instead of sweeping the document", () => {
+  const first = createMathEditor("$x.b$ and $y.t$", 4)
+  first.controller.commitAll()
+  assert.equal(first.editor.value, "$\\mathbf{x}$ and $y.t$")
 
-  assert.equal(editor.value, "$\\mathbf{x}^\\top$ and $\\vec{y}^{-1}$")
+  const second = createMathEditor("$x.b$ and $y.t$", 14)
+  second.controller.commitAll()
+  assert.equal(second.editor.value, "$x.b$ and $y^\\top$")
+
+  const untouched = createMathEditor("$x.b$ and $y.t$", 0)
+  untouched.controller.commitAll()
+  assert.equal(untouched.editor.value, "$x.b$ and $y.t$")
 })
 
 test("commitAll leaves already-expanded chains unchanged", () => {
@@ -749,36 +747,64 @@ test("Escape cancels the pending chain and the focusout sweep leaves it literal"
   assert.equal(context.editor.value, "$x.b$")
 })
 
-test("commits every live math chain during the document-wide focusout sweep", () => {
+test("Escape-cancelled chains stay literal on the next commit keystroke", () => {
   const cases = [
-    ["$x.b$ and $y.t$", "$\\mathbf{x}$ and $y^\\top$"],
-    ["$x.b!$", "$\\mathbf{x}!$"],
-    ["$ax.b$", "$ax.b$"],
-    ["$x.b$ and $3.14$", "$\\mathbf{x}$ and $3.14$"],
-    ["\x60$x.b$\x60 and $y.t$", "\x60$x.b$\x60 and $y^\\top$"],
-    ["$$\nx.b\n$$", "$$\n\\mathbf{x}\n$$"],
-    ["\\begin{aligned}\nx.b\n\\end{aligned}", "\\begin{aligned}\n\\mathbf{x}\n\\end{aligned}"],
-    ["$x.b$", "$\\mathbf{x}$"]
+    ["$x.b$", 4, " ", "$x.b $"],
+    ["$x.b$", 4, "Enter", "$x.b\n$"],
+    ["$x.b$", 4, "Tab", "$x.b$"],
+    ["$x.b$", 4, "_", "$x.b_$"],
+    ["$x.b$", 4, "^", "$x.b^$"],
+    ["$x.b$", 4, "[", "$x.b[$"],
+    ["$x.b$", 4, "(", "$x.b($"],
+    ["$x.b$", 4, "\\", "$x.b\\$"],
+    ["$x.b$", 4, "!", "$x.b!$"],
+    ["$x.b$", 4, "+", "$x.b+$"],
+    ["$x.b$", 4, "-", "$x.b-$"],
+    ["$x.b$", 4, "$", "$x.b$"],
+    ["$\\frac{x.bar}{}$", 12, "Tab", "$\\frac{x.bar}{}$"]
   ]
-  for (const [source, expected] of cases) {
-    const context = createMathEditor(source, 0)
-    context.listeners.get("focusout")({})
-    assert.equal(context.editor.value, expected, source)
+  for (const [source, caret, key, expected] of cases) {
+    const context = createMathEditor(source, caret)
+    pressMathKey(context, "Escape")
+    assert.equal(context.editor.value, source, `Escape should leave ${source} literal`)
+    pressMathKey(context, key, { code: key === " " ? "Space" : undefined })
+    assert.equal(context.editor.value, expected, `Escape then ${key} in ${source}`)
   }
 })
 
-test("commits inner group chains during the document-wide focusout sweep", () => {
+test("focusout commits only the edited region and leaves untouched chains literal", () => {
   const cases = [
-    ["$\\frac{x.bar}{}$", "$\\frac{\\bar{x}}{}$"],
-    ["$(x.bar)$ and $f(y.t)$", "$(\\bar{x})$ and $f(y^\\top)$"],
-    ["$\\sum_{R.cal}$", "$\\sum_{\\mathcal{R}}$"],
-    ["$f(x).b$", "$f(x).b$"],
-    ["$\\frac{x}{y}$", "$\\frac{x}{y}$"]
+    ["$x.b$ and $y.t$", 4, "$\\mathbf{x}$ and $y.t$"],
+    ["$x.b$ and $y.t$", 14, "$x.b$ and $y^\\top$"],
+    ["$x.b$ and $y.t$", 0, "$x.b$ and $y.t$"],
+    ["$x.b!$", 2, "$\\mathbf{x}!$"],
+    ["$ax.b$", 3, "$ax.b$"],
+    ["$x.b$ and $3.14$", 2, "$\\mathbf{x}$ and $3.14$"],
+    ["\x60$x.b$\x60 and $y.t$", 14, "\x60$x.b$\x60 and $y^\\top$"],
+    ["$$\nx.b\n$$", 6, "$$\n\\mathbf{x}\n$$"],
+    ["\\begin{aligned}\nx.b\n\\end{aligned}", 17, "\\begin{aligned}\n\\mathbf{x}\n\\end{aligned}"],
+    ["$x.b$", 4, "$\\mathbf{x}$"]
   ]
-  for (const [source, expected] of cases) {
-    const context = createMathEditor(source, 0)
+  for (const [source, caret, expected] of cases) {
+    const context = createMathEditor(source, caret)
     context.listeners.get("focusout")({})
-    assert.equal(context.editor.value, expected, source)
+    assert.equal(context.editor.value, expected, `${source} at ${caret}`)
+  }
+})
+
+test("focusout commits only the edited inner group chain", () => {
+  const cases = [
+    ["$\\frac{x.bar}{}$", 12, "$\\frac{\\bar{x}}{}$"],
+    ["$(x.bar)$ and $f(y.t)$", 7, "$(\\bar{x})$ and $f(y.t)$"],
+    ["$\\sum_{R.cal}$", 12, "$\\sum_{\\mathcal{R}}$"],
+    ["$f(x).b$", 6, "$f(x).b$"],
+    ["$\\frac{x}{y}$", 10, "$\\frac{x}{y}$"],
+    ["$\\frac{x.bar}{}$", 0, "$\\frac{x.bar}{}$"]
+  ]
+  for (const [source, caret, expected] of cases) {
+    const context = createMathEditor(source, caret)
+    context.listeners.get("focusout")({})
+    assert.equal(context.editor.value, expected, `${source} at ${caret}`)
   }
 })
 
@@ -790,29 +816,15 @@ test("Escape cancels a pending inner group chain and the sweep leaves it literal
   assert.equal(context.editor.value, "$\\frac{x.bar}{}$")
 })
 
-test("keeps commitAll responsive on a 100 KB math document", () => {
+test("scoped blur commit stays responsive on a 100 KB math document", () => {
   const source = "$$" + "x + ".repeat(24995) + "x.b" + "$$"
-  const editor = {
-    value: source,
-    replaceRanges(changes) {
-      let cursor = 0
-      const output = []
-      for (const change of changes) {
-        output.push(this.value.slice(cursor, change.from), change.insert)
-        cursor = change.to
-      }
-      output.push(this.value.slice(cursor))
-      this.value = output.join("")
-    }
-  }
-  const controller = new math.default()
-  controller.editorController = editor
+  const context = createMathEditor(source, source.length - 2)
   const startedAt = performance.now()
-  controller.commitAll()
+  context.controller.commitAll()
   const elapsed = performance.now() - startedAt
 
-  assert.ok(elapsed < 2000, "100 KB commitAll took " + elapsed.toFixed(1) + " ms")
-  assert.ok(editor.value.endsWith("\\mathbf{x}$$"))
+  assert.ok(elapsed < 2000, "100 KB scoped commitAll took " + elapsed.toFixed(1) + " ms")
+  assert.ok(context.editor.value.endsWith("\\mathbf{x}$$"))
 })
 
 test("keeps dollar-pairing behavior independent from shorthand commits", () => {
