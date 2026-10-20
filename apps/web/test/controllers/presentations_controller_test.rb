@@ -114,6 +114,22 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal parent.title, child.fork_parent_title
   end
 
+  test "present and show layouts load the same stylesheet base" do
+    # Editor/show (application layout) and Present (presentation layout)
+    # must share one CSS base: the presentation surface uses Tailwind
+    # utilities and needs the same preflight the author proofed.
+    get presentation_path(presentations(:one))
+    assert_response :success
+    show_sheets = css_select("link[rel=stylesheet]").map { |node| node["href"] }.sort
+
+    get present_presentation_path(presentations(:one))
+    assert_response :success
+    present_sheets = css_select("link[rel=stylesheet]").map { |node| node["href"] }.sort
+
+    assert_includes present_sheets.join(" "), "tailwind", "present mode must load the tailwind base"
+    assert_equal show_sheets, present_sheets, "both surfaces must share one stylesheet base"
+  end
+
   test "publishing records the last published time while presentation mode stays read-only" do
     presentation = presentations(:one)
     get presentation_path(presentation)
@@ -681,7 +697,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".presentation-stage[data-bug-report-ignore]", count: 1
     assert_select ".presentation-mode.presentation-surface"
     assert_select ".slides-typography-book"
-    assert_select 'link[href*="tailwind"]', count: 0
+    assert_select 'link[href*="tailwind"]', count: 1 # unified layout base: present shares the tailwind foundation (see "present and show layouts load the same stylesheet base")
     assert_select 'link[rel="icon"][href="/icon.svg"]'
     assert_select ".presentation-slide", 2
   end
