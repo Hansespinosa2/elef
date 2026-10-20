@@ -1,4 +1,4 @@
-import { mkdir } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { fileURLToPath } from "node:url"
 import path from "node:path"
 import { build } from "esbuild"
@@ -33,5 +33,16 @@ await build({
   minify: true,
   legalComments: "none"
 })
+
+// Keep Highlight.js's PHP whitespace template semantically intact without
+// emitting a physical tab at end-of-line in the checked-in bundle.
+const rawWhitespace = "[ \t\n"
+for (const artifact of ["elef-renderer.js", "projection.js"]) {
+  const artifactPath = path.join(dist, artifact)
+  const bundle = await readFile(artifactPath, "utf8")
+  const occurrences = bundle.split(rawWhitespace).length - 1
+  if (occurrences !== 1) throw new Error(`Expected one Highlight.js whitespace template in ${artifact}, found ${occurrences}.`)
+  await writeFile(artifactPath, bundle.replace(rawWhitespace, "[ \\t\n"))
+}
 
 console.log("packages/renderer: dist/elef-renderer.js + dist/projection.js built (bare entries; the composed IIFE lives in packages/editor-runtime)")

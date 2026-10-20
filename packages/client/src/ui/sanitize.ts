@@ -4,12 +4,28 @@
 // apps/web/test/javascript/shared/preview_sanitizer_cases.js corpus, executed
 // directly against this implementation). mediaBaseUrl is an explicit option;
 // hosts pass their own base URL and keep no sanitizer of their own.
+import { markStage } from "../session/stage_marks.js"
 
 const ALLOWED_ELEMENTS = new Set([
   "A", "ANNOTATION", "BLOCKQUOTE", "BR", "CODE", "DEL", "DIV", "EM", "H1", "H2", "H3", "H4", "H5", "H6",
-  "HR", "IMG", "LI", "MATH", "MFRAC", "MI", "MN", "MO", "MROW", "MSUB", "MSUP", "MTEXT", "MTABLE", "MTD",
-  "MTR", "MOVER", "MUNDER", "MUNDEROVER", "MSQRT", "MROOT", "MSTYLE", "MSPACE", "OL", "P", "PRE", "SECTION",
+  "HR", "IMG", "LI", "MATH", "MENCLOSE", "MFRAC", "MGLYPH", "MI", "MN", "MO", "MPADDED", "MPHANTOM", "MROW", "MSPACE",
+  "MSQRT", "MROOT", "MSTYLE", "MSUB", "MSUBSUP", "MSUP", "MTEXT", "MTABLE", "MTD",
+  "MTR", "MOVER", "MUNDER", "MUNDEROVER", "OL", "P", "PRE", "SECTION",
   "BUTTON", "FIGCAPTION", "FIGURE", "LABEL", "OPTION", "SELECT", "SEMANTICS", "SPAN", "STRONG", "SUB", "SUP", "TABLE", "TBODY", "TD", "TH", "THEAD", "TR", "UL", "VIDEO", "WBR",
+]);
+// Inert MathML presentation attributes emitted by KaTeX's mathml output (no
+// URLs, no script; src is deliberately excluded so mglyph cannot fetch
+// external images). Compared case-insensitively.
+const MATHML_ATTRIBUTES = new Set([
+  "accent", "accentunder", "align", "columnalign", "columnlines", "columnspacing", "depth", "displaystyle",
+  "fence", "frame", "framespacing", "height", "largeop", "linebreak", "linethickness", "lspace", "mathbackground",
+  "mathcolor", "mathsize", "mathvariant", "maxsize", "minlabelspacing", "minsize", "movablelimits", "notation", "rowalign",
+  "rowlines", "rowspacing", "rspace", "scriptlevel", "separator", "stretchy", "symmetric", "valign", "voffset", "width",
+]);
+const MATHML_ELEMENTS = new Set([
+  "MATH", "MENCLOSE", "MFRAC", "MGLYPH", "MI", "MN", "MO", "MPADDED", "MPHANTOM", "MROW", "MSPACE",
+  "MSQRT", "MROOT", "MSTYLE", "MSUB", "MSUBSUP", "MSUP", "MTEXT", "MTABLE", "MTD",
+  "MTR", "MOVER", "MUNDER", "MUNDEROVER", "SEMANTICS", "ANNOTATION",
 ]);
 const INTERACTIVE_ELEMENTS = new Set(["BUTTON", "LABEL", "OPTION", "SELECT"]);
 const MATH_DELIMITERS = new Set(["$", "$$", "\\(", "\\)", "\\[", "\\]"]);
@@ -28,7 +44,7 @@ const ALLOWED_ACTIONS = new Set([
 const ALLOWED_EDITOR_ACTIONS = new Set(["media-choose-slide", "overview-select"]);
 const ALLOWED_CLIENT_MOUNTS = new Set(["mermaid", "document-pages", "art-layout"]);
 const ALLOWED_PRESENTATION_ACTIONS = new Set([
-  "add-slide-after", "delete-slide", "move-slide-up", "move-slide-down", "add-block-after", "delete-block", "move-block-up", "move-block-down",
+  "add-slide-after", "delete-slide", "move-slide-up", "move-slide-down",
 ]);
 
 export interface SanitizeOptions {
@@ -41,17 +57,23 @@ export function sanitizePreview(container: Element, html: string, options: Sanit
   const { interactive = true, documentPagination = false, mediaBaseUrl = "" } = options;
   const document = container.ownerDocument;
   const template = document.createElement("template");
+  markStage("sanitize-parse-start");
   template.innerHTML = typeof html === "string" ? html : "";
+  markStage("sanitize-parse-end");
+  markStage("sanitize-scrub-start");
   const showElement = document.defaultView?.NodeFilter?.SHOW_ELEMENT ?? 1;
   const walker = document.createTreeWalker(template.content, showElement);
   const elements: Element[] = [];
   while (walker.nextNode()) elements.push(walker.currentNode as Element);
 
   for (const element of elements) {
+    // Foreign (MathML/SVG) elements keep their lowercase tagName; compare
+    // case-insensitively so the renderer's MathML output survives.
+    const tag = element.tagName.toUpperCase();
     if (
-      !ALLOWED_ELEMENTS.has(element.tagName) ||
-      (!interactive && INTERACTIVE_ELEMENTS.has(element.tagName)) ||
-      (element.tagName === "BUTTON" && !safePreviewButton(element, interactive))
+      !ALLOWED_ELEMENTS.has(tag) ||
+      (!interactive && INTERACTIVE_ELEMENTS.has(tag)) ||
+      (tag === "BUTTON" && !safePreviewButton(element, interactive))
     ) {
       element.remove();
       continue;
@@ -62,7 +84,10 @@ export function sanitizePreview(container: Element, html: string, options: Sanit
       }
     }
   }
+  markStage("sanitize-scrub-end");
+  markStage("sanitize-install-start");
   container.replaceChildren(template.content);
+  markStage("sanitize-install-end");
 }
 
 function safeAttribute(
@@ -74,24 +99,26 @@ function safeAttribute(
   mediaBaseUrl: string,
 ): boolean {
   const lower = name.toLowerCase();
+  const tag = element.tagName.toUpperCase();
   if (lower.startsWith("on") || lower === "srcdoc" || lower === "formaction") return false;
+  if (MATHML_ATTRIBUTES.has(lower) && MATHML_ELEMENTS.has(tag)) return true;
   if (
     ["class", "role", "alt", "title", "aria-label", "aria-multiline", "aria-readonly", "aria-hidden", "spellcheck", "controls", "playsinline", "preload", "colspan", "rowspan"].includes(lower)
   ) {
     return true;
   }
-  if (lower === "type") return element.tagName === "BUTTON" && value === "button";
-  if (lower === "disabled") return ["BUTTON", "SELECT"].includes(element.tagName) && value === "";
-  if (lower === "selected") return element.tagName === "OPTION" && value === "";
+  if (lower === "type") return tag === "BUTTON" && value === "button";
+  if (lower === "disabled") return ["BUTTON", "SELECT"].includes(tag) && value === "";
+  if (lower === "selected") return tag === "OPTION" && value === "";
   if (lower === "value") {
     return (
-      element.tagName === "OPTION" &&
+      tag === "OPTION" &&
       /^(?:left|center|right|top left|top center|top right|middle left|middle center|middle right|bottom left|bottom center|bottom right)$/.test(value)
     );
   }
-  if (lower === "start") return element.tagName === "OL" && /^(?:0|[1-9]\d*)$/.test(value);
+  if (lower === "start") return tag === "OL" && /^(?:0|[1-9]\d*)$/.test(value);
   if (lower === "contenteditable") return interactive && (value === "true" || value === "false");
-  if (["xmlns", "display", "encoding"].includes(lower) && ["MATH", "ANNOTATION"].includes(element.tagName)) return true;
+  if (["xmlns", "display", "encoding"].includes(lower) && ["MATH", "ANNOTATION"].includes(tag)) return true;
   if (lower === "style") return isSafeKatexStyle(element, value);
   if (lower.startsWith("aria-") && /^[a-z-]+$/.test(lower)) return true;
   if (lower === "data-action") return interactive && ALLOWED_ACTIONS.has(value);
@@ -111,11 +138,11 @@ function safeAttribute(
     );
   }
   if (lower === "data-presentation-editor-action") {
-    return interactive && element.tagName === "BUTTON" && ALLOWED_PRESENTATION_ACTIONS.has(value);
+    return interactive && tag === "BUTTON" && ALLOWED_PRESENTATION_ACTIONS.has(value);
   }
   if (lower === "data-block-index" || lower === "data-slide-index") return interactive && /^(?:0|[1-9]\d*)$/.test(value);
-  if (lower === "data-presentation-editor-align") return interactive && element.tagName === "SELECT" && value === "";
-  if (lower === "data-visual-editor-block-id") return interactive && element.tagName === "SELECT" && /^[A-Za-z0-9_-]+$/.test(value);
+  if (lower === "data-presentation-editor-align") return interactive && tag === "SELECT" && value === "";
+  if (lower === "data-visual-editor-block-id") return interactive && tag === "SELECT" && /^[A-Za-z0-9_-]+$/.test(value);
   if (lower === "data-editor-image-source") return value === "true";
   if (["data-editor-block-id", "data-editor-region-id"].includes(lower)) return /^[A-Za-z0-9_-]+$/.test(value);
   if (lower === "data-editor-empty-block") return value === "true";
@@ -123,7 +150,7 @@ function safeAttribute(
   if (lower === "data-editor-slide-id") return /^slide-\d+$/.test(value);
   if (lower === "data-editor-math-source") {
     return (
-      element.tagName === "SPAN" &&
+      tag === "SPAN" &&
       ["katex", "katex-display", "math-error"].some((className) => element.classList.contains(className))
     );
   }
@@ -136,11 +163,11 @@ function safeAttribute(
   if (lower === "data-art-settled" || lower === "data-art-overfull") return value === "true" || value === "false";
   if (lower === "data-art-host") return value === "fixed";
   if (lower === "data-art-diagnostic") return ["ART_NO_LIST_TARGET", "ART_INVALID_SYNTAX", "ART_UNSUPPORTED_CONTENT", "ART_REVEAL_BOUNDARY", "ART_NO_FIT", "ART_ITEM_TOO_TALL", "ART_INTERNAL_ERROR"].includes(value);
-  if (lower === "data-elef-reveal-event") return element.tagName === "DIV" && element.classList.contains("slide-block") && /^(?:0|[1-9]\d*)$/.test(value);
-  if (lower === "data-elef-reveal-event-count") return element.tagName === "SECTION" && element.classList.contains("slide") && /^[1-9]\d*$/.test(value);
-  if (lower === "data-presentation-canvas-target") return interactive && element.tagName === "SECTION" && value === "canvas";
+  if (lower === "data-elef-reveal-event") return tag === "DIV" && element.classList.contains("slide-block") && /^(?:0|[1-9]\d*)$/.test(value);
+  if (lower === "data-elef-reveal-event-count") return tag === "SECTION" && element.classList.contains("slide") && /^[1-9]\d*$/.test(value);
+  if (lower === "data-presentation-canvas-target") return interactive && tag === "SECTION" && value === "canvas";
   if (lower === "data-presentation-editor-target") {
-    return interactive && element.tagName === "DIV" && element.classList.contains("presentation-surface") && value === "canvas";
+    return interactive && tag === "DIV" && element.classList.contains("presentation-surface") && value === "canvas";
   }
   if (lower === "data-document-pages-target") {
     const reader = element.parentElement;
@@ -151,8 +178,8 @@ function safeAttribute(
       (reader?.classList.contains("document-reader") ?? false)
     );
   }
-  if (lower === "href" && element.tagName === "A") return safeUrl(value);
-  if (lower === "src" && ["IMG", "VIDEO"].includes(element.tagName)) {
+  if (lower === "href" && tag === "A") return safeUrl(value);
+  if (lower === "src" && ["IMG", "VIDEO"].includes(tag)) {
     return (safeUrl(value) || isWithinMediaBase(value, mediaBaseUrl)) && !/^(?:https?:|data:|javascript:)/i.test(value);
   }
   return false;

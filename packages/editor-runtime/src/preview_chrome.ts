@@ -7,6 +7,7 @@
 import {
   presentationBlockAttributes,
   presentationBlockControls,
+  presentationEmptyBlock,
   presentationEmptySlide,
   presentationRoot,
   presentationSlideBlock,
@@ -43,6 +44,7 @@ export const editorChrome = {
   presentationBlockAttributes,
   presentationBlockControls,
   slideBlock: presentationSlideBlock,
+  emptyPresentationBlock: presentationEmptyBlock,
   emptySlide: presentationEmptySlide,
   slideToolbar: presentationSlideToolbar,
   slideFrame: presentationSlideFrame,

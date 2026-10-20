@@ -11,7 +11,9 @@ Reach for when: changing CI lanes or gates, reading the shadow plan, shepherding
 | Matrix | `ci-gate` job in `ci.yml` | Always after plan + evidence | Ran/skipped matrix in the run summary: what failed where |
 | Slow | `.github/workflows/slow-lane.yml` | Pushes to dev, dispatch | Full `bin/check all` envelope on the merged dev tip, with a status job |
 | Nightly | `.github/workflows/nightly-diagnostic.yml` | Daily 06:00 UTC, dispatch | Timing ledger (longest-first) plus dev/main standing health; read-only |
-| Measurement | `sqlite-compatibility.yml`, `native-performance.yml` | Dev pushes, schedule, dispatch | Full SQLite suite and native benchmarks; declared non-gating |
+| Web measurement | `web-performance.yml` | PRs, dev pushes, schedule, dispatch | Twenty-sample web benchmarks; declared non-gating |
+| Native measurement | `native-performance.yml` | Dev pushes, schedule, dispatch | Twenty-process native benchmarks; declared non-gating |
+| SQLite measurement | `sqlite-compatibility.yml` | Dev pushes, schedule, dispatch | Full SQLite suite; declared non-gating |
 | Release | `.github/workflows/desktop-release.yml` | `desktop-v*` tags only | Draft, assets, publish, AUR (see [Desktop release operations](desktop/release-operations.md)) |
 
 PRs land on a maximally information-dense signal. The fast-lane *target* is 10 minutes wall-clock (`desktop-fast` holds itself to 300 s; `plan` and `ci-gate` each carry a 10 min timeout), but this is unproven on a live PR as of this writing — the first PR run after merge is the proof, and `plan`'s full-history checkout (`fetch-depth: 0`) is the known overrun risk. The heavy evidence jobs still run on every PR during v0 — speed comes from caches and in-job lanes, not from skipping required work. Browser/desktop parity assertions still run on the PR in v0 (nothing was removed); the slow lane adds merged-tip parity coverage. Deferring anything off a PR later is allowed only when the failure location stays visible in the PR summary or status — that cross-posting is not yet wired (the slow lane posts only its own run summary), so no deferral may ship until it is.

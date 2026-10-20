@@ -20,6 +20,41 @@
   margin: 0.25rem 0;
   text-align: left;
 }
+.editor-inline-active {
+  background: rgba(159, 197, 169, 0.16);
+  border-radius: 0.25rem;
+  box-shadow: 0 0 0 1px rgba(159, 197, 169, 0.35);
+  color: inherit;
+  font-family: var(--oradia-mono);
+  outline: none;
+  padding: 0.05rem 0.25rem;
+  white-space: pre-wrap;
+}
+/* Structural revelation: source prefixes render through
+   pseudo-elements so they never enter text, caret math, or the
+   differ. Revealed list items drop their native bullet (the source
+   marker takes its place); local reflow while revealed is expected. */
+.editor-reveal-marker::before {
+  color: var(--oradia-muted);
+  content: attr(data-editor-reveal-prefix);
+  font-family: var(--oradia-mono);
+  white-space: pre;
+}
+li.editor-reveal-marker { list-style: none; }
+.editor-reveal-fence::before {
+  color: var(--oradia-muted);
+  content: attr(data-editor-reveal-fence-open);
+  display: block;
+  font-family: var(--oradia-mono);
+  white-space: pre-wrap;
+}
+.editor-reveal-fence[data-editor-reveal-fence-close]::after {
+  color: var(--oradia-muted);
+  content: attr(data-editor-reveal-fence-close);
+  display: block;
+  font-family: var(--oradia-mono);
+  white-space: pre-wrap;
+}
 .editor-shell { background: var(--oradia-slate-900); border: 1px solid var(--oradia-line); border-radius: 1rem; box-shadow: 0 18px 45px rgba(0, 0, 0, 0.16); min-width: 0; max-width: 100%; overflow-x: clip; padding: clamp(1rem, 2.5vw, 1.5rem); }
 .editor-shell-header { align-items: flex-start; display: flex; gap: 1rem; justify-content: space-between; margin-bottom: 1rem; }
 .editor-title-field { flex: 1 1 auto; min-width: 0; }
@@ -56,6 +91,12 @@
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller::-webkit-scrollbar { display: none; }
 .visual-editor-form[data-editor-mode="visual"][data-editor-vim-enabled="true"] .source-field .editor-surface { display: block; margin-top: 0.75rem; }
 .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-cursorLayer { display: none; }
+/* Vim visual ranges paint on the rendered text via the bridge; the hidden
+   engine surface must not paint a second highlight in the source strip. */
+.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-selectionLayer { display: none; }
+/* Vim normal-mode block indicator over the passage character under the
+   caret. Out-of-flow and pointer-transparent: never shifts content. */
+.elef-vim-normal-caret { background-color: var(--oradia-vim-normal); border-radius: 2px; display: none; opacity: 0.55; pointer-events: none; position: fixed; z-index: 20; }
 .visual-editor-form[data-editor-mode="source"] .source-field .editor-surface { display: block; }
 .visual-editor-form[data-editor-mode="source"] .source-field.is-source-hidden { display: block; }
 .editor-layout, .source-pane, .preview-pane { min-width: 0; }
@@ -121,12 +162,22 @@
 .presentation-editor-projection .slide-frame { outline: 1px solid transparent; outline-offset: 0.25rem; }
 .presentation-editor-slide-toolbar { align-items: center; background: rgba(24, 33, 38, 0.9); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; flex-wrap: wrap; gap: 0.35rem; left: 1.25rem; padding: 0.3rem 0.45rem; position: absolute; right: 1.25rem; top: 0.8rem; z-index: 3; }
 .presentation-editor-slide-label { font-size: 0.7rem; font-weight: 800; margin-right: auto; text-transform: uppercase; }
-.presentation-editor-slide-toolbar button, .presentation-editor-block-controls button, .presentation-editor-block-controls select { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px; color: inherit; cursor: pointer; font: inherit; font-size: 0.68rem; font-weight: 700; padding: 0.25rem 0.5rem; }
-.presentation-editor-slide-toolbar button:hover, .presentation-editor-block-controls button:hover, .presentation-editor-block-controls select:hover { background: rgba(255, 255, 255, 0.18); }
-.presentation-editor-slide-toolbar button:disabled, .presentation-editor-block-controls button:disabled { cursor: not-allowed; opacity: 0.4; }
+.presentation-editor-slide-toolbar button, .presentation-editor-block-controls select { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px; color: inherit; cursor: pointer; font: inherit; font-size: 0.68rem; font-weight: 700; padding: 0.25rem 0.5rem; }
+.presentation-editor-slide-toolbar button:hover, .presentation-editor-block-controls select:hover { background: rgba(255, 255, 255, 0.18); }
+.presentation-editor-slide-toolbar button:disabled { cursor: not-allowed; opacity: 0.4; }
 .presentation-editor-projection .slide-title[contenteditable="true"], .presentation-editor-projection .slide-block[contenteditable="true"] { border-radius: 0.45rem; outline: 1px solid transparent; outline-offset: 0.35rem; transition: outline-color 120ms ease, background 120ms ease; }
 .presentation-editor-projection [contenteditable="true"]:hover, .presentation-editor-projection [contenteditable="true"]:focus { background: rgba(79, 139, 104, 0.08); outline-color: rgba(79, 139, 104, 0.5); }
-.presentation-editor-block-controls { align-items: center; display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.15rem 0 0.45rem; }
+.slide-block-shell { position: relative; }
+.presentation-editor-block-controls { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; left: 100%; margin-left: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; top: 0; transition: opacity 120ms ease; white-space: nowrap; z-index: 4; }
+.presentation-editor-block-controls.pill-left { left: auto; margin-left: 0; margin-right: 0.35rem; right: 100%; }
+.presentation-editor-block-controls.pill-inside { left: auto; margin-left: 0; right: 0.25rem; top: 0.15rem; }
+.slide-block-shell:hover .presentation-editor-block-controls,
+.slide-block-shell:focus-within .presentation-editor-block-controls,
+.presentation-editor-block-controls:hover,
+.presentation-editor-block-controls:focus-within { opacity: 1; pointer-events: auto; }
+.presentation-editor-block-controls::before { bottom: 0; content: ""; position: absolute; right: 100%; top: 0; width: 0.45rem; }
+.presentation-editor-block-controls.pill-left::before { left: 100%; right: auto; }
+.presentation-editor-block-controls.pill-inside::before { display: none; }
 .presentation-editor-block-controls select { max-width: 8.5rem; }
 .editor-projection[hidden], .source-field[hidden] { display: none; }
 .source-field { padding-bottom: 0.75rem; }
@@ -164,7 +215,14 @@
 .cm-live-syntax-marker { color: #404740 !important; font-style: normal !important; opacity: 1 !important; }
 .visual-editor-form[data-editor-mode="visual"] .cm-live-syntax-marker { font-size: 0; }
 .visual-editor-form[data-editor-mode="visual"] .cm-live-widget-quote-marker::after { content: "❯"; font-size: 0.9rem; }
-.editor-input-proxy { background: transparent; border: 0; color: transparent; font-size: 1px; height: 1px; left: 0; line-height: 1px; overflow: hidden; padding: 0; pointer-events: auto; position: absolute; resize: none; top: 2.4rem; width: 1px; z-index: 7; }
+/* The proxy carries the full source for form/autosave/preview reads but is
+   never an input surface. Skip rendering its contents: without this, every
+   keystroke's full-source sync re-lays-out ~2000 internal text lines inside
+   this 1px box (~50ms forced layout per key on large Works). Hidden (not
+   display:none) preserves focusability, events, and test visibility; the
+   focus override renders it while focused so direct typing still commits. */
+.editor-input-proxy { background: transparent; border: 0; color: transparent; content-visibility: hidden; contain-intrinsic-size: 1px 1px; font-size: 1px; height: 1px; left: 0; line-height: 1px; overflow: hidden; padding: 0; pointer-events: auto; position: absolute; resize: none; top: 2.4rem; width: 1px; z-index: 7; }
+.editor-input-proxy:focus { content-visibility: visible; }
 .snippet-palette {
   position: fixed;
   z-index: 20;
@@ -283,3 +341,42 @@
 @media (max-width: 920px) {
   .editor-layout { display: flex; flex-direction: column; }
 }
+
+/* Shared Edit-actions menu: one toolbar button plus an out-of-flow overlay
+   menu, so the control never changes content geometry. */
+.edit-actions { display: inline-flex; position: relative; }
+.edit-actions-button { background: transparent; border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-muted); cursor: pointer; font: inherit; font-size: 0.78rem; font-weight: 800; padding: 0.3rem 0.7rem; }
+.edit-actions-button:hover, .edit-actions-button[aria-expanded="true"] { background: var(--oradia-slate-800); color: var(--oradia-ink); }
+.edit-actions-menu { background: rgba(17, 22, 26, 0.96); backdrop-filter: blur(10px); border: 1px solid var(--oradia-slate-700); border-radius: 0.6rem; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.32); box-sizing: border-box; display: grid; left: 0; margin: 0; max-width: calc(100vw - 2rem); min-width: 15rem; padding: 0.25rem; position: absolute; top: calc(100% + 0.4rem); width: max-content; z-index: 30; }
+.edit-actions-menu[hidden] { display: none; }
+.edit-actions-menu [role="menuitem"] { align-items: center; background: transparent; border: 0; border-radius: 0.4rem; color: var(--oradia-ink); cursor: pointer; display: flex; font: inherit; font-size: 0.82rem; gap: 0.7rem; justify-content: space-between; min-height: 2.1rem; padding: 0.35rem 0.5rem; text-align: left; width: 100%; }
+.edit-actions-menu [role="menuitem"]:hover { background: var(--oradia-slate-800); }
+.edit-actions-menu kbd { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 0.35rem; color: var(--oradia-green); flex: 0 0 auto; font-family: var(--oradia-mono); font-size: 0.7rem; padding: 0.15rem 0.35rem; }
+
+/* Keyboard reference dialog: registry-driven rows plus editor triggers. */
+.keyboard-reference { background: var(--oradia-slate-950); border: 1px solid var(--oradia-slate-700); border-radius: 0.85rem; box-sizing: border-box; color: var(--oradia-ink); max-height: min(38rem, calc(100vh - 4rem)); max-width: min(44rem, calc(100vw - 2rem)); overflow: auto; padding: 1.25rem 1.4rem; width: 44rem; }
+.keyboard-reference::backdrop { background: rgba(0, 0, 0, 0.45); }
+.keyboard-reference h2 { font-size: 1.15rem; margin: 0 0 0.4rem; }
+.keyboard-reference h3 { color: var(--oradia-muted); font-size: 0.78rem; margin: 1rem 0 0.4rem; text-transform: uppercase; }
+.keyboard-reference-lede { color: var(--oradia-muted); font-size: 0.85rem; line-height: 1.5; margin: 0; }
+.keyboard-reference-list { display: grid; gap: 0.15rem; list-style: none; margin: 0; padding: 0; }
+.keyboard-reference-list li { align-items: baseline; display: flex; gap: 0.7rem; padding: 0.25rem 0; }
+.keyboard-reference-keys { flex: 0 0 7.5rem; text-align: right; }
+.keyboard-reference-keys kbd { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 0.35rem; color: var(--oradia-green); display: inline-block; font-family: var(--oradia-mono); font-size: 0.72rem; padding: 0.15rem 0.4rem; }
+.keyboard-reference-palette-tag { color: var(--oradia-muted); font-size: 0.72rem; }
+.keyboard-reference-label { flex: 0 0 12rem; font-weight: 700; }
+.keyboard-reference-description { color: var(--oradia-muted); font-size: 0.82rem; }
+.keyboard-reference-close { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-ink); cursor: pointer; font: inherit; font-weight: 800; margin-top: 1rem; padding: 0.45rem 1rem; }
+.keyboard-reference-close:hover { background: var(--oradia-slate-700); }
+
+/* Engine panels mount beside the toolbar while visual passages own the caret. */
+/* CodeMirror copies the editor theme classes onto a custom panel container
+   (PanelGroup#syncClasses), so JS-injected theme rules can outrank the plain
+   :empty selector and paint an empty container as a dark flex box. Empty
+   chrome must never render: keep the important. */
+.visual-engine-panels:empty,
+.visual-editor-form[data-editor-mode="source"] .visual-engine-panels { display: none !important; }
+.visual-engine-panels { background: var(--oradia-slate-950); border-radius: 0.5rem; color: var(--oradia-ink); margin-block: 0.5rem; position: relative; z-index: 8; }
+.visual-engine-panels .cm-panel { padding: 0.65rem; }
+.visual-engine-panels input { background: var(--oradia-slate-800); border: 1px solid var(--oradia-line); border-radius: 0.3rem; color: inherit; padding: 0.25rem 0.4rem; }
+.visual-engine-panels button { color: inherit; margin-inline: 0.2rem; }

@@ -107,17 +107,19 @@ await bundle(join(here, "src", "index.stable.ts"), join(here, "dist", "index.sta
 // the entry and output moved home. Excluded from the per-file transpile
 // below (see `bundled`): the IIFE owns dist/composed_renderer.js.
 const composedOutput = join(here, "dist", "composed_renderer.js")
-await esbuild.build({
+const composedResult = await esbuild.build({
   entryPoints: [join(here, "src", "composed_renderer.ts")],
   bundle: true,
   format: "iife",
   target: "es2022",
   outfile: composedOutput,
   minify: true,
+  metafile: true,
   legalComments: "none",
   external: [],
   logLevel: "warning"
 })
+writeFileSync(composedOutput.replace(/\.js$/, ".metafile.json"), `${JSON.stringify(composedResult.metafile, null, 2)}\n`)
 
 // Keep Highlight.js's PHP whitespace template semantically intact without
 // emitting a physical tab at end-of-line in the checked-in bundle.

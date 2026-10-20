@@ -1,23 +1,24 @@
-const MARKDOWN_MATH = /^\$\$[\s\S]+?\$\$|^\$(?!\$)[^$\r\n]+?\$(?!\$)/
+import { scanMathSource } from "@elef/work-model/math-source"
 
 export function visibleOffsetAtPoint(root: Node, target: Node, offset: number): number | null {
   let visibleOffset = 0
   let result: number | null = null
+  const raw = countsRawNewlines(root)
 
   const visit = (node: Node): void => {
-    if (result !== null || isHiddenText(node, root)) return
+    if (result !== null || isHiddenText(node, root, raw)) return
     if (node === target) {
       if (node.nodeType === Node.TEXT_NODE) {
-        result = visibleOffset + Math.max(0, Math.min(offset, (node.textContent ?? "").length))
+        result = visibleOffset + visibleSubOffset(node.textContent ?? "", offset, raw)
       } else {
         const childOffset = Math.max(0, Math.min(offset, node.childNodes.length))
-        for (let index = 0; index < childOffset; index += 1) visibleOffset += visibleLength(node.childNodes[index] as Node, root)
+        for (let index = 0; index < childOffset; index += 1) visibleOffset += visibleLength(node.childNodes[index] as Node, root, raw)
         result = visibleOffset
       }
       return
     }
     if (node.nodeType === Node.TEXT_NODE) {
-      visibleOffset += (node.textContent ?? "").length
+      visibleOffset += visibleTextLength(node.textContent ?? "", raw)
       return
     }
     for (const child of node.childNodes || []) visit(child)
@@ -32,14 +33,16 @@ export function pointAtVisibleOffset(root: Node, requestedOffset: number): [Node
   let visibleOffset = 0
   let lastText: Node | null = null
   let result: [Node, number] | null = null
+  const raw = countsRawNewlines(root)
 
   const visit = (node: Node): void => {
-    if (result || isHiddenText(node, root)) return
+    if (result || isHiddenText(node, root, raw)) return
     if (node.nodeType === Node.TEXT_NODE) {
       lastText = node
-      const end = visibleOffset + (node.textContent ?? "").length
+      const text = node.textContent ?? ""
+      const end = visibleOffset + visibleTextLength(text, raw)
       if (target <= end) {
-        result = [node, Math.max(0, target - visibleOffset)]
+        result = [node, domSubOffset(text, target - visibleOffset, raw)]
         return
       }
       visibleOffset = end
@@ -182,24 +185,83 @@ function textRects(element: Element): DOMRect[] {
   return rects.sort((left, right) => left.top - right.top || left.left - right.left)
 }
 
-function visibleLength(node: Node, root: Node): number {
-  if (isHiddenText(node, root)) return 0
-  if (node.nodeType === Node.TEXT_NODE) return (node.textContent ?? "").length
-  return [...(node.childNodes || [])].reduce((sum, child) => sum + visibleLength(child, root), 0)
+function visibleLength(node: Node, root: Node, raw = false): number {
+  if (isHiddenText(node, root, raw)) return 0
+  if (node.nodeType === Node.TEXT_NODE) return visibleTextLength(node.textContent ?? "", raw)
+  return [...(node.childNodes || [])].reduce((sum, child) => sum + visibleLength(child, root, raw), 0)
 }
 
-function isHiddenText(node: Node, root: Node): boolean {
-  if (node === root) return false
-  if (node.nodeType === Node.TEXT_NODE && node.parentNode === root && (node.textContent ?? "").trim() === "") return true
-  let element: Element | null = node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement
-  while (element && element !== root) {
-    if (element.getAttribute("contenteditable") === "false" || element.getAttribute("aria-hidden") === "true" || element.classList?.contains("katex-mathml")) return true
+// Active math shows literal source (identity mapping, no source-map
+// newline skipping), so roots at or inside it count raw text.
+function countsRawNewlines(root: Node): boolean {
+  let element: Element | null = root.nodeType === Node.ELEMENT_NODE
+    ? root as Element
+    : root.parentElement ?? null
+  while (element) {
+    if (element.classList?.contains("editor-math-active") || element.hasAttribute?.("data-editor-math-active")) return true
     element = element.parentElement
   }
   return false
 }
 
+function isHiddenText(node: Node, root: Node, raw = false): boolean {
+  if (node === root) return false
+  if (!raw && node.nodeType === Node.TEXT_NODE) {
+    // Mirror: client/session/projection_input.ts and the
+    // visibleTextLength walkers skip the same nodes. The source map
+    // never models newlines as visible (it has no pre-awareness
+    // either), so newline-only runs — pretty-printing between
+    // elements — are skipped to keep every later offset aligned.
+    // Plain-space runs (no newline) are rendered spaces and stay
+    // counted. Newlines embedded in content nodes are excluded by
+    // visibleTextLength below, and newline-adjacent caret positions
+    // decline precise translation as concealed boundaries.
+    const text = node.textContent ?? ""
+    if (text.trim() === "" && /[\r\n]/.test(text)) return true
+    if (node.parentNode === root && text.trim() === "") return true
+  }
+  let element: Element | null = node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement
+  while (element && element !== root) {
+    if (element.getAttribute("contenteditable") === "false" || element.getAttribute("aria-hidden") === "true" || element.classList?.contains("katex-mathml") || element.classList?.contains("katex")) return true
+    element = element.parentElement
+  }
+  return false
+}
+
+// Visible length of a counted text node: newlines excluded to agree
+// with the source map. Every DOM↔map touchpoint uses this.
+function visibleTextLength(nodeText: string, raw = false): number {
+  if (raw) return nodeText.length
+  let length = 0
+  for (const char of nodeText) {
+    if (char !== "\n" && char !== "\r") length += 1
+  }
+  return length
+}
+
+// Visible sub-offset of a DOM offset inside a counted text node.
+function visibleSubOffset(nodeText: string, domOffset: number, raw = false): number {
+  return visibleTextLength(nodeText.slice(0, Math.max(0, Math.min(domOffset, nodeText.length))), raw)
+}
+
+// DOM offset of a visible sub-offset: the first index reaching it,
+// landing before any skipped newline at that position.
+function domSubOffset(nodeText: string, visibleOffset: number, raw = false): number {
+  if (raw) return Math.max(0, Math.min(visibleOffset, nodeText.length))
+  if (visibleOffset <= 0) return 0
+  let seen = 0
+  for (let index = 0; index < nodeText.length; index += 1) {
+    const char = nodeText[index]
+    if (char !== "\n" && char !== "\r") {
+      seen += 1
+      if (seen >= visibleOffset) return index + 1
+    }
+  }
+  return nodeText.length
+}
+
 function markdownPositionMap(source: string): { sourceToVisible: number[]; visibleToSource: number[] } {
+  const maths = new Map(scanMathSource(source).map((math) => [math.start, math]))
   const sourceToVisible = new Array<number>(source.length + 1).fill(0)
   const visibleToSource = [0]
   let sourceIndex = 0
@@ -257,9 +319,9 @@ function markdownPositionMap(source: string): { sourceToVisible: number[]; visib
       continue
     }
 
-    const math = rest.match(MARKDOWN_MATH)
+    const math = maths.get(sourceIndex)
     if (math) {
-      skip(sourceIndex + (math[0] ?? "").length)
+      skip(math.end)
       continue
     }
 
@@ -286,6 +348,15 @@ function markdownPositionMap(source: string): { sourceToVisible: number[]; visib
     const delimiter = rest.match(/^(?:\*\*|__|~~|`+|\*|_)/)
     if (delimiter) {
       skip(sourceIndex + (delimiter[0] ?? "").length)
+      continue
+    }
+
+    // Trailing whitespace runs never reach the DOM (block-end trimming),
+    // so the map skips them and end-of-block carets land at end-of-source.
+    // All-whitespace slices keep identity mapping so their single caret
+    // position stays at the start.
+    if (visibleIndex > 0 && rest.trim() === "") {
+      skip(source.length)
       continue
     }
 

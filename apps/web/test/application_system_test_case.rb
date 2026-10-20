@@ -23,6 +23,14 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     options.add_argument("--disable-backgrounding-occluded-windows")
   end
 
+  teardown do
+    if ENV["ELEF_VISUAL_EVIDENCE"] && %w[VisualRevealTest VisualAssistsTest].include?(self.class.name)
+      directory = Pathname.new(ENV.fetch("ELEF_VISUAL_EVIDENCE"))
+      FileUtils.mkdir_p(directory)
+      page.save_screenshot(directory.join("#{self.class.name}-#{name.gsub(/[^a-zA-Z0-9_-]/, '_')}.png"))
+    end
+  end
+
   setup do
     # One browser is reused across tests, and Capybara's reset clears cookies
     # plus session/local storage but never IndexedDB — where Elef persists

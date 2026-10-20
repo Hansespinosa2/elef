@@ -7,7 +7,7 @@
 // the client feature
 // handles block input, focus, and alignment natively, so no Stimulus
 // `data-action` is emitted here.
-import { presentationTheme } from "@elef/work-model/document-map"
+import { presentationTheme } from "@elef/work-model/style-vocab"
 
 function escapeHtml(value: unknown): string {
   return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
@@ -39,18 +39,33 @@ export interface ChromeBlockPosition {
   vertical: string
 }
 
-export function presentationBlockControls({ slideIndex, blockIndex, blockCount, position }: { slideIndex: number; blockIndex: number; blockCount: number; position?: ChromeBlockPosition | null }): string {
+export function presentationBlockControls({ slideIndex, blockIndex, position }: { slideIndex: number; blockIndex: number; blockCount: number; position?: ChromeBlockPosition | null }): string {
   const alignment = position ? (position.vertical === "top" ? position.horizontal : `${position.vertical} ${position.horizontal}`) : "left"
   const options = ["top", "middle", "bottom"].flatMap(vertical => ["left", "center", "right"].map(horizontal => {
     const value = vertical === "top" ? horizontal : `${vertical} ${horizontal}`
     return `<option value="${value}"${value === alignment ? " selected" : ""}>${value.split(" ").map(part => (part[0] ?? "").toUpperCase() + part.slice(1)).join(" ")}</option>`
   })).join("")
-  return `<div class="presentation-editor-block-controls" aria-label="Block controls"><button type="button" data-presentation-editor-action="add-block-after" data-slide-index="${slideIndex}" data-block-index="${blockIndex}">Add block</button><button type="button" data-presentation-editor-action="delete-block" data-slide-index="${slideIndex}" data-block-index="${blockIndex}"${blockCount === 1 ? " disabled" : ""}>Delete</button><button type="button" aria-label="Move block up" data-presentation-editor-action="move-block-up" data-slide-index="${slideIndex}" data-block-index="${blockIndex}"${blockIndex === 0 ? " disabled" : ""}>↑</button><button type="button" aria-label="Move block down" data-presentation-editor-action="move-block-down" data-slide-index="${slideIndex}" data-block-index="${blockIndex}"${blockIndex === blockCount - 1 ? " disabled" : ""}>↓</button><label>Align <select aria-label="Block alignment" data-presentation-editor-align data-slide-index="${slideIndex}" data-block-index="${blockIndex}">${options}</select></label></div>`
+  // One shared alignment pill per block (mirroring documents): block
+  // structure moved to keyboard (Enter/Backspace/Alt+Arrow) and the
+  // Edit-actions menu, so no permanent buttons take layout here.
+  return `<div class="presentation-editor-block-controls" aria-label="Block alignment"><label>Align <select aria-label="Block alignment" data-presentation-editor-align data-slide-index="${slideIndex}" data-block-index="${blockIndex}">${options}</select></label></div>`
 }
 
 export function presentationSlideBlock({ className, attributes, content, controls, revealEvent }: { className: string; attributes: string; content: string; controls: string; revealEvent?: number }): string {
   const revealAttribute = revealEvent === undefined ? "" : ` data-elef-reveal-event="${revealEvent}"`
-  return `<div class="${className}" ${attributes}${revealAttribute}>${content}</div>${controls}`
+  // The shell is the positioned flex item (mirroring the document block
+  // shell): it carries the block's position classes for alignment and hosts
+  // the absolutely-positioned alignment pill, so controls never shift layout.
+  const tokens = className.split(" ").filter(Boolean)
+  const positionClasses = tokens.filter((token) => token.startsWith("position-")).join(" ")
+  const titleShell = tokens.includes("slide-title") ? " slide-title-shell" : ""
+  const shellClass = ["slide-block-shell", positionClasses].filter(Boolean).join(" ")
+  return `<div class="${shellClass}${titleShell}"><div class="${className}" ${attributes}${revealAttribute}>${content}</div>${controls}</div>`
+}
+
+export function presentationEmptyBlock({ mapped }: { mapped: { id: string; editable_region_id?: string } }): string {
+  if (!mapped.editable_region_id) return ""
+  return `<div class="slide-block slide-empty-block" data-editor-block-id="${mapped.id}" data-editor-region-id="${mapped.editable_region_id}" data-editor-source-editable="true" data-editor-empty-block="true" contenteditable="true" role="textbox" aria-label="Editable slide block" aria-multiline="true" spellcheck="true"><p><br></p></div>`
 }
 
 export function presentationEmptySlide({ index }: { index: number }): string {

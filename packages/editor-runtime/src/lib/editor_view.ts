@@ -1,5 +1,6 @@
 import { sanitizePreview as installSanitizedPreview } from "@elef/client/sanitize"
 import { markProjectionBlocksReadOnly } from "./projection_editability.js"
+import { markStage } from "./stage_marks.js"
 
 const EDITOR_VIEW = `
   <section class="editor-shell" aria-label="Visual editor">
@@ -60,11 +61,10 @@ const EDITOR_VIEW = `
           <div class="snippet-palette" data-mermaid-assist-target="palette" hidden role="listbox" aria-label="Mermaid suggestions"></div>
           <div class="snippet-palette" data-metadata-assist-target="palette" hidden role="listbox" aria-label="Metadata suggestions"></div>
           <div class="snippet-palette" data-document-link-palette-target="palette" hidden role="listbox" aria-label="Document link suggestions"></div>
-          <p class="field-hint editor-mode-hint">Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type <code>/trigger</code> for document structures and <code>:align</code> or <code>:footnote</code> for Elef directives. Type <code>[[</code> to link another document. In math, type <code>@a</code>, <code>@frac</code>, or <code>@gather</code>; Tab walks multi-slot expressions. Type <code>/diagram</code> to open Mermaid Assist. Math transforms such as <code>$x.b.vec.t$</code> commit with Enter or Tab.</p>
+          <p class="field-hint editor-mode-hint">Edit directly on the page. Type / for blocks or @ inside math.</p>
         </div>
 
         <div class="presentation-editor-tools" aria-label="Presentation editing tools" data-editor-view-target="presentationTools">
-          <span class="presentation-editor-help">Edit slide text directly. Use the controls on each slide for structure and positioning.</span>
         </div>
         <section class="slide-overview" aria-labelledby="slide-overview-heading" data-editor-view-target="slideOverview">
           <div class="slide-overview-heading-row">
@@ -167,13 +167,48 @@ export interface DesktopFeatures {
   documentLinks?: boolean | undefined;
 }
 
+// Share in-flight fetches across installs without retaining completed media
+// or failed URLs for the lifetime of a desktop session.
+const pendingImagePreloads = new WeakMap<Document, Map<string, HTMLLinkElement>>()
+
 export function installPreviewHtml(container: Element, html: string): void {
   const mediaBaseUrl = container.closest("form")?.dataset.mediaAssetBaseUrlValue || ""
   installSanitizedPreview(container, html, { mediaBaseUrl })
-  // Managed projections re-sync editability on elef:preview-updated; an
-  // unmanaged projection (no visual-editor target) would otherwise keep the
-  // installed contenteditable shells live with nothing to propagate edits.
+  // This invariant also applies to detached/headless preview installs.
   if (!container.hasAttribute("data-visual-editor-target")) markProjectionBlocksReadOnly(container)
+  // Start image fetches without rendering: the pre-pagination gate
+  // defers skipped-subtree image loads until paginate-start, which is too
+  // late to measure. Preloads use the installed (media-rebased, absolute)
+  // srcs so they hit the same cache entries the img elements will read;
+  // the fonts+images first-pass wait observes their completion. Lifting
+  // the gate here instead would render the whole unpaginated tree during
+  // the async install-to-paginate gap (pure waste: pagination rebuilds it
+  // immediately), so the gate stays until is-paginated flips at pass start.
+  // Links always go to the live document head: install containers may be
+  // detached template content whose owner document has no head.
+  const liveHead = typeof document === "undefined" ? null : document.head
+  if (!liveHead) return
+  const liveDoc = liveHead.ownerDocument
+  const pending = pendingImagePreloads.get(liveDoc) ?? new Map<string, HTMLLinkElement>()
+  pendingImagePreloads.set(liveDoc, pending)
+  for (const image of container.querySelectorAll("img[src]")) {
+    const src = image.getAttribute("src") || ""
+    if (src === "" || src.startsWith("data:") || src.startsWith("blob:") || pending.has(src)) continue
+    const link = liveDoc.createElement("link")
+    link.rel = "preload"
+    link.setAttribute("as", "image")
+    link.href = src
+    const settled = () => {
+      link.removeEventListener("load", settled)
+      link.removeEventListener("error", settled)
+      pending.delete(src)
+      link.remove()
+    }
+    link.addEventListener("load", settled)
+    link.addEventListener("error", settled)
+    pending.set(src, link)
+    liveHead.appendChild(link)
+  }
 }
 
 export function mountEditorHosts(root: Document | null | undefined = globalThis.document): void {
@@ -274,7 +309,9 @@ export function renderEditorView(container: Element | null, config: EditorViewCo
   const projection = root.querySelector("[data-preview-target='container']") as Element
   projection.id = ids.preview || "elef-editor-preview"
   projection.setAttribute("aria-label", mode === "visual" ? "Visual editing surface" : "Rendered preview")
+  markStage("projection-install-start")
   installPreviewHtml(projection, config.previewHtml || "")
+  markStage("projection-install-end")
   renderWarnings(root.querySelector("[data-preview-target='warnings'] ul") as Element, config.warnings || [])
   ;(root.querySelector("[data-preview-target='warnings']") as HTMLElement).hidden = !config.warnings?.length
 
@@ -373,15 +410,9 @@ export function configureEditorKind(root: Element | null, kind: string, {
   sourceInput.dataset.action = [...actions].join(" ")
 
   const hint = root.querySelector(".editor-mode-hint") as Element
-  if (visualEditingEnabled && documentLinksEnabled) {
-    hint.textContent = isDocument
-      ? "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist."
-      : "Visual mode keeps Markdown source canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. Type [[ to link another document. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab."
-  } else if (isDocument) {
-    hint.textContent = "Markdown source stays canonical. Use Source mode for unsupported syntax or to edit LaTeX expressions directly. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist."
-  } else {
-    hint.textContent = "Markdown source stays canonical. Use Source mode for unsupported syntax, inline media, or to edit LaTeX expressions directly. Type /trigger for document structures and :align, :art, or :footnote for Elef directives. In math, type @a, @frac, or @gather; Tab walks multi-slot expressions. Type /diagram to open Mermaid Assist. Math transforms such as $x.b.vec.t$ commit with Enter or Tab."
-  }
+  hint.textContent = visualEditingEnabled
+    ? `Edit directly on the page. Type / for blocks${documentLinksEnabled ? ", [[ for links" : ""}, or @ inside math.`
+    : "Write in Markdown. Type / for blocks or @ inside math."
   ;(root.querySelector('[data-editor-view-target="mediaButton"]') as Element).textContent = isDocument ? "Add image" : "Add image or MP4"
   ;(root.querySelector('[data-editor-view-target="mediaInput"]') as Element).setAttribute("accept", isDocument ? "image/*" : "image/*,video/mp4")
   const presentationTools = root.querySelector('[data-editor-view-target="presentationTools"]') as HTMLElement | null

@@ -8,6 +8,7 @@ mod library;
 mod menus;
 mod printing;
 mod remote_images;
+mod single_instance;
 mod state;
 mod updates;
 mod work_folders;
@@ -115,7 +116,7 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
     };
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_single_instance::init(|app, argv, cwd| {
+        .plugin(single_instance::init(|app, argv, cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.set_focus();
             }

@@ -10,10 +10,12 @@ import {
   visibleOffsetForSourceOffset
 } from "../controllers/editor_caret.js"
 import { markdownForVisibleText, renderInlineMath } from "../controllers/editor_markdown.js"
-import { handleMathClick, handleMathKeydown, syncActiveMath } from "../controllers/editor_math.js"
+import { handleMathClick, handleMathKeydown, recordMathMousedown, syncActiveMath } from "../controllers/editor_math.js"
+import { activeInlineMap, inlinePointForSourceOffset, syncActiveInline } from "../controllers/editor_reveal.js"
 import { setProjectionBlockEditable } from "./projection_editability.js"
 import { mountPresentationEditor } from "@elef/client"
 import type { DocumentEditorDeps, PresentationEditorDeps, PresentationEditorHost } from "@elef/client"
+import { mountHostEditActions } from "./edit_actions_host.js"
 
 // Shared host seam for the client presentation editor. Both hosts (Rails
 // editor forms via the presentation host adapter, desktop via
@@ -28,11 +30,17 @@ export function presentationEditorDeps(): PresentationEditorDeps {
     sourceOffsetForVisibleOffset,
     visibleOffsetAtPoint,
     visibleOffsetForSourceOffset,
-    markdownForVisibleText,
+    // The differ stays dependency-free, so the host resolves the
+    // verified reveal map and injects it (null refuses the flush).
+    markdownForVisibleText: (source, text, kind, element, options) =>
+      markdownForVisibleText(source, text, kind, element, { ...options, revealActives: activeInlineMap(source, element) }),
     renderInlineMath,
     handleMathClick,
+    recordMathMousedown,
     handleMathKeydown,
     syncActiveMath,
+    syncActiveInline,
+    inlinePointForSourceOffset,
     setProjectionBlockEditable
   }
 }
@@ -47,7 +55,8 @@ export function documentEditorDeps(): DocumentEditorDeps {
     // runtime semantics the untyped JavaScript relied on.
     deRenderMath: (element, options) => deRenderMath(element, options) !== null,
     finishMathBeforeEnter,
-    sourceOffsetForVisiblePosition
+    sourceOffsetForVisiblePosition: (source, element, position) =>
+      sourceOffsetForVisiblePosition(source, element, position, activeInlineMap(source, element))
   }
 }
 
@@ -55,9 +64,18 @@ export function mountHostPresentationEditor(form: PresentationEditorHost) {
   // configureEditorKind marks the source field as the editor source target;
   // the CodeMirror editor host publishes itself there too.
   const sourceField = () => form.querySelector(".source-field")
-  return mountPresentationEditor(form, {
+  const getEditor = () => asEditorSeam(editorFor(sourceField()))
+  const mounted = mountPresentationEditor(form, {
     sourceElement: sourceField(),
-    getEditor: () => asEditorSeam(editorFor(sourceField())),
+    getEditor,
     deps: presentationEditorDeps()
   })
+  const editActions = mountHostEditActions(form, getEditor, mounted.editor)
+  return {
+    editor: mounted.editor,
+    destroy() {
+      editActions?.dispose()
+      mounted.destroy()
+    }
+  }
 }

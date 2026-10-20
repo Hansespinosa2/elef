@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 import { pointAtVisibleOffset, visibleOffsetAtPoint } from "./editor_caret.js"
+import { markStage } from "../lib/stage_marks.js"
 
 interface DocumentPage {
   content: HTMLElement;
@@ -31,20 +32,66 @@ interface CapturedCaret {
 const DESIGN_WIDTH = 794
 
 const FLOW_TEXT_SELECTOR = "p, h1, h2, h3, h4, h5, h6, pre, li, td, th"
-const HIDDEN_TEXT_SELECTOR = ".katex-mathml, [aria-hidden='true'], [contenteditable='false']"
+const HIDDEN_TEXT_SELECTOR = ".katex, .katex-mathml, [aria-hidden='true'], [contenteditable='false']"
 const ART_ITEM_TOO_TALL = "ART_ITEM_TOO_TALL"
+
+// S4 paginate counters: overflows() is the forced-layout hot spot, so the
+// benchmark reads counts + accumulated ms from here (reset per pass).
+type PaginateStats = {
+  overflows: number
+  overflowsMs: number
+  overflowsMax: number
+  probeOverflows: number
+  probeOverflowsMs: number
+  flows: number
+  units: number
+  batches: number
+  replays: number
+}
+
+function paginateStats(): PaginateStats {
+  const host = globalThis as { __paginateStats?: PaginateStats }
+  host.__paginateStats ??= { overflows: 0, overflowsMs: 0, overflowsMax: 0, probeOverflows: 0, probeOverflowsMs: 0, flows: 0, units: 0, batches: 0, replays: 0 }
+  return host.__paginateStats
+}
+
+function resetPaginateStats(): void {
+  const stats = paginateStats()
+  stats.overflows = 0
+  stats.overflowsMs = 0
+  stats.overflowsMax = 0
+  stats.probeOverflows = 0
+  stats.probeOverflowsMs = 0
+  stats.flows = 0
+  stats.units = 0
+  stats.batches = 0
+  stats.replays = 0
+}
+
+function now(): number {
+  return typeof performance === "undefined" ? 0 : performance.now()
+}
 
 export default class extends Controller<HTMLElement> {
   static targets = ["surface"]
 
   connect() {
+    markStage("pages-connect")
     this.active = true
     this.nextFlowId = 0
     this.nextCaretTargetId = 0
     this.paginationGeneration = 0
+    this.probingDepth = 0
+    this.openPage = null
     this.resizeFrame = null
     this.reflowFrame = null
     this.reflowTimer = null
+    this.paginatedOnce = false
+    this.firstPassWithoutFonts = false
+    const connection = {}
+    this.resourceConnection = connection
+    this.resourceTimer = null
+    this.watchedImages = new Map<HTMLImageElement, () => void>()
     this.boundResize = () => this.resizeFrames()
     this.form = this.element.closest(".visual-editor-form")
     this.modeChangedHandler = () => this.resizeFrames()
@@ -58,18 +105,97 @@ export default class extends Controller<HTMLElement> {
     window.addEventListener("resize", this.boundResize)
     this.surfaceTarget.addEventListener("focusout", this.boundFocusOut)
     this.surfaceTarget.dataset.documentPagesSettled = "false"
-    this.paginate()
     this.mutationObserver?.observe(this.surfaceTarget, { childList: true, characterData: true, subtree: true })
 
-    if (document.fonts?.ready) {
-      document.fonts.ready.then(() => {
-        if (this.active) this.schedulePagination()
+    // Resources-first single pagination: webfont arrival shifts every line
+    // box and unloaded images measure at zero height, so a pre-resources
+    // pass is always thrown away (2.0s mixed / 4.7s math of the cold-open
+    // profile). When fonts or surface images are still loading, await
+    // them before the first pass instead of paginating twice; a timeout
+    // keeps a slow host from holding the page hostage (the late pass
+    // then repaginates once resources land, as before). Cached resources
+    // paginate immediately with no second pass.
+    this.watchSurfaceImages()
+    if (this.resourcesReady()) {
+      this.paginate()
+    } else {
+      const firstPass = () => {
+        this.resourceTimer = null
+        if (this.paginatedOnce || !this.active) return
+        this.paginate()
+      }
+      this.resourceTimer = setTimeout(firstPass, 3000)
+      document.fonts?.ready.then(() => {
+        if (!this.active || this.resourceConnection !== connection) return
+        if (this.paginatedOnce) {
+          if (this.firstPassWithoutFonts) this.schedulePagination()
+        }
+        else this.maybeFirstPass()
       })
+    }
+  }
+
+  // True when the first pass may measure: fonts settled (or unsupported)
+  // and every surface image finished loading (error counts: broken
+  // images render deterministically at their alt box).
+  resourcesReady(): boolean {
+    const fonts = (typeof document === "undefined" ? undefined : document.fonts) as FontFaceSet | undefined
+    if (fonts && fonts.status !== "loaded") return false
+    const images = this.surfaceTarget.querySelectorAll("img")
+    for (const image of images) {
+      if (!(image as HTMLImageElement).complete) return false
+    }
+    return true
+  }
+
+  // Re-check the first-pass gate after any resource trigger (font ready,
+  // image load/error, surface mutation from install). Clears the timeout
+  // once resources settle so the late pass never double-fires.
+  maybeFirstPass(): void {
+    if (this.paginatedOnce || !this.active) return
+    this.watchSurfaceImages()
+    if (!this.resourcesReady()) return
+    clearTimeout(this.resourceTimer)
+    this.resourceTimer = null
+    this.paginate()
+  }
+
+  // Image triggers are idempotent: newly installed images get listeners
+  // on the next mutation recheck; fired listeners drop out of the set.
+  // A post-first-pass image arrival repaginates (late images previously
+  // overflowed their pages silently).
+  watchSurfaceImages(): void {
+    // A shared fetch can complete several images before their individual
+    // load events dispatch. Retire every completed watcher before measuring
+    // so queued events cannot repaginate dimensions already included in the
+    // pass. Preview replacement can also detach pending images.
+    for (const [element, cleanup] of this.watchedImages) {
+      if (element.complete || !this.surfaceTarget.contains(element)) cleanup()
+    }
+    const images = this.surfaceTarget.querySelectorAll("img")
+    for (const image of images) {
+      const element = image as HTMLImageElement
+      if (element.complete || this.watchedImages.has(element)) continue
+      const cleanup = () => {
+        element.removeEventListener("load", settled)
+        element.removeEventListener("error", settled)
+        this.watchedImages.delete(element)
+      }
+      const settled = () => {
+        cleanup()
+        if (!this.active) return
+        if (this.paginatedOnce) this.schedulePagination()
+        else this.maybeFirstPass()
+      }
+      this.watchedImages.set(element, cleanup)
+      element.addEventListener("load", settled, { once: true })
+      element.addEventListener("error", settled, { once: true })
     }
   }
 
   disconnect() {
     this.active = false
+    this.resourceConnection = null
     window.removeEventListener("resize", this.boundResize)
     this.form?.removeEventListener("elef:editor-mode-change", this.modeChangedHandler)
     this.surfaceTarget.removeEventListener("focusout", this.boundFocusOut)
@@ -78,10 +204,14 @@ export default class extends Controller<HTMLElement> {
     cancelAnimationFrame(this.resizeFrame)
     cancelAnimationFrame(this.reflowFrame)
     clearTimeout(this.reflowTimer)
+    clearTimeout(this.resourceTimer)
+    this.resourceTimer = null
+    for (const cleanup of this.watchedImages.values()) cleanup()
   }
 
   resizeFrames(): void {
     if (!this.surfaceTarget) return
+    markStage("resize-frames-start")
     const preview = this.element.closest(".library-preview") || this.sourceModePreview()
     const previewStyle = preview && getComputedStyle(preview)
     const fittedWidth = previewStyle
@@ -96,8 +226,20 @@ export default class extends Controller<HTMLElement> {
     frames.forEach((frame: HTMLElement) => {
       if (fittedWidth === null) frame.style.removeProperty("width")
       else frame.style.width = `${fittedWidth}px`
-      frame.style.setProperty("--document-page-scale", String(frame.clientWidth / DESIGN_WIDTH))
     })
+    // Every frame shares the same CSS width, so one layout read serves
+    // all of them. Prefer a rendered frame: settled pages are sealed or
+    // quieted (content-visibility) and report intrinsic size rather than
+    // measured width. Falls back to the first frame once all are quiet
+    // (post-pass calls), preserving today's behavior there. The scale
+    // feeds a transform (compositor only).
+    const measured = frames.find((frame) => !frame.classList.contains("is-quiet") && !frame.classList.contains("is-sealed")) ?? frames[0]
+    const firstWidth = measured?.clientWidth
+    const scale = firstWidth === undefined ? "1" : String(firstWidth / DESIGN_WIDTH)
+    frames.forEach((frame: HTMLElement) => {
+      frame.style.setProperty("--document-page-scale", scale)
+    })
+    markStage("resize-frames-end")
   }
 
   sourceModePreview(): Element | null {
@@ -107,6 +249,14 @@ export default class extends Controller<HTMLElement> {
 
   schedulePagination(): void {
     if (!this.active) return
+    this.watchSurfaceImages()
+    // Pre-first-pass schedules re-check the resources gate (install
+    // swaps in new images; user interaction during the wait must not
+    // force an early pass). The gate keeps single pagination.
+    if (!this.paginatedOnce) {
+      this.maybeFirstPass()
+      return
+    }
     this.surfaceTarget.dataset.documentPagesSettled = "false"
     if (this.focusedEditable()) {
       clearTimeout(this.reflowTimer)
@@ -127,7 +277,12 @@ export default class extends Controller<HTMLElement> {
 
   paginate(): void {
     if (!this.surfaceTarget || !this.active) return
+    this.watchSurfaceImages()
+    if (!this.paginatedOnce) this.firstPassWithoutFonts = document.fonts?.status === "loading"
 
+    markStage("paginate-start")
+    resetPaginateStats()
+    this.openPage = null
     const generation = ++this.paginationGeneration
     const caret = this.captureCaret() || this.pendingCaretRestore
     this.pendingCaretRestore = caret
@@ -142,7 +297,13 @@ export default class extends Controller<HTMLElement> {
     let currentPage = this.createPage(pages.length + 1)
     pages.push(currentPage)
 
-    this.pageUnits(blocks).forEach((unit) => {
+    // NOTE: batched appends (append N units, measure once, replay on
+    // overflow) were tried and reverted: breaks are too dense (a break
+    // every ~13 units), so 38-69% of batches replayed and the wasted
+    // full-state measures plus double DOM churn beat the savings.
+    const units = this.pageUnits(blocks)
+    paginateStats().units = units.length
+    units.forEach((unit) => {
       const hadContent = currentPage.content.childElementCount > 0
       unit.forEach((block) => currentPage.content.append(block))
       if (!this.overflows(currentPage)) return
@@ -165,6 +326,7 @@ export default class extends Controller<HTMLElement> {
       currentPage = pages.at(-1) ?? currentPage
     })
 
+    markStage("paginate-finalize-start")
     pages.forEach(({ page, number, frame }) => {
       page.setAttribute("aria-label", `Document page ${number} of ${pages.length}`)
       const pageNumber = page.querySelector(".document-page-number")
@@ -176,8 +338,20 @@ export default class extends Controller<HTMLElement> {
 
     this.resizeFrames()
     this.mutationObserver?.takeRecords()
+    this.paginatedOnce = true
+    // Perf Q2: quiet settled frames so off-screen pages skip rendering
+    // (style, layout, paint) until near the viewport. Earlier pages were
+    // sealed progressively as the pass advanced (see createPage); swap
+    // seal for quiet and quiet the final open page. The next pass
+    // rebuilds bare frames, so its measurements stay exact.
+    pages.forEach(({ frame }) => {
+      frame.classList.remove("is-sealed")
+      frame.classList.add("is-quiet")
+    })
+    markStage("paginate-finalize-end")
     requestAnimationFrame(() => {
       if (!this.active || generation !== this.paginationGeneration) return
+      markStage("paginate-end")
       if (caret) this.restoreCaret(caret)
       this.pendingCaretRestore = null
       this.finishPagination({ paginated: true })
@@ -287,6 +461,16 @@ export default class extends Controller<HTMLElement> {
   }
 
   flowBlock(block: HTMLElement | undefined, pages: DocumentPage[], page: DocumentPage, keepWith: HTMLElement[] = []): void {
+    markStage("paginate-flow-start")
+    paginateStats().flows += 1
+    try {
+      this.flowBlockInner(block, pages, page, keepWith)
+    } finally {
+      markStage("paginate-flow-end")
+    }
+  }
+
+  flowBlockInner(block: HTMLElement | undefined, pages: DocumentPage[], page: DocumentPage, keepWith: HTMLElement[] = []): void {
     let remainder = block
     let currentPage = page
 
@@ -405,9 +589,13 @@ export default class extends Controller<HTMLElement> {
   artItemOverflows(block: HTMLElement, list: Element, item: Element, page: DocumentPage): boolean {
     const candidate = this.childFragment(block, list, [item])
     page.content.append(candidate)
-    const overflows = this.overflows(page)
-    page.content.removeChild(candidate)
-    return overflows
+    this.probingDepth += 1
+    try {
+      return this.overflows(page)
+    } finally {
+      this.probingDepth -= 1
+      page.content.removeChild(candidate)
+    }
   }
 
   artRoot(block: HTMLElement): HTMLElement | null {
@@ -500,22 +688,35 @@ export default class extends Controller<HTMLElement> {
   }
 
   largestFittingChildCount(block: HTMLElement, target: Element, children: Element[], page: DocumentPage): number {
+    // Clone-once probing: one probe shell per split, with each child
+    // cloned once and moved between probes (replaceChildren moves nodes,
+    // never copies). Every probe measures byte-identical content to a
+    // fresh clone per probe; only redundant deep clones are skipped.
+    const clone = block.cloneNode(true) as HTMLElement
+    const cloneTarget = this.nodeAtPath(clone, this.nodePath(block, target))
+    cloneTarget.dataset.documentPageFlowContent = "true"
+    const childClones = children.map((child) => child.cloneNode(true))
+    page.content.append(clone)
     let low = 1
     let high = children.length - 1
     let best = 0
 
-    while (low <= high) {
-      const count = Math.floor((low + high) / 2)
-      const candidate = this.childFragment(block, target, children.slice(0, count))
-      page.content.append(candidate)
-      const fits = !this.overflows(page)
-      page.content.removeChild(candidate)
-      if (fits) {
-        best = count
-        low = count + 1
-      } else {
-        high = count - 1
+    try {
+      this.probingDepth += 1
+      while (low <= high) {
+        const count = Math.floor((low + high) / 2)
+        cloneTarget.replaceChildren(...childClones.slice(0, count))
+        const fits = !this.overflows(page)
+        if (fits) {
+          best = count
+          low = count + 1
+        } else {
+          high = count - 1
+        }
       }
+    } finally {
+      this.probingDepth -= 1
+      page.content.removeChild(clone)
     }
 
     return best
@@ -533,33 +734,116 @@ export default class extends Controller<HTMLElement> {
     const selector = FLOW_TEXT_SELECTOR
     if (block.matches(selector)) return block
 
-    const candidates = [...block.querySelectorAll(selector)].filter((element) => this.textMap(element).text.length > 1)
-    return candidates.length === 1 ? candidates[0] ?? null : null
+    // Only a unique long-text descendant qualifies: stop mapping text
+    // once a second one appears (each text map walks the subtree).
+    let found: Element | null = null
+    for (const element of block.querySelectorAll(selector)) {
+      if (this.textMap(element).text.length <= 1) continue
+      if (found) return null
+      found = element
+    }
+    return found
   }
 
   largestFittingBoundary(block: HTMLElement, target: Element, textMap: TextMap, boundaries: number[], page: DocumentPage): number {
+    // Clone-once probing: one probe shell per split; each probe only
+    // swaps the clone target's ranged children. Byte-identical to a
+    // fresh clone per probe (the rest of the clone copies the same
+    // untouched original); only redundant deep clones are skipped.
+    const clone = block.cloneNode(true) as HTMLElement
+    const cloneTarget = this.nodeAtPath(clone, this.nodePath(block, target))
+    cloneTarget.dataset.documentPageFlowContent = "true"
     let low = 0
     let high = boundaries.length - 1
     let best = 0
 
-    while (low <= high) {
-      const index = Math.floor((low + high) / 2)
-      const end = boundaries[index]
-      if (end === undefined || end >= textMap.text.length) {
-        high = index - 1
-        continue
-      }
+    // Interpolated probing: fitting is monotonic in length, so every
+    // probe narrows [low, high] wherever it lands and best-tracking
+    // finds the same maximum as pure binary search. Length-proportional
+    // height estimates land near the answer on large ranges; a probe
+    // that barely narrows abandons interpolation for midpoints, so the
+    // worst case is one wasted probe. Small ranges skip the estimate
+    // (binary search already costs ~4 probes there). The base height is
+    // read before the probe shell goes in (one layout).
+    let interpolate = boundaries.length >= 24
+    let interpolations = 0
+    const baseScroll = interpolate ? page.content.scrollHeight : 0
+    const remaining = interpolate ? page.content.clientHeight - baseScroll : 0
+    if (remaining <= 0) interpolate = false
+    page.content.append(clone)
 
-      const candidate = this.textFragment(block, target, textMap, 0, end)
-      page.content.append(candidate)
+    const probe = (index: number): boolean | null => {
+      const end = boundaries[index]
+      if (end === undefined || end >= textMap.text.length) return null
+      const range = document.createRange()
+      const start = this.pointAtTextOffset(textMap, 0)
+      const stop = this.pointAtTextOffset(textMap, end)
+      range.setStart(start.node, start.offset)
+      range.setEnd(stop.node, stop.offset)
+      cloneTarget.replaceChildren(range.cloneContents())
       const fits = !this.overflows(page)
-      page.content.removeChild(candidate)
       if (fits) {
-        best = end
-        low = index + 1
-      } else {
-        high = index - 1
+        if (end > best) best = end
+        return true
       }
+      return false
+    }
+
+    const indexNearLength = (length: number): number => {
+      let lo = low
+      let hi = high
+      let nearest = low
+      while (lo <= hi) {
+        const mid = (lo + hi) >> 1
+        const value = boundaries[mid] ?? 0
+        if (value === length) return mid
+        if (value < length) {
+          nearest = mid
+          lo = mid + 1
+        } else {
+          hi = mid - 1
+        }
+      }
+      return Math.max(low, Math.min(high, nearest))
+    }
+
+    // Density state from the most recent probe: growth px for a
+    // fragment of lastLength chars. The first probe is always the
+    // midpoint (a plain binary probe); its growth seeds the estimate.
+    let lastGrowth = 0
+    let lastLength = 0
+
+    try {
+      this.probingDepth += 1
+      while (low <= high) {
+        const span = high - low + 1
+        let index = Math.floor((low + high) / 2)
+        let estimated = false
+        if (interpolate && interpolations < 3 && lastGrowth > 0 && lastLength > 0) {
+          index = indexNearLength((remaining * lastLength) / lastGrowth)
+          estimated = true
+          interpolations += 1
+        }
+        const end = boundaries[index] ?? 0
+        const fits = probe(index)
+        if (fits === null) {
+          high = index - 1
+          continue
+        }
+        // Growth read rides the probe's forced layout (scrollHeight was
+        // just read by overflows), so the density update costs nothing.
+        lastGrowth = page.content.scrollHeight - baseScroll
+        lastLength = end
+        if (fits) {
+          low = index + 1
+        } else {
+          high = index - 1
+        }
+        if (estimated && high - low + 1 > span * 0.875) interpolate = false
+      }
+    } finally {
+      this.probingDepth -= 1
+      page.content.removeChild(clone)
     }
 
     return best
@@ -596,7 +880,25 @@ export default class extends Controller<HTMLElement> {
   pointAtTextOffset(textMap: TextMap, offset: number): { node: Node; offset: number } {
     if (offset <= 0) return { node: textMap.root, offset: 0 }
     if (offset >= textMap.text.length) return { node: textMap.root, offset: textMap.root.childNodes.length }
-    const entry = textMap.nodes.find(({ start, end }) => offset >= start && offset <= end) || textMap.nodes.at(-1)
+    // Entries are contiguous and sorted by start, so the leftmost entry
+    // with end >= offset is exactly the linear scan's first
+    // start <= offset <= end match (any earlier entry ends before
+    // offset; contiguity guarantees this one's start <= offset).
+    const nodes = textMap.nodes
+    if (!nodes.length) return { node: textMap.root, offset: 0 }
+    let low = 0
+    let high = nodes.length - 1
+    let index = nodes.length - 1
+    while (low <= high) {
+      const mid = (low + high) >> 1
+      if ((nodes[mid]?.end ?? 0) >= offset) {
+        index = mid
+        high = mid - 1
+      } else {
+        low = mid + 1
+      }
+    }
+    const entry = nodes[index] ?? nodes.at(-1)
     if (!entry) return { node: textMap.root, offset: 0 }
     return { node: entry.node, offset: Math.max(0, Math.min(offset - entry.start, (entry.node.textContent ?? "").length)) }
   }
@@ -722,6 +1024,14 @@ export default class extends Controller<HTMLElement> {
   }
 
   createPage(number: number): DocumentPage {
+    // Progressive sealing: the previous page is settled (no more appends
+    // or probes will touch it), so skip its rendering unconditionally
+    // while the pass continues. overflows() then costs O(one page)
+    // instead of O(all pages so far). Measurements stay exact: page
+    // boxes are fixed-size and only the open page is ever measured.
+    // Sealed (hidden) rather than quiet (auto): auto would still render
+    // near-viewport pages. The end-of-pass loop swaps seal for quiet.
+    this.openPage?.frame.classList.add("is-sealed")
     const frame = document.createElement("div")
     frame.className = "document-page-frame"
 
@@ -743,11 +1053,24 @@ export default class extends Controller<HTMLElement> {
     page.append(content, footer)
     frame.append(page)
     this.surfaceTarget.append(frame)
-    return { content, number, page, frame }
+    const created = { content, number, page, frame }
+    this.openPage = created
+    return created
   }
 
   overflows({ content }: DocumentPage): boolean {
-    return content.scrollHeight > content.clientHeight + 1
+    const stats = paginateStats()
+    const start = now()
+    const result = content.scrollHeight > content.clientHeight + 1
+    const ms = now() - start
+    stats.overflows += 1
+    stats.overflowsMs += ms
+    if (ms > stats.overflowsMax) stats.overflowsMax = ms
+    if (this.probingDepth > 0) {
+      stats.probeOverflows += 1
+      stats.probeOverflowsMs += ms
+    }
+    return result
   }
 
   focusedEditable(): boolean {

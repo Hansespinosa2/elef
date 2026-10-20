@@ -1,11 +1,11 @@
-import type { Controller } from "@hotwired/stimulus";
+import type { EditorHandle } from "@elef/client/editor";
 
 export interface ApplyEditorSourceOptions {
   id: unknown;
   expectedSource: string;
   getWorkId(): unknown;
   getSource(): unknown;
-  waitForEditor(): Promise<Controller | null>;
+  waitForEditor(): Promise<EditorHandle | null>;
   setFallback(source: string): void;
   materializeEdits?: () => void;
 }

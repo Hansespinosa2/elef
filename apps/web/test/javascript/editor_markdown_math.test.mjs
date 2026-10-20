@@ -2,10 +2,11 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
-const moduleSource = await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/editor_markdown.js", import.meta.url), "utf8")
-assert.match(moduleSource, /^import katex from "katex"/)
+const originalModuleSource = await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/editor_markdown.js", import.meta.url), "utf8")
+const moduleSource = originalModuleSource.replaceAll('"@elef/work-model/math-source"', JSON.stringify(import.meta.resolve("@elef/work-model/math-source")))
+assert.match(moduleSource, /^import \{ cachedKatex, loadKatex \} from "\.\.\/lib\/katex_loader\.js";/)
 assert.doesNotMatch(moduleSource, /globalThis\.katex/)
-const source = moduleSource.replace('import katex from "katex"', "const katex = { renderToString: () => '<span class=katex>x^2</span>' }")
+const source = moduleSource.replace('import { cachedKatex, loadKatex } from "../lib/katex_loader.js"', "const cachedKatex = () => ({ renderToString: () => '<span class=katex>x^2</span>' }); const loadKatex = () => Promise.resolve(cachedKatex())")
 const editorMarkdown = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 test("active display math preserves its block delimiters and line breaks", () => {
@@ -25,6 +26,60 @@ test("active display math preserves its block delimiters and line breaks", () =>
       editorMarkdown.markdownForVisibleText(`${opening}\n\n${closing}`, expected, "paragraph", block),
       expected
     )
+  }
+})
+
+test("an escaped close is literal text, never an active span", () => {
+  const sourceNode = {
+    textContent: "$\\$",
+    parentElement: null,
+    replaceWith(fragment) { this.replacement = fragment }
+  }
+  let treeWalkerUsed = false
+  globalThis.document = {
+    createTreeWalker() {
+      return {
+        nextNode() {
+          if (treeWalkerUsed) return false
+          treeWalkerUsed = true
+          this.currentNode = sourceNode
+          return true
+        }
+      }
+    },
+    createDocumentFragment() { return { children: [], append(node) { this.children.push(node) } } },
+    createTextNode(textContent) { return { textContent } },
+    createElement() { return {} }
+  }
+  globalThis.NodeFilter = { SHOW_TEXT: 4 }
+  globalThis.window = { getSelection: () => null }
+
+  try {
+    assert.equal(editorMarkdown.renderInlineMath({}), 0)
+    assert.equal(sourceNode.replacement, undefined)
+    const emptyBlock = { querySelectorAll() { return [] } }
+    assert.equal(editorMarkdown.markdownForVisibleText("$\\$", "$\\$", "paragraph", emptyBlock), "$\\$")
+  } finally {
+    delete globalThis.document
+    delete globalThis.NodeFilter
+    delete globalThis.window
+  }
+})
+
+test("insertions on both sides of a protected atom commit without leaking markers", async () => {
+  const { parseHTML } = await import("linkedom")
+  const { document } = parseHTML(
+    `<div data-editor-block-id="b1">Inline math: <span class="katex" data-editor-math-source="E = mc^2" data-editor-math-open="$" data-editor-math-close="$" contenteditable="false">ignore</span>.</div>`
+  )
+  const previousDocument = globalThis.document
+  globalThis.document = document
+  try {
+    const block = document.querySelector("div")
+    const result = editorMarkdown.markdownForVisibleText("Inline math:$E = mc^2$", "", "paragraph", block, { documentMode: true })
+    assert.equal(result, "Inline math: $E = mc^2$.")
+  } finally {
+    if (previousDocument === undefined) delete globalThis.document
+    else globalThis.document = previousDocument
   }
 })
 
@@ -79,5 +134,43 @@ test("inline math renders through the imported KaTeX module without a global", (
     delete globalThis.document
     delete globalThis.NodeFilter
     delete globalThis.window
+  }
+})
+
+test("completing display math leaves an insertion text node outside the atom", async () => {
+  const { parseHTML } = await import("linkedom")
+  for (const source of ["$$x^2$$", "\\[x^2\\]"]) {
+    const { document } = parseHTML("<div><p></p></div>")
+    const block = document.querySelector("div")
+    const paragraph = block.querySelector("p")
+    const sourceNode = document.createTextNode(source)
+    paragraph.append(sourceNode)
+    const selection = {
+      isCollapsed: true,
+      anchorNode: sourceNode, focusNode: sourceNode,
+      anchorOffset: source.length, focusOffset: source.length,
+      setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset) {
+        Object.assign(this, { anchorNode, anchorOffset, focusNode, focusOffset })
+      }
+    }
+    const previous = Object.fromEntries(["document", "NodeFilter", "window"].map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]))
+    Object.assign(globalThis, { document, NodeFilter: { SHOW_TEXT: 4 }, window: { getSelection: () => selection } })
+    try {
+      assert.equal(editorMarkdown.renderInlineMath(block), 1)
+      const atom = block.querySelector("[data-editor-math-source]")
+      assert.ok(atom)
+      assert.equal(selection.focusNode.nodeType, 3)
+      assert.equal(selection.focusNode.previousSibling, atom)
+      assert.equal(selection.focusOffset, 0)
+      // Model native insertion at the returned text caret and reconcile it.
+      selection.focusNode.textContent = " after"
+      assert.equal(atom.textContent, "x^2")
+      assert.equal(editorMarkdown.markdownForVisibleText(source, "", "paragraph", block, { documentMode: true }), `${source} after`)
+    } finally {
+      for (const [key, descriptor] of Object.entries(previous)) {
+        if (descriptor) Object.defineProperty(globalThis, key, descriptor)
+        else delete globalThis[key]
+      }
+    }
   }
 })

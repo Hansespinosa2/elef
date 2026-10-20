@@ -1,5 +1,14 @@
 <% persisted = work.persisted? %>
 <% type_label = work_type_label(work) %>
+<% content_for :head do %>
+  <%# Pagination waits for fonts (a pre-fonts pass is thrown away), and the
+      math fonts are otherwise discovered late during render: preload them so
+      the fetch starts with the document instead of after first paint. Size1
+      covers large operators (U+22C3 et al.) that Main lacks; without the
+      preload, cold opens paginate them in fallback metrics and never redo. %>
+  <%= preload_link_tag "katex/fonts/KaTeX_Main-Regular.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" %>
+  <%= preload_link_tag "katex/fonts/KaTeX_Size1-Regular.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" %>
+<% end %>
 <% editor_projection = shared_editor_projection(
   work,
   source: work.source.to_s.gsub(/\r\n?/, "\n"),

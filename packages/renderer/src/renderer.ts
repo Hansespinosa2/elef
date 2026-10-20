@@ -4,6 +4,7 @@ import MarkdownIt from "markdown-it"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
 import { buildEditorStructure, createDocumentLinkResolver, parseDocumentLinkAt } from "@elef/work-model"
+import { mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
 import { analyzeArtList, ART_DIAGNOSTICS } from "@elef/work-model/art-source"
 import { slidePositionClasses, slidePositionLayout } from "@elef/work-model/slide-position-layout"
 import type {
@@ -56,6 +57,7 @@ export interface RendererChrome {
     blockCount: number
     position: SourcePosition | null
   }): string
+  emptyPresentationBlock(input: { mapped: MapBlock }): string
   slideBlock(input: { className: string; attributes: string; content: string; controls: string; revealEvent?: number | undefined }): string
   emptySlide(input: { index: number }): string
   slideToolbar(input: { index: number; slideCount: number }): string
@@ -226,46 +228,35 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
 markdown.inline.ruler.before("escape", "elef_bracket_math", (state, silent) => {
   const source = state.src
   const start = state.pos
-  if (source[start] === "\\" && source[start + 1] === "$" && !isEscaped(source, start)) {
+  if (source[start] === "\\" && source[start + 1] === "$" && !sourceIsEscaped(source, start)) {
     if (silent) return true
     const token = state.push("text", "", 0)
     token.content = "\\$"
     state.pos += 2
     return true
   }
-  if (source[start] !== "\\" || (source[start + 1] !== "(" && source[start + 1] !== "[")) return false
-  if (isEscaped(source, start)) return false
-  const open = source.slice(start, start + 2)
-  const closeDelimiter = open === "\\(" ? "\\)" : "\\]"
-  const close = findMathClose(source, start + 2, closeDelimiter)
-  if (close < 0) return false
+  if (source[start] !== "\\") return false
+  const math = mathSourceAt(source, start)
+  if (!math) return false
   const env = asRenderEnv(state.env)
-  const expression = source.slice(start + 2, close)
   if (silent) return true
   const token = state.push("html_inline", "", 0)
-  token.content = renderMath(expression, open === "\\[", open, closeDelimiter, env.chrome)
-  state.pos = close + 2
+  token.content = renderMath(math.interior, math.display, math.open, math.close, env.chrome)
+  state.pos = math.end
   return true
 })
 
 markdown.inline.ruler.after("backticks", "elef_math", (state, silent) => {
   const source = state.src
   const start = state.pos
-  const marker = source[start]
-  if (marker !== "$" || isEscaped(source, start)) return false
-  const display = source[start + 1] === "$"
-  const delimiter = display ? "$$" : "$"
-  if (!display && /\s/.test(source[start + 1] || "")) return false
-  const close = findMathClose(source, start + delimiter.length, delimiter)
-  if (close < 0) return false
+  if (source[start] !== "$") return false
+  const math = mathSourceAt(source, start)
+  if (!math) return false
   const env = asRenderEnv(state.env)
-  const expression = source.slice(start + delimiter.length, close)
-  if (!display && (!expression || /\s$/.test(expression))) return false
   if (silent) return true
-
   const token = state.push("html_inline", "", 0)
-  token.content = renderMath(expression, display, delimiter, delimiter, env.chrome)
-  state.pos = close + delimiter.length
+  token.content = renderMath(math.interior, math.display, math.open, math.close, env.chrome)
+  state.pos = math.end
   return true
 })
 
@@ -540,9 +531,25 @@ function emptyStructuredLine(rendered: string, caretToken: string, kind: string)
 
 function renderPresentation(source: string, slides: RenderSlide[], style: EditorStyle, margin: MarginSettings, env: RenderEnv, chrome: RendererChrome): string {
   const frames = slides.map((slide, index) => {
-    const mappedBlocks = slide.blocks
+    // Positional pairing runs against non-empty blocks only; empty
+    // placeholders interleave by source position (mirroring documents)
+    // so they never shift parsed alignment.
+    const mappedBlocks = slide.blocks.filter(block => !block.empty_placeholder)
+    const emptyBlocks = slide.blocks.filter(block => block.empty_placeholder)
     const regions = new Map<string, MapRegion>(slide.editable_regions.map((region): [string, MapRegion] => [region.block_id, region]))
     const blocks = slide.parsed_blocks
+    let emptyIndex = 0
+    const flushEmptyBefore = (boundary: number): string => {
+      let markup = ""
+      let empty = emptyBlocks[emptyIndex]
+      while (empty && empty.range.start < boundary) {
+        const region = regions.get(empty.id)
+        if (region?.editable) markup += chrome.emptyPresentationBlock({ mapped: empty })
+        emptyIndex += 1
+        empty = emptyBlocks[emptyIndex]
+      }
+      return markup
+    }
     const renderBlock = (
       block: ParsedBlock,
       blockIndex: number,
@@ -551,6 +558,7 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
       { wrapInItem = false, wrapInArtRegion = false }: { wrapInItem?: boolean; wrapInArtRegion?: boolean } = {}
     ): string => {
       const mapped = mappedBlocks[blockIndex]
+      const prefix = flushEmptyBefore(mapped?.range.start ?? Number.POSITIVE_INFINITY)
       const region = mapped ? regions.get(mapped.id) : undefined
       const sourceMatches = mapped !== undefined && equivalentMarkdown(mapped.markdown, block.markdown)
       const valid = mapped !== undefined && region !== undefined && sourceMatches && mapped.editable_region_id === region.id && region.block_id === mapped.id
@@ -563,12 +571,15 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
       const content = valid && mapped !== undefined && mapped.kind === "image"
         ? chrome.mediaFigure({ rendered, alt: /^\s*!\[([^\]]*)\]/.exec(block.markdown)?.[1] || "" })
         : rendered
-      const controls = valid ? chrome.presentationBlockControls({ slideIndex: index, blockIndex, blockCount: blocks.length, position: block.position }) : ""
+      // Controls address the full mapped list (placeholders included):
+      // the client resolves blocks from the same map.
+      const mappedIndex = mapped ? slide.blocks.indexOf(mapped) : blockIndex
+      const controls = valid ? chrome.presentationBlockControls({ slideIndex: index, blockIndex: mappedIndex, blockCount: slide.blocks.length, position: block.position }) : ""
       const blockMarkup = chrome.slideBlock({ className, attributes, content, controls, revealEvent: block.reveal_event })
       const markup = wrapInArtRegion
         ? `<div class="slide-region-block ${slidePositionClasses(block.position, vertical)}">${blockMarkup}</div>`
         : blockMarkup
-      return wrapInItem ? `<div class="slide-block-item">${markup}</div>` : markup
+      return prefix + (wrapInItem ? `<div class="slide-block-item">${markup}</div>` : markup)
     }
     const renderPlacedBlocks = (
       placedBlocks: ParsedBlock[],
@@ -607,6 +618,7 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
         wrapArtBlocksInGroupsOnly: true
       })
     const empty = blocks.length === 0 ? chrome.emptySlide({ index }) : ""
+    const trailingEmpty = flushEmptyBefore(Number.POSITIVE_INFINITY)
     const toolbar = chrome.slideToolbar({ index, slideCount: slides.length })
     const topMargin = margin.section || margin.subsection
       ? `<div class="slide-margin slide-margin-top" aria-hidden="true">${margin.subsection ? `<span class="slide-margin-subsection">${escapeHtml(slide.subsection || "")}</span>` : ""}${margin.section ? `<span class="slide-margin-section">${escapeHtml(slide.section || "")}</span>` : ""}</div>`
@@ -615,7 +627,7 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
       ? `<div class="slide-margin slide-margin-bottom" aria-hidden="true">${margin.slide_count ? `<span class="slide-margin-count">${index + 1} / ${slides.length}</span>` : ""}${margin.footnote && slide.footnote ? `<span class="slide-margin-footnote" aria-label="Footnote"><span class="slide-margin-footnote-marker">*</span><span class="slide-margin-footnote-text">${renderMarkdownBlock(slide.footnote, env)}</span></span>` : ""}</div>`
       : ""
     const frameArtHost = !slide.title && contentBlocks.some((block) => block.art)
-    return chrome.slideFrame({ index, layout: slide.layout, toolbar, topMargin, content: `${titleMarkup}${slideContent}${empty}`, bottomMargin, artHost: frameArtHost, revealEventCount: slide.reveal_event_count })
+    return chrome.slideFrame({ index, layout: slide.layout, toolbar, topMargin, content: `${titleMarkup}${slideContent}${trailingEmpty}${empty}`, bottomMargin, artHost: frameArtHost, revealEventCount: slide.reveal_event_count })
   }).join("")
   const artController = slides.some((slide) => slide.blocks.some((block) => block.art))
   return chrome.presentationRoot({ style, inner: frames, artController })
@@ -624,7 +636,7 @@ function renderPresentation(source: string, slides: RenderSlide[], style: Editor
 // Default chrome: plain structural wrappers with no editor controls, host
 // framework hooks or editing affordances. Hosts compose richer chrome (see
 // @elef/editor-runtime/editor-chrome) through the `chrome` option.
-const bareChrome: RendererChrome = {
+export const bareChrome: RendererChrome = {
   imageAttributes: () => "",
   mathAttributes: () => "",
   mediaFigure: ({ rendered, alt }) => `<figure>${rendered}<figcaption>${escapeHtml(alt)}</figcaption></figure>`,
@@ -636,6 +648,7 @@ const bareChrome: RendererChrome = {
   presentationBlockAttributes: () => "",
   presentationBlockControls: () => "",
   slideBlock: ({ className, content, revealEvent }) => `<div class="${className}"${revealEvent === undefined ? "" : ` data-elef-reveal-event="${revealEvent}"`}>${content}</div>`,
+  emptyPresentationBlock: () => "",
   emptySlide: () => "",
   slideToolbar: () => "",
   slideFrame: ({ layout, topMargin, content, bottomMargin, artHost, revealEventCount }) => `<section class="slide slide-${layout}"${(revealEventCount ?? 0) > 0 ? ` data-elef-reveal-event-count="${revealEventCount}"` : ""}>${topMargin}<div class="slide-content"${artHost ? ` data-art-host="fixed" data-art-overfull="false"` : ""}>${content}</div>${bottomMargin}</section>`,
@@ -674,14 +687,19 @@ function resolveAssetSource(source: string, env: RenderEnv): ResolvedAsset | nul
 }
 
 function renderMath(expression: string, display: boolean, openDelimiter: string, closeDelimiter: string, chrome: RendererChrome = bareChrome, sourceExpression: string = expression): string {
-  let rendered: string
   try {
-    rendered = katex.renderToString(expression, { displayMode: display, throwOnError: true, trust: false, strict: "ignore" })
+    const rendered = katex.renderToString(expression, { displayMode: display, throwOnError: true, trust: false, strict: "ignore", output: "mathml" })
+    // MathML output drops KaTeX's katex-display wrapper span; restore it
+    // so display equations keep their block layout, margins, centering,
+    // and every existing selector, style rule, and test keeps working.
+    const wrapped = display ? `<span class="katex-display">${rendered}</span>` : rendered
+    const attributes = chrome.mathAttributes({ source: sourceExpression, open: openDelimiter, close: closeDelimiter })
+    return wrapped.replace(/^<span\b/, (opening) => `${opening}${attributes}`)
   } catch (_error) {
-    rendered = `<span class="math-error" title="Invalid TeX">${escapeHtml(expression)}</span>`
+    const fallback = `<span class="math-error" title="Invalid TeX">${escapeHtml(expression)}</span>`
+    const attributes = chrome.mathAttributes({ source: sourceExpression, open: openDelimiter, close: closeDelimiter })
+    return fallback.replace(/^<span\b/, (opening) => `${opening}${attributes}`)
   }
-  const attributes = chrome.mathAttributes({ source: sourceExpression, open: openDelimiter, close: closeDelimiter })
-  return rendered.replace(/^<span\b/, (opening) => `${opening}${attributes}`)
 }
 
 function stripUnsafeMarkdownLinks(text: string): string {
@@ -710,21 +728,6 @@ function stripUnsafeMarkdownLinks(text: string): string {
     pattern.lastIndex = cursor
   }
   return cursor === 0 ? text : result + text.slice(cursor)
-}
-
-function findMathClose(source: string, from: number, delimiter: string): number {
-  let index = from
-  while ((index = source.indexOf(delimiter, index)) >= 0) {
-    if (!isEscaped(source, index) && (delimiter !== "$" || source[index + 1] !== "$" && source[index - 1] !== "$")) return index
-    index += delimiter.length
-  }
-  return -1
-}
-
-function isEscaped(source: string, index: number): boolean {
-  let slashes = 0
-  for (let cursor = index - 1; cursor >= 0 && source[cursor] === "\\"; cursor -= 1) slashes += 1
-  return slashes % 2 === 1
 }
 
 function escapeHtml(value: unknown): string {

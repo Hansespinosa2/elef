@@ -107,12 +107,14 @@ test("grouped Art controls remain inside their aligned block wrappers", () => {
   assert.equal(slides[0].querySelectorAll(".slide-bottom-lane").length, 1)
   assert.equal(groupedArt.length, 6)
   for (const [index, artBlock] of groupedArt.entries()) {
-    const controls = artBlock.querySelector(":scope > .presentation-editor-block-controls")
-    const block = artBlock.querySelector(":scope > .slide-block[data-editor-block-id]")
+    const shell = artBlock.querySelector(":scope > .slide-block-shell")
+    const controls = shell?.querySelector(":scope > .presentation-editor-block-controls")
+    const block = shell?.querySelector(":scope > .slide-block[data-editor-block-id]")
     const select = controls?.querySelector("select[data-presentation-editor-align]")
     const sourceIndex = Number(block?.getAttribute("data-editor-block-id").match(/block-(\d+)$/)?.[1]) - 1
 
-    assert.ok(controls, `Art block ${index} has controls as a direct child`)
+    assert.ok(shell, `Art block ${index} has a shell as a direct child`)
+    assert.ok(controls, `Art block ${index} has controls inside its shell`)
     assert.ok(select, `Art block ${index} has an alignment control`)
     assert.equal(artBlock.parentElement.classList.contains("slide-block-item"), true)
     assert.equal(select.getAttribute("data-block-index"), String(sourceIndex))

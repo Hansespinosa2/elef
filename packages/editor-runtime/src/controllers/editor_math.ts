@@ -1,4 +1,5 @@
-import katex from "katex"
+import { cachedKatex, loadKatex } from "../lib/katex_loader.js"
+import type { KatexApi } from "../lib/katex_loader.js"
 
 export interface MathCaretOptions {
   caret?: string;
@@ -58,6 +59,33 @@ export interface ActiveMathSpanOptions {
   display?: boolean;
 }
 
+function renderMathElement(katex: KatexApi, expression: string, open: string, close: string, isDisplay: boolean): ChildNode {
+  try {
+    const wrapper = document.createElement("span")
+    wrapper.innerHTML = katex.renderToString(expression, { displayMode: isDisplay, throwOnError: true, output: "mathml" })
+    const math = wrapper.firstElementChild as HTMLElement | null
+    if (!math) throw new Error("KaTeX produced no output")
+    math.dataset.editorMathSource = expression
+    math.dataset.editorMathOpen = open
+    math.dataset.editorMathClose = close
+    // Same katex-display restoration as the inline renderer: the
+    // class marks display math while editor CSS keeps inline layout.
+    if (isDisplay) math.classList.add("editor-live-math-display", "katex-display")
+    math.contentEditable = "false"
+    return math
+  } catch (_error) {
+    const mathError = document.createElement("span")
+    mathError.className = "math-error"
+    mathError.dataset.editorMathSource = expression
+    mathError.dataset.editorMathOpen = open
+    mathError.dataset.editorMathClose = close
+    mathError.contentEditable = "false"
+    mathError.title = "Invalid TeX"
+    mathError.textContent = expression
+    return mathError
+  }
+}
+
 export function createActiveMathSpan(fullText: string, { source = "", open = "$", close = open, display = false }: ActiveMathSpanOptions = {}): HTMLSpanElement {
   const activeSpan = document.createElement("span")
   activeSpan.className = "editor-math-active"
@@ -90,29 +118,36 @@ export function reRenderMath(activeSpan: Element | null, { caret = null }: { car
 
   if (hasDelimiters) {
     const expression = fullText.slice(open.length, fullText.length - close.length)
+    const katex = cachedKatex()
     if (katex?.renderToString && expression.trim().length > 0) {
-      try {
-        const wrapper = document.createElement("span")
-        wrapper.innerHTML = katex.renderToString(expression, { displayMode: isDisplay, throwOnError: true })
-        const math = wrapper.firstElementChild as HTMLElement | null
-        if (!math) throw new Error("KaTeX produced no output")
-        math.dataset.editorMathSource = expression
-        math.dataset.editorMathOpen = open
-        math.dataset.editorMathClose = close
-        if (isDisplay) math.classList.add("editor-live-math-display")
-        math.contentEditable = "false"
-        replacement = math
-      } catch (_error) {
-        const mathError = document.createElement("span")
-        mathError.className = "math-error"
-        mathError.dataset.editorMathSource = expression
-        mathError.dataset.editorMathOpen = open
-        mathError.dataset.editorMathClose = close
-        mathError.contentEditable = "false"
-        mathError.title = "Invalid TeX"
-        mathError.textContent = expression
-        replacement = mathError
-      }
+      replacement = renderMathElement(katex, expression, open, close, isDisplay)
+    } else if (!katex && expression.trim().length > 0) {
+      // KaTeX not yet loaded (interaction outran the post-settle
+      // preload): flush synchronously with a quacking placeholder so
+      // caret and editing flow keep today's exact timing, then swap in
+      // the identical render on arrival. The swap only touches the
+      // placeholder node, so sibling-placed carets survive it.
+      const pending = document.createElement("span")
+      pending.className = "editor-math-pending"
+      pending.dataset.editorMathSource = expression
+      pending.dataset.editorMathOpen = open
+      pending.dataset.editorMathClose = close
+      if (isDisplay) pending.classList.add("editor-live-math-display")
+      pending.contentEditable = "false"
+      pending.textContent = fullText
+      replacement = pending
+      loadKatex().then(
+        (api) => {
+          if (!pending.isConnected || !pending.parentNode) return
+          pending.parentNode.replaceChild(renderMathElement(api, expression, open, close, isDisplay), pending)
+        },
+        () => {
+          // Load failure renders like today's missing-KaTeX path: plain
+          // source text with no math datasets.
+          if (!pending.isConnected || !pending.parentNode) return
+          pending.parentNode.replaceChild(document.createTextNode(fullText), pending)
+        }
+      )
     } else {
       replacement = document.createTextNode(fullText)
     }
@@ -221,11 +256,43 @@ export function finishMathBeforeEnter(event: KeyboardEvent, rootElement: Element
   return true
 }
 
+interface PendingMathPress {
+  math: Element;
+  x: number;
+  y: number;
+}
+
+let pendingMathPress: PendingMathPress | null = null
+
+// Clicks retarget when a focus-triggered reflow moves the math between
+// mousedown and click (the press lands in math, the release lands on
+// an ancestor). Recording the press lets the click fall back to the
+// math the user actually pressed. Drags are excluded by movement, so
+// press-and-drag selection across math never derenders.
+const CLICK_DRAG_PX = 6
+
+export function recordMathMousedown(event: MouseEvent, rootElement: Element | null): void {
+  pendingMathPress = null
+  const math = (event.target as Element | null)?.closest?.("[data-editor-math-source]:not([data-editor-math-active])")
+  if (math && rootElement?.contains(math)) {
+    pendingMathPress = { math, x: event.clientX, y: event.clientY }
+  }
+}
+
 export function handleMathClick(event: MouseEvent, rootElement: Element | null): boolean {
   const math = (event.target as Element | null)?.closest?.("[data-editor-math-source]:not([data-editor-math-active])")
   if (math && rootElement?.contains(math)) {
+    pendingMathPress = null
     event.preventDefault()
     deRenderMath(math, { caret: "click", clickEvent: event })
+    return true
+  }
+  const pending = pendingMathPress
+  pendingMathPress = null
+  if (pending && rootElement?.contains(pending.math) &&
+    Math.hypot(event.clientX - pending.x, event.clientY - pending.y) < CLICK_DRAG_PX) {
+    event.preventDefault()
+    deRenderMath(pending.math, { caret: "click", clickEvent: event })
     return true
   }
   return false
@@ -244,8 +311,34 @@ export function syncActiveMath(rootElement: Element | null, onFlush: (() => void
         return
       }
     }
-    reRenderMath(span, {}, onFlush)
+    // The swap re-resolves element-offset carets adjacent to the span,
+    // so preserve the side explicitly (a following text caret also keeps
+    // subsequent keystrokes ordinary text). Far carets keep the default:
+    // the swap cannot disturb a position outside its subtree.
+    const side = caretSideOfSpan(span, selection?.focusNode ?? null, selection?.focusOffset ?? 0)
+    reRenderMath(span, side ? { caret: side } : {}, onFlush)
   })
+}
+
+// Which side of the span a caret sits on ("before" | "after"), or null
+// when the caret is inside the span or outside its parent subtree. The
+// caller deactivates only outside carets; inside positions refuse here
+// as a defensive second gate.
+export function caretSideOfSpan(span: Element, node: Node | null, offset: number): "before" | "after" | null {
+  if (!node) return null
+  const parent = span.parentNode
+  if (!parent) return null
+  const spanIndex = Array.prototype.indexOf.call(parent.childNodes, span)
+  if (spanIndex === -1) return null
+  if (node === parent) {
+    return offset > spanIndex ? "after" : "before"
+  }
+  let current: Node | null = node
+  while (current && current.parentNode !== parent) current = current.parentNode
+  if (!current || current === span) return null
+  const childIndex = Array.prototype.indexOf.call(parent.childNodes, current)
+  if (childIndex === -1) return null
+  return childIndex > spanIndex ? "after" : "before"
 }
 
 interface ActiveMathInfo {

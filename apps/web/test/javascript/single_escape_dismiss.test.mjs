@@ -12,7 +12,10 @@ const dist = (path) => new URL(`../../../../packages/editor-runtime/dist/${path}
 
 async function loadDist(path, replacements = {}) {
   let source = await readFile(dist(path), "utf8")
-  for (const [from, to] of Object.entries(replacements)) source = source.replace(from, to)
+  for (const [from, to] of Object.entries(replacements)) {
+    assert.ok(source.includes(from), `stub drift: ${path} no longer contains ${from}`)
+    source = source.replace(from, to)
+  }
   return import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 }
 
@@ -21,6 +24,12 @@ const CONTROLLER_BASE = "class Controller {}"
 const EDITOR_FOR = 'import { editorFor } from "../lib/editor_controller_lookup.js";'
 const EDITOR_FOR_STUB = "const editorFor = () => null"
 const VIM_ESCAPE_IMPORT = 'import { forwardEscapeToVim } from "../lib/vim_escape.js";'
+// Merged controllers also position popups against the visual projection;
+// inline the real helper so Escape dismissal runs its true close path.
+const visualAssistSource = await readFile(dist("lib/visual_assist.js"), "utf8")
+const VISUAL_ASSIST_6 = 'import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";'
+const VISUAL_ASSIST_LINK = 'import { mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";'
+const VISUAL_ASSIST_MATH = 'import { assistsInMode, placeVisualCaret, projectionHostFor } from "../lib/visual_assist.js";'
 
 function escapeEvent(overrides = {}) {
   return {
@@ -127,6 +136,7 @@ const snippet = await loadDist("controllers/snippet_palette_controller.js", {
   [STIMULUS_STUB]: CONTROLLER_BASE,
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   [VIM_ESCAPE_IMPORT]: "const forwardEscapeToVim = (...args) => { globalThis.__forwardEscapeCalls.push(args) }\n",
+  [VISUAL_ASSIST_6]: visualAssistSource,
   'import { editorInsideCode, editorInsideMath } from "./math_shorthand_controller.js";':
     "const editorInsideCode = () => false\nconst editorInsideMath = () => false\n",
   'import { authoringRegistryFor } from "./authoring_registry.js";': "const authoringRegistryFor = () => []\n",
@@ -185,6 +195,7 @@ const mathShortcut = await loadDist("controllers/math_shortcut_palette_controlle
   [STIMULUS_STUB]: CONTROLLER_BASE,
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   [VIM_ESCAPE_IMPORT]: "const forwardEscapeToVim = (...args) => { globalThis.__forwardEscapeCalls.push(args) }\n",
+  [VISUAL_ASSIST_6]: visualAssistSource,
   'import { application } from "./application.js";':
     "const application = { getControllerForElementAndIdentifier: () => null }\n",
   'import { editorInsideMath, expandMathShorthand, innermostMathChainWindow, mathShorthandAtEditor, parseMathShorthand } from "./math_shorthand_controller.js";':
@@ -217,6 +228,7 @@ const documentLink = await loadDist("controllers/document_link_palette_controlle
   [STIMULUS_STUB]: CONTROLLER_BASE,
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   [VIM_ESCAPE_IMPORT]: "const forwardEscapeToVim = (...args) => { globalThis.__forwardEscapeCalls.push(args) }\n",
+  [VISUAL_ASSIST_LINK]: visualAssistSource,
 })
 
 test("[[ document link popup closes and forwards one Escape to Vim", () => {
@@ -242,6 +254,7 @@ const mermaid = await loadDist("controllers/mermaid_assist_controller.js", {
   [STIMULUS_STUB]: CONTROLLER_BASE,
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   [VIM_ESCAPE_IMPORT]: "const forwardEscapeToVim = (...args) => { globalThis.__forwardEscapeCalls.push(args) }\n",
+  [VISUAL_ASSIST_6]: visualAssistSource,
   'import { diagramTemplate, mermaidCompletion, mermaidEnterEdit, mermaidTabEdit, MERMAID_DIAGRAMS, slashDiagramQuery } from "./mermaid_syntax.js";':
     "const diagramTemplate = () => null\nconst mermaidCompletion = () => null\nconst mermaidEnterEdit = () => null\nconst mermaidTabEdit = () => null\nconst MERMAID_DIAGRAMS = []\nconst slashDiagramQuery = () => null\n",
 })
@@ -272,6 +285,7 @@ const metadata = await loadDist("controllers/metadata_assist_controller.js", {
   [STIMULUS_STUB]: CONTROLLER_BASE,
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   [VIM_ESCAPE_IMPORT]: "const forwardEscapeToVim = (...args) => { globalThis.__forwardEscapeCalls.push(args) }\n",
+  [VISUAL_ASSIST_6]: visualAssistSource,
   [`import {
   fieldScore,
   metadataCandidatesFor,
@@ -307,6 +321,7 @@ const shorthand = await loadDist("controllers/math_shorthand_controller.js", {
   'import { syntaxTree } from "@codemirror/language";': "const syntaxTree = (state) => state.tree\n",
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   'import { editorPopupOpen } from "../lib/vim_escape.js";': "const { editorPopupOpen } = globalThis.__vimEscape\n",
+  [VISUAL_ASSIST_MATH]: visualAssistSource,
 })
 delete globalThis.__vimEscape
 

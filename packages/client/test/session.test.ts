@@ -9,6 +9,7 @@ import {
   detectLineSeparator,
   diffSource,
   frontmatterRangeFor,
+  frontmatterRevealAction,
   normalizeLineEndings,
   offsetSelection,
   toEditorLineEndings,
@@ -97,4 +98,22 @@ test("frontmatter range matches the controller regex", () => {
   assert.equal(frontmatterRangeFor("no frontmatter here"), null);
   assert.equal(frontmatterRangeFor("body\n---\nnot first\n---"), null);
   assert.equal(frontmatterRangeFor("---\n"), null);
+});
+
+test("hidden frontmatter unfolds on entry and refolds on exit", () => {
+  const range = { from: 0, to: 16 };
+  const decide = (ranges: Array<{ from: number; to: number }>, folded: boolean, visible: boolean, auto: boolean) =>
+    frontmatterRevealAction(ranges, range, folded, visible, auto);
+
+  assert.equal(decide([{ from: 5, to: 5 }], true, false, false), "unfold");
+  assert.equal(decide([{ from: 0, to: 0 }], true, false, false), "unfold");
+  assert.equal(decide([{ from: 16, to: 16 }], true, false, false), "unfold");
+  assert.equal(decide([{ from: 0, to: 40 }], true, false, false), "unfold");
+  assert.equal(decide([{ from: 20, to: 20 }], true, false, false), "none");
+  assert.equal(decide([{ from: 5, to: 5 }], false, false, true), "none");
+  assert.equal(decide([{ from: 20, to: 20 }], false, false, true), "refold");
+  assert.equal(decide([{ from: 20, to: 20 }], false, false, false), "none");
+  assert.equal(decide([{ from: 20, to: 20 }], false, true, true), "none");
+  assert.equal(decide([{ from: 5, to: 5 }], false, true, false), "none");
+  assert.equal(frontmatterRevealAction([{ from: 5, to: 5 }], null, true, false, false), "none");
 });

@@ -190,11 +190,26 @@ class VimEditorTest < ApplicationSystemTestCase
     page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
   end
 
+  test "Vim visual mode keeps the empty engine panels hidden and the projection in view" do
+    document = Document.create!(title: "Vim panels", source: "A *warm* word.")
+    visit edit_document_path(document)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector ".editor-projection .document-editor-block", wait: 10
+    # CodeMirror copies editor theme classes onto the custom panel container;
+    # JS-injected theme rules must not paint the empty container over the page.
+    assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.visual-engine-panels')).display")
+    projection_top = page.evaluate_script("document.querySelector('.editor-projection').getBoundingClientRect().top")
+    assert_operator projection_top, :<, page.evaluate_script("window.innerHeight")
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
   test "Vim visual mode highlights horizontal selections with the Aradia palette" do
     document = Document.create!(title: "Visual selection", source: "abcdef\nsecond line")
     visit settings_path
     find("#vim-enabled").check
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "source")
 
     editor = find(".cm-content")
     editor.click
@@ -235,6 +250,89 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_operator extended_selection["to"] - extended_selection["from"], :>, selection["to"] - selection["from"]
     assert_operator extended_selection["width"], :>, selection["width"]
     assert_equal "rgba(159, 197, 169, 0.42)", extended_selection["background"]
+  end
+
+  test "Vim visual mode paints the engine range on the rendered text" do
+    document = Document.create!(title: "Visual selection", source: "abcdef\nsecond line")
+    visit settings_path
+    find("#vim-enabled").check
+    visit edit_document_path(document)
+
+    block = find(".document-editor-block", text: "abcdef")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const text = block.querySelector("p").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 3);
+      document.querySelector('.source-field').editorController.setSelectionRange(3, 3);
+    JAVASCRIPT
+    page.driver.browser.action.send_keys("v", "h", "h").perform
+    assert_selector "[data-editor-target='mode'][data-mode='visual']", text: "Visual"
+
+    painted = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selection = window.getSelection();
+        const layer = document.querySelector('.cm-selectionLayer');
+        return {
+          collapsed: selection.isCollapsed,
+          text: selection.toString(),
+          inPassage: Boolean(selection.anchorNode?.parentElement?.closest?.(".document-editor-block")),
+          stripHidden: !layer || getComputedStyle(layer).display === "none"
+        };
+      })()
+    JAVASCRIPT
+    assert_equal false, painted["collapsed"]
+    assert_equal "bcd", painted["text"]
+    assert_equal true, painted["inPassage"]
+    assert_equal true, painted["stripHidden"]
+
+    # Operating on the painted range edits the engine source exactly once.
+    page.driver.browser.action.send_keys("d").perform
+    assert_field "Markdown source", with: "aef\nsecond line", wait: 5
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+  end
+
+  test "Vim normal mode shows an on-character block on the rendered text" do
+    document = Document.create!(title: "Normal caret", source: "abcdef\nsecond line")
+    visit settings_path
+    find("#vim-enabled").check
+    visit edit_document_path(document)
+
+    block = find(".document-editor-block", text: "abcdef")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const text = block.querySelector("p").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 2);
+      document.querySelector('.source-field').editorController.setSelectionRange(2, 2);
+    JAVASCRIPT
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+
+    indicator = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const overlay = document.querySelector('.elef-vim-normal-caret');
+        const rect = overlay?.getBoundingClientRect();
+        const range = document.createRange();
+        const text = document.querySelector('.document-editor-block p').firstChild;
+        range.setStart(text, 2);
+        range.setEnd(text, 3);
+        const char = range.getBoundingClientRect();
+        return {
+          display: overlay ? getComputedStyle(overlay).display : null,
+          matches: rect && Math.abs(rect.x - char.x) < 1 && Math.abs(rect.width - char.width) < 1
+        };
+      })()
+    JAVASCRIPT
+    assert_equal "block", indicator["display"]
+    assert_equal true, indicator["matches"]
+
+    # Insert mode drops the block; Escape restores it.
+    page.driver.browser.action.send_keys("i").perform
+    assert_selector "[data-editor-target='mode'][data-mode='insert']", text: "Insert"
+    assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.elef-vim-normal-caret')).display")
+    page.driver.browser.action.send_keys(:escape).perform
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
+    assert_equal "block", page.evaluate_script("getComputedStyle(document.querySelector('.elef-vim-normal-caret')).display")
   end
 
   test "Vim settings persist per browser" do
@@ -361,42 +459,38 @@ class VimEditorTest < ApplicationSystemTestCase
       ```
     MARKDOWN
     visit edit_document_path(document)
-    page.execute_script("document.querySelector('.source-field').editorController.setSelectionRange(document.querySelector('.source-field').editorController.value.length)")
 
+    # Invisible directives collapse until entered (reveal-in-place), so each
+    # marker line is entered in turn; revealed syntax keeps its active mark
+    # and true token colors instead of the dimmed inactive-marker color.
     styles = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
+        const editor = document.querySelector('.source-field').editorController;
         const find = (text) => [...document.querySelectorAll(".cm-line span")].find((node) => node.textContent.trim() === text)
-        const describe = (node) => node && ({
-          className: node.className,
-          color: getComputedStyle(node).color,
-          opacity: getComputedStyle(node).opacity,
-          fontStyle: getComputedStyle(node).fontStyle
-        })
+        const reveal = (text) => {
+          editor.setSelectionRange(editor.value.indexOf(text));
+          return find(text);
+        }
 
-        const metadata = find(":::align{center}")
-        const heading = find("#")
-        const quote = find(">")
-        const strong = find("**")
+        const metadata = reveal(":::align{center}")
+        const heading = reveal("#")
+        const quote = reveal(">")
+        const strong = reveal("**")
         const metadataClasses = metadata ? [...metadata.classList] : []
         const sharedClass = metadataClasses.find((className) => [heading, quote, strong].every((node) => node?.classList.contains(className)))
 
         return {
-          metadata: describe(metadata),
-          heading: describe(heading),
-          quote: describe(quote),
-          strong: describe(strong),
+          metadata: metadata?.className,
+          heading: heading?.className,
+          quote: quote?.className,
+          strong: strong?.className,
           sharedClass,
-          fenced: describe(find(":::not-metadata"))
+          fenced: find(":::not-metadata")?.className ?? null
         }
       })()
     JAVASCRIPT
 
-    refute_nil styles["sharedClass"]
-    %w[color opacity fontStyle].each do |property|
-      assert_equal styles["metadata"][property], styles["heading"][property]
-      assert_equal styles["metadata"][property], styles["quote"][property]
-      assert_equal styles["metadata"][property], styles["strong"][property]
-    end
+    assert_equal "cm-live-active-syntax", styles["sharedClass"]
     assert_nil styles["fenced"]
   end
 
@@ -667,6 +761,49 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_operator selection_state["width"], :>, 0
     assert_equal "rgb(34, 51, 51)", selection_state["selectionBg"]
     assert_equal "rgba(255, 255, 255, 0.035)", selection_state["activeLineBg"]
+  ensure
+    page.execute_script("localStorage.clear()")
+  end
+
+  test "Vim normal-mode keys edit the source through the visual projection" do
+    document = Document.create!(title: "Vim visual editing", source: "# Vim visual\n\nFirst paragraph.\n")
+    visit edit_document_path(document)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+
+    block = find(".document-editor-block", text: "First paragraph.")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p").firstChild, 0);
+    JAVASCRIPT
+
+    # Normal-mode "x" deletes under the caret; plain typing would insert it.
+    block.send_keys("x")
+    assert_equal "# Vim visual\n\nirst paragraph.\n",
+      page.evaluate_script("document.querySelector('.source-field').editorController.value")
+
+    # The refresh holds while the block is focused, so the same node
+    # persists; re-seat the caret and compose a motion plus an operator.
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p").firstChild, 0);
+    JAVASCRIPT
+    block.send_keys("lx")
+    assert_field "Markdown source", with: "# Vim visual\n\nist paragraph.\n", wait: 5
+
+    caret = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const selection = window.getSelection();
+        return { collapsed: selection.isCollapsed, focusOffset: selection.focusOffset };
+      })()
+    JAVASCRIPT
+    assert_equal true, caret["collapsed"]
+    assert_equal 1, caret["focusOffset"]
+
+    page.execute_script("document.activeElement.blur()")
+    assert_selector ".document-editor-block", text: "ist paragraph.", wait: 10
   ensure
     page.execute_script("localStorage.clear()")
   end

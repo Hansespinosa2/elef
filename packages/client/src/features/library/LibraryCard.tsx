@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState } from "react";
 import type { FormEvent, JSX, MouseEvent, RefObject } from "react";
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
-import { presentationTheme } from "@elef/work-model/document-map";
+import { presentationTheme } from "@elef/work-model/style-vocab";
 // The preview renderer (KaTeX, highlight.js, markdown-it) stays out of the
 // boot bundle: CardPreview loads "@elef/client/preview-core" beside the work
 // snapshot, so hosts serve it as a separate deferred file.
