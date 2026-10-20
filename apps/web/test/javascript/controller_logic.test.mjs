@@ -2,17 +2,23 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 import { parseHTML } from "linkedom"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
 // Ported from dev's controller_logic suite: web-host controllers load from
-// the host tree, shared controllers from the editor-runtime dist bundle.
+// the host tree, shared controllers transpile from editor-runtime source.
 // The retired presentation-canvas scale case lives with attachCanvasScaling
 // (packages/client/test/presentation.test.ts); both map-shift cases moved to
 // the unified DocumentEditor (shared/document_editor.test.js).
 const hostControllerPath = new URL("../../app/javascript/controllers/", import.meta.url)
-const sharedControllerPath = new URL("../../../../packages/editor-runtime/dist/controllers/", import.meta.url)
+const sharedControllerPath = "packages/editor-runtime/src/controllers/"
 
 async function loadController(name, { base = hostControllerPath, overrides = {} } = {}) {
-  let source = await readFile(new URL(`${name}_controller.js`, base), "utf8")
+  let source
+  if (base === sharedControllerPath) {
+    source = await loadPackageSource(`${sharedControllerPath}${name}_controller.ts`)
+  } else {
+    source = await readFile(new URL(`${name}_controller.js`, base), "utf8")
+  }
   source = source.replace(/^import\s+[\s\S]*?\s+from\s+["']([^"']+)["'];?\s*/gm, (_statement, specifier) => {
     if (Object.hasOwn(overrides, specifier)) return overrides[specifier]
     return specifier === "@hotwired/stimulus" ? "class Controller {}\n" : ""
@@ -31,7 +37,7 @@ function replaceGlobal(name, value) {
 }
 
 const CommandPaletteController = await loadController("command_palette")
-const visualAssistSource = await readFile(new URL("../../../../packages/editor-runtime/dist/lib/visual_assist.js", import.meta.url), "utf8")
+const visualAssistSource = await loadPackageSource("packages/editor-runtime/src/lib/visual_assist.ts")
 const SnippetPaletteController = await loadController("snippet_palette", {
   base: sharedControllerPath,
   overrides: {
@@ -944,7 +950,7 @@ test("visual link routing binds on document capture and ignores idle keys", (t) 
 
 // --- Visual-mode metadata assist ---
 
-const metadataAssistSource = (await readFile(new URL("../../../../packages/editor-runtime/dist/lib/metadata_assist.js", import.meta.url), "utf8"))
+const metadataAssistSource = (await loadPackageSource("packages/editor-runtime/src/lib/metadata_assist.ts"))
   .replace('from "@elef/client"', `from "${import.meta.resolve("@elef/client")}"`)
   .replace('from "@elef/work-model"', `from "${import.meta.resolve("@elef/work-model")}"`)
   .replace('from "@elef/work-model/style-vocab"', `from "${import.meta.resolve("@elef/work-model/style-vocab")}"`)
@@ -1211,7 +1217,7 @@ test("visual math placeholder stops walk the projection caret on Tab", (t) => {
 
 // --- Visual-mode mermaid assist ---
 
-const mermaidSyntaxSource = await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/mermaid_syntax.js", import.meta.url), "utf8")
+const mermaidSyntaxSource = await loadPackageSource("packages/editor-runtime/src/controllers/mermaid_syntax.ts")
 const MermaidAssistController = await loadController("mermaid_assist", {
   base: sharedControllerPath,
   overrides: {

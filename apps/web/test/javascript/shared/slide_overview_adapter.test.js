@@ -1,13 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
-import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { SlideOverview } from "@elef/client"
+import { loadPackageSource } from "./package_source.mjs"
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
 const overviewUrl = import.meta.resolve("@elef/client")
-const source = (await readFile(path.join(root, "packages/editor-runtime/dist/controllers/slide_overview_controller.js"), "utf8"))
+const source = (await loadPackageSource("packages/editor-runtime/src/controllers/slide_overview_controller.ts"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { SlideOverview } from "@elef/client"', `import { SlideOverview } from "${overviewUrl}"`)
   .replace('import { bindEditorAction } from "../lib/editor_actions.js"', "const bindEditorAction = (...args) => { (globalThis.__overviewBinds ||= []).push(args); return () => {} }")

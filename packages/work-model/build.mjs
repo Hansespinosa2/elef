@@ -1,4 +1,4 @@
-// Canonical producer of the committed packages/work-model/dist/ artifacts,
+// Canonical producer of the gitignored packages/work-model/dist/ artifacts,
 // mirroring the packages/client dist pattern: one self-contained ESM bundle
 // per export subpath, which both hosts consume (importmap pins, desktop
 // build, node). The barrel entry keeps its bare self-referential specifiers

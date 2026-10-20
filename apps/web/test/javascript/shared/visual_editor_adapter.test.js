@@ -1,11 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
-import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { parseHTML } from "linkedom"
+import { loadPackageSource } from "./package_source.mjs"
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
 const clientStubUrl = `data:text/javascript;base64,${Buffer.from(`
 export class DocumentEditor {
   constructor(options) { this.options = options; this.calls = [] }
@@ -24,7 +21,7 @@ export class DocumentEditor {
 }
 `).toString("base64")}`
 globalThis.__editActionsMounts = []
-const source = (await readFile(path.join(root, "packages/editor-runtime/dist/controllers/visual_editor_controller.js"), "utf8"))
+const source = (await loadPackageSource("packages/editor-runtime/src/controllers/visual_editor_controller.ts"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { DocumentEditor } from "@elef/client"', `import { DocumentEditor } from "${clientStubUrl}"`)
   .replace(/^import \{[^}]*\} from "..\/lib\/editor_controller_lookup.js";?$/m, "const editorFor = () => null")

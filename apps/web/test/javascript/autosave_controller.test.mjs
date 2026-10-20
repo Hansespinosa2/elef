@@ -1,9 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
 const workSessionUrl = import.meta.resolve("@elef/client")
-const conflictDialogSource = await readFile(new URL("../../../../packages/editor-runtime/dist/lib/conflict_dialog.js", import.meta.url), "utf8")
+const conflictDialogSource = await loadPackageSource("packages/editor-runtime/src/lib/conflict_dialog.ts")
 const conflictDialogUrl = `data:text/javascript;base64,${Buffer.from(conflictDialogSource).toString("base64")}`
 const source = (await readFile(new URL("../../app/javascript/controllers/autosave_controller.js", import.meta.url), "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")

@@ -1,8 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
-const source = await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/mermaid_syntax.js", import.meta.url), "utf8")
+const source = await loadPackageSource("packages/editor-runtime/src/controllers/mermaid_syntax.ts")
 const mermaid = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 function applyEdit(source, edit) {

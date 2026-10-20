@@ -1,18 +1,19 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
-const distControllers = new URL("../../../../packages/editor-runtime/dist/controllers/", import.meta.url)
-const syntaxUrl = new URL("mermaid_syntax.js", distControllers).href
-const visualAssistSource = await readFile(new URL("../../../../packages/editor-runtime/dist/lib/visual_assist.js", import.meta.url), "utf8")
-const controllerSource = (await readFile(new URL("mermaid_assist_controller.js", distControllers), "utf8"))
+// mermaid_syntax.ts is import-free, so the assist suite inlines the real
+// module source exactly as it inlines visual_assist below.
+const mermaidSyntaxSource = await loadPackageSource("packages/editor-runtime/src/controllers/mermaid_syntax.ts")
+const visualAssistSource = await loadPackageSource("packages/editor-runtime/src/lib/visual_assist.ts")
+const controllerSource = (await loadPackageSource("packages/editor-runtime/src/controllers/mermaid_assist_controller.ts"))
   .replace('import { Controller } from "@hotwired/stimulus";', "class Controller {}")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js";', "const editorFor = () => null")
   .replace('import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";', () => visualAssistSource)
   .replace('import { forwardEscapeToVim } from "../lib/vim_escape.js";', "const forwardEscapeToVim = () => false")
   .replace(
     'import { diagramTemplate, mermaidCompletion, mermaidEnterEdit, mermaidTabEdit, MERMAID_DIAGRAMS, slashDiagramQuery } from "./mermaid_syntax.js";',
-    `import { diagramTemplate, mermaidCompletion, mermaidEnterEdit, mermaidTabEdit, MERMAID_DIAGRAMS, slashDiagramQuery } from "${syntaxUrl}";`
+    () => mermaidSyntaxSource
   )
 const mermaidAssist = await import(`data:text/javascript;base64,${Buffer.from(controllerSource).toString("base64")}`)
 

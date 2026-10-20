@@ -1,28 +1,30 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
-import path from "node:path"
-import { fileURLToPath, pathToFileURL } from "node:url"
+import { loadPackageSource } from "./package_source.mjs"
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
-const source = (await readFile(path.join(root, "packages/editor-runtime/dist/controllers/preview_controller.js"), "utf8"))
+// editor_view's transitive imports are import-free sources, so the suite
+// inlines the real modules. The cross-package sanitize seam stays stubbed;
+// attachCanvasScaling keeps resolving the real client bundle, so this file
+// stays in the dist smoke lane for that entry (see docs/development.md).
+const projectionEditabilitySource = await loadPackageSource("packages/editor-runtime/src/lib/projection_editability.ts")
+const stageMarksSource = await loadPackageSource("packages/editor-runtime/src/lib/stage_marks.ts")
+const editorViewSource = (await loadPackageSource("packages/editor-runtime/src/lib/editor_view.ts"))
+  .replace('import { sanitizePreview as installSanitizedPreview } from "@elef/client/sanitize"', "const installSanitizedPreview = (html) => html")
+  .replace('import { markProjectionBlocksReadOnly } from "./projection_editability.js"', () => projectionEditabilitySource)
+  .replace('import { markStage } from "./stage_marks.js"', () => stageMarksSource)
+const previewRequestBodySource = await loadPackageSource("packages/editor-runtime/src/lib/preview_request_body.ts")
+const source = (await loadPackageSource("packages/editor-runtime/src/controllers/preview_controller.ts"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
-  .replace(
-    'import { installPreviewHtml } from "../lib/editor_view.js"',
-    `import { installPreviewHtml } from "${pathToFileURL(path.join(root, "packages/editor-runtime/dist/lib/editor_view.js")).href}"`
-  )
-  .replace(
-    'import { buildPreviewRequestBody } from "../lib/preview_request_body.js"',
-    `import { buildPreviewRequestBody } from "${pathToFileURL(path.join(root, "packages/editor-runtime/dist/lib/preview_request_body.js")).href}"`
-  )
+  .replace('import { installPreviewHtml } from "../lib/editor_view.js"', () => editorViewSource)
+  .replace('import { buildPreviewRequestBody } from "../lib/preview_request_body.js"', () => previewRequestBodySource)
   .replace(
     'import { attachCanvasScaling } from "@elef/client"',
     `import { attachCanvasScaling } from "${import.meta.resolve("@elef/client")}"`
   )
-  .replace(
-    'import { markStage } from "../lib/stage_marks.js"',
-    "const markStage = () => {}"
-  )
+  // stage_marks arrives for real via the editor_view inline above, so the
+  // local import is dropped instead of stubbed: a second declaration would
+  // collide in the flattened module scope.
+  .replace('import { markStage } from "../lib/stage_marks.js"', "")
 const preview = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 test("preview timeout also bounds reading the JSON response body", async () => {

@@ -4,9 +4,13 @@ import test from "node:test"
 // Structural revelation helpers: markers derive from source order
 // and verify against rendered text, so any mismatch hides the marker
 // instead of showing a wrong one.
-const dist = (path) =>
-  new URL(`../../../../packages/editor-runtime/dist/${path}`, import.meta.url)
-const reveal = await import(dist("controllers/editor_reveal.js"))
+import { loadPackageSource } from "./shared/package_source.mjs"
+
+// editor_reveal.ts is import-free, so the suite runs the real module from
+// source through a data: URL instead of importing the dist file.
+const reveal = await import(
+  `data:text/javascript;base64,${Buffer.from(await loadPackageSource("packages/editor-runtime/src/controllers/editor_reveal.ts")).toString("base64")}`
+)
 
 test("heading markers include the exact hashes", () => {
   assert.equal(reveal.structuralMarkerForLine("heading", ["## Warm head"], 0, "Warm head"), "## ")

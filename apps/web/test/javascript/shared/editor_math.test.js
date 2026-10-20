@@ -1,9 +1,9 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
 import { parseHTML } from "linkedom"
+import { loadPackageSource } from "./package_source.mjs"
 
-const source = (await readFile(new URL("../../../../../packages/editor-runtime/dist/controllers/editor_math.js", import.meta.url), "utf8"))
+const source = (await loadPackageSource("packages/editor-runtime/src/controllers/editor_math.ts"))
   .replace('import { cachedKatex, loadKatex } from "../lib/katex_loader.js"', "const cachedKatex = () => ({ renderToString: () => '<span class=katex>x^2</span>' }); const loadKatex = () => Promise.resolve(cachedKatex())")
 const editorMath = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 

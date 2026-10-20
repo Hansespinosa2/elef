@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
 // Single-Escape dismissal: one Escape press closes any open fuzzy popup
 // (`:`/`/` snippet, `@`/`.` math shortcut, `/diagram` mermaid, YAML
@@ -8,10 +8,11 @@ import { readFile } from "node:fs/promises"
 // Normal mode when Vim mode is on. Previously each popup's capture-phase
 // keydown handler swallowed Escape, so Vim never saw it and authors had to
 // press Escape twice.
-const dist = (path) => new URL(`../../../../packages/editor-runtime/dist/${path}`, import.meta.url)
-
-async function loadDist(path, replacements = {}) {
-  let source = await readFile(dist(path), "utf8")
+// Suites under test transpile from editor-runtime source, so a green run
+// proves the current sources — not the last build. The drift assertion
+// below fails loudly if a source edit renames a stubbed import.
+async function loadModule(path, replacements = {}) {
+  let source = await loadPackageSource(`packages/editor-runtime/src/${path.replace(/\.js$/, ".ts")}`)
   for (const [from, to] of Object.entries(replacements)) {
     assert.ok(source.includes(from), `stub drift: ${path} no longer contains ${from}`)
     source = source.replace(from, to)
@@ -26,7 +27,7 @@ const EDITOR_FOR_STUB = "const editorFor = () => null"
 const VIM_ESCAPE_IMPORT = 'import { forwardEscapeToVim } from "../lib/vim_escape.js";'
 // Merged controllers also position popups against the visual projection;
 // inline the real helper so Escape dismissal runs its true close path.
-const visualAssistSource = await readFile(dist("lib/visual_assist.js"), "utf8")
+const visualAssistSource = await loadPackageSource("packages/editor-runtime/src/lib/visual_assist.ts")
 const VISUAL_ASSIST_6 = 'import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";'
 const VISUAL_ASSIST_LINK = 'import { mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js";'
 const VISUAL_ASSIST_MATH = 'import { assistsInMode, placeVisualCaret, projectionHostFor } from "../lib/visual_assist.js";'
@@ -77,7 +78,7 @@ function vimEditor(overrides = {}) {
 }
 
 // Real shared helper (Vim engine stubbed): proves the forward contract.
-const vimEscape = await loadDist("lib/vim_escape.js", {
+const vimEscape = await loadModule("lib/vim_escape.js", {
   'import { Vim } from "@replit/codemirror-vim";':
     "const Vim = { handleKey(...args) { globalThis.__vimHandleKeyCalls.push(args) } }\n",
 })
@@ -132,7 +133,7 @@ test("editorPopupOpen reports any visible listbox popup", () => {
   assert.equal(vimEscape.editorPopupOpen(null), false)
 })
 
-const snippet = await loadDist("controllers/snippet_palette_controller.js", {
+const snippet = await loadModule("controllers/snippet_palette_controller.js", {
   [STIMULUS_STUB]: CONTROLLER_BASE,
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   [VIM_ESCAPE_IMPORT]: "const forwardEscapeToVim = (...args) => { globalThis.__forwardEscapeCalls.push(args) }\n",
@@ -191,7 +192,7 @@ test(":/ snippet popup ends snippet stops on the same Escape", () => {
   assert.equal(globalThis.__forwardEscapeCalls.length, 1)
 })
 
-const mathShortcut = await loadDist("controllers/math_shortcut_palette_controller.js", {
+const mathShortcut = await loadModule("controllers/math_shortcut_palette_controller.js", {
   [STIMULUS_STUB]: CONTROLLER_BASE,
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   [VIM_ESCAPE_IMPORT]: "const forwardEscapeToVim = (...args) => { globalThis.__forwardEscapeCalls.push(args) }\n",
@@ -224,7 +225,7 @@ test("@/. math shortcut popup closes and forwards one Escape to Vim", () => {
   assert.deepEqual(globalThis.__forwardEscapeCalls[0], [editor, event])
 })
 
-const documentLink = await loadDist("controllers/document_link_palette_controller.js", {
+const documentLink = await loadModule("controllers/document_link_palette_controller.js", {
   [STIMULUS_STUB]: CONTROLLER_BASE,
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   [VIM_ESCAPE_IMPORT]: "const forwardEscapeToVim = (...args) => { globalThis.__forwardEscapeCalls.push(args) }\n",
@@ -250,7 +251,7 @@ test("[[ document link popup closes and forwards one Escape to Vim", () => {
   assert.deepEqual(globalThis.__forwardEscapeCalls[0], [editor, event])
 })
 
-const mermaid = await loadDist("controllers/mermaid_assist_controller.js", {
+const mermaid = await loadModule("controllers/mermaid_assist_controller.js", {
   [STIMULUS_STUB]: CONTROLLER_BASE,
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   [VIM_ESCAPE_IMPORT]: "const forwardEscapeToVim = (...args) => { globalThis.__forwardEscapeCalls.push(args) }\n",
@@ -281,7 +282,7 @@ test("/diagram mermaid popup closes and forwards one Escape to Vim", () => {
   assert.deepEqual(globalThis.__forwardEscapeCalls[0], [editor, event])
 })
 
-const metadata = await loadDist("controllers/metadata_assist_controller.js", {
+const metadata = await loadModule("controllers/metadata_assist_controller.js", {
   [STIMULUS_STUB]: CONTROLLER_BASE,
   [EDITOR_FOR]: EDITOR_FOR_STUB,
   [VIM_ESCAPE_IMPORT]: "const forwardEscapeToVim = (...args) => { globalThis.__forwardEscapeCalls.push(args) }\n",
@@ -316,7 +317,7 @@ test("YAML front-matter popup closes and forwards one Escape to Vim", () => {
 })
 
 globalThis.__vimEscape = vimEscape
-const shorthand = await loadDist("controllers/math_shorthand_controller.js", {
+const shorthand = await loadModule("controllers/math_shorthand_controller.js", {
   [STIMULUS_STUB]: CONTROLLER_BASE,
   'import { syntaxTree } from "@codemirror/language";': "const syntaxTree = (state) => state.tree\n",
   [EDITOR_FOR]: EDITOR_FOR_STUB,

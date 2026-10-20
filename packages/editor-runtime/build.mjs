@@ -1,4 +1,4 @@
-// Canonical producer of the committed packages/editor-runtime/dist/ artifacts.
+// Canonical producer of the gitignored packages/editor-runtime/dist/ artifacts.
 //
 // Two shapes from one source:
 // - The four package entries (index, preview_chrome, test_internals,
@@ -122,7 +122,7 @@ const composedResult = await esbuild.build({
 writeFileSync(composedOutput.replace(/\.js$/, ".metafile.json"), `${JSON.stringify(composedResult.metafile, null, 2)}\n`)
 
 // Keep Highlight.js's PHP whitespace template semantically intact without
-// emitting a physical tab at end-of-line in the checked-in bundle.
+// emitting a physical tab at end-of-line in the built bundle.
 const composedBundle = readFileSync(composedOutput, "utf8")
 const rawWhitespace = "[ \t\n"
 const composedOccurrences = composedBundle.split(rawWhitespace).length - 1

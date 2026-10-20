@@ -1,9 +1,9 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
-const visualAssistSource = await readFile(new URL("../../../../packages/editor-runtime/dist/lib/visual_assist.js", import.meta.url), "utf8")
-const source = (await readFile(new URL("../../../../packages/editor-runtime/dist/controllers/document_link_palette_controller.js", import.meta.url), "utf8"))
+const visualAssistSource = await loadPackageSource("packages/editor-runtime/src/lib/visual_assist.ts")
+const source = (await loadPackageSource("packages/editor-runtime/src/controllers/document_link_palette_controller.ts"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { editorFor } from "../lib/editor_controller_lookup.js"', "const editorFor = () => null")
   .replace('import { mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"', () => visualAssistSource)

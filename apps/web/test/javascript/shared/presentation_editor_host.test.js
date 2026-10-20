@@ -1,11 +1,8 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { readFile } from "node:fs/promises"
-import path from "node:path"
-import { fileURLToPath } from "node:url"
 import { parseHTML } from "linkedom"
+import { loadPackageSource } from "./package_source.mjs"
 
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
 globalThis.__presentationMounts = []
 globalThis.__editActionsMounts = []
 const clientStubUrl = `data:text/javascript;base64,${Buffer.from(`
@@ -16,7 +13,7 @@ export function mountPresentationEditor(form, options) {
   return mounted
 }
 `).toString("base64")}`
-const source = (await readFile(path.join(root, "packages/editor-runtime/dist/lib/presentation_editor_host.js"), "utf8"))
+const source = (await loadPackageSource("packages/editor-runtime/src/lib/presentation_editor_host.ts"))
   .replace(/^import \{[^}]*\} from "\.\.\/controllers\/editor_math\.js";?$/ms, "const createActiveMathSpan = () => null; const deRenderMath = () => null; const finishMathBeforeEnter = () => null")
   .replace(/^import \{[^}]*\} from "\.\.\/controllers\/editor_math\.js";?$/ms, "const handleMathClick = () => null; const recordMathMousedown = () => null; const handleMathKeydown = () => null; const syncActiveMath = () => null")
   .replace(/^import \{[^}]*\} from "\.\.\/controllers\/editor_reveal\.js";?$/ms, "const activeInlineMap = () => null; const syncActiveInline = () => null; const inlinePointForSourceOffset = () => null")
