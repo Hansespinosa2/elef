@@ -40,63 +40,17 @@ module WorkPreview
     preview_work.theme = attributes[:theme] if attributes.key?(:theme)
     preview_work.typography = attributes[:typography] if attributes.key?(:typography)
 
-    editor_projection = if params[:projection].to_s == "editor"
-      helpers.shared_editor_projection(
-        preview_work,
-        source: source.gsub(/\r\n?/, "\n"),
-        title: title.presence || preview_work.default_title
-      )
-    end
-    editor_map = editor_projection&.fetch(:editor_map) || Source::Document.editor_map(
-      source.gsub(/\r\n?/, "\n"),
-      source_name: title.presence || preview_work.default_title,
-      mode: preview_work.work_type.to_sym
+    editor_projection = helpers.shared_editor_projection(
+      preview_work,
+      source: source.gsub(/\r\n?/, "\n"),
+      title: title.presence || preview_work.default_title
     )
 
-    html = if editor_projection
-      editor_projection[:html]
-    elsif preview_work.presentation?
-      margin = preview_work.document.margin_settings
-      settings = {
-        "theme" => preview_work.theme,
-        "typography" => preview_work.typography,
-        "margin" => {
-          "section" => margin.section,
-          "subsection" => margin.subsection,
-          "footnote" => margin.footnote,
-          "slide_count" => margin.slide_count
-        }
-      }
-      if params[:projection].to_s == "editor"
-        render_to_string(
-          partial: "works/preview",
-          formats: [:html],
-          locals: { work: preview_work, editable: true, editor_map: editor_map }
-        )
-      else
-        settings["asset_owner_id"] = work.id if work.persisted?
-        asset_manifest = work.persisted? ? PresentationRelease.asset_manifest_for(work) : []
-        Presentations::RenderCache.fetch(source: source, settings: settings, asset_manifest: asset_manifest) do
-          render_to_string(
-            partial: "works/preview",
-            formats: [:html],
-            locals: { work: preview_work, editable: false, editor_map: editor_map }
-          )
-        end
-      end
-    else
-      render_to_string(
-        partial: "works/preview",
-        formats: [:html],
-        locals: { work: preview_work, editable: params[:projection].to_s == "editor", editor_map: editor_map }
-      )
-    end
-
     {
-      html: html,
-      editor_map: editor_map,
+      html: editor_projection[:html],
+      editor_map: editor_projection[:editor_map],
       style: { theme: preview_work.theme_override, typography: preview_work.typography_override },
-      warnings: editor_projection ? editor_projection[:warnings] : preview_work.preview_warnings,
+      warnings: editor_projection[:warnings],
       revision: work_preview_revision(work)
     }
   end
