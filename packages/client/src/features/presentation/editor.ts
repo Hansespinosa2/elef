@@ -15,6 +15,7 @@
 import {
   addSlide as addSlideToSource,
   blockOperationRange,
+  blockOperationStart,
   deleteSlide as deleteSlideFromSource,
   directiveLineSpan,
   exciseRanges,
@@ -25,6 +26,13 @@ import {
   parseAlignment,
   removeBlock as removeBlockFromSource
 } from "@elef/work-model/document-transforms"
+import { alignSourceOffset, alignVisibleOffset, touchesConcealedBoundary, translateProjectionInput, visibleBlockText } from "../../session/projection_input.js"
+import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
+import { updateVimNormalCaret } from "../../session/vim_caret.js"
+import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
+import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
+import { projectionRangeEdit } from "../../session/projection_range.js"
+import { paintProjectionSelections } from "../../session/projection_selections.js"
 
 export interface EditorSourceRange {
   start: number
@@ -39,6 +47,7 @@ export interface PresentationEditorBlock {
   delimiter_range?: EditorSourceRange
   position_directive_id?: string
   position?: { horizontal: string; vertical: string; vertical_explicit?: boolean }
+  empty_placeholder?: boolean
 }
 
 export interface PresentationEditorDirective {
@@ -81,26 +90,61 @@ export interface PresentationEditorMap {
 
 export interface PresentationEditorSeam {
   value: string
+  selectionStart: number
+  selectionEnd: number
+  selectionHead: number
+  selectionRangeCount: number
+  selectionRanges?: Array<{ anchor: number; head: number }>
+  vimEnabled: boolean
+  insertMode: boolean
+  editingMode: string
+  focus(): void
   inputTarget?: unknown
   commitSource?(source: string): unknown
   replaceRange(replacement: string, from: number, to: number): void
   replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
+  setSelectionRange(anchor: number, head?: number): void
+  handleVimKey(event: ProjectionKeyEvent): boolean
+  runKeymap(event: ProjectionKeyEvent): boolean
 }
 
 export interface ProjectionEvent {
   readonly target: EventTarget | null | undefined
+  readonly clientX?: number | undefined
+  readonly clientY?: number | undefined
   preventDefault(): void
 }
 
 export interface ProjectionKeyEvent {
   readonly key: string
+  readonly defaultPrevented?: boolean
   readonly target: EventTarget | null | undefined
+  readonly isComposing: boolean
+  readonly altKey: boolean
+  readonly ctrlKey: boolean
+  readonly metaKey: boolean
+  readonly shiftKey: boolean
   preventDefault(): void
+}
+
+export interface ProjectionBeforeinputEvent {
+  readonly cancelable?: boolean
+  preventDefault?(): void
+  readonly target: EventTarget | null | undefined
+  readonly inputType: string
+  readonly data?: string | null | undefined
+  readonly dataTransfer?: {
+    readonly types?: ArrayLike<string> | null | undefined
+    getData(type: string): string
+  } | null | undefined
 }
 
 export interface PresentationEditorDeps {
   syncActiveMath(element: Element | null, flush: () => void): void
+  inlinePointForSourceOffset(fragments: Element[], source: string, offset: number): [Node, number] | null
+  syncActiveInline(target: Element | null, getSource: (block: Element) => string | null, flush: () => void): void
   handleMathClick(event: ProjectionEvent, target: Element | null): boolean
+  recordMathMousedown(event: ProjectionEvent, target: Element | null): void
   handleMathKeydown(event: ProjectionKeyEvent, canvas: Element | null, flush: () => void): boolean
   moveCaretBetweenBlocks(event: ProjectionKeyEvent, canvas: Element | null): boolean
   visibleOffsetAtPoint(block: Element, node: Node | null, offset: number): number | null
@@ -149,6 +193,8 @@ interface ProjectionEdit {
 }
 
 interface ShiftableRanges {
+  id?: string | null
+  block_id?: string | null
   range?: EditorSourceRange | undefined
   source_range?: EditorSourceRange | undefined
   content_range?: EditorSourceRange | undefined
@@ -200,7 +246,8 @@ export class PresentationEditor {
   pendingProjectionEdits: Map<string, ProjectionEdit> | undefined
   activeProjectionBlock: Element | null | undefined
   lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
-  pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null } | null | undefined
+  pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null; relativeOffset?: number } | null | undefined
+  suppressProjectionInput = false
 
   constructor(form: PresentationEditorHost, options: MountPresentationEditorOptions = {}) {
     this.element = form
@@ -249,11 +296,13 @@ export class PresentationEditor {
       this.sourceInput(event)
       this.blockInput(event)
     }, true)
+    on(form, "beforeinput", (event) => this.projectionBeforeinput(event), true)
     on(form, "elef:editor-mode-change", (event) => this.applyMode(event.detail.mode))
     on(form, "elef:preview-updated", (event) => this.previewUpdated(event.detail.payload))
     on(form, "elef:preview-stale", (event) => this.previewStale(event.detail))
     on(form, "click", (event) => this.handleAction(event))
     on(form, "click", (event) => this.projectionLinkClicked(event))
+    on(form, "mousedown", (event) => this.deps.recordMathMousedown(event, this.canvas()))
     on(form, "change", (event) => {
       if (event.target?.closest?.("[data-presentation-editor-align]")) this.alignmentChanged(event)
     })
@@ -263,13 +312,28 @@ export class PresentationEditor {
     on(form, "focusout", (event) => {
       if (event.target?.closest?.("[data-editor-block-id]")) this.blockBlur(event)
     })
+    on(form, "mouseover", (event) => this.placePillForEvent(event))
+    on(form, "focusin", (event) => this.placePillForEvent(event))
     on(form, "keydown", (event) => this.blockKeydown(event), true)
     const doc = form?.ownerDocument
-    on(doc, "selectionchange", () => this.rememberProjectionCaret())
+    on(doc, "selectionchange", () => {
+      this.refreshVimNormalCaret()
+      this.rememberProjectionCaret()
+    })
+    const view = doc?.defaultView ?? null
+    on(view, "scroll", () => {
+      this.refreshVimNormalCaret()
+      this.restoreSelections()
+    }, true)
+    on(view, "resize", () => {
+      this.refreshVimNormalCaret()
+      this.restoreSelections()
+      this.placeAlignmentPills()
+    })
 
     this.editorController = this.getEditor()
     this.applyMode(form.getAttribute("data-editor-mode") || "visual")
-    this.updateBlockBoundaries()
+    this.placeAlignmentPills()
   }
 
   destroy(): void {
@@ -305,15 +369,25 @@ export class PresentationEditor {
     if (!visual) this.pendingCaretRestore = null
     this.source()?.classList.toggle("is-source-hidden", visual)
     this.syncProjectionEditability()
+    this.refreshVimNormalCaret()
+    this.restoreSelections()
+  }
+
+  refreshVimNormalCaret(): void {
+    if (!this.element) return
+    updateVimNormalCaret(this.element, this.editorController, this.canvas(), this.element.dataset.editorMode !== "source")
   }
 
   blockFocus(event: ProjectionEvent): void {
     this.activeProjectionBlock = (event.target as Element).closest("[data-editor-block-id]")
     this.element.dataset.editorProjectionActive = "true"
+    this.refreshVimNormalCaret()
   }
 
   blockBlur(_event: ProjectionEvent): void {
+    this.refreshVimNormalCaret()
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     this.flushPendingProjectionEdits()
     this.activeProjectionBlock = null
     delete this.element.dataset.editorProjectionActive
@@ -322,15 +396,160 @@ export class PresentationEditor {
 
   projectionLinkClicked(event: ProjectionEvent): void {
     if (this.deps.handleMathClick(event, this.canvas())) return
-    this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
     const link = (event.target as Element).closest?.(".editor-projection [contenteditable='true'] a")
+    const editable = link?.closest("[contenteditable='true']") as HTMLElement | null
+    this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     if (!link) return
 
     event.preventDefault()
-    ;(link.closest("[contenteditable='true']") as HTMLElement | null)?.focus()
+    editable?.focus({ preventScroll: true })
+  }
+
+  // Precise-intent leg, shared with the document editor: caret-local
+  // plain-text intents commit exact source transactions immediately, so
+  // history and Vim observe real edits. The native mutation still proceeds
+  // and the pending flush reconciles, which also covers any batch the
+  // precise path declines.
+  projectionBeforeinput(event: ProjectionBeforeinputEvent): void {
+    // A set-but-unfired flag from a previous cycle is stale (its input was
+    // cancelled); each cycle re-arms only when it commits precisely below.
+    // beforeinput/input pairs never interleave, so clearing here cannot
+    // steal a live suppression.
+    this.suppressProjectionInput = false
+    const editor = this.editorController
+    if (!editor || this.updatingSource) return
+    const block = (event.target as Element | null | undefined)?.closest?.("[data-editor-block-id]") as HTMLElement | null | undefined
+    const canvas = this.canvas()
+    if (!block || !canvas?.contains(block)) return
+    if (block.contentEditable !== "true") return
+    const region = this.regionForBlock(block.dataset.editorBlockId)
+    if (!region) return
+    const selection = this.getSelection()
+    if (!selection?.anchorNode || !selection.focusNode) return
+    const ranged = projectionRangeEdit(event, canvas, selection, (endpoint, node, offset) => {
+      if (this.pendingProjectionEdits?.size) this.flushPendingProjectionEdits()
+      const endpointRegion = this.regionForBlock(endpoint.dataset.editorBlockId)
+      if (!endpointRegion) return null
+      const visible = this.deps.visibleOffsetAtPoint(endpoint, node, offset)
+      if (visible === null) return null
+      const slice = editor.value.slice(endpointRegion.content_range.start, endpointRegion.content_range.end)
+      const relative = alignVisibleOffset(slice, visibleBlockText(endpoint), visible)
+        ?? this.deps.sourceOffsetForVisibleOffset(slice, visible)
+      return endpointRegion.content_range.start + relative
+    })
+    if (ranged) {
+      event.preventDefault?.()
+      this.pendingCaretRestore = { sourceOffset: ranged.from + ranged.insert.length, preferredBlockId: null }
+      editor.replaceRange(ranged.insert, ranged.from, ranged.to)
+      ;(this.activeElement() as HTMLElement | null)?.blur()
+      return
+    }
+    if (this.pendingProjectionEdits?.size) return
+    const endpointBlock = (node: Node): Element | null => {
+      const element = (node.nodeType === this.Node.ELEMENT_NODE ? node : (node as ChildNode).parentElement) as Element | null
+      return element?.closest?.("[data-editor-block-id]") ?? null
+    }
+    if (endpointBlock(selection.anchorNode) !== block || endpointBlock(selection.focusNode) !== block) return
+    const anchorVisible = this.deps.visibleOffsetAtPoint(block, selection.anchorNode, selection.anchorOffset)
+    const focusVisible = this.deps.visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
+    if (anchorVisible === null || focusVisible === null) return
+    const transferTypes = Array.from(event.dataTransfer?.types ?? [])
+    let transferText: string | null = null
+    if (transferTypes.includes("text/plain")) {
+      try {
+        transferText = event.dataTransfer?.getData("text/plain") ?? null
+      } catch {
+        transferText = null
+      }
+    }
+    // Edits fully inside an active display span commit by identity from
+    // the verified match: the span shows literal (possibly multiline)
+    // source, and the newline-blind map cannot express empty-line
+    // carets. Raw in-span offsets count newlines, so the middle body
+    // line maps exactly. Unpaired spans decline to legacy.
+    const activeDisplay = activeDisplayMathForNodes(selection.anchorNode, selection.focusNode)
+    if (activeDisplay) {
+      const displaySlice = editor.value.slice(region.content_range.start, region.content_range.end)
+      const displayMatch = mathMatchForSpan([block], displaySlice, activeDisplay)
+      const anchorRaw = displayMatch ? this.deps.visibleOffsetAtPoint(activeDisplay, selection.anchorNode, selection.anchorOffset) : null
+      const focusRaw = displayMatch ? this.deps.visibleOffsetAtPoint(activeDisplay, selection.focusNode, selection.focusOffset) : null
+      if (!displayMatch || anchorRaw === null || focusRaw === null) return
+      const displayEdit = translateProjectionInput({
+        inputType: event.inputType,
+        data: event.data ?? null,
+        transferText,
+        transferHasHtml: transferTypes.includes("text/html"),
+        anchorVisible: anchorRaw,
+        focusVisible: focusRaw,
+        kind: region.kind ?? "paragraph"
+      }, activeDisplay.textContent ?? "")
+      const spanLength = (activeDisplay.textContent ?? "").length
+      if (!displayEdit || displayEdit.fromVisible < 0 || displayEdit.toVisible > spanLength) return
+      const displayFrom = region.content_range.start + displayMatch.start + displayEdit.fromVisible
+      const displayTo = region.content_range.start + displayMatch.start + displayEdit.toVisible
+      this.shiftMapAfterEdit(displayFrom, displayTo, displayEdit.insert.length, region.block_id)
+      editor.replaceRange(displayEdit.insert, displayFrom, displayTo)
+      this.suppressProjectionInput = true
+      return
+    }
+    const visibleText = visibleBlockText(block)
+    const edit = translateProjectionInput({
+      inputType: event.inputType,
+      data: event.data ?? null,
+      transferText,
+      transferHasHtml: transferTypes.includes("text/html"),
+      anchorVisible,
+      focusVisible,
+      kind: region.kind ?? "paragraph"
+    }, visibleText)
+    if (!edit) return
+    const slice = editor.value.slice(region.content_range.start, region.content_range.end)
+    // The precise path is an optimization over a correct legacy: it runs
+    // only when the DOM and the source model agree on the block's
+    // visible text modulo whitespace the DOM never rendered (trimmed
+    // trailing spaces, folded runs not yet reinstalled). The aligner
+    // walks both texts, so it both verifies agreement and bridges lag;
+    // revealed source, collapsed directives, and rendered math diverge
+    // on non-whitespace and decline to the structure-aware legacy path.
+    // A length gate cannot prove agreement (lag shifts equal-length
+    // texts), so the aligner always maps, and the concealed check uses
+    // the same mapping (the caret map would jump the lag and decline).
+    const mapOffset = (visible: number): number | null => alignVisibleOffset(slice, visibleText, visible)
+    const mappedFrom = mapOffset(edit.fromVisible)
+    const mappedTo = mapOffset(edit.toVisible)
+    if (mappedFrom === null || mappedTo === null) return
+    if (touchesConcealedBoundary((_source, visible) => mapOffset(visible), slice, edit.fromVisible, edit.toVisible)) return
+    const from = region.content_range.start + mappedFrom
+    const to = region.content_range.start + mappedTo
+    if (region.kind !== "code") this.deps.renderInlineMath(block)
+    this.shiftMapAfterEdit(from, to, edit.insert.length, region.block_id)
+    editor.replaceRange(edit.insert, from, to)
+    // The commit above is complete and the map already shifted: the input
+    // event that follows this beforeinput must not arm a redundant
+    // pending entry, which would reconcile the (possibly whitespace-lagging)
+    // block DOM back over the just-committed source.
+    this.suppressProjectionInput = true
   }
 
   blockInput(event: ProjectionEvent): void {
+    // Engine-routed keys dispatch input to refresh the preview while the
+    // block DOM still shows the old text; reconciling it would write stale
+    // content back over the engine. Consumed first so a suppressed event
+    // never arms the flag for the next real input.
+    if (this.suppressProjectionInput) {
+      this.suppressProjectionInput = false
+      // The precise commit already landed and the native mutation just
+      // completed: render math this keystroke completed (the beforeinput
+      // render saw pre-mutation text). Render-only, no pending arm:
+      // reconciling the (possibly whitespace-lagging) DOM would write
+      // stale content back over the just-committed source.
+      const blockElement = (event.target as Element).closest?.("[data-editor-block-id]")
+      const block = this.findBlock((blockElement as HTMLElement | null)?.dataset.editorBlockId)
+      const region = this.map?.editable_regions?.find((candidate) => candidate.block_id === block?.id)
+      if (blockElement && region && region.kind !== "code") this.deps.renderInlineMath(blockElement)
+      return
+    }
     if (!this.editorController || this.updatingSource) return
     const blockElement = (event.target as Element).closest?.("[data-editor-block-id]")
     if (!blockElement || !this.canEditBlock(blockElement)) return
@@ -370,15 +589,38 @@ export class PresentationEditor {
     const editor = this.editorController
     if (!editor) return null
     const source = editor.value.slice(region.content_range.start, region.content_range.end)
+    // Active math shows literal source, but the map models math as
+    // zero-width: without this branch every in-span caret reads as the
+    // match end, corrupting the engine caret on every selection sync.
+    // Verified pairing refuses stale spans (falls through below).
+    const activeMath = container?.closest?.(".editor-math-active")
+    if (focusNode && activeMath && block) {
+      const match = mathMatchForSpan([block], source, activeMath)
+      if (match) {
+        const offset = this.deps.visibleOffsetAtPoint(activeMath, focusNode, selection?.focusOffset ?? 0)
+        if (offset !== null) {
+          return { blockId: current.blockId ?? "", sourceOffset: region.content_range.start + match.start + offset }
+        }
+      }
+    }
+    // DOM-grounded read first (same rationale as the document editor):
+    // uncommitted whitespace the map cannot see would clamp the engine
+    // caret to the wrong boundary and corrupt the next keystroke.
+    const aligned = block && canvas?.contains(block)
+      ? alignVisibleOffset(source, visibleBlockText(block), current.visibleOffset)
+      : null
     return {
       blockId: current.blockId ?? "",
-      sourceOffset: region.content_range.start + this.deps.sourceOffsetForVisibleOffset(source, current.visibleOffset)
+      sourceOffset: region.content_range.start + (aligned ?? this.deps.sourceOffsetForVisibleOffset(source, current.visibleOffset))
     }
   }
 
-  restoreCaret(sourceOffset: number, preferredBlockId: string | null = null): boolean {
+  // Pure source-to-DOM point mapping shared by collapsed and ranged
+  // restores; unmappable offsets return null so callers degrade to the
+  // collapsed head. No focus, selection, or pending side effects.
+  selectionPointForSourceOffset(sourceOffset: number, preferredBlockId: string | null = null): { element: HTMLElement; node: Node; offset: number; visibleOffset: number; blockId: string } | null {
     const canvas = this.canvas()
-    if (!canvas || !this.editorController) return false
+    if (!canvas || !this.editorController) return null
     const regions = this.allRegions().filter((region) => region.editable)
     const region = regions.find((candidate) => candidate.block_id === preferredBlockId) ||
       regions.find((candidate) => sourceOffset >= candidate.content_range.start && sourceOffset <= candidate.content_range.end) ||
@@ -388,22 +630,103 @@ export class PresentationEditor {
         const closestDistance = Math.min(Math.abs(sourceOffset - closest.content_range.start), Math.abs(sourceOffset - closest.content_range.end))
         return distance < closestDistance ? candidate : closest
       }, null as PresentationEditorRegion | null)
-    if (!region) return false
+    if (!region) return null
 
     const block = [...canvas.querySelectorAll("[data-editor-block-id]")]
       .find((candidate) => (candidate as HTMLElement).dataset.editorBlockId === region.block_id)
-    if (!block) return false
-    if ((block as HTMLElement).contentEditable !== "true") {
+    if (!block) return null
+    const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
+    // Math END boundaries bypass the map: it models math as zero-width,
+    // so at block end (or inside an active span, which shows source) the
+    // mapped point lands before the atom instead of after it. Verified
+    // pairing refuses stale spans and falls through to the map below.
+    const mathPoint = mathEndPlacement([block], source, sourceOffset - region.content_range.start)
+    if (mathPoint) {
+      const visibleOffset = this.deps.visibleOffsetAtPoint(block, mathPoint.node, mathPoint.offset)
+        ?? this.deps.visibleOffsetForSourceOffset(source, sourceOffset - region.content_range.start)
+      return { element: block as HTMLElement, node: mathPoint.node, offset: mathPoint.offset, visibleOffset, blockId: region.block_id ?? "" }
+    }
+    // DOM-grounded placement first: the block DOM can lead the engine by
+    // whitespace the source trimmed (a just-typed edge space), which the
+    // canonical map cannot see. The aligner declines concealed syntax
+    // and missing text, which fall back to the map.
+    const relative = sourceOffset - region.content_range.start
+    const visibleOffset = alignSourceOffset(source, visibleBlockText(block), relative)
+      ?? this.deps.visibleOffsetForSourceOffset(source, relative)
+    const point = this.deps.pointAtVisibleOffset(block, visibleOffset)
+    return { element: block as HTMLElement, node: point[0], offset: point[1], visibleOffset, blockId: region.block_id ?? "" }
+  }
+
+  restoreCaret(sourceOffset: number, preferredBlockId: string | null = null): boolean {
+    const canvas = this.canvas()
+    if (!canvas || !this.editorController) return false
+    const point = this.selectionPointForSourceOffset(sourceOffset, preferredBlockId)
+    if (!point) return false
+    if (point.element.contentEditable !== "true") {
       if (this.isProjectionFresh() === false) this.pendingCaretRestore = { sourceOffset, preferredBlockId }
       return false
     }
-    const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
-    const visibleOffset = this.deps.visibleOffsetForSourceOffset(source, sourceOffset - region.content_range.start)
-    const point = this.deps.pointAtVisibleOffset(block, visibleOffset)
-    ;(block as HTMLElement).focus({ preventScroll: true })
-    this.getSelection()?.setPosition(point[0], point[1])
-    this.lastProjectionCaret = { blockId: region.block_id ?? "", visibleOffset }
+    const region = this.allRegions().find((candidate) => candidate.block_id === point.blockId)
+    const inlinePoint = region ? this.deps.inlinePointForSourceOffset(
+      [point.element],
+      this.editorController.value.slice(region.content_range.start, region.content_range.end),
+      sourceOffset - region.content_range.start,
+    ) : null
+    point.element.focus({ preventScroll: true })
+    this.getSelection()?.setPosition(inlinePoint?.[0] ?? point.node, inlinePoint?.[1] ?? point.offset)
+    this.lastProjectionCaret = { blockId: point.blockId, visibleOffset: point.visibleOffset }
     return true
+  }
+
+  // Paints a ranged engine selection (Vim visual) on the rendered slide
+  // text; either end unmappable or uneditable aborts (the collapsed head
+  // placed first still shows).
+  restoreSelection(anchorSourceOffset: number, headSourceOffset: number, preferredBlockId: string | null = null): boolean {
+    const canvas = this.canvas()
+    if (!canvas || !this.editorController) return false
+    const anchor = this.selectionPointForSourceOffset(anchorSourceOffset, preferredBlockId)
+    const head = this.selectionPointForSourceOffset(headSourceOffset, preferredBlockId)
+    if (!anchor || !head) return false
+    if (anchor.element.contentEditable !== "true" || head.element.contentEditable !== "true") return false
+    head.element.focus({ preventScroll: true })
+    this.getSelection()?.setBaseAndExtent(anchor.node, anchor.offset, head.node, head.offset)
+    this.lastProjectionCaret = { blockId: head.blockId, visibleOffset: head.visibleOffset }
+    this.deps.syncActiveMath(canvas, () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(canvas, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
+    return true
+  }
+
+  // Repaints every engine selection range on the rendered slide text (see
+  // the document editor for the contract): the native selection owns the
+  // primary range, the overlay paints the rest, and a single range clears
+  // the layer. Ends map through the caret point machinery individually.
+  restoreSelections(): void {
+    const canvas = this.canvas()
+    const editor = this.editorController
+    if (!canvas || !editor) return
+    if (this.element.dataset.editorMode === "source") {
+      paintProjectionSelections(canvas, [], () => null)
+      return
+    }
+    paintProjectionSelections(canvas, editor.selectionRanges ?? [], (sourceOffset) => {
+      const point = this.selectionPointForSourceOffset(sourceOffset)
+      return point ? { node: point.node, offset: point.offset } : null
+    })
+  }
+
+  // Visual assist pipeline (session/projection_assist): shared with the
+  // document editor; the canvas is this projection's root.
+  applyVisualAssistInsert(edit: AssistInsertEdit, selection: Selection | null = this.getSelection()): boolean {
+    return applyVisualAssistInsert({
+      projectionTarget: this.canvas(),
+      allRegions: () => this.allRegions(),
+      shiftMapAfterEdit: (from, to, length, blockId) => this.shiftMapAfterEdit(from, to, length, blockId),
+      stageCaretRestore: (restore) => { this.pendingCaretRestore = restore }
+    }, edit, selection)
+  }
+
+  syncActiveMathAfterCaretMove(): void {
+    this.deps.syncActiveMath(this.canvas(), () => {})
   }
 
   flushPendingProjectionEdits(): void {
@@ -411,17 +734,40 @@ export class PresentationEditor {
     this.pendingProjectionFrame = undefined
     if (!this.pendingProjectionEdits?.size || !this.editorController) return
 
-    const edits = [...this.pendingProjectionEdits.values()].map((edit) => ({
-      ...edit,
-      replacement: this.deps.markdownForVisibleText(edit.source, this.editableText(edit.blockElement), edit.kind, edit.blockElement)
-    })).filter((edit) => edit.replacement !== edit.source)
+    const pending = [...this.pendingProjectionEdits.values()]
+    const current = this.editorController.value
+    const edits = pending.map((edit) => {
+      const region = this.regionForBlock(edit.blockId)
+      return {
+        ...edit,
+        from: region?.content_range.start ?? edit.from,
+        to: region?.content_range.end ?? edit.to,
+        replacement: this.deps.markdownForVisibleText(edit.source, this.editableText(edit.blockElement), edit.kind, edit.blockElement)
+      }
+    }).filter((edit) => {
+      const region = this.regionForBlock(edit.blockId)
+      if (!region) return false
+      // A newer source transaction (assist accept, undo, reload) committed
+      // after this entry was recorded: reconciling would write stale block
+      // content back over newer input, so discard it. Ranges always resolve
+      // against the current map, never the recorded offsets.
+      if (current.slice(region.content_range.start, region.content_range.end) !== edit.source) return false
+      return edit.replacement !== edit.source
+    })
     this.pendingProjectionEdits.clear()
     if (edits.length === 0) {
+      // Precise translator commits reconcile here: the engine already
+      // matches, but post-mutation math still needs its live render
+      // (the beforeinput render saw pre-mutation text).
+      pending.forEach((edit) => {
+        if (edit.kind !== "code") this.deps.renderInlineMath(edit.blockElement)
+      })
       if (this.operationPending && this.isProjectionFresh() !== false) {
         this.operationPending = false
         this.setControlsDisabled(false)
         this.setStatus("")
       }
+      this.syncEngineSelectionFromCaret()
       return
     }
 
@@ -431,9 +777,10 @@ export class PresentationEditor {
     const changes = edits.map((edit) => ({ from: edit.from, to: edit.to, insert: edit.replacement }))
       .sort((left, right) => left.from - right.from)
     edits.sort((left, right) => right.from - left.from).forEach((edit) => {
-      this.shiftMapAfterEdit(edit.from, edit.to, edit.replacement.length)
+      this.shiftMapAfterEdit(edit.from, edit.to, edit.replacement.length, edit.blockId)
     })
     this.editorController.replaceRanges(changes)
+    this.syncEngineSelectionFromCaret()
   }
 
   scheduleProjectionFlush(): void {
@@ -446,6 +793,7 @@ export class PresentationEditor {
 
   rememberProjectionCaret(): void {
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     const selection = this.getSelection()
     if (!selection?.focusNode) return
     const focusNode = selection.focusNode
@@ -454,15 +802,64 @@ export class PresentationEditor {
     const canvas = this.canvas()
     if (!block || !canvas?.contains(block)) return
     const visibleOffset = this.deps.visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
-    if (visibleOffset !== null) this.lastProjectionCaret = { blockId: (block as HTMLElement).dataset.editorBlockId ?? "", visibleOffset }
+    if (visibleOffset === null) return
+    this.lastProjectionCaret = { blockId: (block as HTMLElement).dataset.editorBlockId ?? "", visibleOffset }
+    if ((block as HTMLElement).contentEditable === "true") this.syncEngineSelectionFromCaret()
+  }
+
+  // Input-bridge selection leg, shared with the document editor: while an
+  // editable block carries the native caret, the engine selection tracks it,
+  // so Vim state, history context, and completion anchors follow visual
+  // editing instead of going stale. Typing paths skip here (their source is
+  // mid-edit) and sync after the flush commits; ranged drag selections stay
+  // projection-side until the drag-translation increment lands.
+  syncEngineSelectionFromCaret(): void {
+    const editor = this.editorController
+    if (!editor || this.pendingProjectionEdits?.size) return
+    // A Vim visual range lives on the engine; the projection only ever shows
+    // its head, so syncing a collapsed native caret back must not clobber it.
+    if (editor.vimEnabled && !editor.insertMode && editor.selectionStart !== editor.selectionEnd) return
+    const selection = this.getSelection()
+    if (!selection?.isCollapsed || !selection.focusNode) return
+    const focusNode = selection.focusNode
+    const node = (focusNode.nodeType === this.Node.ELEMENT_NODE ? focusNode : focusNode.parentElement) as Element | null
+    const block = node?.closest?.("[data-editor-block-id]")
+    const canvas = this.canvas()
+    if (!block || !canvas?.contains(block)) return
+    if ((block as HTMLElement).contentEditable !== "true") return
+    const caret = this.captureCaret()
+    if (!caret) return
+    if (editor.selectionStart === caret.sourceOffset && editor.selectionEnd === caret.sourceOffset) return
+    editor.setSelectionRange(caret.sourceOffset, caret.sourceOffset)
+  }
+
+  // Routes visual-mode keys through the live Vim machinery when Vim is
+  // Shared visual key routing (session/projection_keys); documents and
+  // presentations execute identical behavior through these delegates.
+  routeVimKey(event: ProjectionKeyEvent, blockElement: Element): boolean {
+    return routeProjectionVimKey(this, event, blockElement)
+  }
+
+  routeKeymapKey(event: ProjectionKeyEvent, blockElement: Element): boolean {
+    return routeProjectionKeymapKey(this, event, blockElement)
   }
 
   blockKeydown(event: ProjectionKeyEvent): void {
+    if (event.defaultPrevented) return
     if (this.pendingProjectionFrame || this.pendingProjectionEdits?.size) {
       this.flushPendingProjectionEdits()
     }
+    const keyBlock = (event.target as Element | null | undefined)?.closest?.("[data-editor-block-id]")
+    const keyCanvas = this.canvas()
+    if (keyBlock && keyCanvas?.contains(keyBlock) && this.routeVimKey(event, keyBlock)) return
     if (this.deps.handleMathKeydown(event, this.canvas(), () => this.flushPendingProjectionEdits())) return
     if (this.deps.moveCaretBetweenBlocks(event, this.canvas())) return
+    if (keyBlock && keyCanvas?.contains(keyBlock) && this.moveBlockWithKeyboard(event)) return
+    if (keyBlock && keyCanvas?.contains(keyBlock) && this.routeKeymapKey(event, keyBlock)) return
+    if (event.key === "Enter" && !event.shiftKey) {
+      this.enterAtBlockEnd(event)
+      return
+    }
     if (!["Backspace", "Delete"].includes(event.key)) return
 
     const selection = this.getSelection()
@@ -492,12 +889,48 @@ export class PresentationEditor {
     if (updated !== source) this.replaceSource(updated)
   }
 
+  // Enter at the end of a plain paragraph or heading opens a new
+  // empty block below (mid-block Enter already splits through the
+  // native path, and lists/quotes/code keep their own flows). Without
+  // this the trailing empty paragraph trims away and Enter looks dead.
+  enterAtBlockEnd(event: ProjectionKeyEvent): void {
+    const selection = this.getSelection()
+    if (!selection?.isCollapsed) return
+    const focusNode = selection.focusNode
+    const node = focusNode
+      ? (focusNode.nodeType === this.Node.ELEMENT_NODE ? focusNode : focusNode.parentElement) as Element | null
+      : null
+    const blockElement = node?.closest?.("[data-editor-block-id][contenteditable='true']")
+    const canvas = this.canvas()
+    if (!blockElement || !canvas?.contains(blockElement) || !this.editorController) return
+    const blockId = (blockElement as HTMLElement).dataset.editorBlockId
+    const region = this.regionForBlock(blockId)
+    if (!region || !["paragraph", "heading"].includes(region.kind ?? "")) return
+    const caret = this.deps.visibleOffsetAtPoint(blockElement, selection.focusNode, selection.focusOffset) ?? 0
+    if (caret < visibleBlockText(blockElement).length) return
+
+    event.preventDefault()
+    this.flushPendingProjectionEdits()
+    const source = this.sourceValue()
+    const contentStart = region.content_range.start
+    const contentEnd = region.content_range.end
+    const before = source.slice(contentStart, contentEnd).replace(/[ \t]+$/, "")
+    const updated = source.slice(0, contentStart) + before + "\n\n" + source.slice(contentEnd)
+    if (updated === source) return
+    this.pendingCaretRestore = { sourceOffset: contentStart + before.length + 2, preferredBlockId: null }
+    this.replaceSource(updated)
+    // Preview installs hold while an editable has focus; yield it so the
+    // new block installs and the pending restore lands the caret there.
+    ;(blockElement as HTMLElement).blur()
+  }
+
   alignmentChanged(event: ProjectionEvent): void {
     if (this.element.dataset.editorMode === "source") return
     const select = (event.target as Element).closest("[data-presentation-editor-align]") as HTMLSelectElement
     if (!this.editorController || !this.map) return
 
     this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+    this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     this.flushPendingProjectionEdits()
 
     const source = this.sourceValue()
@@ -630,11 +1063,12 @@ export class PresentationEditor {
     event.preventDefault()
     const action = control.dataset.presentationEditorAction
     const slideIndex = Number(control.dataset.slideIndex)
-    const blockIndex = Number(control.dataset.blockIndex)
 
     if (action === "delete-slide" && !this.confirm("Delete this slide?")) return
-    if (action === "delete-block" && !this.confirm("Delete this block?")) return
 
+    // Slide actions only: per-block buttons are gone (keyboard + the
+    // Edit-actions menu own block structure), so block actions below run
+    // through applyVisualBlockAction/moveCaretBlock instead of clicks.
     switch (action) {
       case "add-slide-after":
         this.addSlide(slideIndex + 1)
@@ -648,21 +1082,114 @@ export class PresentationEditor {
       case "move-slide-down":
         this.moveSlide(slideIndex, slideIndex + 1)
         break
-      case "add-block-after":
-        this.addBlock(slideIndex, blockIndex + 1)
-        break
-      case "delete-block":
-        this.deleteBlock(slideIndex, blockIndex)
-        break
-      case "move-block-up":
-        this.moveBlock(slideIndex, blockIndex, blockIndex - 1)
-        break
-      case "move-block-down":
-        this.moveBlock(slideIndex, blockIndex, blockIndex + 1)
-        break
       default:
         break
     }
+  }
+
+  // Shared Edit-actions menu entry point: runs a block structure action
+  // against the caret's block. Creation and deletion restore the caret to
+  // the action site on the fresh preview; moves share the caret-following
+  // Alt+Arrow path so repeated moves keep working from the menu.
+  applyVisualBlockAction(action: "add-block-after" | "delete-block" | "move-block-up" | "move-block-down"): boolean {
+    if (action === "move-block-up" || action === "move-block-down") {
+      return this.moveCaretBlock(action === "move-block-up" ? -1 : 1)
+    }
+    if (this.element.dataset.editorMode === "source" || !this.canOperateOnProjection()) return false
+    const caret = this.captureCaret()
+    const located = caret && this.locateBlock(caret.blockId)
+    const slide = located && this.map?.slides?.[located.slideIndex]
+    const block = located?.block
+    if (!slide || !block) return false
+    const blocks = slide.blocks ?? []
+    const blockIndex = blocks.indexOf(block)
+    if (blockIndex === -1) return false
+    // The menu runs on a prevented mousedown (no blur), so flush
+    // in-flight keystrokes first: replaceSource commits the engine value
+    // and would otherwise drop them.
+    this.flushPendingProjectionEdits()
+    const source = this.sourceValue()
+
+    if (action === "add-block-after") {
+      const target = blocks[blockIndex + 1]
+      // Mirror insertBlock's insertion point so the caret lands at the
+      // start of the inserted "New block" text on the fresh preview.
+      const slideRange = slide.range
+      if (!slideRange) return false
+      const insertion = target ? blockOperationStart(slide, target) : slideRange.end
+      const updated = insertBlockInSource(source, slide, blockIndex + 1)
+      if (updated === null) return false
+      let caretOffset = insertion
+      if (!target) {
+        const before = source.slice(0, insertion)
+        caretOffset = insertion + (before.trim() === "" ? 0 : before.endsWith("\n") ? 1 : 2)
+      }
+      this.pendingCaretRestore = { sourceOffset: caretOffset, preferredBlockId: null }
+      this.replaceSource(updated)
+      return true
+    }
+    if (action === "delete-block") {
+      if (!this.confirm("Delete this block?")) return false
+      const span = blockOperationRange(block, slide)
+      const updated = removeBlockFromSource(source, slide, block)
+      if (updated === null) return false
+      // Post-delete the offset is a gap boundary; nearest-region
+      // resolution lands the caret at the end of the previous block.
+      if (span) this.pendingCaretRestore = { sourceOffset: span.from, preferredBlockId: null }
+      this.replaceSource(updated)
+      return true
+    }
+    return false
+  }
+
+  moveBlockWithKeyboard(event: ProjectionKeyEvent): boolean {
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return false
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return false
+    const caret = this.captureCaret()
+    const located = caret && this.locateBlock(caret.blockId)
+    // Placeless keys stay with the engine; inside a block Alt always means
+    // the block move, so busy/boundary presses swallow instead of flipping
+    // to linewise mid-gesture (a stale-map linewise move would corrupt).
+    if (!located || !located.block) return false
+    event.preventDefault()
+    this.moveCaretBlock(event.key === "ArrowUp" ? -1 : 1)
+    return true
+  }
+
+  // Blockwise Alt+ArrowUp/Down (and the menu move rows): swaps the caret's
+  // block with its neighbor through the shared move op. Visual
+  // presentations move whole blocks where source mode moves lines — each
+  // mode's Alt matches its editing unit, like Enter splits blocks here and
+  // inserts newlines there. Refusals (stale map, empty placeholders,
+  // boundaries) return false; the keyboard path swallows those inside a
+  // block and the menu surfaces them as a no-op.
+  moveCaretBlock(delta: -1 | 1): boolean {
+    if (this.element.dataset.editorMode === "source" || !this.canOperateOnProjection()) return false
+    const caret = this.captureCaret()
+    if (!caret) return false
+    const located = this.locateBlock(caret.blockId)
+    const slide = located && this.map?.slides?.[located.slideIndex]
+    const block = located?.block
+    if (!slide || !block || block.empty_placeholder) return false
+    const blocks = slide.blocks ?? []
+    const blockIndex = blocks.indexOf(block)
+    const neighbor = blocks[blockIndex + delta]
+    if (blockIndex === -1 || !neighbor || neighbor.empty_placeholder) return false
+    this.flushPendingProjectionEdits()
+    const region = this.regionForBlock(block.id)
+    const relative = region ? caret.sourceOffset - region.content_range.start : 0
+    const updated = moveBlockInSource(this.sourceValue(), slide, blockIndex, blockIndex + delta)
+    if (updated === null) return false
+    // Numbered block ids are dense among non-empty blocks, so an adjacent
+    // swap hands the moved block its neighbor's id; the pending restore
+    // resolves the preserved relative caret against the fresh map.
+    this.pendingCaretRestore = { sourceOffset: 0, preferredBlockId: neighbor.id, relativeOffset: Math.max(0, relative) }
+    this.replaceSource(updated)
+    // Release the focus-held preview so the reorder installs (Enter splits
+    // do the same); the staged restore returns focus to the moved block.
+    const active = this.element.ownerDocument?.activeElement as HTMLElement | null
+    if (active && typeof active.blur === "function" && this.canvas()?.contains(active)) active.blur()
+    return true
   }
 
   addSlide(index: number): void {
@@ -712,7 +1239,7 @@ export class PresentationEditor {
     this.map = payload.editor_map
     this.operationPending = false
     if (wasPending) this.setControlsDisabled(false)
-    this.updateBlockBoundaries()
+    this.placeAlignmentPills()
     this.syncProjectionEditability()
     this.setStatus("")
     this.restorePendingCaret()
@@ -722,6 +1249,16 @@ export class PresentationEditor {
     if (!this.isMapSynchronized()) {
       this.operationPending = true
       this.setControlsDisabled(true)
+    }
+    // T1 fast path (mirrors DocumentEditor.previewStale): while a
+    // source-editable projection block holds DOM focus, only that block's
+    // editability is observable — the blur reinstall re-syncs the rest.
+    const active = this.activeElement()?.closest?.("[data-editor-block-id]") as HTMLElement | null | undefined
+    if (this.element.dataset.editorMode !== "source" && active && this.canvas()?.contains(active) &&
+        active.dataset.editorSourceEditable !== "false") {
+      const label = active.classList.contains("slide-title") ? "Editable slide title" : "Editable slide block"
+      this.deps.setProjectionBlockEditable(active, true, label)
+      return
     }
     this.syncProjectionEditability({ preserveActive: detail.preserveActive })
   }
@@ -774,26 +1311,36 @@ export class PresentationEditor {
     this.setControlsDisabled(true)
   }
 
-  shiftMapAfterEdit(from: number, to: number, replacementLength: number): void {
+  shiftMapAfterEdit(from: number, to: number, replacementLength: number, editedBlockId: string | null = null): void {
     if (!this.map) return
 
     const delta = replacementLength - (to - from)
-    const shiftRange = (range: EditorSourceRange | null | undefined): void => {
+    const shiftRange = (range: EditorSourceRange | null | undefined, editedBlock: boolean): void => {
       if (!range) return
-      const shiftPosition = (position: number): number => {
+      const shiftStart = (position: number): number => {
+        if (position === from && editedBlock) return position
         if (position <= from) return position
         if (position >= to) return position + delta
-        return from + replacementLength
+        return from
       }
-      range.start = shiftPosition(range.start)
-      range.end = Math.max(range.start, shiftPosition(range.end))
+      const shiftEnd = (position: number): number => {
+        if (from === to && position === from) return editedBlock ? from + replacementLength : position
+        if (position <= from) return position
+        if (position >= to) return position + delta
+        return editedBlock ? from + replacementLength : from
+      }
+      range.start = shiftStart(range.start)
+      range.end = Math.max(range.start, shiftEnd(range.end))
     }
+    const shifted = new Set<object>()
     const shiftObject = (object: ShiftableRanges | null | undefined): void => {
-      if (!object) return
-      shiftRange(object.range)
-      shiftRange(object.source_range)
-      shiftRange(object.content_range)
-      shiftRange(object.delimiter_range)
+      if (!object || shifted.has(object)) return
+      shifted.add(object)
+      const editedBlock = object.id === editedBlockId || object.block_id === editedBlockId
+      shiftRange(object.range, editedBlock)
+      shiftRange(object.source_range, editedBlock)
+      shiftRange(object.content_range, editedBlock)
+      shiftRange(object.delimiter_range, editedBlock)
     }
 
     this.map.source_length = Number(this.map.source_length || 0) + delta
@@ -847,34 +1394,54 @@ export class PresentationEditor {
     return this.allRegions().find((region) => region.block_id === blockId) || null
   }
 
+  inlineRevealSource(block: Element): string | null {
+    const blockId = (block as HTMLElement).dataset.editorBlockId
+    const region = this.regionForBlock(blockId)
+    const editor = this.editorController
+    if (!region?.content_range || !editor) return null
+    // Table and image blocks route to dedicated differs without
+    // inline-reveal projection. Fenced code keeps its source: inline
+    // pairing safe-refuses inside pre (elements excluded), while the
+    // structural pass needs the source for fence delimiters.
+    if (["table", "image"].includes(region.kind ?? "")) return null
+    // Heading regions exclude the marker prefix; extend to the block
+    // start so structural markers resolve (leading # never tokenizes,
+    // so inline pairing is unaffected).
+    if (region.kind === "heading") {
+      const start = this.findBlock(blockId)?.range.start
+      if (typeof start === "number" && start < region.content_range.start) {
+        return editor.value.slice(start, region.content_range.end)
+      }
+    }
+    return editor.value.slice(region.content_range.start, region.content_range.end)
+  }
+
   restorePendingCaret(): void {
     const pending = this.pendingCaretRestore
     if (!pending || this.element.dataset.editorMode !== "visual") return
     this.pendingCaretRestore = null
-    this.scheduleFrame(() => this.restoreCaret(pending.sourceOffset, pending.preferredBlockId))
-  }
-
-  updateBlockBoundaries(): void {
-    ;([...this.element.querySelectorAll('[data-presentation-editor-action="move-block-up"], [data-presentation-editor-action="move-block-down"]')] as Array<HTMLButtonElement>).forEach((control) => {
-      const slide = this.map?.slides?.[Number(control.dataset.slideIndex)]
-      const index = Number(control.dataset.blockIndex)
-      const delta = control.dataset.presentationEditorAction === "move-block-up" ? -1 : 1
-      const neighbor = slide?.blocks?.[index + delta]
-      const block = slide?.blocks?.[index]
-      const disabled = !neighbor || !block
-
-      if (disabled) {
-        if (control.dataset.editorBoundaryDisabled !== "true") control.dataset.editorBoundaryDisabled = "true"
-        if (!control.disabled) control.disabled = true
-      } else {
-        if (control.dataset.editorBoundaryDisabled !== undefined) delete control.dataset.editorBoundaryDisabled
-        if (control.disabled) control.disabled = false
-      }
+    let sourceOffset = pending.sourceOffset
+    const preferredBlockId = pending.preferredBlockId
+    // Block moves resolve against the fresh map: the moved block inherits
+    // its neighbor's id, and the preserved relative caret clamps into its
+    // new content range. An unresolvable id abandons the restore rather
+    // than landing the caret at an unrelated offset.
+    if (pending.relativeOffset !== undefined && preferredBlockId) {
+      const region = this.regionForBlock(preferredBlockId)
+      if (!region) return
+      const length = region.content_range.end - region.content_range.start
+      sourceOffset = region.content_range.start + Math.max(0, Math.min(pending.relativeOffset, length))
+    }
+    this.scheduleFrame(() => {
+      this.restoreCaret(sourceOffset, preferredBlockId)
+      this.restoreSelections()
     })
   }
 
   editableText(element: Element): string {
-    return ((element as HTMLElement).innerText || element.textContent || "").replace(/ /g, " ").replace(/\n+$/, "")
+    // NBSP preserved as just-typed width evidence for the differ (same
+    // contract as the document editor); canonicalized at diff time.
+    return ((element as HTMLElement).innerText || element.textContent || "").replace(/\n+$/, "")
   }
 
   readMap(): PresentationEditorMap | null {
@@ -885,6 +1452,46 @@ export class PresentationEditor {
     } catch (_error) {
       return null
     }
+  }
+
+  // Alignment-pill placement: the pill floats beside its shell (never
+  // over block text, so it cannot swallow clicks), flipping to the left
+  // side or an inside overlay when the slide edge leaves no room. Measured
+  // eagerly after every install and refreshed on hover/focus (typing grows
+  // shrink-wrapped shells), so the DOM state is always final.
+  placeAlignmentPills(): void {
+    const canvas = this.canvas()
+    if (!canvas) return
+    canvas.querySelectorAll(".slide-block-shell").forEach((shell) => this.placeAlignmentPill(shell))
+  }
+
+  placePillForEvent(event: ProjectionEvent): void {
+    const shell = (event.target as Element | null)?.closest?.(".slide-block-shell")
+    if (shell && this.canvas()?.contains(shell)) this.placeAlignmentPill(shell)
+  }
+
+  placeAlignmentPill(shell: Element): void {
+    // Shells own exactly one pill by construction (chrome + ERB partials).
+    const controls = shell.querySelector(".presentation-editor-block-controls") as HTMLElement | null
+    if (!controls) return
+    const slide = shell.closest(".slide") ?? this.canvas()
+    if (!slide || typeof shell.getBoundingClientRect !== "function") return
+    const shellRect = shell.getBoundingClientRect()
+    const slideRect = slide.getBoundingClientRect()
+    if (shellRect.width === 0 && shellRect.height === 0) return
+    // Transparent pills still lay out, so the width measures exactly.
+    const pillWidth = controls.offsetWidth || 190
+    const gap = 6
+    const pad = 4
+    const roomRight = slideRect.right - pad - (shellRect.right + gap)
+    const roomLeft = shellRect.left - gap - (slideRect.left + pad)
+    const placement = roomRight >= pillWidth ? "" : roomLeft >= pillWidth ? "pill-left" : "pill-inside"
+    const current = controls.classList.contains("pill-left")
+      ? "pill-left"
+      : controls.classList.contains("pill-inside") ? "pill-inside" : ""
+    if (current === placement) return
+    controls.classList.remove("pill-left", "pill-inside")
+    if (placement) controls.classList.add(placement)
   }
 
   setStatus(text: string): void {
@@ -901,7 +1508,7 @@ export class PresentationEditor {
         control.dataset.editorOperationPending = "true"
         control.disabled = true
       } else if (control.dataset.editorOperationPending === "true") {
-        control.disabled = control.dataset.editorOriginalDisabled === "true" || control.dataset.editorBoundaryDisabled === "true"
+        control.disabled = control.dataset.editorOriginalDisabled === "true"
         delete control.dataset.editorOperationPending
         delete control.dataset.editorOriginalDisabled
       }

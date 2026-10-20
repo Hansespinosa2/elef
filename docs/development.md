@@ -100,11 +100,8 @@ Rails system tests use Selenium in headless mode. Keep browser automation headle
 JavaScript tests run against locally built `dist/` bundles, which are never committed: build them once after checkout (and again after changing package sources), then run the suite. `bin/check quick` does not rebuild them; `bin/check affected` rebuilds every bundle first, so always run it before handoff:
 
 ~~~sh
-npm run renderer:build
-npm run build --prefix packages/client
-npm run build --prefix packages/work-model
-npm run build --prefix packages/editor-runtime
-bin/rails tailwindcss:build
+npm run build:packages
+(cd apps/web && bin/rails tailwindcss:build)
 git diff -- apps/web/app/assets/builds/tailwind.css
 ~~~
 

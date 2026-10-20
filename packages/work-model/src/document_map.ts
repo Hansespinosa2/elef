@@ -1,6 +1,30 @@
 import { ART_DIAGNOSTICS, analyzeArtList, resolveArtBindings, type ArtBindings, type ArtBoundaryMap, type ArtDiagnostic, type ArtListAnalysis } from "./art_source.js"
 import { parseAlignment } from "./document_transforms.js"
 import { slidePositionLayout } from "./slide_position_layout.js"
+import { POSITION_VOCABULARY, THEMES, TYPOGRAPHIES, initialFrontMatter, normalizeThemeValue, normalizeTypographyValue, sourceLines, type SourceLine } from "./style_vocab.js"
+
+// Style vocabulary + front-matter read/write live in style_vocab.ts
+// (dependency-free micro-entry); re-exported here so existing
+// document-map importers keep working.
+export {
+  MARGIN_SETTING_KEYS,
+  METADATA_BOOLEAN_VALUES,
+  METADATA_TOP_LEVEL_KEYS,
+  POSITION_VOCABULARY,
+  PRESENTATION_THEMES,
+  THEME_VALUES,
+  TYPOGRAPHY_VALUES,
+  buildNewWorkSource,
+  frontMatterHasKey,
+  initialFrontMatter,
+  metadataValueChoices,
+  normalizeThemeValue,
+  normalizeTypographyValue,
+  presentationTheme,
+  withAppearanceValue,
+  withFrontMatterValue
+} from "./style_vocab.js"
+export type { FrontMatter, PresentationTheme, SourceLine } from "./style_vocab.js"
 
 export interface SourceRange {
   start: number;
@@ -11,29 +35,6 @@ export interface SourcePosition {
   horizontal: string;
   vertical: string;
   vertical_explicit: boolean;
-}
-
-// Canonical align position vocabulary (F7): the host authoring-registry
-// merge derives its directive grammar from this export instead of
-// restating the word lists, and positionFromBlock below parses from it.
-export const POSITION_VOCABULARY: {
-  readonly horizontal: readonly string[];
-  readonly vertical: readonly string[];
-} = {
-  horizontal: ["left", "center", "right"],
-  vertical: ["top", "middle", "bottom"]
-};
-
-export interface SourceLine {
-  start: number;
-  end: number;
-  text: string;
-}
-
-export interface FrontMatter {
-  lines: SourceLine[];
-  closingLine: number;
-  bodyStart: number;
 }
 
 export interface MapBlockArt {
@@ -175,54 +176,6 @@ interface FenceState {
   closing: boolean;
 }
 
-const THEMES = new Set(["light", "dark", "match"])
-const TYPOGRAPHIES = new Set(["book", "modern", "technical"])
-
-// Canonical front-matter vocabulary for the metadata assist. The value lists
-// derive from the same Sets the parser/validator reads, so suggestions can
-// never drift from accepted values. Top-level keys are the user-facing
-// fields (theme, typography, show-in-margin); portable document keys
-// (elef_document_key, elef_aliases) stay system-managed and unsuggested.
-// Margin subkeys accept kebab, snake, and camel spellings at parse time;
-// the assist suggests the kebab and snake forms.
-export const THEME_VALUES: readonly string[] = [...THEMES]
-export const TYPOGRAPHY_VALUES: readonly string[] = [...TYPOGRAPHIES]
-export const METADATA_TOP_LEVEL_KEYS: readonly string[] = ["theme", "typography", "show-in-margin"]
-export const MARGIN_SETTING_KEYS: readonly string[] = ["section", "subsection", "footnote", "slide-count", "slide_count"]
-export const METADATA_BOOLEAN_VALUES: readonly string[] = ["true", "false"]
-
-export function metadataValueChoices(key: string): readonly string[] | null {
-  const normalized = String(key ?? "").trim().toLowerCase()
-  if (normalized === "theme") return THEME_VALUES
-  if (normalized === "typography") return TYPOGRAPHY_VALUES
-  const marginKey = normalized.replace(/-([a-z])/g, (_, letter: string) => `_${letter}`).replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`).replace(/^_/, "")
-  if (marginKey === "section" || marginKey === "subsection" || marginKey === "footnote" || marginKey === "slide_count") {
-    return METADATA_BOOLEAN_VALUES
-  }
-  return null
-}
-
-// Canonical presentation themes: each pairs one color mode with one font, so
-// slides render three genuinely distinct looks. Legacy front-matter/workspace
-// theme/typography values keep parsing unchanged (no migration, no rejects);
-// the slide surface derives one of these at render time. Explicit dark always
-// stays dark; otherwise typography selects the theme. Exactly 2 of the 9
-// legacy (theme, typography) pairs render pixel-identical — (match, book)
-// (the preserved Book Light default) and (dark, modern). The technical
-// pairs render the mid-tone treatment (neither legacy light nor match), and
-// dark now always pairs with the modern face. Body copy keeps legacy metrics
-// by design: hybrid pairs such as (dark, technical) render modern-dark
-// headings over technical-density (0.96em) body. Mirrored by
-// Work#presentation_theme.
-export const PRESENTATION_THEMES = ["book-light", "modern-dark", "technical-light"] as const
-export type PresentationTheme = (typeof PRESENTATION_THEMES)[number]
-
-export function presentationTheme(theme: unknown, typography: unknown): PresentationTheme {
-  if (normalizeThemeValue(theme) === "dark") return "modern-dark"
-  if (normalizeTypographyValue(typography) === "technical") return "technical-light"
-  return "book-light"
-}
-
 export function buildEditorMap(
   source: unknown,
   { sourceName = "Untitled presentation", mode = "presentation" }: { sourceName?: string; mode?: string } = {}
@@ -269,11 +222,11 @@ export function buildEditorStructure(
     const result = editorBlocks(source, range.start, range.end, metadata, index, mode, artResolution, boundaryMap)
     let blocks = result.blocks
     let regions = result.regions
-    if (mode === "document") {
-      const empty = emptyEditorBlocks(source, index, blocks)
-      blocks = [...blocks, ...empty.map(([block]) => block)].sort((left, right) => left.range.start - right.range.start)
-      regions = [...regions, ...empty.map(([, region]) => region)]
-    }
+    // Both modes edit empty paragraphs (Enter opens one): placeholders
+    // carry empty_placeholder so read-only surfaces can skip them.
+    const empty = emptyEditorBlocks(source, index, blocks)
+    blocks = [...blocks, ...empty.map(([block]) => block)].sort((left, right) => left.range.start - right.range.start)
+    regions = [...regions, ...empty.map(([, region]) => region)]
     const slideMap: MapSlide = {
       id: `slide-${index + 1}`,
       index,
@@ -317,23 +270,6 @@ export function buildEditorStructure(
   }
 }
 
-export function initialFrontMatter(source: string): FrontMatter | null {
-  const lines = sourceLines(source)
-  const first = lines[0]
-  if (!first || first.text.replace(/^\uFEFF/, "").replace(/[ \t]+$/, "") !== "---") return null
-  const closingIndex = lines.findIndex((line, index) => index > 0 && line.text.replace(/[ \t]+$/, "") === "---")
-  if (closingIndex < 0) return null
-  const metadataLines = lines.slice(1, closingIndex)
-  if (!metadataLines.some(line => /^[A-Za-z_][\w-]*\s*:/.test(line.text))) return null
-  const closing = lines[closingIndex]
-  if (!closing) return null
-  return {
-    lines,
-    closingLine: closingIndex,
-    bodyStart: closing.end
-  }
-}
-
 export function readStyle(source: string): EditorStyle {
   const frontMatter = initialFrontMatter(source)
   const read = (key: string, fallback: string, vocabulary: Set<string>): string => {
@@ -351,87 +287,6 @@ export function readStyle(source: string): EditorStyle {
     theme: read("theme", "match", THEMES),
     typography: read("typography", "book", TYPOGRAPHIES)
   }
-}
-
-// The native appearance adapter persists the same flat metadata fields as
-// Rails. Retain unrelated metadata, body bytes, and the file's line endings.
-export function withAppearanceValue(source: unknown, key: string, value: string): string {
-  const vocabulary = key === "theme" ? THEMES : key === "typography" ? TYPOGRAPHIES : null
-  if (typeof source !== "string" || !vocabulary || (value !== "" && !vocabulary.has(value))) {
-    throw new TypeError("Unsupported appearance value")
-  }
-  return withFrontMatterValue(source, key, value === "" ? null : value)
-}
-
-export function withFrontMatterValue(source: unknown, key: string, value: string | null | undefined): string {
-  if (typeof source !== "string" || typeof key !== "string" || !key) {
-    throw new TypeError("Front matter updates need source text and a key.")
-  }
-  const remove = value === null || value === undefined
-  const front = initialFrontMatter(source)
-  const ending = (line: SourceLine): string => source.slice(line.start + line.text.length, line.end)
-  const eol = front?.lines.map(ending).find(Boolean) || (source.includes("\r\n") ? "\r\n" : "\n")
-  if (!front) return remove ? source : `---${eol}${key}: ${value}${eol}---${eol}${source}`
-  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-  const matching = front.lines.slice(1, front.closingLine).find(line => new RegExp(`^\\s*${escapedKey}\\s*:`).test(line.text))
-  if (matching) {
-    const replacement = remove ? "" : `${key}: ${value}${ending(matching)}`
-    const updated = source.slice(0, matching.start) + replacement + source.slice(matching.end)
-    if (remove && front.closingLine === 2) {
-      return source.slice(front.bodyStart).replace(/^\r?\n/, "")
-    }
-    return updated
-  }
-  if (remove) return source
-  const closing = front.lines[front.closingLine]
-  if (!closing) return source
-  return source.slice(0, closing.start) + `${key}: ${value}${eol}` + source.slice(closing.start)
-}
-
-export function normalizeThemeValue(value: unknown): string {
-  return normalizeStyleValue(value, THEMES, "match")
-}
-
-// Shared new-work seed: visible YAML front matter carrying the workspace
-// theme default, mirroring Document.available_default_source and
-// Presentation.available_default_source on Rails. The web host passes its
-// workspace default; hosts without a workspace style setting (desktop)
-// omit it for the canonical "match" default. Unknown themes fall back to
-// "match" exactly like Workspace#default_theme; only kind/title misuse
-// throws.
-export function buildNewWorkSource(input: { kind: unknown; title: unknown; theme?: unknown }): string {
-  const kind = (input as { kind?: unknown } | null)?.kind
-  if (kind !== "document" && kind !== "presentation") {
-    throw new TypeError("New works need kind \"document\" or \"presentation\".")
-  }
-  const title = String((input as { title?: unknown } | null)?.title ?? "")
-    .replace(/[\r\n]/g, " ")
-    .trim()
-    .replace(/\s+/g, " ")
-  if (title === "") throw new TypeError("New works need a title.")
-  const provided = (input as { theme?: unknown } | null)?.theme
-  const theme = provided === undefined ? "match" : normalizeThemeValue(provided)
-  return `---\ntheme: ${theme}\n---\n# ${title}\n\n`
-}
-
-export function normalizeTypographyValue(value: unknown): string {
-  return normalizeStyleValue(value, TYPOGRAPHIES, "book")
-}
-
-function normalizeStyleValue(value: unknown, vocabulary: Set<string>, fallback: string): string {
-  const withoutComment = String(value ?? "").trim().replace(/\s+#.*$/, "").trim()
-  const unquoted = withoutComment.match(/^(['"])(.*)\1$/)?.[2] ?? withoutComment
-  return vocabulary.has(unquoted) ? unquoted : fallback
-}
-
-export function frontMatterHasKey(source: unknown, key: string): boolean | null {
-  if (typeof source !== "string" || typeof key !== "string" || !key) {
-    throw new TypeError("Front matter key lookup needs source text and a key.")
-  }
-  const front = initialFrontMatter(source)
-  if (!front) return null
-  const pattern = new RegExp(`^\\s*${key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*:`)
-  return front.lines.slice(1, front.closingLine).some(line => pattern.test(line.text))
 }
 
 export function readStyleOverrides(source: string): { theme: string | null; typography: string | null } {
@@ -539,7 +394,7 @@ function slideSourceRanges(source: string, bodyStart: number): SlideSourceRange[
       continue
     }
     if (mathFence) {
-      if (displayMathFenceMarker(line.text) === mathFence) mathFence = null
+      if (displayMathFenceCloser(line.text, mathFence)) mathFence = null
       continue
     }
     const openingMathFence = displayMathFenceOpener(line.text)
@@ -647,7 +502,7 @@ function editorBlocks(
     }
     if (mathFence) {
       current.push(line)
-      if (displayMathFenceMarker(line.text) === mathFence) {
+      if (displayMathFenceCloser(line.text, mathFence)) {
         mathFence = null
         if (boundaryMap.blockEnds.has(lineIndex + 1)) flush()
       }
@@ -1011,7 +866,7 @@ function parseMarginDirectives(markdown: string, context: MarginContext, sourceB
       return
     }
     if (mathFence) {
-      if (displayMathFenceMarker(line) === mathFence) mathFence = null
+      if (displayMathFenceCloser(line, mathFence)) mathFence = null
       content.push(line)
       return
     }
@@ -1327,7 +1182,7 @@ function markdownBlocks(markdown: string, artResolution: ArtBindings, sourceBoun
     else if (incoming) fence = incoming
     if (!fence && mathFence) {
       current.push(line)
-      if (displayMathFenceMarker(line) === mathFence) {
+      if (displayMathFenceCloser(line, mathFence)) {
         mathFence = null
         if (boundaryMap.blockEnds.has(index + 1)) flush()
       }
@@ -1467,10 +1322,26 @@ function displayMathFenceOpener(line: string): string | null {
   return inlineDisplayOpener && !inlineDisplayOpener[1]?.includes("$$") ? "$$" : null
 }
 
+// Mirror the renderer's inline display-math rule: once a fence is open, the
+// first unescaped closing delimiter ends the span, so `\end{aligned}$$`
+// closers (and any trailing content before `$$`) close the fence instead of
+// swallowing the rest of the document into one block.
+function displayMathFenceCloser(line: string, fence: string): boolean {
+  if (displayMathFenceMarker(line) === fence) return true
+  let index = line.indexOf(fence)
+  while (index >= 0) {
+    let slashes = 0
+    for (let cursor = index - 1; cursor >= 0 && line[cursor] === "\\"; cursor -= 1) slashes += 1
+    if (slashes % 2 === 0) return true
+    index = line.indexOf(fence, index + fence.length)
+  }
+  return false
+}
+
 function displayMathFenceSource(markdown: string): boolean {
   const lines = markdown.split(/\r\n|\r|\n/)
   const opener = displayMathFenceOpener(lines[0] ?? "")
-  return Boolean(opener && (lines.length === 1 || displayMathFenceMarker(lines.at(-1) ?? "") === opener))
+  return Boolean(opener && (lines.length === 1 || displayMathFenceCloser(lines.at(-1) ?? "", opener)))
 }
 
 function fenceMarker(line: string): FenceState | null {
@@ -1485,18 +1356,4 @@ function toggleFence(current: FenceState | null, incoming: FenceState | null): F
   if (!current) return incoming
   if (incoming && incoming.marker === current.marker && incoming.length >= current.length && incoming.closing) return null
   return current
-}
-
-function sourceLines(source: string, start = 0, end = source.length): SourceLine[] {
-  const lines: SourceLine[] = []
-  let cursor = start
-  while (cursor < end) {
-    let newline = cursor
-    while (newline < end && source[newline] !== "\n" && source[newline] !== "\r") newline += 1
-    let lineEnd = newline
-    if (newline < end) lineEnd += source[newline] === "\r" && source[newline + 1] === "\n" ? 2 : 1
-    lines.push({ start: cursor, end: lineEnd, text: source.slice(cursor, newline) })
-    cursor = lineEnd
-  }
-  return lines
 }

@@ -72,3 +72,25 @@ export function frontmatterRangeFor(source: string): { from: number; to: number 
   const match = source.match(FRONTMATTER_PATTERN)
   return match && match[0].length > 4 ? { from: 0, to: match[0].length } : null
 }
+
+// Frontmatter reveal decision for hidden metadata in source mode: unfold
+// when a folded range is entered (endpoints are inclusive because a folded
+// range exposes only its edges), refold when an auto-revealed range is left
+// entirely. Explicit visibility and visual-mode folding stay adapter-owned.
+export function frontmatterRevealAction(
+  ranges: ReadonlyArray<{ from: number; to: number }>,
+  frontmatter: { from: number; to: number } | null | undefined,
+  folded: boolean,
+  visible: boolean,
+  autoRevealed: boolean
+): "unfold" | "refold" | "none" {
+  if (!frontmatter) return "none"
+  const touches = ranges.some((range) =>
+    (range.from >= frontmatter.from && range.from <= frontmatter.to) ||
+    (range.to >= frontmatter.from && range.to <= frontmatter.to) ||
+    (range.from <= frontmatter.from && range.to >= frontmatter.to)
+  )
+  if (touches && folded) return "unfold"
+  if (!touches && !folded && !visible && autoRevealed) return "refold"
+  return "none"
+}

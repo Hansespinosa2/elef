@@ -189,7 +189,7 @@ test("the desktop host defaults to Rails' Visual mode and gates it until preview
   assert.match(application, /document\.body\.dataset\.desktopView = "editor"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "library"/)
   assert.match(application, /editor\.loadDocument\(work\.source\)[\s\S]*?editor\.setEditingMode\(desktopFeatures\.visualEditing \? "visual" : "source", \{ restoreCaret: false \}\)/)
-  const editorController = await read("packages/editor-runtime/src/controllers/editor_controller.ts")
+  const editorController = await read("packages/client/src/features/editor/engine.ts")
   assert.match(editorController, /this\.form\?\.dispatchEvent\(new CustomEvent\("elef:editor-mode-change"/)
   assert.match(application, /theme: "dark"/)
   assert.match(application, /void openWork\(target\.workId\)/)
@@ -288,7 +288,7 @@ test("Markdown appearance persistence is shared and absent from desktop orchestr
 })
 
 test("structural source operations commit through the bound session", async () => {
-  const editorController = await read("packages/editor-runtime/src/controllers/editor_controller.ts")
+  const editorController = await read("packages/client/src/features/editor/engine.ts")
   const clientEditor = await read("packages/client/src/features/presentation/editor.ts")
   const visualEditor = await read("packages/editor-runtime/src/controllers/visual_editor_controller.ts")
   const documentEditor = await read("packages/client/src/features/document/document_editor.ts")
@@ -298,9 +298,16 @@ test("structural source operations commit through the bound session", async () =
   assert.match(editorController, /commitSource\(source:/)
   assert.match(editorController, /this\.session && !this\.session\.disposed/)
   // Whole-buffer structural replacements funnel through it (direct replace
-  // survives only as the no-session fallback inside those two call sites)…
+  // survives only as the no-session fallback inside those two call sites,
+  // plus the suppress+render typing branch and the display-math positional
+  // patch)…
   assert.equal((clientEditor.match(/\.commitSource\(/g) || []).length, 2)
-  assert.equal((clientEditor.match(/\.replaceRange\(/g) || []).length, 2)
+  // A native cross-block selection is one precise ranged edit, rather
+  // than a whole-buffer structural replacement. Admit that exact route
+  // separately and retain the existing guard on every other direct call.
+  const crossBlockPatch = "editor.replaceRange(ranged.insert, ranged.from, ranged.to)"
+  assert.equal(clientEditor.split(crossBlockPatch).length - 1, 1)
+  assert.equal((clientEditor.replace(crossBlockPatch, "").match(/\.replaceRange\(/g) || []).length, 4)
   assert.match(visualEditor, /new DocumentEditor\(/)
   assert.equal((documentEditor.match(/\.commitSource\(/g) || []).length, 3)
   assert.match(overview, /new SlideOverview\(/)
@@ -318,7 +325,7 @@ test("structural source operations commit through the bound session", async () =
 })
 
 test("document reload reapplies editor preferences and readiness follows connection", async () => {
-  const controller = await read("packages/editor-runtime/src/controllers/editor_controller.ts")
+  const controller = await read("packages/client/src/features/editor/engine.ts")
   const load = controller.slice(controller.indexOf("  loadDocument(source:"), controller.indexOf("  setExternalValue(value:"))
   for (const method of ["vimCompartment.reconfigure", "applyLineNumbers", "applyCursorStyle", "refreshFrontmatterRange", "setEditingMode", "syncMetadataToggle"]) {
     assert.ok(load.includes(method), `New documents must reapply ${method}`)

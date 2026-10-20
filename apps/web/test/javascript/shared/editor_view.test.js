@@ -2,7 +2,33 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
 
-import { configureEditorKind, enableVisualModeAfterPreview, enableVisualModeFromInstalledPreview, installPreviewHtml, renderEditorView, mountEditorHosts } from "@elef/editor-runtime/test-internals"
+import { configureEditorKind, enableVisualModeAfterPreview, enableVisualModeFromInstalledPreview, focusOpenedEditor, installPreviewHtml, renderEditorView, mountEditorHosts } from "@elef/editor-runtime/test-internals"
+
+test("opening focuses the active editor presentation after resetting its source caret", () => {
+  for (const editingMode of ["source", "visual"]) {
+    const calls = []
+    const editor = {
+      editingMode,
+      setSelectionRange(offset) { calls.push(["selection", offset]) },
+      focus() { calls.push(["source-focus"]) },
+      projectionController() { return { restoreCaret(offset) { calls.push(["rendered-caret", offset]); return true } } }
+    }
+    assert.equal(focusOpenedEditor(editor, editingMode), true)
+    assert.deepEqual(calls, [["selection", 0], editingMode === "source" ? ["source-focus"] : ["rendered-caret", 0]])
+  }
+})
+
+test("opening without a mapped visual passage never focuses the concealed source engine", () => {
+  assert.equal(focusOpenedEditor(null, "visual"), false)
+  for (const projection of [null, { restoreCaret() { return false } }]) {
+    const editor = {
+      editingMode: "visual", setSelectionRange() {},
+      focus() { assert.fail("visual open focused the concealed source engine") },
+      projectionController() { return projection }
+    }
+    assert.equal(focusOpenedEditor(editor, "visual"), false)
+  }
+})
 
 function mount(config) {
   const { document } = parseHTML("<form><div id='mount'></div></form>")
@@ -173,6 +199,31 @@ test("preview installs without a visual editor land read-only instead of disconn
     assert.equal(block.hasAttribute("aria-label"), false)
     assert.equal(block.hasAttribute("aria-multiline"), false)
     assert.equal(block.hasAttribute("spellcheck"), false)
+  }
+})
+
+test("image preloads share pending requests, release head nodes, and retry after failure", () => {
+  const { document, Event } = parseHTML("<html><head></head><body><div id='preview'></div></body></html>")
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "document")
+  Object.defineProperty(globalThis, "document", { configurable: true, value: document })
+  const preview = document.querySelector("#preview")
+  const html = '<img src="/assets/figure.svg"><img src="/assets/figure.svg"><img src="data:image/png;base64,AAAA"><img src="blob:local-image">'
+  try {
+    installPreviewHtml(preview, html)
+    installPreviewHtml(preview, html)
+    assert.equal(document.head.querySelectorAll('link[rel="preload"]').length, 1)
+    const failed = document.head.querySelector("link")
+    assert.equal(failed.getAttribute("as"), "image")
+    assert.equal(failed.getAttribute("href"), "/assets/figure.svg")
+    failed.dispatchEvent(new Event("error"))
+    assert.equal(document.head.children.length, 0)
+    installPreviewHtml(preview, html)
+    assert.equal(document.head.children.length, 1)
+    document.head.querySelector("link").dispatchEvent(new Event("load"))
+    assert.equal(document.head.children.length, 0)
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "document", previous)
+    else delete globalThis.document
   }
 })
 

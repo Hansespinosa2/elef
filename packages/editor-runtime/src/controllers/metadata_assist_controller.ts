@@ -7,6 +7,7 @@ import {
   metadataQueryAt,
   rankMetadataCandidates
 } from "../lib/metadata_assist.js"
+import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisualCaret, projectionHostFor, visualCaretRect } from "../lib/visual_assist.js"
 import type { MetadataQuery } from "../lib/metadata_assist.js"
 
 export default class extends Controller<HTMLElement> {
@@ -24,13 +25,27 @@ export default class extends Controller<HTMLElement> {
     this.editorModeChange = () => this.close()
     this.editorForm?.addEventListener("elef:editor-mode-change", this.editorModeChange)
     this.positionPalette = this.positionPalette.bind(this)
+    this.visualKeydown = (event: Event) => {
+      if (this.editorController?.editingMode !== "visual") return
+      if (this.paletteTarget.hidden) return
+      this.keydown(event as KeyboardEvent)
+    }
+    this.visualScroll = () => {
+      if (this.editorController?.editingMode === "visual") this.positionPalette()
+    }
     this.paletteTarget.setAttribute("aria-live", "polite")
     this.setupEditor()
     window.addEventListener("resize", this.positionPalette)
+    // Document capture precedes the form-level projection router
+    // deterministically; idle visual keys never reach the palette.
+    document.addEventListener("keydown", this.visualKeydown, true)
+    window.addEventListener("scroll", this.visualScroll, { capture: true, passive: true })
   }
 
   disconnect(): void {
     window.removeEventListener("resize", this.positionPalette)
+    document.removeEventListener("keydown", this.visualKeydown, true)
+    window.removeEventListener("scroll", this.visualScroll, { capture: true })
     if (this.scrollBound) this.editorController?.scrollElement.removeEventListener("scroll", this.positionPalette)
     if (this.keydownBound) this.editorController?.dom.removeEventListener("keydown", this.handleEditorKeydown, true)
     this.element.removeEventListener("elef:editor-ready", this.editorReady)
@@ -78,6 +93,8 @@ export default class extends Controller<HTMLElement> {
     const selected = openPalette?.querySelector('[aria-selected="true"]')
     if (selected) editor.setAttribute("aria-activedescendant", selected.id)
     else editor.removeAttribute("aria-activedescendant")
+    if (this.editorController?.editingMode !== "visual") return
+    mirrorPopupAccessibility(this.element, { open: Boolean(openPalette), selectedId: selected?.id ?? null })
   }
 
   input(): void {
@@ -87,7 +104,7 @@ export default class extends Controller<HTMLElement> {
   keydown(event: KeyboardEvent): void {
     if (event.defaultPrevented) return
     const editor = this.editorController
-    if (!editor || editor.editingMode !== "source") {
+    if (!assistsInMode(editor)) {
       this.close()
       return
     }
@@ -126,7 +143,7 @@ export default class extends Controller<HTMLElement> {
 
   refresh(): void {
     const editor = this.editorController
-    if (!editor || editor.editingMode !== "source") return this.close()
+    if (!assistsInMode(editor)) return this.close()
     if (editor.selectionStart !== editor.selectionEnd) return this.close()
     const query: MetadataQuery | null = metadataQueryAt(editor.value, editor.selectionStart)
     if (!query) return this.close()
@@ -184,16 +201,17 @@ export default class extends Controller<HTMLElement> {
     if (this.paletteTarget.hidden) return
     const editor = this.editorController
     if (!editor) return
+    // The engine surface hides in visual mode: anchor to the native
+    // projection caret instead of engine coordinates.
+    if (editor.editingMode === "visual") {
+      const rect = visualCaretRect()
+      if (!rect) return
+      placePaletteBelow(this.paletteTarget, rect)
+      return
+    }
     const editorRect = editor.dom.getBoundingClientRect()
     const markerRect = editor.view.coordsAtPos(editor.selectionStart) || editorRect
-    const paletteRect = this.paletteTarget.getBoundingClientRect()
-    const left = Math.max(8, Math.min(markerRect.left, window.innerWidth - paletteRect.width - 8))
-    const maxTop = window.innerHeight - paletteRect.height - 8
-    const belowTop = markerRect.bottom + 4
-    const aboveTop = markerRect.top - paletteRect.height - 4
-    const top = belowTop <= maxTop ? belowTop : Math.max(8, Math.min(aboveTop, maxTop))
-    this.paletteTarget.style.left = `${left}px`
-    this.paletteTarget.style.top = `${top}px`
+    placePaletteBelow(this.paletteTarget, markerRect)
   }
 
   insertSelected(): void {
@@ -202,13 +220,15 @@ export default class extends Controller<HTMLElement> {
     const editor = this.editorController
     if (!candidate || !query || !editor) return this.close()
     const caret = editor.selectionStart
-    if (query.kind === "key") {
-      editor.replaceRange(`${candidate}: `, this.queryStart, caret)
+    const insertion = query.kind === "key" ? `${candidate}: ` : candidate
+    editor.replaceRange(insertion, this.queryStart, caret)
+    if (editor.editingMode === "visual") {
+      projectionHostFor(this.element)?.applyVisualAssistInsert?.({ from: this.queryStart, to: caret, insert: insertion, caret: this.queryStart + insertion.length })
+      placeVisualCaret(this.element, this.queryStart + insertion.length)
     } else {
-      editor.replaceRange(candidate, this.queryStart, caret)
+      editor.focus()
     }
     this.close()
-    editor.focus()
     queueMicrotask(() => this.refresh())
   }
 

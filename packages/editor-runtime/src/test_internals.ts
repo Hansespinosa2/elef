@@ -17,7 +17,7 @@ export {
   translateClientMounts,
 } from "./lib/client_mounts.js";
 export { presentConflictDialog } from "./lib/conflict_dialog.js";
-export { editorFor } from "./lib/editor_controller_lookup.js";
+export { asEditorSeam, editorFor } from "./lib/editor_controller_lookup.js";
 export { waitForEditorController } from "./lib/editor_ready.js";
 export { applyEditorSource } from "./lib/editor_source.js";
 export { mountEditorHosts } from "./lib/editor_view.js";
@@ -25,11 +25,13 @@ export { renderWorkerMessage } from "./lib/renderer_worker.js";
 export { mermaidAssetUrl } from "./controllers/mermaid_runtime.js";
 export { translateElementMounts } from "./lib/client_mounts.js";
 export { createWorkOpenFlow, prepareWorkOpen } from "./lib/work_open_flow.js";
+export { focusOpenedEditor } from "./lib/file_library_application.js";
 export { createDocumentGraphCache } from "./lib/document_graph_cache.js";
 export { bindEditorAction, editorActionControl } from "./lib/editor_actions.js";
 export { createCodeMirrorBinding } from "./lib/editor_binding.js";
 export { createDocumentState } from "./lib/editor_document_state.js";
 export { editorTabBinding } from "./lib/editor_tab_keymap.js";
+export { sourceOffsetForVisibleOffset, visibleOffsetForSourceOffset } from "./controllers/editor_caret.js";
 export {
   configureEditorKind,
   enableVisualModeAfterPreview,
@@ -44,7 +46,7 @@ export {
 } from "./lib/feature_flags.js";
 export { measurePaintedAction, percentile95 } from "./lib/performance_measurement.js";
 export { buildPreviewRequestBody } from "./lib/preview_request_body.js";
-export { setProjectionBlockEditable } from "./lib/projection_editability.js";
+export { markProjectionBlocksReadOnly, setProjectionBlockEditable } from "./lib/projection_editability.js";
 export { createRendererClient } from "./lib/renderer_worker_client.js";
 export { createRequestGuard } from "./lib/request_identity.js";
 export { formatLineNumber } from "./lib/vim_line_numbers.js";
@@ -54,3 +56,4 @@ export {
   metadataQueryAt,
   rankMetadataCandidates
 } from "./lib/metadata_assist.js";
+export { pointAtVisibleOffset, visibleOffsetAtPoint } from "./controllers/editor_caret.js";

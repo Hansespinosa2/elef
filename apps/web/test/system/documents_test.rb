@@ -494,6 +494,61 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal expected.split("\n"), source_editor_state["lines"]
   end
 
+  test "visual shortcuts execute shared engine commands" do
+    source = "# Shortcuts\n\nFirst paragraph.\n"
+    document = Document.create!(title: "Visual shortcuts", source: source)
+    visit edit_document_path(document)
+
+    # Undo a scripted engine edit: native undo has no stack here (nothing was
+    # typed), so only the shared history command can revert the source.
+    page.execute_script("document.querySelector('.source-field').editorController.replaceRange('Second paragraph.', 13, 29)")
+    block = find(".document-editor-block", text: "Second paragraph.", exact_text: true)
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p").firstChild, 17);
+    JAVASCRIPT
+    mod = page.evaluate_script("navigator.platform").match?(/Mac/i) ? :command : :control
+    block.send_keys([mod, "z"])
+    assert_field "Markdown source", with: source, wait: 5
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
+    assert_selector ".document-editor-block", text: "First paragraph."
+
+    # Tab indents through the shared Tab binding, not focus traversal.
+    block = find(".document-editor-block", text: "First paragraph.", exact_text: true)
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(block.querySelector("p").firstChild, 0);
+    JAVASCRIPT
+    block.send_keys(:tab)
+    assert_field "Markdown source", with: "# Shortcuts\n\n  First paragraph.\n", wait: 5
+  end
+
+  test "visual Alt-Up moves the selected line through the shared keymap" do
+    document = Document.create!(title: "Visual line move", source: "# Lines\n\n- one\n- two\n- three\n")
+    visit edit_document_path(document)
+
+    block = find(".document-editor-block", text: "two")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus({ preventScroll: true });
+      const text = block.querySelectorAll("li")[1].firstChild;
+      window.getSelection().setPosition(text, 1);
+    JAVASCRIPT
+    block.send_keys([:alt, :up])
+    assert_field "Markdown source", with: "# Lines\n\n- two\n- one\n- three\n", wait: 5
+    page.execute_script("document.activeElement.blur()")
+    wait_for_fresh_projection
+    order = page.evaluate_script(<<~JAVASCRIPT)
+      [...[...document.querySelectorAll(".document-editor-block")]
+        .find((block) => block.querySelector("li"))
+        .querySelectorAll("li")].map((item) => item.textContent)
+    JAVASCRIPT
+    assert_equal ["two", "one", "three"], order
+  end
+
   test "mermaid continuation falls back safely when the caret is in the middle of a label" do
     source = "```mermaid\nflowchart LR\n    A[Research] --> B[Design]\n```"
     document = Document.create!(title: "Mermaid middle edit", source: source)
@@ -1236,7 +1291,8 @@ class DocumentsTest < ApplicationSystemTestCase
     block.send_keys(" $test$")
 
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$", wait: 5
-    assert_selector ".document-editor-block .katex", text: "test", wait: 5
+    assert_selector ".document-editor-block .katex[data-editor-math-source='test']", wait: 5
+    assert_selector ".document-editor-block .katex[data-editor-math-source='test'] annotation", text: "test", visible: :all
     block.send_keys(" after")
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$ after", wait: 5
 
@@ -1244,7 +1300,8 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_text "Document saved."
     visit edit_document_path(document)
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$ after"
-    assert_selector ".document-editor-block .katex", text: "test"
+    assert_selector ".document-editor-block .katex[data-editor-math-source='test']"
+    assert_selector ".document-editor-block .katex[data-editor-math-source='test'] annotation", text: "test", visible: :all
   end
 
   test "latex visual mode enter and exit flow allows inline editing" do
@@ -1319,8 +1376,11 @@ class DocumentsTest < ApplicationSystemTestCase
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = active_document_block
-    block.send_keys("$$")
+    # Pair centers the caret inside the empty pair; a second $ would
+    # promote to a display skeleton, so navigate around the pair instead.
+    block.send_keys("$")
     block.send_keys(:left)
+    block.send_keys(:right)
     block.send_keys("x=3")
     assert_selector ".document-editor-block .editor-math-active", text: "$x=3$", wait: 5
     assert_field "Markdown source", with: new_document_prefix + "# Untitled document\n\n$x=3$", wait: 5

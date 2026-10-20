@@ -307,6 +307,18 @@ export const SHORTCUT_ACTIONS: readonly ShortcutAction[] = Object.freeze([
     palette: true,
     requiresEditor: false,
   }),
+  Object.freeze({
+    // Palette-only like new-document: the reference opens the shared
+    // client dialog through the editor's Edit-actions menu, so it needs an
+    // editor on the page but no direct chord.
+    id: "keyboard-shortcuts",
+    label: "Keyboard shortcuts",
+    description: "Open the shortcut and trigger reference",
+    webChord: null,
+    desktopChord: null,
+    palette: true,
+    requiresEditor: true,
+  }),
 ]);
 
 export const PALETTE_ACTION_IDS: readonly string[] = Object.freeze(

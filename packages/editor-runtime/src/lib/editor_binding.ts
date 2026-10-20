@@ -5,15 +5,15 @@
 // CodeMirror controller behind { getText, setText, materializeEdits } so the
 // session never touches the view. Behavior mirrors the previous inline
 // policy closures exactly; only the construction site moved.
-import type { Controller } from "@hotwired/stimulus";
+import type { EditorHandle } from "@elef/client/editor";
 import { applyEditorSource } from "./editor_source.js"
 
 export interface CodeMirrorBindingOptions {
-  getEditor(): Controller | null | undefined;
+  getEditor(): EditorHandle | null | undefined;
   getWorkId(): unknown;
-  getFallbackValue(): unknown;
+  getFallbackValue(): string;
   setFallbackValue(source: string): void;
-  waitForEditor(): Promise<Controller | null>;
+  waitForEditor(): Promise<EditorHandle | null>;
   materializeEdits?: () => void;
 }
 

@@ -69,8 +69,9 @@ class LibraryControllerTest < ActionDispatch::IntegrationTest
       quick-open new-presentation new-document new-snippet change-appearance
       open-settings open-snippets open-math-shortcuts library-all
       library-documents library-presentations save toggle-vim vim-settings
-      toggle-metadata present print download-pptx report-bug load-samples
-      slide-add slide-duplicate slide-delete slide-move-up slide-move-down
+      toggle-metadata keyboard-shortcuts present print download-pptx report-bug
+      load-samples slide-add slide-duplicate slide-delete slide-move-up
+      slide-move-down
     ]
     missing = expected - ids
     assert_empty missing, "palette is missing registry actions: #{missing.inspect}"

@@ -163,6 +163,17 @@ CLIENT_ALLOWED_BARE = (
     "@elef/contracts",
     "@elef/renderer",
     "@elef/work-model",
+    # The editing engine lives in the client feature slice (packages/client
+    # owns editor behavior per the change-routing rule); these are the exact
+    # externals the moved engine imports, mirrored from
+    # EDITOR_RUNTIME_ALLOWED_BARE minus the Stimulus shell framework, which
+    # the client must never touch. Not host knowledge: identical in both
+    # hosts' webviews, and CLIENT_HOST_PATTERN still scans these files.
+    "codemirror",
+    "@codemirror",
+    "@lezer/highlight",
+    "@replit/codemirror-vim",
+    "katex",
 )
 CLIENT_HOST_PATTERN = re.compile(
     r"__TAURI__|MiniRacer|ActiveRecord|__ELEF_E2E__|\btauri\b|\brails\b",

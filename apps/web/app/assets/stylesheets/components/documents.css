@@ -1,5 +1,13 @@
 .document-reader { width: 100%; }
 .document-surface { color: var(--oradia-paper-ink); font-family: var(--oradia-sans); }
+/* MathML elements carry no KaTeX classes, so without this they inherit the
+   body stack and symbols missing from it fall back per-glyph to whatever the
+   OS provides (DejaVu on CI, assorted local fonts), paginating math
+   differently per machine. Route every math glyph through the vendored KaTeX
+   webfonts first; Main stays first so currently covered glyphs do not move. */
+math, mi, mo, mn, mtext {
+  font-family: KaTeX_Main, KaTeX_AMS, KaTeX_Caligraphic, KaTeX_Script, KaTeX_Fraktur, KaTeX_SansSerif, KaTeX_Typewriter, KaTeX_Size1, "Times New Roman", serif;
+}
 .document-surface.is-paginated { background: transparent; border: 0; box-shadow: none; display: grid; gap: 24px; padding: 0; }
 .document-surface h1, .document-surface h2, .document-surface h3, .document-surface h4, .document-surface h5, .document-surface h6 { color: var(--document-heading-ink); margin-top: 0; }
 .document-surface h1 { font-size: 48px; line-height: 1.05; margin-bottom: 24px; }
@@ -49,6 +57,45 @@
   overflow: hidden;
   position: relative;
   width: 794px;
+}
+/* Off-screen page skipping (perf Q2): after pagination settles, frames
+   skip rendering until near the viewport. The intrinsic size matches
+   the A4 frame so scrollbars never jump; auto (not hidden) keeps
+   focus, find-in-page, and caret placement working. Applied only after
+   measuring finishes: pagination rebuilds bare frames every pass. */
+.document-page-frame.is-quiet {
+  content-visibility: auto;
+  contain-intrinsic-size: 794px 1123px;
+}
+/* Mid-pagination seal: settled pages skip rendering unconditionally while
+   the pass continues, so overflows() costs O(one page). Unlike is-quiet
+   (auto), this also skips near-viewport pages, which auto would render.
+   Replaced by is-quiet at pass end; never present in steady state. */
+.document-page-frame.is-sealed {
+  content-visibility: hidden;
+  contain-intrinsic-size: 794px 1123px;
+}
+/* Pre-pagination gate (editor only): the server-rendered projection sits
+   unpaginated in the surface until the first pass. auto keeps eval-time
+   forced layouts (CodeMirror's initial measure via vim cursor draw) to
+   near-viewport content instead of all ~46K nodes. paginate() adds
+   is-paginated at pass start and rebuilds synchronously in the same
+   block, so the browser never renders the unpaginated tree; the first
+   pass additionally awaits fonts AND images (see document_pages
+   connect), and installs preload image URLs without rendering (see
+   installPreviewHtml) so deferred fetches start early. Every other
+   pre-flip path (sanitize, install, editability-sync, block collection)
+   is DOM-only, and resizeFrames short-circuits with no frames. Reader
+   surfaces are never gated (no editor measure there). No intrinsic
+   size: one scrollbar adjustment at pass start, pre-settle and
+   pre-interaction. */
+.document-editor-projection .document-surface:not(.is-paginated) {
+  content-visibility: auto;
+}
+@media print {
+  .document-page-frame.is-quiet { content-visibility: visible; }
+  .document-page-frame.is-sealed { content-visibility: visible; }
+  .document-editor-projection .document-surface:not(.is-paginated) { content-visibility: visible; }
 }
 .document-page-frame > .document-page {
   bottom: auto;

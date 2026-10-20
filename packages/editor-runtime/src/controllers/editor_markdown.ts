@@ -1,6 +1,7 @@
-import katex from "katex"
+import { cachedKatex, loadKatex } from "../lib/katex_loader.js"
+import type { RevealActives, RevealToken } from "./editor_reveal.js"
 
-const INLINE_MATH = /(?<!\\)\\\[([\s\S]+?)\\\]|(?<!\\)\$\$([\s\S]+?)\$\$(?!\$)|(?<!\\)\\\(([^\r\n]+?)\\\)|(?<![\\$])\$(?!\$|\s)([^$\r\n]+?)(?<!\s)\$(?!\$)/g
+import { mathSourceAt, scanMathSource } from "@elef/work-model/math-source"
 
 export interface InlineToken {
   length: number;
@@ -24,7 +25,7 @@ export interface FormatBudget {
   strike: number;
 }
 
-export function markdownForVisibleText(markdown: string, text: string, kind: string, element: Element | null = null, { documentMode = false }: { documentMode?: boolean } = {}): string {
+export function markdownForVisibleText(markdown: string, text: string, kind: string, element: Element | null = null, { documentMode = false, revealActives = undefined }: { documentMode?: boolean; revealActives?: RevealActives | null } = {}): string {
   const source = markdown || ""
   const rawValue = rawVisibleText(text)
 
@@ -41,30 +42,48 @@ export function markdownForVisibleText(markdown: string, text: string, kind: str
   const expectedAtoms = protectedElements.length + activeCount
   if (element?.querySelectorAll && sourceAtoms.total !== expectedAtoms &&
     !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms.total, protectedElements.length, expectedAtoms)) return source
+  // Revealed inline constructs project their source slices; a pairing
+  // mismatch (null map from the host) refuses, the batch staying in the
+  // DOM for the next flush. Absent maps are the legacy concealed path.
+  if (revealActives === null) return source
+  const actives: RevealActives = revealActives ?? new Map()
   const structured = kind === "list" || kind === "quote"
-  const sourceText = documentMode && structured ? String(text || "").replace(/\u00a0/g, " ") : rawValue
+  const sourceText = documentMode && structured ? String(text || "") : rawValue
   const atomText = protectedElements.length ? visibleTextWithProtectedAtoms(element as Element, protectedElements.length) : sourceText
-  const normalizedText = atomText.replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ")
-  const renderedText = documentMode && structured ? normalizedText : visibleText(normalizedText)
+  // Collapse ASCII-only runs: NBSP breaks runs, preserving the width of
+  // just-typed whitespace (see rawVisibleText). Pure-ASCII runs can only
+  // be layout/textContent artifacts (innerText already collapsed them).
+  const normalizedText = atomText.replace(/[ \t]+/g, " ")
+  const valueTrimmed = !(documentMode && structured)
+  const renderedText = valueTrimmed ? visibleText(normalizedText, true) : normalizedText
+  // The trim hides just-typed trailing whitespace from the differ (a flush
+  // can re-read the DOM while the typed space is still trailing); keep the
+  // trimmed run as evidence so the alignment cannot mistake a hidden
+  // insertion for a whitespace deletion.
+  const trailingExtra = valueTrimmed ? (normalizedText.match(/[ \t\u00a0]*$/)?.[0] ?? "") : ""
   const value = structured ? renderedText : normalizeInlineRenderedText(renderedText)
   const formatBudget = inlineFormatBudget(element)
+  if (actives.size > 0 && !revealTokensAgree(source, actives, formatBudget)) return source
 
   if (kind === "list" || kind === "quote") {
-    const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget, { preserveEmptyLines: documentMode }, allMathElements)
+    const projection = structuredBlockProjection(source, kind, protectedElements, formatBudget, { preserveEmptyLines: documentMode }, allMathElements, actives)
     const structuredValue = documentMode ? addStructuredMarkers(source, value, kind) : value
-    const preserved = preserveProjectedMarkdown(source, structuredValue, projection, { preserveLineBreaks: documentMode })
+    const preserved = preserveProjectedMarkdown(source, structuredValue, projection, { preserveLineBreaks: documentMode, trailingExtra })
     if (preserved !== null) return preserved
   }
 
-  if (source === "" && documentMode) return value
+  if (source === "" && documentMode) return value.replace(/\u00a0/g, " ")
 
-  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements)
+  const preserved = preserveInlineMarkdown(source, value, protectedElements, formatBudget, allMathElements, trailingExtra, actives)
   // A failed source projection must never serialize display-only atoms or
-  // lossy rendered text into canonical Markdown.
+  // lossy rendered text into canonical Markdown. Atom markers are never
+  // legitimate source: if one survived the differ, the alignment was
+  // wrong and keeping the current source is the only safe answer.
+  if (preserved !== null && preserved.includes("\uE000")) return source
   return preserved === null ? source : preserved
 }
 
-export function sourceOffsetForVisiblePosition(source: string, element: Element | null, visiblePosition: number): number | null {
+export function sourceOffsetForVisiblePosition(source: string, element: Element | null, visiblePosition: number, revealActives?: RevealActives | null): number | null {
   const protectedElements = protectedElementsFor(element)
   const allMathElements = allMathElementsFor(element)
   const activeCount = allMathElements.filter((candidate) => candidate.dataset.editorMathActive === "true").length
@@ -73,7 +92,11 @@ export function sourceOffsetForVisiblePosition(source: string, element: Element 
   if (sourceAtoms !== expectedAtoms &&
     !hasMatchingActiveMathDelimiter(source, allMathElements, sourceAtoms, protectedElements.length, expectedAtoms)) return null
 
-  const projection = inlineProjection(source, 0, protectedElements, 0, inlineFormatBudget(element), allMathElements)
+  if (revealActives === null) return null
+  const actives: RevealActives = revealActives ?? new Map()
+  const formatBudget = inlineFormatBudget(element)
+  if (actives.size > 0 && !revealTokensAgree(source, actives, formatBudget)) return null
+  const projection = inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements, actives)
   return projection.boundaries[visiblePosition] ?? null
 }
 
@@ -90,7 +113,24 @@ interface MathSegment {
 }
 
 export function renderInlineMath(element: Element | null): number {
-  if (!element || typeof katex?.renderToString !== "function") return 0
+  // KaTeX not yet loaded (interaction outran the post-settle preload):
+  // render nothing now (today's missing-KaTeX behavior) and retry once
+  // it arrives. The retry re-reads live text nodes and selection, so
+  // caret placement stays exact; already-rendered math is skipped by
+  // the data-editor-math-source guard below.
+  const katex = cachedKatex()
+  if (!katex?.renderToString) {
+    if (element) {
+      loadKatex().then(
+        () => {
+          if (element.isConnected) renderInlineMath(element)
+        },
+        () => {}
+      )
+    }
+    return 0
+  }
+  if (!element) return 0
 
   const textNodes: Text[] = []
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
@@ -101,7 +141,7 @@ export function renderInlineMath(element: Element | null): number {
 
   let renderedCount = 0
   textNodes.forEach((node) => {
-    const matches = [...(node.textContent ?? "").matchAll(new RegExp(INLINE_MATH.source, "g"))]
+    const matches = scanMathSource(node.textContent ?? "").filter((math) => math.interior !== "")
     if (matches.length === 0) return
 
     const selection = window.getSelection()
@@ -118,14 +158,14 @@ export function renderInlineMath(element: Element | null): number {
     }
 
     matches.forEach((match) => {
-      const from = match.index ?? 0
-      const to = from + (match[0] ?? "").length
+      const from = match.start
+      const to = match.end
       appendText(cursor, from)
 
-      const expression = match[1] ?? match[2] ?? match[3] ?? match[4] ?? ""
-      const displayMode = match[1] !== undefined || match[2] !== undefined
-      const openDelimiter = match[1] !== undefined ? "\\[" : match[2] !== undefined ? "$$" : match[3] !== undefined ? "\\(" : "$"
-      const closeDelimiter = match[1] !== undefined ? "\\]" : match[2] !== undefined ? "$$" : match[3] !== undefined ? "\\)" : "$"
+      const expression = match.interior
+      const displayMode = match.display
+      const openDelimiter = match.open
+      const closeDelimiter = match.close
 
       if (selection?.isCollapsed && selection.anchorNode === node && typeof anchorOffset === "number" &&
         anchorOffset >= from + openDelimiter.length && anchorOffset <= to - closeDelimiter.length) {
@@ -139,7 +179,7 @@ export function renderInlineMath(element: Element | null): number {
         activeMath.contentEditable = "true"
         activeMath.spellcheck = false
 
-        const activeText = document.createTextNode(match[0])
+        const activeText = document.createTextNode((node.textContent ?? "").slice(from, to))
         activeMath.append(activeText)
         fragment.append(activeMath)
         segments.push({ from, to, node: activeMath, textNode: activeText, type: "active-math" })
@@ -149,13 +189,17 @@ export function renderInlineMath(element: Element | null): number {
 
       const rendered = document.createElement("span")
       try {
-        rendered.innerHTML = katex.renderToString(expression, { displayMode, throwOnError: true })
+        rendered.innerHTML = katex.renderToString(expression, { displayMode, throwOnError: true, output: "mathml" })
         const math = rendered.firstElementChild as HTMLElement | null
         if (!math) throw new Error("KaTeX produced no output")
         math.dataset.editorMathSource = expression
         math.dataset.editorMathOpen = openDelimiter
         math.dataset.editorMathClose = closeDelimiter
-        if (displayMode) math.classList.add("editor-live-math-display")
+        // MathML output drops KaTeX's katex-display marker; restore it on
+        // the element (the reader wraps it, the live span carries it
+        // flat) so display selectors match. Editor CSS keeps forcing
+        // inline-block layout here regardless of the class.
+        if (displayMode) math.classList.add("editor-live-math-display", "katex-display")
         math.contentEditable = "false"
         fragment.append(math)
         segments.push({ from, to, node: math, type: "math", displayMode })
@@ -182,12 +226,8 @@ export function renderInlineMath(element: Element | null): number {
 
     const pointFor = (offset: number | null): [Node, number] | null => {
       if (offset === null) return null
-      const displayMathAtEnd = segments.find((candidate) => candidate.type === "math" && candidate.displayMode && candidate.to === offset)
-      if (displayMathAtEnd) {
-        const parent = displayMathAtEnd.node.parentNode as Node
-        return [parent, [...parent.childNodes].indexOf(displayMathAtEnd.node) + 1]
-      }
-
+      // appendText keeps an empty text segment after completed math.
+      // Prefer it for insertion, including display math at block end.
       const segment = segments.find((candidate) => candidate.type === "text" && offset >= candidate.from && offset <= candidate.to)
       if (segment) return [segment.node, offset - segment.from]
 
@@ -213,12 +253,18 @@ export function renderInlineMath(element: Element | null): number {
   return renderedCount
 }
 
-function visibleText(text: string): string {
-  return (text || "").replace(/\u00a0/g, " ").replace(/\n+$/, "").trim()
+function visibleText(text: string, preserveNbsp = false): string {
+  const value = preserveNbsp ? (text || "") : (text || "").replace(/\u00a0/g, " ")
+  return value.replace(/\n+$/, "").trim()
 }
 
 function rawVisibleText(text: string): string {
-  return (text || "").replace(/\u00a0/g, " ").replace(/\n+$/, "")
+  // NBSPs are never renderer output: the browser mints one when a typed
+  // space lands beside another space, so NBSP marks just-typed
+  // whitespace. Keep it through run collapsing (ASCII-only runs
+  // collapse; NBSP breaks runs) and canonicalize to ASCII only when
+  // diffing, so typed spaces beside existing spaces survive flushes.
+  return (text || "").replace(/\n+$/, "")
 }
 
 function normalizeInlineRenderedText(text: string): string {
@@ -365,34 +411,210 @@ function activeDisplayMathBlock(source: string, allMathElements: HTMLElement[]):
   return before + fullText + after
 }
 
-function preserveInlineMarkdown(source: string, value: string, protectedElements: HTMLElement[], formatBudget: FormatBudget | null, allMathElements: HTMLElement[] = []): string | null {
-  return preserveProjectedMarkdown(source, value, inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements))
+function preserveInlineMarkdown(source: string, value: string, protectedElements: HTMLElement[], formatBudget: FormatBudget | null, allMathElements: HTMLElement[] = [], trailingExtra = "", revealActives: RevealActives = new Map()): string | null {
+  const projection = inlineProjection(source, 0, protectedElements, 0, formatBudget, allMathElements, revealActives)
+  const segmented = preserveSegmentedByMarkers(source, value, projection, trailingExtra, revealActives)
+  if (segmented !== undefined) return segmented
+  return preserveProjectedMarkdown(source, value, projection, { trailingExtra })
 }
 
-function preserveProjectedMarkdown(source: string, value: string, projection: InlineProjection, { preserveLineBreaks = false }: { preserveLineBreaks?: boolean } = {}): string | null {
+// Diff text around protected atoms as independent segments, emitting
+// each atom's source slice verbatim. A single prefix/suffix diff cannot
+// express insertions on both sides of an atom (lag whitespace before it
+// plus a fresh keystroke after it): it reads the whole span as one
+// replacement and serializes the display-only marker into canonical
+// Markdown. Markers pair positionally (both sides enumerate protected
+// elements in document order), so identical marker sequences anchor the
+// split; anything else falls back to the single diff.
+function preserveSegmentedByMarkers(
+  source: string,
+  value: string,
+  projection: InlineProjection,
+  trailingExtra: string,
+  revealActives: RevealActives
+): string | undefined {
+  if (revealActives.size > 0) return undefined
+  const splitMarkers = (text: string): string[] => text.split(/(\uE000[0-9a-z]+\uE001)/)
+  const previousParts = splitMarkers(projection.text)
+  const valueParts = splitMarkers(value)
+  if (previousParts.length < 3 || previousParts.length !== valueParts.length) return undefined
+  for (let index = 1; index < previousParts.length; index += 2) {
+    if (previousParts[index] !== valueParts[index]) return undefined
+  }
+  const output: string[] = []
+  let previousOffset = 0
+  for (let index = 0; index < previousParts.length; index += 1) {
+    const previousPart = previousParts[index] ?? ""
+    const valuePart = valueParts[index] ?? ""
+    if (index % 2 === 1) {
+      const boundFrom = projection.boundaries[previousOffset]
+      const boundTo = projection.boundaries[previousOffset + previousPart.length]
+      if (boundFrom === undefined || boundTo === undefined) return undefined
+      output.push(source.slice(boundFrom, boundTo))
+      previousOffset += previousPart.length
+      continue
+    }
+    const segmentStart = projection.boundaries[previousOffset]
+    const segmentEnd = projection.boundaries[previousOffset + previousPart.length]
+    if (segmentStart === undefined || segmentEnd === undefined) return undefined
+    const isLast = index === previousParts.length - 1
+    const preserved = preserveProjectedMarkdown(
+      source.slice(segmentStart, segmentEnd),
+      valuePart,
+      {
+        text: previousPart,
+        boundaries: projection.boundaries.slice(previousOffset, previousOffset + previousPart.length + 1).map((bound) => bound - segmentStart),
+        // The differ only reads text/boundaries; carry the parent flags
+        // for the projection shape.
+        hasSyntax: projection.hasSyntax,
+        atomCount: projection.atomCount
+      },
+      // Segments are marker-bounded middle text, never block edges: the
+      // value keeps marker-adjacent spaces the edge trims would hide
+      // from `previous`, so trimming either side duplicates whitespace
+      // (and arms consumedRun on a middle run). Diff untrimmed.
+      { preserveLineBreaks: true, trailingExtra: isLast ? trailingExtra : "" }
+    )
+    if (preserved === null) return undefined
+    output.push(preserved)
+    previousOffset += previousPart.length
+  }
+  return output.join("")
+}
+
+function preserveProjectedMarkdown(source: string, value: string, projection: InlineProjection, { preserveLineBreaks = false, trailingExtra = "" }: { preserveLineBreaks?: boolean; trailingExtra?: string } = {}): string | null {
   // Projections never contain carriage returns (structured lines are stripped
   // before projection; inline whitespace is collapsed), so normalize the
   // edited value the same way before diffing — otherwise every CRLF line
   // break reads as a phantom edit and the splice deletes structure.
-  const normalizedValue = value.replace(/\r\n?/g, "\n")
+  // Canonicalize NBSP here, after run widths were fixed upstream: the
+  // differ is positional, so conversion no longer collapses anything,
+  // and source stays ASCII (a source-literal NBSP canonicalizes once,
+  // then round-trips).
+  const normalizedValue = value.replace(/\r\n?/g, "\n").replace(/\u00a0/g, " ")
   const leading = preserveLineBreaks ? 0 : projection.text.match(/^\s*/)?.[0]?.length || 0
   const trailing = preserveLineBreaks ? 0 : projection.text.match(/\s*$/)?.[0]?.length || 0
   const end = projection.text.length - trailing
   const previous = projection.text.slice(leading, end)
   const boundaries = projection.boundaries.slice(leading, end + 1)
+  // The trimmed trailing run is invisible in the DOM; its true end boundary
+  // sits past it at end-of-source.
+  const endBoundary = trailing > 0 ? projection.boundaries[projection.text.length] : undefined
   if (previous === normalizedValue) return source
+  // The DOM already shows the source verbatim (modulo line-ending and
+  // NBSP forms the source owns): no edit is detectable, so any differ
+  // output would be spurious. This also covers escapes the projection
+  // resolves but the editable DOM shows literally (`\$` pre-reinstall):
+  // without it the positional diff re-inserts the visible backslash.
+  if (source === normalizedValue) return source
 
-  const { prefix, suffix } = commonEditBounds(previous, normalizedValue)
-  const from = boundaries[prefix]
-  const to = boundaries[previous.length - suffix]
+  // The DOM can lag the engine by whitespace it never rendered: the
+  // projection strips trailing runs, and precise commits preserve source
+  // whitespace the editable DOM never contained. Once such a space sits
+  // inside the base (e.g. "See [[Research" typed after "See "), a naive
+  // diff against the lagging DOM ("See[[Research ta") reads the inherited
+  // gap as a user deletion. Align first, skipping previous-whitespace the
+  // value lacks; the walks stop at real divergence, so skipped runs always
+  // sit outside the edit and are preserved. Only an empty diff with skips
+  // (a genuine whitespace deletion) falls back to the unaligned diff so
+  // user deletions are still honored.
+  const aligned = alignedEditBounds(previous, normalizedValue, trailingExtra)
+  const fallback = aligned === null
+  const { prefix, suffix, prefixValue, suffixValue } = fallback
+    ? { ...commonEditBounds(previous, normalizedValue), prefixValue: 0, suffixValue: 0 }
+    : aligned
+  // The projection strips the source's trailing run, but the DOM shows it
+  // once committed: without consuming it here the differ re-inserts the
+  // already-committed whitespace beside every end-append (a doubled
+  // space after each completed math atom). Consume the run at the
+  // aligned site only when it fits strictly between the aligned prefix
+  // and suffix with nothing but horizontal whitespace: a middle edit's
+  // whitespace never qualifies, and anything longer than the stripped
+  // run still diffs as a genuine insertion.
+  let consumedRun = 0
+  if (!fallback && trailing > 0) {
+    const run = normalizedValue.slice(prefixValue, prefixValue + trailing)
+    if (run.length === trailing && /^[ \t]*$/.test(run) && prefixValue + trailing <= normalizedValue.length - suffixValue) {
+      consumedRun = trailing
+    }
+  }
+  const valuePrefix = fallback ? prefix : prefixValue + consumedRun
+  const valueSuffix = fallback ? suffix : suffixValue
+  // Pure end-insertions land past the invisible trailing run (matching the
+  // caret map's end affinity); every other edit keeps the original
+  // boundaries so range operations never swallow unselected whitespace.
+  const endInsertion = prefix === previous.length && endBoundary !== undefined
+  const from = endInsertion ? endBoundary : boundaries[prefix]
+  const to = endInsertion ? endBoundary : boundaries[previous.length - suffix]
   if (from === undefined || to === undefined || from > to) return null
 
   // New line breaks introduced by the edit adopt the block's own convention
   // so a CRLF block is never silently rewritten to mixed endings.
   const lineEnding = source.includes("\r\n") ? "\r\n" : "\n"
-  const insertion = normalizedValue.slice(prefix, normalizedValue.length - suffix).replace(/\n/g, lineEnding)
+  let insertion = normalizedValue.slice(valuePrefix, normalizedValue.length - valueSuffix).replace(/\n/g, lineEnding)
+  // A trimmed trailing run is user-typed content, not round-trip noise:
+  // fold it into end-site insertions (end-insertions always land here),
+  // or re-append it after middle-site edits. Round-trips early-return
+  // before reaching here, and deletions fall back (which implies no
+  // trailing run), so any run seen here was typed during this batch.
+  if (trailingExtra) {
+    // Evidence canonicalizes to ASCII: NBSP marked just-typed width, but
+    // source stays ASCII.
+    const trailingEvidence = trailingExtra.replace(/\u00a0/g, " ")
+    if (suffix === 0 && valueSuffix === 0) insertion += trailingEvidence
+    else return `${source.slice(0, from)}${insertion}${source.slice(to)}${trailingEvidence}`
+  }
   const result = `${source.slice(0, from)}${insertion}${source.slice(to)}`
   return result
+}
+
+function isLagWhitespace(char: string | undefined): boolean {
+  return char === " " || char === "\t"
+}
+
+// Aligns previous (projection) against next (DOM), skipping horizontal
+// whitespace the DOM lacks. Returns null when the skipped runs intersect
+// the edit (or the diff is empty with skips), signalling the caller to
+// use the unaligned diff instead. Separate previous/value cursors track
+// both sides across skips.
+function alignedEditBounds(previous: string, next: string, trailingExtra = ""): { prefix: number; suffix: number; prefixValue: number; suffixValue: number } | null {
+  let prefix = 0
+  let prefixValue = 0
+  let skipped = 0
+  while (prefixValue < next.length) {
+    if (prefix >= previous.length) break
+    if (previous[prefix] === next[prefixValue]) {
+      prefix += 1
+      prefixValue += 1
+      continue
+    }
+    if (!isLagWhitespace(previous[prefix])) break
+    prefix += 1
+    skipped += 1
+  }
+  let suffix = 0
+  let suffixValue = 0
+  while (suffixValue < next.length - prefixValue) {
+    const prevIndex = previous.length - suffix - 1
+    if (prevIndex < prefix) break
+    if (previous[prevIndex] === next[next.length - suffixValue - 1]) {
+      suffix += 1
+      suffixValue += 1
+      continue
+    }
+    if (!isLagWhitespace(previous[prevIndex])) break
+    suffix += 1
+    skipped += 1
+  }
+  // The loops bound both cursors so ranges cannot overlap; the only
+  // fallback is an empty diff with skips (a genuine whitespace deletion),
+  // which the unaligned diff owns. A trimmed trailing run proves the
+  // "empty" verdict is an artifact of the trim (the user typed trailing
+  // whitespace the trimmed value hides), so it stays aligned and the
+  // caller folds the run into the end-site insertion.
+  const empty = prefix + suffix >= previous.length && prefixValue + suffixValue >= next.length
+  if (empty && skipped > 0 && !trailingExtra) return null
+  return { prefix, suffix, prefixValue, suffixValue }
 }
 
 function commonEditBounds(previous: string, next: string): { prefix: number; suffix: number } {
@@ -406,7 +628,7 @@ function commonEditBounds(previous: string, next: string): { prefix: number; suf
   return { prefix, suffix }
 }
 
-function inlineProjection(source: string, sourceOffset = 0, protectedElements: HTMLElement[] = [], protectedStartIndex = 0, formatBudget: FormatBudget | null = null, allMathElements: HTMLElement[] = []): InlineProjection {
+function inlineProjection(source: string, sourceOffset = 0, protectedElements: HTMLElement[] = [], protectedStartIndex = 0, formatBudget: FormatBudget | null = null, allMathElements: HTMLElement[] = [], revealActives: RevealActives = new Map()): InlineProjection {
   let text = ""
   const boundaries: number[] = []
   let hasSyntax = false
@@ -484,16 +706,44 @@ function inlineProjection(source: string, sourceOffset = 0, protectedElements: H
       const protectedElement = protectedElements[protectedIndex]
       appendProtected(protectedElement ? atomMarker(protectedStartIndex + protectedIndex) : token.content, sourceOffset + index, sourceOffset + index + token.length)
       protectedIndex += 1
-    } else if (["code", "document_link", "escape"].includes(token.kind)) {
+    } else if (token.kind === "code") {
+      // Revealed code projects its source slice (delimiters included);
+      // concealed code projects content only.
+      const revealed = revealActives.get(sourceOffset + index)
+      if (revealed) {
+        appendPlain(source.slice(index, index + token.length), sourceOffset + index)
+      } else {
+        appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0))
+      }
+    } else if (token.kind === "document_link") {
+      // Revealed document links project the full [[slice]]; concealed
+      // ones project the label only.
+      const revealed = revealActives.get(sourceOffset + index)
+      if (revealed) {
+        appendPlain(source.slice(index, index + token.length), sourceOffset + index)
+      } else {
+        appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0))
+      }
+    } else if (token.kind === "escape") {
       appendPlain(token.content, sourceOffset + index + (token.contentOffset ?? 0))
     } else {
+      // Revealed formats and links bypass recursion: the full slice
+      // (with nested delimiters as plain text) is already visible in
+      // the DOM.
+      const revealed = token.kind === "format" || token.kind === "link" ? revealActives.get(sourceOffset + index) : undefined
+      if (revealed) {
+        appendPlain(source.slice(index, index + token.length), sourceOffset + index)
+        index += token.length
+        continue
+      }
       const content = inlineProjection(
         token.content,
         sourceOffset + index + (token.contentOffset ?? 0),
         protectedElements.slice(protectedIndex),
         protectedStartIndex + protectedIndex,
         formatBudget,
-        allMathElements.slice(mathIndex)
+        allMathElements.slice(mathIndex),
+        revealActives
       )
       appendProjection(content)
       protectedIndex += content.atomCount
@@ -505,7 +755,7 @@ function inlineProjection(source: string, sourceOffset = 0, protectedElements: H
   return { text, boundaries, hasSyntax, atomCount: protectedIndex, mathCount: mathIndex }
 }
 
-function structuredBlockProjection(source: string, kind: string, protectedElements: HTMLElement[], formatBudget: FormatBudget | null = null, { preserveEmptyLines = false }: { preserveEmptyLines?: boolean } = {}, allMathElements: HTMLElement[] = []): InlineProjection {
+function structuredBlockProjection(source: string, kind: string, protectedElements: HTMLElement[], formatBudget: FormatBudget | null = null, { preserveEmptyLines = false }: { preserveEmptyLines?: boolean } = {}, allMathElements: HTMLElement[] = [], revealActives: RevealActives = new Map()): InlineProjection {
   const lines = source.split("\n")
   const boundaries: number[] = []
   let text = ""
@@ -531,7 +781,8 @@ function structuredBlockProjection(source: string, kind: string, protectedElemen
       protectedElements.slice(protectedIndex),
       protectedIndex,
       formatBudget,
-      allMathElements.slice(mathIndex)
+      allMathElements.slice(mathIndex),
+      revealActives
     )
     protectedIndex += projection.atomCount
     mathIndex += projection.mathCount || 0
@@ -628,18 +879,9 @@ function inlineTokenAt(source: string, formatBudget: FormatBudget | null = null,
     if (match) return { length: (match[0] ?? "").length, content: match[2] ?? "", contentOffset: 1, kind: "format", formatType: "emphasis" }
   }
 
-  match = source.match(/^\\\[([\s\S]+?)\\\]/)
-  if (match) return { length: (match[0] ?? "").length, content: match[1] ?? "", kind: "math" }
-
-  match = source.match(/^\\\(([^\r\n]+?)\\\)/)
-  if (match) return { length: (match[0] ?? "").length, content: match[1] ?? "", kind: "math" }
-
-  match = source.match(/^\$\$([\s\S]+?)\$\$(?!\$)/)
-  if (match) return { length: (match[0] ?? "").length, content: match[1] ?? "", kind: "math" }
-
-  if (previousCharacter !== "$") {
-    match = source.match(/^\$(?!\$)(?!\s)([^$\r\n]+?)(?<!\s)\$(?!\$)/)
-    if (match) return { length: (match[0] ?? "").length, content: match[1] ?? "", kind: "math" }
+  const math = mathSourceAt(source)
+  if (math && math.interior !== "" && (math.open !== "$" || previousCharacter !== "$")) {
+    return { length: math.end, content: math.interior, kind: "math" }
   }
 
   return null
@@ -648,11 +890,45 @@ function inlineTokenAt(source: string, formatBudget: FormatBudget | null = null,
 function inlineFormatBudget(element: Element | null): FormatBudget | null {
   if (!element?.querySelectorAll) return null
 
+  // Revealed spans replaced their elements; count them by dataset so
+  // the tokenizer budget still matches the source constructs.
   return {
-    strong: element.querySelectorAll("strong, b").length,
-    emphasis: element.querySelectorAll("em, i").length,
-    strike: element.querySelectorAll("del, s, strike").length
+    strong: element.querySelectorAll("strong, b, [data-editor-inline-format='strong']").length,
+    emphasis: element.querySelectorAll("em, i, [data-editor-inline-format='emphasis']").length,
+    strike: element.querySelectorAll("del, s, strike, [data-editor-inline-format='strike']").length
   }
+}
+
+// The reveal tokenizer must agree with inlineTokenAt on every mapped
+// token boundary; any divergence refuses (safe direction: recover).
+// Walk top-level tokens with a throwaway budget clone: mapped starts
+// are always top-level (pairing is outermost-only), so each must
+// appear here with equal length and kind.
+function revealTokensAgree(source: string, actives: RevealActives, budget: FormatBudget | null): boolean {
+  const seen = new Map<number, { length: number; kind: string; formatType: string | undefined }>()
+  const walk = budget ? { ...budget } : null
+  let index = 0
+  while (index < source.length) {
+    const token = inlineTokenAt(source.slice(index), walk, source[index - 1] ?? "")
+    if (!token) {
+      index += 1
+      continue
+    }
+    if (token.formatType && walk) walk[token.formatType] -= 1
+    if (token.kind === "format" || token.kind === "code" || token.kind === "link" || token.kind === "document_link") {
+      seen.set(index, { length: token.length, kind: token.kind, formatType: token.formatType })
+    }
+    index += token.length
+  }
+  for (const [start, entry] of actives) {
+    const found = seen.get(start)
+    if (!found || found.length !== entry.token.end - entry.token.start) return false
+    if (entry.token.kind === "code" && found.kind !== "code") return false
+    if (entry.token.kind === "format" && (found.kind !== "format" || found.formatType !== entry.token.formatType)) return false
+    if (entry.token.kind === "link" && found.kind !== "link") return false
+    if (entry.token.kind === "document_link" && found.kind !== "document_link") return false
+  }
+  return true
 }
 
 export function protectedElementsFor(element: Element | null): HTMLElement[] {

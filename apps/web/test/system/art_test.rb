@@ -176,7 +176,7 @@ class ArtTest < ApplicationSystemTestCase
     assert_selector ".preview-warnings li", text: /taller than a document page/
   end
 
-  test "rich fixed Sequence stays vertical and eight compact items show no-fit" do
+  test "rich fixed Sequence stays vertical and ten compact items show no-fit" do
     rich = Presentation.create!(
       title: "Art rich Sequence",
       source: "# Implementation roadmap\n\n:::art\n1. Discovery\n   - Interview users\n   - Map the current process\n2. Design\n   - Prioritize constraints\n   - Produce a prototype\n3. Delivery\n   - Build the system\n   - Validate with teams\n4. Adoption\n   - Train users\n   - Measure outcomes"
@@ -192,14 +192,16 @@ class ArtTest < ApplicationSystemTestCase
     assert_in_delta 560, rich_state.fetch("host")[3], 2
     assert rich_state.fetch("containment"), rich_state.inspect
 
-    many = Presentation.create!(title: "Art no-fit", source: "# Hiring pipeline\n\n:::art\n#{(1..8).map { |index| "#{index}. Step #{index}" }.join("\n")}")
+    # Ten items overflow the fixed slide host now that block controls float
+    # outside the content flow (eight fit once the in-flow button bar left).
+    many = Presentation.create!(title: "Art no-fit", source: "# Hiring pipeline\n\n:::art\n#{(1..10).map { |index| "#{index}. Step #{index}" }.join("\n")}")
     visit edit_presentation_path(many)
     wait_for_art_settled
     art = find(".presentation-surface[data-controller~='art-layout'] [data-elef-art-root]")
     many_geometry = page.evaluate_script("(() => { const root = document.querySelector('.presentation-surface[data-controller~=\"art-layout\"] [data-elef-art-root]'); const host = root.closest('[data-art-host=\"fixed\"]'); let top = 0, node = root; while (node && node !== host) { top += node.offsetTop; node = node.offsetParent; } return {status: root.dataset.artStatus, layout: root.dataset.artLayout, root: [root.scrollHeight, root.clientHeight, root.offsetHeight], host: [host.scrollHeight, host.clientHeight], top, children: [...host.children].map(child => [child.offsetTop, child.offsetHeight])} })()")
     assert_equal "fallback-no-fit", art["data-art-status"], many_geometry.inspect
     assert_equal "ART_NO_FIT", art["data-art-diagnostic"]
-    assert_equal 8, art.all(".elef-art-list > li").length
+    assert_equal 10, art.all(".elef-art-list > li", visible: :all).length
     assert_equal "true", art.find(:xpath, "ancestor::*[@data-art-host='fixed']")["data-art-overfull"]
     assert_selector ".preview-warnings li", text: /does not fit the fixed slide/
   end
@@ -424,20 +426,25 @@ class ArtTest < ApplicationSystemTestCase
         const surface = staging.firstElementChild;
         surface.style.cssText = "position:fixed;left:0;top:0;width:1280px;height:720px;z-index:99999;pointer-events:none";
         document.body.append(surface);
+        // Pill placement is JS-owned: run the live controller's placement on
+        // staged Rails markup exactly as mount does for rendered previews.
+        [...surface.querySelectorAll(".slide-block-shell")].forEach((shell) => document.querySelector(".visual-editor-form").presentationEditorController.placeAlignmentPill(shell));
         const result = [...surface.querySelectorAll(".slide-region-block")].filter((region) => region.querySelector("[data-elef-art-root]")).map((region) => {
-          const controls = region.querySelector(":scope > .presentation-editor-block-controls");
+          const shell = region.querySelector(":scope > .slide-block-shell");
+          const controls = shell?.querySelector(":scope > .presentation-editor-block-controls");
           const select = controls?.querySelector("select[data-presentation-editor-align]");
-          const regionRect = region.getBoundingClientRect();
+          const shellRect = shell?.getBoundingClientRect();
           const controlsRect = controls?.getBoundingClientRect();
           return {
             classes: region.className.split(/\\s+/).filter(name => name.startsWith("position-")),
-            controlsDirect: controls?.parentElement === region,
-            relative: getComputedStyle(region).position === "relative",
+            shellDirect: controls?.parentElement === shell,
+            relative: shell && getComputedStyle(shell).position === "relative",
             absoluteControls: controls && getComputedStyle(controls).position === "absolute",
-            topOffset: controlsRect ? Math.abs(controlsRect.top - regionRect.top) : null,
-            rightOffset: controlsRect ? Math.abs(regionRect.right - controlsRect.right) : null,
+            topOffset: controlsRect && shellRect ? Math.abs(controlsRect.top - shellRect.top) : null,
+            leftGap: controlsRect && shellRect ? controlsRect.left - shellRect.right : null,
+            rightGap: controlsRect && shellRect ? shellRect.left - controlsRect.right : null,
             blockIndex: select?.dataset.blockIndex ?? null,
-            blockId: region.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
+            blockId: shell?.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
           };
         });
         surface.remove();
@@ -450,9 +457,9 @@ class ArtTest < ApplicationSystemTestCase
     hover_state = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const root = document.querySelector(".presentation-surface.presentation-editor-projection [data-elef-art-root]");
-        const region = root?.closest(".slide-region-block");
-        const controls = region?.querySelector(":scope > .presentation-editor-block-controls");
-        return { hover: region?.matches(":hover"), opacity: controls && getComputedStyle(controls).opacity, pointerEvents: controls && getComputedStyle(controls).pointerEvents };
+        const shell = root?.closest(".slide-block-shell");
+        const controls = shell?.querySelector(":scope > .presentation-editor-block-controls");
+        return { hover: shell?.matches(":hover"), opacity: controls && getComputedStyle(controls).opacity, pointerEvents: controls && getComputedStyle(controls).pointerEvents };
       })()
     JAVASCRIPT
     assert_equal true, hover_state.fetch("hover"), hover_state.inspect
@@ -514,23 +521,28 @@ class ArtTest < ApplicationSystemTestCase
         const surface = staging.firstElementChild;
         surface.style.cssText = "position:fixed;left:0;top:0;width:1280px;height:720px;z-index:99999;pointer-events:none";
         document.body.append(surface);
+        // Pill placement is JS-owned: run the live controller's placement on
+        // staged Rails markup exactly as mount does for rendered previews.
+        [...surface.querySelectorAll(".slide-block-shell")].forEach((shell) => document.querySelector(".visual-editor-form").presentationEditorController.placeAlignmentPill(shell));
         const result = [...surface.querySelectorAll(".slide-middle-group > .slide-block-item > .slide-region-block, .slide-bottom-lane > .slide-block-item > .slide-region-block")]
           .filter((region) => region.querySelector("[data-elef-art-root]"))
           .map((region) => {
-            const controls = region.querySelector(":scope > .presentation-editor-block-controls");
+            const shell = region.querySelector(":scope > .slide-block-shell");
+          const controls = shell?.querySelector(":scope > .presentation-editor-block-controls");
             const select = controls?.querySelector("select[data-presentation-editor-align]");
-            const regionRect = region.getBoundingClientRect();
+            const shellRect = shell?.getBoundingClientRect();
             const controlsRect = controls?.getBoundingClientRect();
             return {
               lane: region.closest(".slide-middle-group") ? "middle" : "bottom",
               classes: region.className.split(/\\s+/).filter(name => name.startsWith("position-")),
-              controlsDirect: controls?.parentElement === region,
-              relative: getComputedStyle(region).position === "relative",
+              shellDirect: controls?.parentElement === shell,
+              relative: shell && getComputedStyle(shell).position === "relative",
               absoluteControls: controls && getComputedStyle(controls).position === "absolute",
-              topOffset: controlsRect ? Math.abs(controlsRect.top - regionRect.top) : null,
-              rightOffset: controlsRect ? Math.abs(regionRect.right - controlsRect.right) : null,
+              topOffset: controlsRect && shellRect ? Math.abs(controlsRect.top - shellRect.top) : null,
+            leftGap: controlsRect && shellRect ? controlsRect.left - shellRect.right : null,
+              rightGap: controlsRect && shellRect ? shellRect.left - controlsRect.right : null,
               blockIndex: select?.dataset.blockIndex ?? null,
-              blockId: region.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
+              blockId: shell?.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
             };
           });
         surface.remove();
@@ -543,7 +555,7 @@ class ArtTest < ApplicationSystemTestCase
     body_hover = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const root = document.querySelector(".presentation-surface.presentation-editor-projection [data-elef-art-root]");
-        const controls = root?.closest(".slide-region-block")?.querySelector(":scope > .presentation-editor-block-controls");
+        const controls = root?.closest(".slide-block-shell")?.querySelector(":scope > .presentation-editor-block-controls");
         return {opacity: controls && getComputedStyle(controls).opacity, pointerEvents: controls && getComputedStyle(controls).pointerEvents};
       })()
     JAVASCRIPT
@@ -580,19 +592,21 @@ class ArtTest < ApplicationSystemTestCase
       (() => {
         const surface = document.querySelector(".presentation-surface.presentation-editor-projection");
         return [...surface.querySelectorAll(".slide-region-block")].filter((region) => region.querySelector("[data-elef-art-root]")).map((region) => {
-          const controls = region.querySelector(":scope > .presentation-editor-block-controls");
+          const shell = region.querySelector(":scope > .slide-block-shell");
+          const controls = shell?.querySelector(":scope > .presentation-editor-block-controls");
           const select = controls?.querySelector("select[data-presentation-editor-align]");
-          const regionRect = region.getBoundingClientRect();
+          const shellRect = shell?.getBoundingClientRect();
           const controlsRect = controls?.getBoundingClientRect();
           return {
             classes: region.className.split(/\\s+/).filter(name => name.startsWith("position-")),
-            controlsDirect: controls?.parentElement === region,
-            relative: getComputedStyle(region).position === "relative",
+            shellDirect: controls?.parentElement === shell,
+            relative: shell && getComputedStyle(shell).position === "relative",
             absoluteControls: controls && getComputedStyle(controls).position === "absolute",
-            topOffset: controlsRect ? Math.abs(controlsRect.top - regionRect.top) : null,
-            rightOffset: controlsRect ? Math.abs(regionRect.right - controlsRect.right) : null,
+            topOffset: controlsRect && shellRect ? Math.abs(controlsRect.top - shellRect.top) : null,
+            leftGap: controlsRect && shellRect ? controlsRect.left - shellRect.right : null,
+            rightGap: controlsRect && shellRect ? shellRect.left - controlsRect.right : null,
             blockIndex: select?.dataset.blockIndex ?? null,
-            blockId: region.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
+            blockId: shell?.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
           };
         });
       })()
@@ -606,11 +620,17 @@ class ArtTest < ApplicationSystemTestCase
       expected_vertical = index.even? ? "middle" : "bottom"
       assert_includes entry.fetch("classes"), "position-#{expected_horizontal}"
       assert_includes entry.fetch("classes"), "position-#{expected_vertical}"
-      assert entry.fetch("controlsDirect"), "Art controls must be direct children of their Art region: #{entry.inspect}"
-      assert entry.fetch("relative"), "Art region must establish the controls' positioning context: #{entry.inspect}"
+      assert entry.fetch("shellDirect"), "Art controls must be direct children of their block shell: #{entry.inspect}"
+      assert entry.fetch("relative"), "Block shell must establish the positioning context for the controls: #{entry.inspect}"
       assert entry.fetch("absoluteControls"), "Art controls must remain absolutely positioned: #{entry.inspect}"
-      assert_in_delta 0, entry.fetch("topOffset"), 1, entry.inspect
-      assert_in_delta 0, entry.fetch("rightOffset"), 1, entry.inspect
+      assert_in_delta 0, entry.fetch("topOffset"), 8, entry.inspect
+      if expected_horizontal == "right"
+        assert_in_delta 0, entry.fetch("rightGap"), 8, entry.inspect
+        assert_operator entry.fetch("rightGap"), :>=, -1, entry.inspect
+      else
+        assert_in_delta 0, entry.fetch("leftGap"), 8, entry.inspect
+        assert_operator entry.fetch("leftGap"), :>=, -1, entry.inspect
+      end
       block_id_index = entry.fetch("blockId").match(/block-(\d+)\z/)[1].to_i - 1
       assert_equal block_id_index.to_s, entry.fetch("blockIndex")
     end
@@ -623,20 +643,22 @@ class ArtTest < ApplicationSystemTestCase
         return [...surface.querySelectorAll(".slide-middle-group > .slide-block-item > .slide-region-block, .slide-bottom-lane > .slide-block-item > .slide-region-block")]
           .filter((region) => region.querySelector("[data-elef-art-root]"))
           .map((region) => {
-            const controls = region.querySelector(":scope > .presentation-editor-block-controls");
+            const shell = region.querySelector(":scope > .slide-block-shell");
+          const controls = shell?.querySelector(":scope > .presentation-editor-block-controls");
             const select = controls?.querySelector("select[data-presentation-editor-align]");
-            const regionRect = region.getBoundingClientRect();
+            const shellRect = shell?.getBoundingClientRect();
             const controlsRect = controls?.getBoundingClientRect();
             return {
               lane: region.closest(".slide-middle-group") ? "middle" : "bottom",
               classes: region.className.split(/\\s+/).filter(name => name.startsWith("position-")),
-              controlsDirect: controls?.parentElement === region,
-              relative: getComputedStyle(region).position === "relative",
+              shellDirect: controls?.parentElement === shell,
+              relative: shell && getComputedStyle(shell).position === "relative",
               absoluteControls: controls && getComputedStyle(controls).position === "absolute",
-              topOffset: controlsRect ? Math.abs(controlsRect.top - regionRect.top) : null,
-              rightOffset: controlsRect ? Math.abs(regionRect.right - controlsRect.right) : null,
+              topOffset: controlsRect && shellRect ? Math.abs(controlsRect.top - shellRect.top) : null,
+            leftGap: controlsRect && shellRect ? controlsRect.left - shellRect.right : null,
+              rightGap: controlsRect && shellRect ? shellRect.left - controlsRect.right : null,
               blockIndex: select?.dataset.blockIndex ?? null,
-              blockId: region.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
+              blockId: shell?.querySelector(":scope > .slide-block")?.dataset.editorBlockId ?? null
             };
           });
       })()
@@ -652,11 +674,17 @@ class ArtTest < ApplicationSystemTestCase
       assert_equal expected_lane, entry.fetch("lane"), entry.inspect
       assert_includes entry.fetch("classes"), "position-#{expected_horizontal}"
       assert_includes entry.fetch("classes"), "position-#{expected_vertical}"
-      assert entry.fetch("controlsDirect"), "Art controls must be direct children of their Art region: #{entry.inspect}"
-      assert entry.fetch("relative"), "Art region must establish the controls' positioning context: #{entry.inspect}"
+      assert entry.fetch("shellDirect"), "Art controls must be direct children of their block shell: #{entry.inspect}"
+      assert entry.fetch("relative"), "Block shell must establish the positioning context for the controls: #{entry.inspect}"
       assert entry.fetch("absoluteControls"), "Art controls must remain absolutely positioned: #{entry.inspect}"
-      assert_in_delta 0, entry.fetch("topOffset"), 1, entry.inspect
-      assert_in_delta 0, entry.fetch("rightOffset"), 1, entry.inspect
+      assert_in_delta 0, entry.fetch("topOffset"), 8, entry.inspect
+      if expected_horizontal == "right"
+        assert_in_delta 0, entry.fetch("rightGap"), 8, entry.inspect
+        assert_operator entry.fetch("rightGap"), :>=, -1, entry.inspect
+      else
+        assert_in_delta 0, entry.fetch("leftGap"), 8, entry.inspect
+        assert_operator entry.fetch("leftGap"), :>=, -1, entry.inspect
+      end
       block_id_index = entry.fetch("blockId").match(/block-(\d+)\z/)[1].to_i - 1
       assert_equal block_id_index.to_s, entry.fetch("blockIndex")
     end

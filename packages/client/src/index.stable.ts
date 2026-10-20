@@ -69,6 +69,7 @@ export type { PrintWorkKind } from "./features/export/print.js";
 export {
   presentationBlockAttributes,
   presentationBlockControls,
+  presentationEmptyBlock,
   presentationEmptySlide,
   presentationRoot,
   presentationSlideBlock,

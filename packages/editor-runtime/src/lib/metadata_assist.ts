@@ -3,7 +3,7 @@ import {
   MARGIN_SETTING_KEYS,
   METADATA_TOP_LEVEL_KEYS,
   metadataValueChoices
-} from "@elef/work-model"
+} from "@elef/work-model/style-vocab"
 
 export interface MetadataQuery {
   kind: "key" | "value";

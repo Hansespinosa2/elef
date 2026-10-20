@@ -1,6 +1,6 @@
 export default {
   testDir: "./specs",
-  testMatch: ["components.spec.js", "print-pdf.spec.js"],
+  testMatch: ["components.spec.js", "editor-mode-events.spec.js", "print-pdf.spec.js"],
   fullyParallel: false,
   workers: 1,
   timeout: 30_000,

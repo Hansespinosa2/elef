@@ -1,4 +1,4 @@
-import { POSITION_VOCABULARY } from "@elef/work-model/document-map"
+import { POSITION_VOCABULARY } from "@elef/work-model/style-vocab"
 
 export interface RegistryEntry {
   id?: unknown;

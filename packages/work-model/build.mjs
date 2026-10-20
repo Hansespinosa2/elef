@@ -37,6 +37,8 @@ bundle(join(here, "src", "document_links.ts"), join(here, "dist", "document-link
 bundle(join(here, "src", "document_transforms.ts"), join(here, "dist", "document-transforms.js"));
 bundle(join(here, "src", "art_source.ts"), join(here, "dist", "art-source.js"));
 bundle(join(here, "src", "slide_position_layout.ts"), join(here, "dist", "slide-position-layout.js"));
+bundle(join(here, "src", "style_vocab.ts"), join(here, "dist", "style-vocab.js"));
+bundle(join(here, "src", "math_source.ts"), join(here, "dist", "math-source.js"));
 bundle(join(here, "src", "index.ts"), join(here, "dist", "elef-work-model.js"), {
   external: ["@elef/work-model/*"],
 });

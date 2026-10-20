@@ -969,6 +969,15 @@ class DesktopEditorUi {
       ;(async () => {
         let outcome
         try {
+          // Work-open focuses the active visual passage, and while a
+          // passage carries the native caret the input bridge tracks the
+          // engine selection from it — programmatic cursor moves would be
+          // clobbered back. This scenario asserts gutter tracking of the
+          // CodeMirror cursor, so hand the caret to the editor first
+          // (mirroring the web system test's unfocused-passage setup).
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+          window.getSelection()?.removeAllRanges()
+          editor.view.focus()
           editor.loadDocument("One\ntwo\nthree\nfour")
           editor.setSelectionRange(0)
           await twoFrames()
@@ -1090,6 +1099,24 @@ class DesktopEditorUi {
     })
   }
 
+  async assertCaretAtStartOnOpen() {
+    const mode = await $("#desktop-editor-form").getAttribute("data-editor-mode")
+    if (mode === "source") return this.assertSourceCaretAtStartOnOpen()
+    await browser.waitUntil(async () => browser.execute(() => {
+      const first = document.querySelector("#desktop-preview [data-editor-block-id][contenteditable='true']")
+      const selection = window.getSelection()
+      if (!first || document.activeElement !== first || !selection?.isCollapsed
+          || !selection.focusNode || !first.contains(selection.focusNode)) return false
+      const prefix = document.createRange()
+      prefix.selectNodeContents(first)
+      prefix.setEnd(selection.focusNode, selection.focusOffset)
+      return prefix.toString().length === 0
+    }), {
+      timeout: 5_000,
+      timeoutMsg: "The visual editor did not open with its caret in the first rendered passage"
+    })
+  }
+
   async typeEmptyDisplayMath(mode) {
     await browser.execute(() => window.focus())
     focusDesktopWindow()
@@ -1109,6 +1136,27 @@ class DesktopEditorUi {
       })
       if (!focus?.active || !focus.selectionInsideBlock) {
         throw new Error(`The visual editor did not receive focus before native typing: ${JSON.stringify(focus)}`)
+      }
+      // Vim persists across scenarios in this shared session: in visual
+      // normal mode "$" is a motion and inserts nothing (by design, same
+      // as source mode). Enter insert mode first, mirroring the source
+      // branch below; before the display-math key listener attaches so
+      // the "i" press stays out of the expected key sequence.
+      const visualVimState = await browser.execute(() => {
+        const editor = document.querySelector("#desktop-editor-field")?.editorController
+        return {
+          enabled: editor?.vimEnabled === true,
+          insertMode: editor?.vimMode?.startsWith("insert") === true
+        }
+      })
+      if (visualVimState.enabled && !visualVimState.insertMode) {
+        typeNativeText("i", { activate: false })
+        await browser.waitUntil(async () => browser.execute(() =>
+          document.querySelector("#desktop-editor-field")?.editorController?.vimMode?.startsWith("insert") === true
+        ), {
+          timeout: 5_000,
+          timeoutMsg: "The visual editor did not enter Vim insert mode before display-math input"
+        })
       }
     } else {
       target = await $("#work-source-editor .cm-content")
@@ -2340,14 +2388,14 @@ describe("desktop binary workflows and native boundaries", () => {
     await library.assertWorkAbsent(title)
   })
 
-  it("opens a library work with the source caret at 0 and focused", async () => {
+  it("opens a library work with the caret at the start of its active editor", async () => {
     const ui = new DesktopEditorUi()
     await ui.openWork()
     await ui.captureCaretAutofocusShot("library-open")
-    await ui.assertSourceCaretAtStartOnOpen()
+    await ui.assertCaretAtStartOnOpen()
   })
 
-  it("creates a work from the New menu with the source caret at 0 and focused", async () => {
+  it("creates a work from the New menu with the caret at the start of its active editor", async () => {
     const library = new DesktopLibraryUi()
     await library.openLibrary()
     await $(".new-work-trigger").click()
@@ -2361,7 +2409,7 @@ describe("desktop binary workflows and native boundaries", () => {
       title = await $("#desktop-editor-title").getValue()
       const ui = new DesktopEditorUi()
       await ui.captureCaretAutofocusShot("direct-create-open")
-      await ui.assertSourceCaretAtStartOnOpen()
+      await ui.assertCaretAtStartOnOpen()
     } finally {
       if (title) {
         await library.openLibrary()

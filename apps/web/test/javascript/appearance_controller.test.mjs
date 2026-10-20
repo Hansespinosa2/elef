@@ -7,16 +7,17 @@ import { fileURLToPath } from "node:url"
 const controllerPath = new URL("../../../../packages/editor-runtime/dist/controllers/appearance_controller.js", import.meta.url)
 const testPath = fileURLToPath(import.meta.url)
 const importmapPath = path.resolve(path.dirname(testPath), "../../config/importmap.rb")
-const documentMapUrl = import.meta.resolve("@elef/work-model")
+const styleVocabUrl = import.meta.resolve("@elef/work-model/style-vocab")
 const source = (await readFile(controllerPath, "utf8"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
-  .replace('import { withAppearanceValue } from "@elef/work-model"', `import { withAppearanceValue } from "${documentMapUrl}"`)
+  .replace('import { withAppearanceValue } from "@elef/work-model/style-vocab"', `import { withAppearanceValue } from "${styleVocabUrl}"`)
 const appearance = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
 test("Rails importmap pins the shared appearance source mapper", async () => {
   const importmap = await readFile(importmapPath, "utf8")
   assert.match(importmap, /pin "@elef\/work-model", to: "work-model\/dist\/elef-work-model\.js"/)
   assert.match(importmap, /pin "@elef\/work-model\/art-source", to: "work-model\/dist\/art-source\.js"/)
+  assert.match(importmap, /pin "@elef\/work-model\/style-vocab", to: "work-model\/dist\/style-vocab\.js"/)
 })
 
 test("the shared appearance controller commits selected styles to Markdown", () => {
