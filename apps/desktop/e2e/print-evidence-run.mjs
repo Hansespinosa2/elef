@@ -118,5 +118,14 @@ try {
   if (result.status !== 0) throw new Error(`Print-evidence capture failed with status ${result.status}`)
   console.log(`Print-evidence captures written to ${env.ELEF_E2E_PRINT_EVIDENCE_DIR}`)
 } finally {
-  updaterServer.kill("SIGTERM")
+  // Mirror run.mjs: a single SIGTERM does not reliably stop the fixture
+  // server (its survival kept this orchestrator alive, hanging the evidence
+  // lane until the job timeout with the captures already written).
+  // Escalate to SIGKILL so the process always exits.
+  const exited = new Promise(resolve => updaterServer.once("exit", resolve))
+  if (updaterServer.exitCode === null && updaterServer.signalCode === null) {
+    updaterServer.kill("SIGTERM")
+    await Promise.race([exited, new Promise(resolve => setTimeout(resolve, 1_000))])
+    if (updaterServer.exitCode === null && updaterServer.signalCode === null) updaterServer.kill("SIGKILL")
+  }
 }
