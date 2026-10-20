@@ -1447,7 +1447,7 @@ test("source shorthand commit skips the projection pipeline", () => {
   const { calls: hostCalls, host } = stubHostDouble()
   const mounted = mountShorthand({ mode: "source", host })
 
-  const committed = mounted.controller.commit({ status: "valid", start: 5, end: 8, expansion: "\\mathbf{x}" }, " ")
+  const committed = mounted.controller.commit({ status: "valid", start: 5, end: 8, source: "x.b", expansion: "\\mathbf{x}" }, " ")
 
   assert.equal(committed, true)
   assert.equal(mounted.engine.value, "See $\\mathbf{x} $ done")
