@@ -876,19 +876,22 @@ class ArtTest < ApplicationSystemTestCase
     assert_equal "ready", print_state.fetch("status"), print_state.inspect
     page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", media: "screen")
 
-    overfull = Presentation.create!(title: "Printable Art no-fit", source: "# Hiring pipeline\n\n:::art\n#{(1..8).map { |number| "#{number}. Step #{number}" }.join("\n")}")
+    # Ten items overflow under the unified Tailwind base (eight fit since
+    # preflight; see the presentation-layout parity fix). Keep this count
+    # above the fit threshold so the no-fit branch stays covered.
+    overfull = Presentation.create!(title: "Printable Art no-fit", source: "# Hiring pipeline\n\n:::art\n#{(1..10).map { |number| "#{number}. Step #{number}" }.join("\n")}")
     visit print_presentation_path(overfull)
     assert_selector ".presentation-print [data-elef-art-root][data-art-settled='true']", wait: 15
     no_fit = find(".presentation-print [data-elef-art-root]")
     assert_equal "fallback-no-fit", no_fit["data-art-status"]
     assert_equal "ART_NO_FIT", no_fit["data-art-diagnostic"]
     assert_equal "true", no_fit.find(:xpath, "ancestor::*[@data-art-host='fixed']")["data-art-overfull"]
-    assert_equal 8, no_fit.all(".elef-art-list > li").length
+    assert_equal 10, no_fit.all(".elef-art-list > li").length
     page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", media: "print")
     page.evaluate_async_script("const done = arguments[0]; requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 300))); ")
     no_fit_print = page.evaluate_script("(() => { const root = document.querySelector('.presentation-print [data-elef-art-root]'); const host = root.closest('[data-art-host=\"fixed\"]'); return {status: root.dataset.artStatus, settled: root.dataset.artSettled, layout: root.dataset.artLayout, host: host && [host.clientWidth, host.clientHeight, host.scrollWidth, host.scrollHeight], root: [root.clientWidth, root.clientHeight, root.scrollWidth, root.scrollHeight], print: matchMedia('print').matches} })()")
     assert_equal "fallback-no-fit", no_fit_print.fetch("status"), no_fit_print.inspect
-    assert_equal 8, find(".presentation-print [data-elef-art-root]").all(".elef-art-list > li").length
+    assert_equal 10, find(".presentation-print [data-elef-art-root]").all(".elef-art-list > li").length
     page.driver.browser.execute_cdp("Emulation.setEmulatedMedia", media: "screen")
   end
 end
