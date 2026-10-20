@@ -16,7 +16,8 @@
     "@wdio/mocha-framework": "9.32.0",
     "@wdio/spec-reporter": "9.32.0",
     "@wdio/tauri-plugin": "1.4.0",
-    "@wdio/tauri-service": "1.4.0"
+    "@wdio/tauri-service": "1.4.0",
+    "pdfjs-dist": "^6.4.299"
   },
   "overrides": {
     "@puppeteer/browsers": "3.2.3",

@@ -10,7 +10,7 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client"
+import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client"
 import type { ExportMenuHandle, ExportMenuProps, GraphController, LibraryPaletteCommand } from "@elef/client"
 
 interface OpenedEditor {
@@ -1165,9 +1165,17 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     // the matching web print geometry (A4 document pages, fixed 16:9
     // presentation pages) from the shared print contract, and pausing videos
     // mirrors the web print-view controller so PDFs carry the poster frame.
+    // The markers cover the native dialog lifetime, not the command: the
+    // platform dialog (and its PDF destination) outlives the resolve of the
+    // native print_work command, so clearing markers when the command
+    // resolves renders the unmarked live editor shell into the PDF. Markers
+    // are print-media-only (no screen rule references them), so keeping them
+    // is safe; each preparation clears every marker first, then adds the
+    // current kind pair, so switching work kinds leaves no stale marker.
     const printKind = printWorkKindForSourceFile(activeWorkFolder?.source_file)
     const printMarkers = printMarkerClasses(printKind)
     pausePrintVideos(preview)
+    document.body.classList.remove(...ALL_PRINT_MARKERS)
     document.body.classList.add(...printMarkers)
     await new Promise(resolve => requestAnimationFrame(resolve))
     try {
@@ -1176,21 +1184,20 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // silent no-op in the desktop webviews on macOS and Linux, which is
       // why desktop PDF export never produced a dialog. It stays as the
       // last-resort fallback where no native pipeline answers. The native
-      // dialog fires no afterprint event, so the printing-work marker is
-      // cleared here on every path: dialog shown, cancelled, or failed.
+      // dialog fires no afterprint event, so the markers intentionally stay
+      // on every path: dialog shown, cancelled, or failed.
       const printViaNative = typeof fileLibrary.printWork === "function"
       if (printViaNative) await fileLibrary.printWork()
       else window.print()
       // Harness probe: the e2e run cannot dismiss the platform dialog, so
-      // it asserts this flag (native seam reached) instead of dialog pixels.
+      // it asserts this flag (native seam reached) instead of dialog pixels,
+      // plus the marker set below (the render-time print state).
       if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
         globalThis.__elefPrintResult = { native: printViaNative, kind: printKind }
       }
     } catch (error) {
       console.error("[desktop-print]", error)
       showNotice("The print dialog could not be opened.", "error")
-    } finally {
-      document.body.classList.remove(...printMarkers)
     }
   }
 

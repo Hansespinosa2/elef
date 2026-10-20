@@ -152,8 +152,13 @@ Capability keys come from the `HostCapabilities` interface
   the matching web print geometry, so the PDF carries the Work preview only —
   shell, Export menu, notices, and editor affordances stay out — with fixed
   13.333 × 7.5 in presentation pages and flowing A4 document pages. The native
-  dialog fires no `afterprint` event, so the markers clear when the
-  command resolves; the WebDriver harness resolves the command without
+  dialog fires no `afterprint` event, and the platform dialog (with its PDF
+  destination) outlives the resolve of the native print command, so the
+  markers intentionally stay once set: clearing them when the command
+  resolves renders the unmarked live editor shell into the PDF. Each
+  preparation clears every marker (`ALL_PRINT_MARKERS`) first, then adds
+  the current kind pair; markers are print-media-only, so keeping them is
+  screen-safe. The WebDriver harness resolves the command without
   opening the dialog. The menu closes on activation, outside pointerdown
   or click, and Escape.
 - Media resolution differs by necessity, bytes match by policy: the webview

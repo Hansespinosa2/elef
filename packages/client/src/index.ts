@@ -76,6 +76,7 @@ export type {
   ExportMenuProps,
 } from "./features/export/ExportMenu.js";
 export {
+  ALL_PRINT_MARKERS,
   DOCUMENT_PRINT_GEOMETRY,
   PRESENTATION_PRINT_GEOMETRY,
   PRINT_DOCUMENT_MARKER,

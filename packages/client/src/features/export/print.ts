@@ -12,6 +12,20 @@ export const PRINT_MARKER = "printing-work"
 export const PRINT_DOCUMENT_MARKER = "printing-document"
 export const PRINT_PRESENTATION_MARKER = "printing-presentation"
 
+// Every marker the print flow may leave on the document element. The
+// markers are print-media-only (no screen stylesheet may reference them),
+// so they are safe to keep across the native print dialog lifetime: the
+// platform dialog (and its PDF destination) on macOS outlives the resolve
+// of the native print command, and clearing markers when the command
+// resolves prints the unmarked live editor shell instead of the Work.
+// Each preparation removes all three, then adds the current kind pair, so
+// switching work kinds never leaves a stale kind marker behind.
+export const ALL_PRINT_MARKERS: ReadonlyArray<string> = [
+  PRINT_MARKER,
+  PRINT_DOCUMENT_MARKER,
+  PRINT_PRESENTATION_MARKER,
+]
+
 // Mirrors the preview-context kind rule in the desktop shell
 // (`activeWorkFolder?.source_file === "document.md"`): documents print as
 // documents, everything else prints as a presentation.

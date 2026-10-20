@@ -69,8 +69,42 @@ test("the desktop document print path selects A4 without touching the PPTX pipel
 })
 
 test("the desktop print flow prepares through the shared print contract", () => {
-  for (const token of ["pausePrintVideos", "printMarkerClasses", "printWorkKindForSourceFile"]) {
+  for (const token of ["pausePrintVideos", "printMarkerClasses", "printWorkKindForSourceFile", "ALL_PRINT_MARKERS"]) {
     assert.ok(printFlow.includes(token), `expected printCurrentWork to use the shared ${token}`)
   }
   assert.ok(printFlow.includes("kind: printKind"), "expected the harness probe to carry the work kind")
+})
+
+test("the desktop presentation print neutralizes the editor projection so one slide fills one page", () => {
+  // The desktop prints the live editor projection (scaled canvas, flex
+  // slide internals, positioned blocks, shell padding and borders) while
+  // the web prints a dedicated block-layout partial. Without
+  // neutralization Chromium drops flex-column projection content when
+  // fragmenting it (blank first page, clipped oversized title, missing
+  // blocks) and the shell chain offsets the frame past the page fold.
+  const print = printBlock(hostCss)
+  for (const selector of [
+    ".printing-work .slide,",
+    ".printing-work .slide-block { display: block",
+    ".printing-work #desktop-preview,",
+    ".printing-work .slide-frame { margin: 0",
+    ".printing-work .slide-frame:last-of-type",
+  ]) {
+    assert.ok(print.includes(selector), `expected the print stylesheet to neutralize the projection: ${selector}`)
+  }
+})
+
+test("the print markers stay print-media-only so persisting them is screen-safe", () => {
+  // printCurrentWork keeps the markers across the native dialog lifetime
+  // (the dialog outlives the command resolve); that is only safe while no
+  // screen stylesheet keys off them. The flow must also never clear the
+  // markers when the command resolves.
+  const screenCss = hostCss.slice(0, hostCss.indexOf("@media print"))
+  for (const marker of ["printing-work", "printing-document", "printing-presentation"]) {
+    assert.ok(!screenCss.includes(marker), `expected no screen rule to reference ${marker}`)
+  }
+  assert.ok(
+    !/finally\s*{[^}]*classList\.remove/.test(printFlow),
+    "expected printCurrentWork to keep the markers once the native command resolves",
+  )
 })
