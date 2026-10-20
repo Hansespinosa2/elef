@@ -144,7 +144,9 @@ Ask "which row owns the state or behavior?" and put the change there; add a host
 
 ## Verification homes
 
-- `spec/` owns what must be true: frozen machine-checked law (schemas plus fixtures, with a checker that reads them).
+- `spec/` owns the frozen persisted-format law: the work-manifest schema plus fixtures, checked by `tooling/check_spec.py` (a deliberately small validator — its header names the supported subset).
+- `packages/contracts` owns the TypeScript host/port signatures, pinned at compile time by its types test; it performs no runtime validation.
+- Renderer-output and host-port behavior contracts live as executable proof in `tests/` (e.g. `apps/web/test/javascript/fixtures/renderer-outputs.json` plus the renderer suites that read it) and `tooling/` (boundary/ownership checkers), not in `spec/`.
 - `tests/` owns cross-owner executable proof; single-owner tests live next to the code they cover.
 - `tooling/` owns repo-run scripts and release operations.
 
