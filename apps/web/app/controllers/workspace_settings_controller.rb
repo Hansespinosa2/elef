@@ -13,7 +13,7 @@ class WorkspaceSettingsController < ApplicationController
     )
 
     respond_to do |format|
-      format.html { redirect_to settings_path, notice: "Workspace appearance saved." }
+      format.html { redirect_to settings_path }
       format.json { render json: { theme: @workspace.default_theme, typography: @workspace.default_typography } }
     end
   rescue ActiveRecord::RecordInvalid

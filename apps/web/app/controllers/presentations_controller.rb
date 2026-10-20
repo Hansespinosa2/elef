@@ -33,7 +33,7 @@ class PresentationsController < ApplicationController
 
   def start
     presentation = Presentation.create!(source: Presentation.available_default_source)
-    redirect_to edit_presentation_path(presentation), notice: "New presentation started."
+    redirect_to edit_presentation_path(presentation)
   end
 
   def create
@@ -67,7 +67,7 @@ class PresentationsController < ApplicationController
 
   def rename
     if @presentation.update(title: params.require(:presentation).permit(:title)[:title])
-      redirect_to(params[:library_view] == "all" ? root_path : presentations_path, notice: "Presentation renamed.")
+      redirect_to(params[:library_view] == "all" ? root_path : presentations_path)
     else
       redirect_to(params[:library_view] == "all" ? root_path : presentations_path, alert: @presentation.errors.full_messages.to_sentence)
     end
@@ -75,7 +75,7 @@ class PresentationsController < ApplicationController
 
   def destroy
     @presentation.destroy!
-    redirect_to presentations_path, notice: "Presentation deleted."
+    redirect_to presentations_path
   end
 
   def fork

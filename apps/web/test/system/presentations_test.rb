@@ -328,7 +328,6 @@ class PresentationsTest < ApplicationSystemTestCase
       find('input[aria-label="Rename Workflow parent"]').set("Renamed parent")
       click_on "Save title"
     end
-    assert_text "Presentation renamed.", wait: 5
     within("article", text: "Renamed parent") do
       find(".library-card-menu-trigger").click
       find("summary", text: "Fork").click
@@ -340,7 +339,6 @@ class PresentationsTest < ApplicationSystemTestCase
       find(".library-card-menu-trigger").click
       accept_confirm { click_on "Delete" }
     end
-    assert_text "Presentation deleted."
     assert_text "Parent no longer available"
     assert_equal "# Keep this source", Presentation.find_by!(parent_id: nil, fork_type: "inspiration").source
   end

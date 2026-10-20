@@ -588,7 +588,7 @@ class PresentationsControllerTest < ActionDispatch::IntegrationTest
 
     presentation = Presentation.order(:id).last
     assert_redirected_to edit_presentation_path(presentation)
-    assert_equal "New presentation started.", flash[:notice]
+    assert_nil flash[:notice]
     assert_equal Presentation.available_default_source, presentation.source
     assert_equal "---\ntheme: #{Workspace.default.default_theme}\n---\n#{Presentation::DEFAULT_SOURCE}", presentation.source
   end

@@ -17,7 +17,7 @@ class MathShortcutsController < ApplicationController
     @math_shortcut = MathShortcut.new(math_shortcut_params.merge(workspace: Workspace.default, built_in: false))
     if @math_shortcut.save
       respond_to do |format|
-        format.html { redirect_to math_shortcuts_path, notice: "Math shortcut created." }
+        format.html { redirect_to math_shortcuts_path }
         format.json { render json: { entry: authoring_entry(@math_shortcut) }, status: :created }
       end
     else
@@ -42,7 +42,7 @@ class MathShortcutsController < ApplicationController
       end
     elsif @math_shortcut.update(math_shortcut_params)
       respond_to do |format|
-        format.html { redirect_to math_shortcuts_path, notice: "Math shortcut updated." }
+        format.html { redirect_to math_shortcuts_path }
         format.json { render json: { entry: authoring_entry(@math_shortcut) } }
       end
     else
@@ -62,7 +62,7 @@ class MathShortcutsController < ApplicationController
     else
       @math_shortcut.destroy!
       respond_to do |format|
-        format.html { redirect_to math_shortcuts_path, notice: "Math shortcut deleted." }
+        format.html { redirect_to math_shortcuts_path }
         format.json { head :no_content }
       end
     end

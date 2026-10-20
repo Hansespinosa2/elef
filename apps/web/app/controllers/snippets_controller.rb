@@ -23,7 +23,7 @@ class SnippetsController < ApplicationController
     @snippet = Snippet.new(snippet_params)
     if @snippet.save
       respond_to do |format|
-        format.html { redirect_to snippets_path, notice: "Snippet created." }
+        format.html { redirect_to snippets_path }
         format.json { render json: { entry: authoring_entry(@snippet) }, status: :created }
       end
     else
@@ -43,7 +43,7 @@ class SnippetsController < ApplicationController
     @snippet = personal_snippet
     if @snippet.update(snippet_params)
       respond_to do |format|
-        format.html { redirect_to snippets_path, notice: "Snippet saved." }
+        format.html { redirect_to snippets_path }
         format.json { render json: { entry: authoring_entry(@snippet) } }
       end
     else
@@ -58,7 +58,7 @@ class SnippetsController < ApplicationController
     @snippet = personal_snippet
     @snippet.destroy!
     respond_to do |format|
-      format.html { redirect_to snippets_path, notice: "Snippet deleted." }
+      format.html { redirect_to snippets_path }
       format.json { head :no_content }
     end
   end

@@ -74,7 +74,7 @@ class DocumentsControllerTest < ActionDispatch::IntegrationTest
 
     document = Document.order(:id).last
     assert_redirected_to edit_document_path(document)
-    assert_equal "New document started.", flash[:notice]
+    assert_nil flash[:notice]
     assert_equal "---\ntheme: #{Workspace.default.default_theme}\n---\n# Untitled document", document.source
   end
 
