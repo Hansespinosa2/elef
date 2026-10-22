@@ -276,7 +276,7 @@ jobs:
         working-directory: apps/web
         run: bin/rails tailwindcss:build
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -523,7 +523,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -875,7 +875,7 @@ jobs:
         with:
           ref: ${{ github.sha }}
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: Re-verify the Gate A wiring and record the source SHA
