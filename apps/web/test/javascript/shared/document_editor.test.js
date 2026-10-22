@@ -505,8 +505,10 @@ test("shortcuts run through the shared keymap with engine after-care", (t) => {
   assert.equal(editor.routeKeymapKey(event, block), true)
   assert.deepEqual(keymapCalls, ["z"])
   assert.equal(event.defaultPrevented, true)
-  assert.deepEqual(restored, [[7, "b1"]])
-  assert.deepEqual(editor.pendingCaretRestore, { sourceOffset: 7, preferredBlockId: "b1" })
+  // Head 7 sits outside b1's stubbed region (9-14): the restore must not
+  // stay pinned to the originating block.
+  assert.deepEqual(restored, [[7, null]])
+  assert.deepEqual(editor.pendingCaretRestore, { sourceOffset: 7, preferredBlockId: null })
   assert.deepEqual(inputEvents, ["input"])
   assert.equal(engine.value, "undone")
 })

@@ -8,6 +8,7 @@
 // keys before keymaps in the engine extension order), so visual key behavior
 // cannot drift from source behavior.
 import { vimPassthroughKey } from "./projection_input.js"
+import { adjustTableColumnMove, skipTableDelimiterRow } from "./table_motion.js"
 
 export interface ProjectionKeyEventLike {
   readonly key: string
@@ -43,6 +44,8 @@ export interface ProjectionKeyHost {
   restoreSelection?(anchorSourceOffset: number, headSourceOffset: number, preferredBlockId: string | null): boolean
   refreshVimNormalCaret?(): void
   restoreSelections?(): void
+  syncEngineSelectionFromCaret?(): void
+  regionRangeForBlock?(blockId: string | null): { start: number; end: number } | null
 }
 
 function hasModifier(event: ProjectionKeyEventLike): boolean {
@@ -58,28 +61,82 @@ function isClipboardCopy(event: ProjectionKeyEventLike): boolean {
   return (event.ctrlKey ? 1 : 0) + (event.metaKey ? 1 : 0) === 1
 }
 
+// Line-wise motions preserve the source-character column, which the table
+// grid must re-pin to the cell column; every other motion lands exactly
+// and must not be re-pinned, or horizontal motions freeze inside table
+// cells and word motions lose their landing.
+const VERTICAL_PROJECTION_KEYS = new Set(["j", "k", "ArrowUp", "ArrowDown", "+", "-", "Enter"])
+
 function afterProjectionEngineKey(
   host: ProjectionKeyHost,
   editor: ProjectionKeyEditor,
   blockElement: Element,
   valueBefore: string,
+  headBefore: number,
+  vertical: boolean,
+  // Vim-path ranges are engine-owned visual selections and must paint
+  // end to end; keymap-path ranges (select-all) stay bridge-consumable,
+  // so they keep the originating block's scope. The input bridge
+  // replaces only block-scoped native ranges (the typing suites
+  // enshrine block-scoped replacement), while Vim operators consume
+  // the engine range directly.
+  freeRange: boolean,
 ): void {
-  const head = editor.selectionHead
+  let head = editor.selectionHead
   const blockId = (blockElement as HTMLElement).dataset.editorBlockId ?? null
-  if (!editor.projectionPanelFocused) host.restoreCaret(head, blockId)
+  // A cross-block motion must not stay pinned to the originating block:
+  // the point mapper prefers preferredBlockId even when the head left its
+  // range, which strands the caret at the old block's edge. Drop the
+  // preference when the head moved out of the originating region.
+  let preferredBlockId = blockId
+  if (blockId) {
+    const range = host.regionRangeForBlock?.(blockId)
+    if (range && (head < range.start || head > range.end)) preferredBlockId = null
+  }
+  // Inside Markdown tables the engine moves line-wise, which overshoots
+  // into the wrong column of the next row, and delimiter rows
+  // (|---|---|) have no rendered cells at all. Re-land line-wise pure
+  // motions (no text change) in the same grid column, preserving the
+  // anchor so Vim visual ranges survive the adjustment. Normal-mode
+  // motions stay collapsed: keeping the raw delimiter landing as an
+  // anchor would paint a phantom range (and flip the mode pill to
+  // visual).
+  if (editor.value === valueBefore && head !== headBefore) {
+    const unDelim = skipTableDelimiterRow(editor.value, headBefore, head)
+    const adjusted = vertical ? adjustTableColumnMove(editor.value, headBefore, unDelim) : unDelim
+    if (adjusted !== head) {
+      if (editor.selectionStart === editor.selectionEnd) {
+        editor.setSelectionRange(adjusted, adjusted)
+      } else {
+        const anchor = editor.selectionStart === head ? editor.selectionEnd : editor.selectionStart
+        editor.setSelectionRange(anchor, adjusted)
+      }
+      head = adjusted
+    }
+  }
+  if (!editor.projectionPanelFocused) host.restoreCaret(head, preferredBlockId)
   // A ranged main selection (Vim visual) paints on the rendered text;
   // the collapsed head above stays as the fallback when either end
   // cannot map (concealed syntax) or the host has no range support.
   if (editor.selectionStart !== editor.selectionEnd && !editor.projectionPanelFocused) {
     const anchor = head === editor.selectionEnd ? editor.selectionStart : editor.selectionEnd
-    host.restoreSelection?.(anchor, head, blockId)
+    // A Vim visual range that leaves the originating block must not pin
+    // either end to it: forcing the origin preference strands the head
+    // at the old block's edge (the collapsed path above drops the
+    // preference the same way). Either end outside the origin range
+    // resolves freely, so cross-block visual ranges paint end to end.
+    // Keymap ranges (select-all) keep the forced preference: the input
+    // bridge replaces block-scoped native ranges.
+    const range = blockId && freeRange ? host.regionRangeForBlock?.(blockId) : null
+    const crossed = range && ((anchor < range.start || anchor > range.end) || (head < range.start || head > range.end))
+    host.restoreSelection?.(anchor, head, crossed ? null : blockId)
   }
   // Mode switches (normal/insert/visual) rarely move the selection, so
   // the normal-mode block cannot rely on selectionchange alone.
   host.refreshVimNormalCaret?.()
   host.restoreSelections?.()
   if (editor.value !== valueBefore) {
-    host.pendingCaretRestore = { sourceOffset: head, preferredBlockId: blockId }
+    host.pendingCaretRestore = { sourceOffset: head, preferredBlockId }
     // The engine already holds the new source; the block DOM still shows
     // the old text until the refresh lands. Suppress the input
     // reconciliation for this dispatch, or it reads the stale DOM and
@@ -117,14 +174,19 @@ export function routeProjectionVimKey(
   const modified = hasModifier(event)
   if (editor.insertMode && event.key !== "Escape" && !modified) return false
   if (host.pendingProjectionEdits?.size) host.flushPendingProjectionEdits()
+  // The engine acts on its own selection: sync it from the native caret
+  // first, or motions replay from a stale head and land apparently at
+  // random. Visual ranges stay engine-owned (the sync skips them).
+  host.syncEngineSelectionFromCaret?.()
   const valueBefore = editor.value
+  const headBefore = editor.selectionHead
   if (!editor.handleVimKey(event)) {
     if (modified || vimPassthroughKey(event.key)) return false
     event.preventDefault()
     return true
   }
   event.preventDefault()
-  afterProjectionEngineKey(host, editor, blockElement, valueBefore)
+  afterProjectionEngineKey(host, editor, blockElement, valueBefore, headBefore, !modified && VERTICAL_PROJECTION_KEYS.has(event.key), true)
   return true
 }
 
@@ -149,8 +211,9 @@ export function routeProjectionKeymapKey(
   if (!modified && event.key !== "Tab" && !multipleEdit) return false
   if (host.pendingProjectionEdits?.size) host.flushPendingProjectionEdits()
   const valueBefore = editor.value
+  const headBefore = editor.selectionHead
   if (!editor.runKeymap(event)) return false
   event.preventDefault()
-  afterProjectionEngineKey(host, editor, blockElement, valueBefore)
+  afterProjectionEngineKey(host, editor, blockElement, valueBefore, headBefore, !modified && VERTICAL_PROJECTION_KEYS.has(event.key), false)
   return true
 }

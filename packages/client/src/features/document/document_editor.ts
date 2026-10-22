@@ -9,6 +9,7 @@ import { alignSourceOffset, alignVisibleOffset, touchesConcealedBoundary, transl
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 import { updateVimNormalCaret } from "../../session/vim_caret.js"
 import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
+import { tableGridForBlock, tableRelativeForVisible, tableSourceOffset, tableVisibleForSource } from "../../session/table_motion.js"
 import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
 import { markStage } from "../../session/stage_marks.js"
 import { projectionRangeEdit } from "../../session/projection_range.js"
@@ -221,6 +222,7 @@ export class DocumentEditor {
   // reveal. Any block or marker change, flush, or reinstall re-syncs fully.
   lastRevealSyncBlockId: string | null | undefined
   lastRevealSyncSpan: Element | null | undefined
+  caretSyncEstablished = false
   lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
   updatingProjection: boolean | undefined
   initialTitleFocusSettled: boolean | undefined
@@ -421,7 +423,8 @@ export class DocumentEditor {
       if (visible === null) return null
       const slice = editor.value.slice(endpointRegion.content_range.start, endpointRegion.content_range.end)
       const content = this.combinedBlockForId(endpoint.dataset.editorBlockId) || endpoint
-      const relative = alignVisibleOffset(slice, visibleBlockText(content), visible)
+      const relative = tableRelativeForVisible(slice, content, visible)
+        ?? alignVisibleOffset(slice, visibleBlockText(content), visible)
         ?? this.deps.sourceOffsetForVisibleOffset(slice, visible)
       return endpointRegion.content_range.start + relative
     })
@@ -507,7 +510,14 @@ export class DocumentEditor {
     // texts), so the aligner always maps, and the concealed check uses
     // the same mapping (the caret map would jump the lag and decline).
     markStage("key-align-start")
-    const mapOffset = (visible: number): number | null => alignVisibleOffset(slice, visibleText, visible)
+    // Table cells resolve through the rendered grid: the aligner below
+    // cannot see cell boundaries and the map skips header rows, so both
+    // misplace in-table edits. The concealed check still declines
+    // cross-cell ranges to the legacy path, as before.
+    const tableGrid = tableGridForBlock(block)
+    const mapOffset = (visible: number): number | null =>
+      (tableGrid ? tableSourceOffset(slice, tableGrid, visible) : null)
+      ?? alignVisibleOffset(slice, visibleText, visible)
     const mappedFrom = mapOffset(edit.fromVisible)
     const mappedTo = mapOffset(edit.toVisible)
     if (mappedFrom === null || mappedTo === null) { markStage("key-align-end"); return }
@@ -621,6 +631,16 @@ export class DocumentEditor {
     // caret then corrupts the next shorthand decision). The aligner
     // declines genuinely divergent text, which falls back to the map.
     const fragments = this.blockFragments(current.blockId)
+    // Tables render as one shell: the linear map below skips the header
+    // row as concealed (a later-line divider match) and cannot see cell
+    // boundaries, so resolve through the rendered grid when a fragment
+    // positively identifies the table; otherwise keep the legacy read.
+    for (const fragment of fragments) {
+      const tableRelative = tableRelativeForVisible(source, fragment, current.visibleOffset)
+      if (tableRelative !== null) {
+        return { blockId: current.blockId ?? "", sourceOffset: region.content_range.start + tableRelative }
+      }
+    }
     const aligned = fragments.length > 0
       ? alignVisibleOffset(source, fragments.map((fragment) => visibleBlockText(fragment)).join(""), current.visibleOffset)
       : null
@@ -638,8 +658,25 @@ export class DocumentEditor {
   selectionPointForSourceOffset(sourceOffset: number, preferredBlockId: string | null = null): { element: HTMLElement; node: Node; offset: number; visibleOffset: number; blockId: string } | null {
     if (!this.hasProjectionTarget || !this.editorController) return null
     const regions = this.allRegions().filter((region) => region.editable)
+    // Gap offsets (a line ending plus the next block's concealed marker)
+    // belong to no region; the distance fallback below would strand them
+    // on the previous block's end, so Vim motions landing on concealed
+    // markers (w onto "#", G to a line start) never visually advance.
+    // Resolve them to the following region: the marker is concealed, so
+    // the caret shows at that block's start. Regions arrive in document
+    // order from the server map.
+    let gapRegion: DocumentEditorRegion | null = null
+    let prevEnd = -1
+    for (const candidate of regions) {
+      if (sourceOffset > prevEnd && sourceOffset < candidate.content_range.start) {
+        gapRegion = candidate
+        break
+      }
+      prevEnd = candidate.content_range.end
+    }
     const region = regions.find((candidate) => candidate.block_id === preferredBlockId) ||
       regions.find((candidate) => sourceOffset >= candidate.content_range.start && sourceOffset <= candidate.content_range.end) ||
+      gapRegion ||
       regions.reduce((closest, candidate) => {
         if (!closest) return candidate
         const distance = Math.min(Math.abs(sourceOffset - candidate.content_range.start), Math.abs(sourceOffset - candidate.content_range.end))
@@ -701,6 +738,12 @@ export class DocumentEditor {
       const local = this.deps.visibleOffsetAtPoint(fragment, mathPoint.node, mathPoint.offset) ?? visibleOffset
       return { element: fragment, node: mathPoint.node, offset: mathPoint.offset, visibleOffset: preceding + local, blockId: region.block_id ?? "" }
     }
+    // Tables render as one shell, so the linear map above cannot see cell
+    // boundaries (delimiter rows occupy source space with zero rendered
+    // cells). Recompute from the rendered grid when it positively
+    // identifies the table; otherwise keep the mapped offset.
+    const tableOffset = tableVisibleForSource(source, block, relative)
+    if (tableOffset !== null) visibleOffset = tableOffset
     const point = this.deps.pointAtVisibleOffset(block, visibleOffset)
     return { element: block as HTMLElement, node: point[0], offset: point[1], visibleOffset, blockId: region.block_id ?? "" }
   }
@@ -897,8 +940,30 @@ export class DocumentEditor {
     if ((block as HTMLElement).contentEditable !== "true") return
     const caret = this.captureCaret()
     if (!caret) return
-    if (editor.selectionStart === caret.sourceOffset && editor.selectionEnd === caret.sourceOffset) return
+    if (editor.selectionStart === caret.sourceOffset && editor.selectionEnd === caret.sourceOffset) {
+      this.caretSyncEstablished = true
+      return
+    }
+    if (editor.vimEnabled && !editor.insertMode && this.caretSyncEstablished) {
+      // The native caret cannot represent engine positions on concealed
+      // markers (a w onto "#" and the block start below it read the same
+      // caret), so a forward sync can yank a correct engine head
+      // backwards and trap the next motion. When the engine head already
+      // resolves to this exact caret node and offset, they agree and
+      // there is nothing to sync. Node identity (not the visible
+      // offset) is the comparison: fragment-relative offsets differ
+      // across multi-fragment blocks. The establishment flag keeps the
+      // very first sync unconditional: a stale engine (fresh load) can
+      // collide with the caret through the same lossy mapping, and only
+      // a real sync disambiguates it. Insert mode keeps the old
+      // behavior: the native caret owns there.
+      const enginePoint = this.selectionPointForSourceOffset(editor.selectionHead, null)
+      const selection = window.getSelection()
+      if (enginePoint && enginePoint.blockId === caret.blockId &&
+        selection?.focusNode === enginePoint.node && selection?.focusOffset === enginePoint.offset) return
+    }
     editor.setSelectionRange(caret.sourceOffset, caret.sourceOffset)
+    this.caretSyncEstablished = true
   }
 
   blockMarkdown(blockElement: Element, region: DocumentEditorRegion, block: DocumentEditorBlock, source: string): { markdown: string; kind: string; start: number; end: number } {
@@ -957,6 +1022,13 @@ export class DocumentEditor {
 
   regionForBlock(blockId: string | undefined): DocumentEditorRegion | null {
     return this.allRegions().find((region) => region.block_id === blockId) || null
+  }
+
+  regionRangeForBlock(blockId: string | null): { start: number; end: number } | null {
+    if (!blockId) return null
+    const region = this.regionForBlock(blockId)
+    if (!region) return null
+    return { start: region.content_range.start, end: region.content_range.end }
   }
 
   inlineRevealSource(block: Element): string | null {
