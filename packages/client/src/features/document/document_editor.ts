@@ -205,6 +205,7 @@ export class DocumentEditor {
   pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null } | null | undefined
   suppressProjectionInput = false
   pendingCaret: { sourceOffset: number; location: string } | null | undefined
+  caretSyncEstablished = false
   lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
   updatingProjection: boolean | undefined
   initialTitleFocusSettled: boolean | undefined
@@ -640,8 +641,25 @@ export class DocumentEditor {
   selectionPointForSourceOffset(sourceOffset: number, preferredBlockId: string | null = null): { element: HTMLElement; node: Node; offset: number; visibleOffset: number; blockId: string } | null {
     if (!this.hasProjectionTarget || !this.editorController) return null
     const regions = this.allRegions().filter((region) => region.editable)
+    // Gap offsets (a line ending plus the next block's concealed marker)
+    // belong to no region; the distance fallback below would strand them
+    // on the previous block's end, so Vim motions landing on concealed
+    // markers (w onto "#", G to a line start) never visually advance.
+    // Resolve them to the following region: the marker is concealed, so
+    // the caret shows at that block's start. Regions arrive in document
+    // order from the server map.
+    let gapRegion: DocumentEditorRegion | null = null
+    let prevEnd = -1
+    for (const candidate of regions) {
+      if (sourceOffset > prevEnd && sourceOffset < candidate.content_range.start) {
+        gapRegion = candidate
+        break
+      }
+      prevEnd = candidate.content_range.end
+    }
     const region = regions.find((candidate) => candidate.block_id === preferredBlockId) ||
       regions.find((candidate) => sourceOffset >= candidate.content_range.start && sourceOffset <= candidate.content_range.end) ||
+      gapRegion ||
       regions.reduce((closest, candidate) => {
         if (!closest) return candidate
         const distance = Math.min(Math.abs(sourceOffset - candidate.content_range.start), Math.abs(sourceOffset - candidate.content_range.end))
@@ -878,8 +896,30 @@ export class DocumentEditor {
     if ((block as HTMLElement).contentEditable !== "true") return
     const caret = this.captureCaret()
     if (!caret) return
-    if (editor.selectionStart === caret.sourceOffset && editor.selectionEnd === caret.sourceOffset) return
+    if (editor.selectionStart === caret.sourceOffset && editor.selectionEnd === caret.sourceOffset) {
+      this.caretSyncEstablished = true
+      return
+    }
+    if (editor.vimEnabled && !editor.insertMode && this.caretSyncEstablished) {
+      // The native caret cannot represent engine positions on concealed
+      // markers (a w onto "#" and the block start below it read the same
+      // caret), so a forward sync can yank a correct engine head
+      // backwards and trap the next motion. When the engine head already
+      // resolves to this exact caret node and offset, they agree and
+      // there is nothing to sync. Node identity (not the visible
+      // offset) is the comparison: fragment-relative offsets differ
+      // across multi-fragment blocks. The establishment flag keeps the
+      // very first sync unconditional: a stale engine (fresh load) can
+      // collide with the caret through the same lossy mapping, and only
+      // a real sync disambiguates it. Insert mode keeps the old
+      // behavior: the native caret owns there.
+      const enginePoint = this.selectionPointForSourceOffset(editor.selectionHead, null)
+      const selection = window.getSelection()
+      if (enginePoint && enginePoint.blockId === caret.blockId &&
+        selection?.focusNode === enginePoint.node && selection?.focusOffset === enginePoint.offset) return
+    }
     editor.setSelectionRange(caret.sourceOffset, caret.sourceOffset)
+    this.caretSyncEstablished = true
   }
 
   blockMarkdown(blockElement: Element, region: DocumentEditorRegion, block: DocumentEditorBlock, source: string): { markdown: string; kind: string; start: number; end: number } {

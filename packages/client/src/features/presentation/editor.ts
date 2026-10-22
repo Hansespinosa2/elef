@@ -249,6 +249,7 @@ export class PresentationEditor {
   activeProjectionBlock: Element | null | undefined
   lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
   pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null; relativeOffset?: number } | null | undefined
+  caretSyncEstablished = false
   suppressProjectionInput = false
 
   constructor(form: PresentationEditorHost, options: MountPresentationEditorOptions = {}) {
@@ -635,8 +636,25 @@ export class PresentationEditor {
     const canvas = this.canvas()
     if (!canvas || !this.editorController) return null
     const regions = this.allRegions().filter((region) => region.editable)
+    // Gap offsets (a line ending plus the next block's concealed marker)
+    // belong to no region; the distance fallback below would strand them
+    // on the previous block's end, so Vim motions landing on concealed
+    // markers (w onto "#", G to a line start) never visually advance.
+    // Resolve them to the following region: the marker is concealed, so
+    // the caret shows at that block's start. Regions arrive in document
+    // order from the server map.
+    let gapRegion: PresentationEditorRegion | null = null
+    let prevEnd = -1
+    for (const candidate of regions) {
+      if (sourceOffset > prevEnd && sourceOffset < candidate.content_range.start) {
+        gapRegion = candidate
+        break
+      }
+      prevEnd = candidate.content_range.end
+    }
     const region = regions.find((candidate) => candidate.block_id === preferredBlockId) ||
       regions.find((candidate) => sourceOffset >= candidate.content_range.start && sourceOffset <= candidate.content_range.end) ||
+      gapRegion ||
       regions.reduce((closest, candidate) => {
         if (!closest) return candidate
         const distance = Math.min(Math.abs(sourceOffset - candidate.content_range.start), Math.abs(sourceOffset - candidate.content_range.end))
@@ -847,8 +865,23 @@ export class PresentationEditor {
     if ((block as HTMLElement).contentEditable !== "true") return
     const caret = this.captureCaret()
     if (!caret) return
-    if (editor.selectionStart === caret.sourceOffset && editor.selectionEnd === caret.sourceOffset) return
+    if (editor.selectionStart === caret.sourceOffset && editor.selectionEnd === caret.sourceOffset) {
+      this.caretSyncEstablished = true
+      return
+    }
+    if (editor.vimEnabled && !editor.insertMode && this.caretSyncEstablished) {
+      // Same concealed-marker agreement check as the document editor:
+      // the native caret cannot represent engine positions on markers,
+      // so a forward sync can yank a correct head backwards and trap
+      // the next motion. Node identity is the comparison. The
+      // establishment flag keeps the very first sync unconditional.
+      const enginePoint = this.selectionPointForSourceOffset(editor.selectionHead, null)
+      const selection = this.getSelection()
+      if (enginePoint && enginePoint.blockId === caret.blockId &&
+        selection?.focusNode === enginePoint.node && selection?.focusOffset === enginePoint.offset) return
+    }
     editor.setSelectionRange(caret.sourceOffset, caret.sourceOffset)
+    this.caretSyncEstablished = true
   }
 
   // Routes visual-mode keys through the live Vim machinery when Vim is

@@ -61,12 +61,26 @@ function isClipboardCopy(event: ProjectionKeyEventLike): boolean {
   return (event.ctrlKey ? 1 : 0) + (event.metaKey ? 1 : 0) === 1
 }
 
+// Line-wise motions preserve the source-character column, which the table
+// grid must re-pin to the cell column; every other motion lands exactly
+// and must not be re-pinned, or horizontal motions freeze inside table
+// cells and word motions lose their landing.
+const VERTICAL_PROJECTION_KEYS = new Set(["j", "k", "ArrowUp", "ArrowDown", "+", "-", "Enter"])
+
 function afterProjectionEngineKey(
   host: ProjectionKeyHost,
   editor: ProjectionKeyEditor,
   blockElement: Element,
   valueBefore: string,
   headBefore: number,
+  vertical: boolean,
+  // Vim-path ranges are engine-owned visual selections and must paint
+  // end to end; keymap-path ranges (select-all) stay bridge-consumable,
+  // so they keep the originating block's scope. The input bridge
+  // replaces only block-scoped native ranges (the typing suites
+  // enshrine block-scoped replacement), while Vim operators consume
+  // the engine range directly.
+  freeRange: boolean,
 ): void {
   let head = editor.selectionHead
   const blockId = (blockElement as HTMLElement).dataset.editorBlockId ?? null
@@ -81,14 +95,15 @@ function afterProjectionEngineKey(
   }
   // Inside Markdown tables the engine moves line-wise, which overshoots
   // into the wrong column of the next row, and delimiter rows
-  // (|---|---|) have no rendered cells at all. Re-land pure motions
-  // (no text change) in the same grid column, preserving the anchor so
-  // Vim visual ranges survive the adjustment. Normal-mode motions stay
-  // collapsed: keeping the raw delimiter landing as an anchor would
-  // paint a phantom range (and flip the mode pill to visual).
+  // (|---|---|) have no rendered cells at all. Re-land line-wise pure
+  // motions (no text change) in the same grid column, preserving the
+  // anchor so Vim visual ranges survive the adjustment. Normal-mode
+  // motions stay collapsed: keeping the raw delimiter landing as an
+  // anchor would paint a phantom range (and flip the mode pill to
+  // visual).
   if (editor.value === valueBefore && head !== headBefore) {
     const unDelim = skipTableDelimiterRow(editor.value, headBefore, head)
-    const adjusted = adjustTableColumnMove(editor.value, headBefore, unDelim)
+    const adjusted = vertical ? adjustTableColumnMove(editor.value, headBefore, unDelim) : unDelim
     if (adjusted !== head) {
       if (editor.selectionStart === editor.selectionEnd) {
         editor.setSelectionRange(adjusted, adjusted)
@@ -105,7 +120,16 @@ function afterProjectionEngineKey(
   // cannot map (concealed syntax) or the host has no range support.
   if (editor.selectionStart !== editor.selectionEnd && !editor.projectionPanelFocused) {
     const anchor = head === editor.selectionEnd ? editor.selectionStart : editor.selectionEnd
-    host.restoreSelection?.(anchor, head, blockId)
+    // A Vim visual range that leaves the originating block must not pin
+    // either end to it: forcing the origin preference strands the head
+    // at the old block's edge (the collapsed path above drops the
+    // preference the same way). Either end outside the origin range
+    // resolves freely, so cross-block visual ranges paint end to end.
+    // Keymap ranges (select-all) keep the forced preference: the input
+    // bridge replaces block-scoped native ranges.
+    const range = blockId && freeRange ? host.regionRangeForBlock?.(blockId) : null
+    const crossed = range && ((anchor < range.start || anchor > range.end) || (head < range.start || head > range.end))
+    host.restoreSelection?.(anchor, head, crossed ? null : blockId)
   }
   // Mode switches (normal/insert/visual) rarely move the selection, so
   // the normal-mode block cannot rely on selectionchange alone.
@@ -162,7 +186,7 @@ export function routeProjectionVimKey(
     return true
   }
   event.preventDefault()
-  afterProjectionEngineKey(host, editor, blockElement, valueBefore, headBefore)
+  afterProjectionEngineKey(host, editor, blockElement, valueBefore, headBefore, !modified && VERTICAL_PROJECTION_KEYS.has(event.key), true)
   return true
 }
 
@@ -190,6 +214,6 @@ export function routeProjectionKeymapKey(
   const headBefore = editor.selectionHead
   if (!editor.runKeymap(event)) return false
   event.preventDefault()
-  afterProjectionEngineKey(host, editor, blockElement, valueBefore, headBefore)
+  afterProjectionEngineKey(host, editor, blockElement, valueBefore, headBefore, !modified && VERTICAL_PROJECTION_KEYS.has(event.key), false)
   return true
 }

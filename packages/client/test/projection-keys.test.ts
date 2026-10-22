@@ -532,3 +532,43 @@ test("in-block motions keep the originating block preference", () => {
   assert.equal(routeProjectionVimKey(host, keyEvent("j"), (host as unknown as { block: Element }).block), true);
   assert.deepEqual((host as unknown as { restored: Array<[number, string | null]> }).restored, [[5, "b1"]]);
 });
+
+test("cross-block visual ranges drop the stale block preference", () => {
+  // A visual motion that leaves the originating block must not pin the
+  // painted range to it: forcing the origin preference strands the head
+  // at the old block's edge, so vjj paints only the first block.
+  const editor = stubEditor({ selectionHead: 2 });
+  editor.handleVimKey = () => {
+    (editor as unknown as { selectionHead: number }).selectionHead = 14;
+    (editor as unknown as { selectionStart: number }).selectionStart = 2;
+    (editor as unknown as { selectionEnd: number }).selectionEnd = 14;
+    return true;
+  };
+  const host = stubHost(editor) as unknown as ProjectionKeyHost & {
+    regionRangeForBlock: (blockId: string | null) => { start: number; end: number } | null;
+    restoredRanges: Array<[number, number, string | null]>;
+  };
+  host.regionRangeForBlock = () => ({ start: 0, end: 11 });
+  assert.equal(routeProjectionVimKey(host, keyEvent("j"), (host as unknown as { block: Element }).block), true);
+  assert.deepEqual(host.restoredRanges, [[2, 14, null]]);
+});
+
+test("keymap ranges keep the originating block preference", () => {
+  // Select-all style ranges stay bridge-consumable: the input bridge
+  // replaces block-scoped native ranges, so the keymap path must not
+  // drop the origin preference the way the Vim path does.
+  const editor = stubEditor({ selectionHead: 2 });
+  editor.runKeymap = () => {
+    (editor as unknown as { selectionHead: number }).selectionHead = 14;
+    (editor as unknown as { selectionStart: number }).selectionStart = 2;
+    (editor as unknown as { selectionEnd: number }).selectionEnd = 14;
+    return true;
+  };
+  const host = stubHost(editor) as unknown as ProjectionKeyHost & {
+    regionRangeForBlock: (blockId: string | null) => { start: number; end: number } | null;
+    restoredRanges: Array<[number, number, string | null]>;
+  };
+  host.regionRangeForBlock = () => ({ start: 0, end: 11 });
+  assert.equal(routeProjectionKeymapKey(host, keyEvent("a", { metaKey: true }), (host as unknown as { block: Element }).block), true);
+  assert.deepEqual(host.restoredRanges, [[2, 14, "b1"]]);
+});

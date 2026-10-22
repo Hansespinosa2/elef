@@ -255,3 +255,31 @@ test("document restoreSelections tolerates a missing projection or editor", () =
   } as unknown as NonNullable<typeof elementless.editorController>;
   assert.doesNotThrow(() => elementless.restoreSelections());
 });
+
+test("gap offsets on a concealed marker resolve to the following block", () => {
+  // A Vim w landing on block 2's concealed "#" marker (engine offset 10
+  // in "# One two\n# Three four") belongs to no region; the old closest
+  // fallback stranded it on block 1's end, so the caret never advanced.
+  const { editor, projection } = mountDocument();
+  const blocks = [...projection.querySelectorAll<HTMLElement>("[data-editor-block-id]")];
+  const first = blocks[0]; const second = blocks[1];
+  assert.ok(first && second);
+  editor.readyEditor = {
+    get value() { return "# One two\n# Three four"; },
+  } as unknown as NonNullable<typeof editor.editorController>;
+  editor.map = { editable_regions: [
+    { id: "r1", block_id: "b1", kind: "heading", editable: true, content_range: { start: 2, end: 9 } },
+    { id: "r2", block_id: "b2", kind: "heading", editable: true, content_range: { start: 12, end: 22 } },
+  ] };
+  editor.blockFragments = (blockId) => [blocks.find((block) => block.dataset.editorBlockId === blockId) ?? first as HTMLElement];
+  editor.visibleTextLength = () => 3;
+  editor.deps.visibleOffsetForSourceOffset = (_source, relative) => Math.max(0, relative);
+  editor.deps.pointAtVisibleOffset = (block, offset) => [(block as HTMLElement).firstChild, offset];
+  const marker = editor.selectionPointForSourceOffset(10, null);
+  assert.equal(marker?.blockId, "b2");
+  assert.equal(marker?.offset, 0);
+  // End-of-line (offset 9, the previous region's end) still belongs to
+  // the first block: only strictly-interior gap offsets move forward.
+  const eol = editor.selectionPointForSourceOffset(9, null);
+  assert.equal(eol?.blockId, "b1");
+});

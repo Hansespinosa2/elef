@@ -879,4 +879,421 @@ class VimEditorTest < ApplicationSystemTestCase
   ensure
     page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
   end
+
+  test "Vim k traverses visual blocks from bottom to top" do
+    Document.create!(title: "Vim traverse up", source: "# One\n# Two\n# Three")
+    visit edit_document_path(Document.order(:id).last)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
+
+    last = find(".document-editor-block", text: "Three")
+    page.execute_script(<<~JAVASCRIPT, last)
+      const block = arguments[0];
+      const text = block.querySelector("h1, h2, h3, p, li").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 0);
+    JAVASCRIPT
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    # One k per line: Two, then One. A stuck restore fails loudly.
+    find(".document-editor-block", text: "Three").send_keys("k", "k")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    focused = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const node = window.getSelection().focusNode;
+        if (!node) return null;
+        const element = node.nodeType === 1 ? node : node.parentElement;
+        const block = element.closest("[data-editor-block-id]");
+        return block ? block.textContent : null;
+      })()
+    JAVASCRIPT
+    assert_includes focused, "One"
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
+  test "Vim h and l move within lines and stop at edges without wraparound" do
+    # Stock Vim (no whichwrap) holds h at the line start and l on the
+    # last character; the visual editor must show exactly that. A
+    # four-character line keeps every step on unambiguous engine
+    # positions (mid-line display offsets map one-to-one).
+    Document.create!(title: "Vim horizontal", source: "# ABCD")
+    visit edit_document_path(Document.order(:id).last)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
+
+    first = find(".document-editor-block", text: "ABCD")
+    page.execute_script(<<~JAVASCRIPT, first)
+      const block = arguments[0];
+      const text = block.querySelector("h1, h2, h3, p, li").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 2);
+    JAVASCRIPT
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    caret = lambda do
+      page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const selection = window.getSelection();
+          const node = selection.focusNode;
+          return { text: node ? node.textContent : null, offset: selection.focusOffset };
+        })()
+      JAVASCRIPT
+    end
+    step = lambda do |keys|
+      find(".document-editor-block", text: "ABCD").send_keys(*keys)
+      page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    end
+
+    # h walks back to the line start, then holds the display at 0 while
+    # the engine crosses the concealed marker.
+    step.call(["h"])
+    assert_equal "ABCD", caret.call["text"]
+    assert_equal 1, caret.call["offset"]
+
+    step.call(["h"])
+    assert_equal "ABCD", caret.call["text"]
+    assert_equal 0, caret.call["offset"]
+
+    step.call(["h", "h"])
+    assert_equal "ABCD", caret.call["text"]
+    assert_equal 0, caret.call["offset"]
+
+    # l walks forward out of the marker to the last character, then
+    # holds: the first two presses stay on display 0 (marker space,
+    # then "A"), then each press advances one display cell.
+    step.call(["l"])
+    assert_equal "ABCD", caret.call["text"]
+    assert_equal 0, caret.call["offset"]
+
+    step.call(["l"])
+    assert_equal "ABCD", caret.call["text"]
+    assert_equal 0, caret.call["offset"]
+
+    step.call(["l"])
+    assert_equal "ABCD", caret.call["text"]
+    assert_equal 1, caret.call["offset"]
+
+    step.call(["l", "l"])
+    assert_equal "ABCD", caret.call["text"]
+    assert_equal 3, caret.call["offset"]
+
+    step.call(["l"])
+    assert_equal "ABCD", caret.call["text"]
+    assert_equal 3, caret.call["offset"]
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
+  test "Vim word motions w b e move across visual blocks" do
+    Document.create!(title: "Vim words", source: "# One two\n# Three four")
+    visit edit_document_path(Document.order(:id).last)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
+
+    first = find(".document-editor-block", text: "One two")
+    page.execute_script(<<~JAVASCRIPT, first)
+      const block = arguments[0];
+      const text = block.querySelector("h1, h2, h3, p, li").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 0);
+    JAVASCRIPT
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    caret = lambda do
+      page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const selection = window.getSelection();
+          const node = selection.focusNode;
+          return { text: node ? node.textContent : null, offset: selection.focusOffset };
+        })()
+      JAVASCRIPT
+    end
+    block = find(".document-editor-block", text: "One two")
+
+    block.send_keys("w")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal "One two", caret.call["text"]
+    assert_equal 4, caret.call["offset"]
+
+    block.send_keys("w")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal "Three four", caret.call["text"]
+    assert_equal 0, caret.call["offset"]
+
+    # b steps back over the concealed "#" marker to the previous word in
+    # one motion (engine-defined word motion, identical in source mode).
+    find(".document-editor-block", text: "Three four").send_keys("b")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal "One two", caret.call["text"]
+    assert_equal 4, caret.call["offset"]
+
+    find(".document-editor-block", text: "One two").send_keys("e")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal "One two", caret.call["text"]
+    assert_equal 6, caret.call["offset"]
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
+  test "Vim dollar and zero reach rendered line ends" do
+    Document.create!(title: "Vim line ends", source: "First paragraph here")
+    visit edit_document_path(Document.order(:id).last)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
+
+    para = find(".document-editor-block", text: "First paragraph here")
+    page.execute_script(<<~JAVASCRIPT, para)
+      const block = arguments[0];
+      const text = block.querySelector("h1, h2, h3, p, li").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 0);
+    JAVASCRIPT
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    caret = lambda do
+      page.evaluate_script("window.getSelection().focusOffset")
+    end
+
+    find(".document-editor-block", text: "First paragraph here").send_keys("$")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal "First paragraph here".length - 1, caret.call
+
+    find(".document-editor-block", text: "First paragraph here").send_keys("0")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal 0, caret.call
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
+  test "Vim gg and capital G jump between document top and bottom" do
+    Document.create!(title: "Vim jumps", source: "# One\n# Two\n# Three\n# Four\n# Five")
+    visit edit_document_path(Document.order(:id).last)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
+
+    middle = find(".document-editor-block", text: "Three")
+    page.execute_script(<<~JAVASCRIPT, middle)
+      const block = arguments[0];
+      const text = block.querySelector("h1, h2, h3, p, li").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 0);
+    JAVASCRIPT
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    focused = lambda do
+      page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const node = window.getSelection().focusNode;
+          if (!node) return null;
+          const element = node.nodeType === 1 ? node : node.parentElement;
+          const block = element.closest("[data-editor-block-id]");
+          return block ? block.textContent : null;
+        })()
+      JAVASCRIPT
+    end
+
+    find(".document-editor-block", text: "Three").send_keys("G")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_includes focused.call, "Five"
+
+    find(".document-editor-block", text: "Five").send_keys("g", "g")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_includes focused.call, "One"
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
+  test "Vim counts multiply motions across blocks" do
+    Document.create!(title: "Vim counts", source: "# A\n# B\n# C\n# D\n# E\n# F")
+    visit edit_document_path(Document.order(:id).last)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
+
+    first = find(".document-editor-block", text: "A")
+    page.execute_script(<<~JAVASCRIPT, first)
+      const block = arguments[0];
+      const text = block.querySelector("h1, h2, h3, p, li").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 0);
+    JAVASCRIPT
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    focused = lambda do
+      page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const node = window.getSelection().focusNode;
+          if (!node) return null;
+          const element = node.nodeType === 1 ? node : node.parentElement;
+          const block = element.closest("[data-editor-block-id]");
+          return block ? block.textContent : null;
+        })()
+      JAVASCRIPT
+    end
+
+    # Holding j from the top reaches the bottom: 3j lands on D.
+    find(".document-editor-block", text: "A").send_keys("3j")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_includes focused.call, "D"
+
+    find(".document-editor-block", text: "D").send_keys("2k")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_includes focused.call, "B"
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
+  test "Vim visual mode extends the selection across blocks with j and k" do
+    Document.create!(title: "Vim visual range", source: "# One\n# Two\n# Three")
+    visit edit_document_path(Document.order(:id).last)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
+
+    first = find(".document-editor-block", text: "One")
+    page.execute_script(<<~JAVASCRIPT, first)
+      const block = arguments[0];
+      const text = block.querySelector("h1, h2, h3, p, li").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 0);
+    JAVASCRIPT
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    # Native selection text does not serialize across block editing
+    # hosts, so assert the range endpoints: anchor in the first block,
+    # focus in the reached block. The failure screenshot shows the
+    # painted highlight end to end.
+    selection = lambda do
+      page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const selection = window.getSelection();
+          return {
+            collapsed: selection.isCollapsed,
+            anchorText: selection.anchorNode ? selection.anchorNode.textContent : null,
+            anchorOffset: selection.anchorOffset,
+            focusText: selection.focusNode ? selection.focusNode.textContent : null,
+            focusOffset: selection.focusOffset
+          };
+        })()
+      JAVASCRIPT
+    end
+
+    find(".document-editor-block", text: "One").send_keys("v", "j", "j")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal false, selection.call["collapsed"]
+    assert_equal "One", selection.call["anchorText"]
+    assert_equal 0, selection.call["anchorOffset"]
+    assert_equal "Three", selection.call["focusText"]
+    assert_equal 1, selection.call["focusOffset"]
+    page.save_screenshot("../../assets/pr-shots/visual-vim-table/visual-range-across-blocks.png")
+
+    # k shrinks the range back toward the anchor. Focus returns to the
+    # middle block; the exact intra-cell column is engine-defined
+    # (shared with source mode by construction).
+    find(".document-editor-block", text: "Three").send_keys("k")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal false, selection.call["collapsed"]
+    assert_equal "One", selection.call["anchorText"]
+    assert_equal "Two", selection.call["focusText"]
+
+    find(".document-editor-block", text: "Two").send_keys(:escape)
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    assert_equal true, selection.call["collapsed"]
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
+  test "Vim navigates a filled 8 by 8 table by grid cells with hjkl and arrows" do
+    header = "| #{(1..8).map { |c| "h#{c}" }.join(" | ")} |"
+    delimiter = "|#{Array.new(8, "---").join("|")}|"
+    rows = (1..8).map { |r| "| #{(1..8).map { |c| "r#{r}c#{c}" }.join(" | ")} |" }
+    Document.create!(title: "Vim grid", source: ([header, delimiter] + rows).join("\n"))
+    visit edit_document_path(Document.order(:id).last)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
+
+    block = find(".document-editor-block", text: "r1c1")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      const cell = block.querySelectorAll("td, th")[8];
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(cell.firstChild, 0);
+    JAVASCRIPT
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    page.save_screenshot("../../assets/pr-shots/visual-vim-table/table-8x8-before.png")
+
+    cell = lambda do
+      page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const node = window.getSelection().focusNode;
+          if (!node) return null;
+          const element = node.nodeType === 1 ? node : node.parentElement;
+          const found = element.closest("td, th");
+          return found ? { text: found.textContent, index: found.cellIndex } : null;
+        })()
+      JAVASCRIPT
+    end
+    settle = lambda do
+      page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    end
+
+    # jjj stays in column 1 across three body rows.
+    find(".document-editor-block", text: "r1c1").send_keys("j", "j", "j")
+    settle.call
+    assert_includes cell.call["text"], "r4c1"
+    assert_equal 0, cell.call["index"]
+
+    # kkk climbs back up the same column.
+    find(".document-editor-block", text: "r4c1").send_keys("k", "k", "k")
+    settle.call
+    assert_includes cell.call["text"], "r1c1"
+    assert_equal 0, cell.call["index"]
+
+    # h/l are character motions (as in source Vim): l steps inside the
+    # cell text, h steps back, neither leaves the cell mid-text.
+    caret = lambda do
+      page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const selection = window.getSelection();
+          return { offset: selection.focusOffset };
+        })()
+      JAVASCRIPT
+    end
+    find(".document-editor-block", text: "r1c1").send_keys("l")
+    settle.call
+    assert_includes cell.call["text"], "r1c1"
+    assert_equal 0, cell.call["index"]
+    assert_equal 1, caret.call["offset"]
+
+    find(".document-editor-block", text: "r1c1").send_keys("h")
+    settle.call
+    assert_equal 0, caret.call["offset"]
+
+    # ArrowUp/ArrowDown are line motions: they must match j/k cell for
+    # cell through the same grid.
+    find(".document-editor-block", text: "r1c1").send_keys(:down, :down)
+    settle.call
+    assert_includes cell.call["text"], "r3c1"
+    assert_equal 0, cell.call["index"]
+
+    find(".document-editor-block", text: "r3c1").send_keys(:up)
+    settle.call
+    assert_includes cell.call["text"], "r2c1"
+    assert_equal 0, cell.call["index"]
+    page.save_screenshot("../../assets/pr-shots/visual-vim-table/table-8x8-after.png")
+
+    # Cohesive authoring: an insert-mode edit inside the cell rewrites source.
+    find(".document-editor-block", text: "r2c1").send_keys("i", "!", :escape)
+    settle.call
+    assert_field "Markdown source", with: /!r2c1/, wait: 10
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
 end
