@@ -9,6 +9,7 @@ import { alignSourceOffset, alignVisibleOffset, touchesConcealedBoundary, transl
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 import { updateVimNormalCaret } from "../../session/vim_caret.js"
 import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
+import { tableGridForBlock, tableRelativeForVisible, tableSourceOffset, tableVisibleForSource } from "../../session/table_motion.js"
 import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
 import { markStage } from "../../session/stage_marks.js"
 import { projectionRangeEdit } from "../../session/projection_range.js"
@@ -404,7 +405,8 @@ export class DocumentEditor {
       if (visible === null) return null
       const slice = editor.value.slice(endpointRegion.content_range.start, endpointRegion.content_range.end)
       const content = this.combinedBlockForId(endpoint.dataset.editorBlockId) || endpoint
-      const relative = alignVisibleOffset(slice, visibleBlockText(content), visible)
+      const relative = tableRelativeForVisible(slice, content, visible)
+        ?? alignVisibleOffset(slice, visibleBlockText(content), visible)
         ?? this.deps.sourceOffsetForVisibleOffset(slice, visible)
       return endpointRegion.content_range.start + relative
     })
@@ -490,7 +492,14 @@ export class DocumentEditor {
     // texts), so the aligner always maps, and the concealed check uses
     // the same mapping (the caret map would jump the lag and decline).
     markStage("key-align-start")
-    const mapOffset = (visible: number): number | null => alignVisibleOffset(slice, visibleText, visible)
+    // Table cells resolve through the rendered grid: the aligner below
+    // cannot see cell boundaries and the map skips header rows, so both
+    // misplace in-table edits. The concealed check still declines
+    // cross-cell ranges to the legacy path, as before.
+    const tableGrid = tableGridForBlock(block)
+    const mapOffset = (visible: number): number | null =>
+      (tableGrid ? tableSourceOffset(slice, tableGrid, visible) : null)
+      ?? alignVisibleOffset(slice, visibleText, visible)
     const mappedFrom = mapOffset(edit.fromVisible)
     const mappedTo = mapOffset(edit.toVisible)
     if (mappedFrom === null || mappedTo === null) { markStage("key-align-end"); return }
@@ -604,6 +613,16 @@ export class DocumentEditor {
     // caret then corrupts the next shorthand decision). The aligner
     // declines genuinely divergent text, which falls back to the map.
     const fragments = this.blockFragments(current.blockId)
+    // Tables render as one shell: the linear map below skips the header
+    // row as concealed (a later-line divider match) and cannot see cell
+    // boundaries, so resolve through the rendered grid when a fragment
+    // positively identifies the table; otherwise keep the legacy read.
+    for (const fragment of fragments) {
+      const tableRelative = tableRelativeForVisible(source, fragment, current.visibleOffset)
+      if (tableRelative !== null) {
+        return { blockId: current.blockId ?? "", sourceOffset: region.content_range.start + tableRelative }
+      }
+    }
     const aligned = fragments.length > 0
       ? alignVisibleOffset(source, fragments.map((fragment) => visibleBlockText(fragment)).join(""), current.visibleOffset)
       : null
@@ -684,6 +703,12 @@ export class DocumentEditor {
       const local = this.deps.visibleOffsetAtPoint(fragment, mathPoint.node, mathPoint.offset) ?? visibleOffset
       return { element: fragment, node: mathPoint.node, offset: mathPoint.offset, visibleOffset: preceding + local, blockId: region.block_id ?? "" }
     }
+    // Tables render as one shell, so the linear map above cannot see cell
+    // boundaries (delimiter rows occupy source space with zero rendered
+    // cells). Recompute from the rendered grid when it positively
+    // identifies the table; otherwise keep the mapped offset.
+    const tableOffset = tableVisibleForSource(source, block, relative)
+    if (tableOffset !== null) visibleOffset = tableOffset
     const point = this.deps.pointAtVisibleOffset(block, visibleOffset)
     return { element: block as HTMLElement, node: point[0], offset: point[1], visibleOffset, blockId: region.block_id ?? "" }
   }
@@ -913,6 +938,13 @@ export class DocumentEditor {
 
   regionForBlock(blockId: string | undefined): DocumentEditorRegion | null {
     return this.allRegions().find((region) => region.block_id === blockId) || null
+  }
+
+  regionRangeForBlock(blockId: string | null): { start: number; end: number } | null {
+    if (!blockId) return null
+    const region = this.regionForBlock(blockId)
+    if (!region) return null
+    return { start: region.content_range.start, end: region.content_range.end }
   }
 
   inlineRevealSource(block: Element): string | null {

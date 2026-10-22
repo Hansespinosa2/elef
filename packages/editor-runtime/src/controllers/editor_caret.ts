@@ -41,7 +41,11 @@ export function pointAtVisibleOffset(root: Node, requestedOffset: number): [Node
       lastText = node
       const text = node.textContent ?? ""
       const end = visibleOffset + visibleTextLength(text, raw)
-      if (target <= end) {
+      // Boundary carets attach forward to the following node: a caret at
+      // the end of one cell is the start of the next, which is where Vim
+      // motions land and where the grid layers resolve it. End-of-content
+      // still falls through to the tail fallback below with the same value.
+      if (target < end) {
         result = [node, domSubOffset(text, target - visibleOffset, raw)]
         return
       }
@@ -326,7 +330,10 @@ function markdownPositionMap(source: string): { sourceToVisible: number[]; visib
     }
 
     const tableDivider = rest.match(/^[ \t]*\|?[ \t]*:?-{3,}:?[ \t]*(?:\|[ \t]*:?-{3,}:?[ \t]*)+\|?[ \t]*(?=\r?$)/m)
-    if (tableDivider && (sourceIndex === 0 || source[sourceIndex - 1] === "\n")) {
+    // The multiline flag lets ^ match a later line in rest: a divider
+    // below the current line must not skip the current line as concealed
+    // (it once swallowed whole header rows, stranding table carets).
+    if (tableDivider && tableDivider.index === 0 && (sourceIndex === 0 || source[sourceIndex - 1] === "\n")) {
       skip(sourceIndex + (tableDivider[0] ?? "").length)
       continue
     }

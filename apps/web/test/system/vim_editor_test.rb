@@ -807,4 +807,76 @@ class VimEditorTest < ApplicationSystemTestCase
   ensure
     page.execute_script("localStorage.clear()")
   end
+
+  test "Vim j traverses visual blocks from top to bottom" do
+    Document.create!(title: "Vim traverse", source: "# One\n# Two\n# Three")
+    visit edit_document_path(Document.order(:id).last)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
+
+    first = find(".document-editor-block", text: "One")
+    page.execute_script(<<~JAVASCRIPT, first)
+      const block = arguments[0];
+      const text = block.querySelector("h1, h2, h3, p, li").firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 0);
+    JAVASCRIPT
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+
+    # One j per line: Two, then Three. Consecutive headings keep every
+    # keypress on its own block so a stuck restore fails loudly.
+    find(".document-editor-block", text: "One").send_keys("j", "j")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    focused = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const node = window.getSelection().focusNode;
+        if (!node) return null;
+        const element = node.nodeType === 1 ? node : node.parentElement;
+        const block = element.closest("[data-editor-block-id]");
+        return block ? block.textContent : null;
+      })()
+    JAVASCRIPT
+    assert_includes focused, "Three"
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
+  test "Vim j moves down table cells in the same column" do
+    Document.create!(title: "Vim table", source: "| a | b |\n|---|---|\n| c | d |\n| e | f |")
+    visit edit_document_path(Document.order(:id).last)
+    page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+    page.refresh
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
+
+    first = find(".document-editor-block", text: "a")
+    page.execute_script(<<~JAVASCRIPT, first)
+      const block = arguments[0];
+      const cell = block.querySelector("td, th");
+      const text = cell.firstChild;
+      block.focus({ preventScroll: true });
+      window.getSelection().setPosition(text, 0);
+    JAVASCRIPT
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    page.save_screenshot("../../assets/pr-shots/visual-vim-table/table-vim-before-j.png")
+
+    # One j steps over the delimiter row into the body row below,
+    # same column: the caret must leave the header for cell "c".
+    find(".document-editor-block", text: "a").send_keys("j")
+    page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
+    focused = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const node = window.getSelection().focusNode;
+        if (!node) return null;
+        const element = node.nodeType === 1 ? node : node.parentElement;
+        const cell = element.closest("td, th");
+        return cell ? { text: cell.textContent, index: cell.cellIndex } : null;
+      })()
+    JAVASCRIPT
+    assert_includes focused["text"], "c"
+    assert_equal 0, focused["index"]
+    page.save_screenshot("../../assets/pr-shots/visual-vim-table/table-vim-after-j.png")
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
 end
