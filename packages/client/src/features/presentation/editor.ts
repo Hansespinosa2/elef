@@ -248,7 +248,8 @@ export class PresentationEditor {
   lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
   // Same reveal-sync throttle key as the document editor: skip the
   // projection-wide math/inline scans while the caret stays in the same
-  // block and active span. Reset on flush and reinstall (below).
+  // block and reveal marker (active spans and unrevealed revealable
+  // constructs alike). Reset on flush and reinstall (below).
   lastRevealSyncBlockId: string | null | undefined
   lastRevealSyncSpan: Element | null | undefined
   pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null; relativeOffset?: number } | null | undefined
@@ -821,12 +822,12 @@ export class PresentationEditor {
       return
     }
     const blockId = (block as HTMLElement).dataset.editorBlockId ?? ""
-    const activeSpan = node?.closest?.(".editor-math-active, .editor-inline-active") ?? null
-    if (blockId !== this.lastRevealSyncBlockId || activeSpan !== this.lastRevealSyncSpan) {
+    const revealMarker = node?.closest?.(".editor-math-active, .editor-inline-active, [data-editor-math-source], em, strong, del, s, code, a, span.document-link.unresolved") ?? null
+    if (blockId !== this.lastRevealSyncBlockId || revealMarker !== this.lastRevealSyncSpan) {
       this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
       this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
       this.lastRevealSyncBlockId = blockId
-      this.lastRevealSyncSpan = activeSpan
+      this.lastRevealSyncSpan = revealMarker
     }
     const visibleOffset = this.deps.visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
     if (visibleOffset === null) return

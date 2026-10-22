@@ -268,23 +268,33 @@ test("projection caret syncs reveal state once per block visit", () => {
     editor.rememberProjectionCaret();
     assert.equal(mathSyncs, 1);
     assert.equal(inlineSyncs, 1);
+    // Entering unrevealed syntax in the same block: re-sync. The revealable
+    // construct exists before activation swaps it, so the key must notice
+    // the ancestor even though no active span exists yet.
+    first.innerHTML = `O<em>ne</em>`;
+    const emText = first.querySelector("em")?.firstChild;
+    assert.ok(emText);
+    focus = { node: emText as unknown, offset: 0 };
+    editor.rememberProjectionCaret();
+    assert.equal(mathSyncs, 2);
+    assert.equal(inlineSyncs, 2);
     // Entering an active span in the same block: re-sync.
     first.innerHTML = `O<span class="editor-math-active">ne</span>`;
     const spanText = first.querySelector(".editor-math-active")?.firstChild;
     assert.ok(spanText);
     focus = { node: spanText as unknown, offset: 0 };
     editor.rememberProjectionCaret();
-    assert.equal(mathSyncs, 2);
-    assert.equal(inlineSyncs, 2);
+    assert.equal(mathSyncs, 3);
+    assert.equal(inlineSyncs, 3);
     // Same span again: no re-sync.
-    editor.rememberProjectionCaret();
-    assert.equal(mathSyncs, 2);
-    assert.equal(inlineSyncs, 2);
-    // Different block: re-sync.
-    focus = { node: second.firstChild as unknown, offset: 0 };
     editor.rememberProjectionCaret();
     assert.equal(mathSyncs, 3);
     assert.equal(inlineSyncs, 3);
+    // Different block: re-sync.
+    focus = { node: second.firstChild as unknown, offset: 0 };
+    editor.rememberProjectionCaret();
+    assert.equal(mathSyncs, 4);
+    assert.equal(inlineSyncs, 4);
   } finally {
     if (previous) Object.defineProperty(globalThis, "window", previous);
     else delete (globalThis as Record<string, unknown>).window;

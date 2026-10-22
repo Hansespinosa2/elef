@@ -210,12 +210,15 @@ export class DocumentEditor {
   // failed restore stays armed and yanks the caret on the next unrelated
   // preview update.
   pendingCaret: { sourceOffset: number; location: string; sourceLength: number } | null | undefined
-  // Throttle key for the reveal syncs below: the last block id and active
-  // span element a sync ran for. Both syncs are block- and span-scoped, so
-  // caret motion inside the same block and span repaints nothing and can
-  // skip the projection-wide scans (holding j/arrows otherwise pays
-  // O(blocks) plus KaTeX re-renders per step). Any block or span change,
-  // flush, or reinstall resets the key and re-syncs fully.
+  // Throttle key for the reveal syncs below: the last block id and nearest
+  // reveal-relevant ancestor a sync ran for. Both syncs are block- and
+  // span-scoped, so caret motion inside the same block and marker repaints
+  // nothing and can skip the projection-wide scans (holding j/arrows
+  // otherwise pays O(blocks) plus KaTeX re-renders per step). The marker
+  // covers active spans AND unrevealed revealable constructs (em, math
+  // source, links): the construct element exists before activation swaps
+  // it, so entering unrevealed syntax still changes the key and fires the
+  // reveal. Any block or marker change, flush, or reinstall re-syncs fully.
   lastRevealSyncBlockId: string | null | undefined
   lastRevealSyncSpan: Element | null | undefined
   lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
@@ -860,12 +863,12 @@ export class DocumentEditor {
       return
     }
     const blockId = (block as HTMLElement).dataset.editorBlockId ?? ""
-    const activeSpan = node?.closest?.(".editor-math-active, .editor-inline-active") ?? null
-    if (blockId !== this.lastRevealSyncBlockId || activeSpan !== this.lastRevealSyncSpan) {
+    const revealMarker = node?.closest?.(".editor-math-active, .editor-inline-active, [data-editor-math-source], em, strong, del, s, code, a, span.document-link.unresolved") ?? null
+    if (blockId !== this.lastRevealSyncBlockId || revealMarker !== this.lastRevealSyncSpan) {
       this.deps.syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
       this.deps.syncActiveInline(this.projectionTarget, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
       this.lastRevealSyncBlockId = blockId
-      this.lastRevealSyncSpan = activeSpan
+      this.lastRevealSyncSpan = revealMarker
     }
     const visibleOffset = this.visibleOffsetInBlockGroup(block, selection.focusNode, selection.focusOffset)
     if (visibleOffset === null) return
