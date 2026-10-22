@@ -30,6 +30,8 @@ import { alignSourceOffset, alignVisibleOffset, touchesConcealedBoundary, transl
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 import { updateVimNormalCaret } from "../../session/vim_caret.js"
 import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
+import { tableGridForBlock, tableRelativeForVisible, tableSourceOffset, tableVisibleForSource } from "../../session/table_motion.js"
+import { tableVisibleOffset } from "../../session/table_motion.js"
 import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
 import { projectionRangeEdit } from "../../session/projection_range.js"
 import { paintProjectionSelections } from "../../session/projection_selections.js"
@@ -247,6 +249,7 @@ export class PresentationEditor {
   activeProjectionBlock: Element | null | undefined
   lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
   pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null; relativeOffset?: number } | null | undefined
+  caretSyncEstablished = false
   suppressProjectionInput = false
 
   constructor(form: PresentationEditorHost, options: MountPresentationEditorOptions = {}) {
@@ -434,7 +437,8 @@ export class PresentationEditor {
       const visible = this.deps.visibleOffsetAtPoint(endpoint, node, offset)
       if (visible === null) return null
       const slice = editor.value.slice(endpointRegion.content_range.start, endpointRegion.content_range.end)
-      const relative = alignVisibleOffset(slice, visibleBlockText(endpoint), visible)
+      const relative = tableRelativeForVisible(slice, endpoint, visible)
+        ?? alignVisibleOffset(slice, visibleBlockText(endpoint), visible)
         ?? this.deps.sourceOffsetForVisibleOffset(slice, visible)
       return endpointRegion.content_range.start + relative
     })
@@ -515,7 +519,10 @@ export class PresentationEditor {
     // A length gate cannot prove agreement (lag shifts equal-length
     // texts), so the aligner always maps, and the concealed check uses
     // the same mapping (the caret map would jump the lag and decline).
-    const mapOffset = (visible: number): number | null => alignVisibleOffset(slice, visibleText, visible)
+    const tableGrid = tableGridForBlock(block)
+    const mapOffset = (visible: number): number | null =>
+      (tableGrid ? tableSourceOffset(slice, tableGrid, visible) : null)
+      ?? alignVisibleOffset(slice, visibleText, visible)
     const mappedFrom = mapOffset(edit.fromVisible)
     const mappedTo = mapOffset(edit.toVisible)
     if (mappedFrom === null || mappedTo === null) return
@@ -605,7 +612,14 @@ export class PresentationEditor {
     }
     // DOM-grounded read first (same rationale as the document editor):
     // uncommitted whitespace the map cannot see would clamp the engine
-    // caret to the wrong boundary and corrupt the next keystroke.
+    // caret to the wrong boundary and corrupt the next keystroke. Tables
+    // resolve through the rendered grid first, as in the document editor.
+    const tableRelative = block && canvas?.contains(block)
+      ? tableRelativeForVisible(source, block, current.visibleOffset)
+      : null
+    if (tableRelative !== null) {
+      return { blockId: current.blockId ?? "", sourceOffset: region.content_range.start + tableRelative }
+    }
     const aligned = block && canvas?.contains(block)
       ? alignVisibleOffset(source, visibleBlockText(block), current.visibleOffset)
       : null
@@ -622,8 +636,25 @@ export class PresentationEditor {
     const canvas = this.canvas()
     if (!canvas || !this.editorController) return null
     const regions = this.allRegions().filter((region) => region.editable)
+    // Gap offsets (a line ending plus the next block's concealed marker)
+    // belong to no region; the distance fallback below would strand them
+    // on the previous block's end, so Vim motions landing on concealed
+    // markers (w onto "#", G to a line start) never visually advance.
+    // Resolve them to the following region: the marker is concealed, so
+    // the caret shows at that block's start. Regions arrive in document
+    // order from the server map.
+    let gapRegion: PresentationEditorRegion | null = null
+    let prevEnd = -1
+    for (const candidate of regions) {
+      if (sourceOffset > prevEnd && sourceOffset < candidate.content_range.start) {
+        gapRegion = candidate
+        break
+      }
+      prevEnd = candidate.content_range.end
+    }
     const region = regions.find((candidate) => candidate.block_id === preferredBlockId) ||
       regions.find((candidate) => sourceOffset >= candidate.content_range.start && sourceOffset <= candidate.content_range.end) ||
+      gapRegion ||
       regions.reduce((closest, candidate) => {
         if (!closest) return candidate
         const distance = Math.min(Math.abs(sourceOffset - candidate.content_range.start), Math.abs(sourceOffset - candidate.content_range.end))
@@ -651,8 +682,13 @@ export class PresentationEditor {
     // canonical map cannot see. The aligner declines concealed syntax
     // and missing text, which fall back to the map.
     const relative = sourceOffset - region.content_range.start
-    const visibleOffset = alignSourceOffset(source, visibleBlockText(block), relative)
+    let visibleOffset = alignSourceOffset(source, visibleBlockText(block), relative)
       ?? this.deps.visibleOffsetForSourceOffset(source, relative)
+    // Same table-shell correction as the document editor: the linear map
+    // cannot see cell boundaries, so recompute from the rendered grid when
+    // it positively identifies the table.
+    const tableOffset = tableVisibleForSource(source, block, relative)
+    if (tableOffset !== null) visibleOffset = tableOffset
     const point = this.deps.pointAtVisibleOffset(block, visibleOffset)
     return { element: block as HTMLElement, node: point[0], offset: point[1], visibleOffset, blockId: region.block_id ?? "" }
   }
@@ -829,8 +865,23 @@ export class PresentationEditor {
     if ((block as HTMLElement).contentEditable !== "true") return
     const caret = this.captureCaret()
     if (!caret) return
-    if (editor.selectionStart === caret.sourceOffset && editor.selectionEnd === caret.sourceOffset) return
+    if (editor.selectionStart === caret.sourceOffset && editor.selectionEnd === caret.sourceOffset) {
+      this.caretSyncEstablished = true
+      return
+    }
+    if (editor.vimEnabled && !editor.insertMode && this.caretSyncEstablished) {
+      // Same concealed-marker agreement check as the document editor:
+      // the native caret cannot represent engine positions on markers,
+      // so a forward sync can yank a correct head backwards and trap
+      // the next motion. Node identity is the comparison. The
+      // establishment flag keeps the very first sync unconditional.
+      const enginePoint = this.selectionPointForSourceOffset(editor.selectionHead, null)
+      const selection = this.getSelection()
+      if (enginePoint && enginePoint.blockId === caret.blockId &&
+        selection?.focusNode === enginePoint.node && selection?.focusOffset === enginePoint.offset) return
+    }
     editor.setSelectionRange(caret.sourceOffset, caret.sourceOffset)
+    this.caretSyncEstablished = true
   }
 
   // Routes visual-mode keys through the live Vim machinery when Vim is
@@ -1392,6 +1443,13 @@ export class PresentationEditor {
 
   regionForBlock(blockId: string | undefined): PresentationEditorRegion | null {
     return this.allRegions().find((region) => region.block_id === blockId) || null
+  }
+
+  regionRangeForBlock(blockId: string | null): { start: number; end: number } | null {
+    if (!blockId) return null
+    const region = this.regionForBlock(blockId)
+    if (!region) return null
+    return { start: region.content_range.start, end: region.content_range.end }
   }
 
   inlineRevealSource(block: Element): string | null {

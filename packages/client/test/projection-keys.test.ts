@@ -456,3 +456,119 @@ test("opening an engine panel preserves its input focus", () => {
   assert.equal(event.defaultPrevented, true);
   assert.deepEqual(host.restored, []);
 });
+
+test("Vim routing syncs the engine selection from the native caret before handling", () => {
+  const editor = stubEditor();
+  const host = stubHost(editor) as unknown as ProjectionKeyHost & { syncs: number; syncEngineSelectionFromCaret: () => void };
+  host.syncs = 0;
+  host.syncEngineSelectionFromCaret = () => {
+    host.syncs += 1;
+  };
+  assert.equal(routeProjectionVimKey(host, keyEvent("j"), (host as unknown as { block: Element }).block), true);
+  assert.equal(host.syncs, 1);
+  assert.deepEqual(editor.vimCalls, ["j"]);
+});
+
+test("cross-block motions drop the stale block preference", () => {
+  const editor = stubEditor({ selectionHead: 11 });
+  editor.handleVimKey = () => {
+    (editor as unknown as { selectionHead: number }).selectionHead = 14;
+    return true;
+  };
+  const host = stubHost(editor) as unknown as ProjectionKeyHost & {
+    regionRangeForBlock: (blockId: string | null) => { start: number; end: number } | null;
+  };
+  host.regionRangeForBlock = () => ({ start: 0, end: 11 });
+  assert.equal(routeProjectionVimKey(host, keyEvent("j"), (host as unknown as { block: Element }).block), true);
+  assert.deepEqual((host as unknown as { restored: Array<[number, string | null]> }).restored, [[14, null]]);
+});
+
+test("table column adjustment preserves the Vim visual anchor", () => {
+  const editor = stubEditor({ selectionHead: 4 });
+  (editor as unknown as { value: string }).value = "|aaaa|b|\n|c|dd|\n";
+  (editor as unknown as { selectionStart: number }).selectionStart = 2;
+  (editor as unknown as { selectionEnd: number }).selectionEnd = 4;
+  editor.handleVimKey = () => {
+    (editor as unknown as { selectionHead: number }).selectionHead = 14;
+    (editor as unknown as { selectionStart: number }).selectionStart = 2;
+    (editor as unknown as { selectionEnd: number }).selectionEnd = 14;
+    return true;
+  };
+  const host = stubHost(editor);
+  assert.equal(routeProjectionVimKey(host, keyEvent("j"), (host as unknown as { block: Element }).block), true);
+  const ranges = (editor as unknown as { rangesSet: Array<[number, number]> }).rangesSet;
+  assert.deepEqual(ranges[ranges.length - 1], [2, 10]);
+});
+
+test("table column adjustment keeps normal-mode motions collapsed", () => {
+  // Same engine landing as the visual-anchor case, but the selection was
+  // collapsed at entry: the adjustment must not invent an anchor from the
+  // raw line-wise landing (which would paint a phantom range and flip the
+  // mode pill to visual).
+  const editor = stubEditor({ selectionHead: 4, selectionStart: 4, selectionEnd: 4 });
+  (editor as unknown as { value: string }).value = "|aaaa|b|\n|c|dd|\n";
+  editor.handleVimKey = () => {
+    (editor as unknown as { selectionHead: number }).selectionHead = 14;
+    (editor as unknown as { selectionStart: number }).selectionStart = 14;
+    (editor as unknown as { selectionEnd: number }).selectionEnd = 14;
+    return true;
+  };
+  const host = stubHost(editor);
+  assert.equal(routeProjectionVimKey(host, keyEvent("j"), (host as unknown as { block: Element }).block), true);
+  const ranges = (editor as unknown as { rangesSet: Array<[number, number]> }).rangesSet;
+  assert.deepEqual(ranges[ranges.length - 1], [10, 10]);
+});
+
+test("in-block motions keep the originating block preference", () => {
+  const editor = stubEditor({ selectionHead: 4 });
+  editor.handleVimKey = () => {
+    (editor as unknown as { selectionHead: number }).selectionHead = 5;
+    return true;
+  };
+  const host = stubHost(editor) as unknown as ProjectionKeyHost & {
+    regionRangeForBlock: (blockId: string | null) => { start: number; end: number } | null;
+  };
+  host.regionRangeForBlock = () => ({ start: 0, end: 11 });
+  assert.equal(routeProjectionVimKey(host, keyEvent("j"), (host as unknown as { block: Element }).block), true);
+  assert.deepEqual((host as unknown as { restored: Array<[number, string | null]> }).restored, [[5, "b1"]]);
+});
+
+test("cross-block visual ranges drop the stale block preference", () => {
+  // A visual motion that leaves the originating block must not pin the
+  // painted range to it: forcing the origin preference strands the head
+  // at the old block's edge, so vjj paints only the first block.
+  const editor = stubEditor({ selectionHead: 2 });
+  editor.handleVimKey = () => {
+    (editor as unknown as { selectionHead: number }).selectionHead = 14;
+    (editor as unknown as { selectionStart: number }).selectionStart = 2;
+    (editor as unknown as { selectionEnd: number }).selectionEnd = 14;
+    return true;
+  };
+  const host = stubHost(editor) as unknown as ProjectionKeyHost & {
+    regionRangeForBlock: (blockId: string | null) => { start: number; end: number } | null;
+    restoredRanges: Array<[number, number, string | null]>;
+  };
+  host.regionRangeForBlock = () => ({ start: 0, end: 11 });
+  assert.equal(routeProjectionVimKey(host, keyEvent("j"), (host as unknown as { block: Element }).block), true);
+  assert.deepEqual(host.restoredRanges, [[2, 14, null]]);
+});
+
+test("keymap ranges keep the originating block preference", () => {
+  // Select-all style ranges stay bridge-consumable: the input bridge
+  // replaces block-scoped native ranges, so the keymap path must not
+  // drop the origin preference the way the Vim path does.
+  const editor = stubEditor({ selectionHead: 2 });
+  editor.runKeymap = () => {
+    (editor as unknown as { selectionHead: number }).selectionHead = 14;
+    (editor as unknown as { selectionStart: number }).selectionStart = 2;
+    (editor as unknown as { selectionEnd: number }).selectionEnd = 14;
+    return true;
+  };
+  const host = stubHost(editor) as unknown as ProjectionKeyHost & {
+    regionRangeForBlock: (blockId: string | null) => { start: number; end: number } | null;
+    restoredRanges: Array<[number, number, string | null]>;
+  };
+  host.regionRangeForBlock = () => ({ start: 0, end: 11 });
+  assert.equal(routeProjectionKeymapKey(host, keyEvent("a", { metaKey: true }), (host as unknown as { block: Element }).block), true);
+  assert.deepEqual(host.restoredRanges, [[2, 14, "b1"]]);
+});

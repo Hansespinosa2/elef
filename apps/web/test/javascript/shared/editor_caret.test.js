@@ -139,3 +139,26 @@ test("trimmed trailing space round-trips through the DOM", () => {
   assert.equal(node, text)
   assert.equal(offset, 3)
 })
+
+const TABLE_SOURCE = "| a | b |\n|---|---|\n| c | d |\n"
+const TABLE_HTML = `<div data-editor-block-id="b1"><table><thead><tr><th>a</th><th>b</th></tr></thead><tbody><tr><td>c</td><td>d</td></tr></tbody></table></div>`
+
+test("table dividers only skip their own line, never the header above", () => {
+  // The divider regex is multiline, so a later-line divider once skipped
+  // the header row as concealed and stranded table carets in later rows.
+  assert.equal(sourceOffsetForVisibleOffset(TABLE_SOURCE, 0), 1)
+  assert.equal(visibleOffsetForSourceOffset(TABLE_SOURCE, 2), 1)
+})
+
+test("boundary carets attach forward into the next cell", () => {
+  // DOM-visible 1 is both end-of-'a' and start-of-'b': Vim motions land
+  // on the following character, so placement resolves it there.
+  const { document } = parseHTML(TABLE_HTML)
+  const block = document.querySelector("[data-editor-block-id]")
+  const second = block.querySelectorAll("th")[1].firstChild
+
+  assert.equal(visibleOffsetAtPoint(block, second, 0), 1)
+  const [node, offset] = pointAtVisibleOffset(block, 1)
+  assert.equal(node, second)
+  assert.equal(offset, 0)
+})
