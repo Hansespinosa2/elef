@@ -105,6 +105,14 @@ export default class extends Controller<HTMLElement> {
 
   retry(event: any) {
     event?.preventDefault()
+    this.refreshNow()
+  }
+
+  // Structural commits (Enter splits, block deletes) need their reinstall
+  // without waiting out the typing debounce: every keystroke resets the
+  // 300ms schedule, so an Enter followed by typing keeps pushing its own
+  // consequence back. Same immediate path as a manual retry.
+  refreshNow(): void {
     clearTimeout(this.timer)
     this.timer = null
     this.pendingProjection = null

@@ -169,7 +169,7 @@ export interface PresentationEditorEnv {
 }
 
 export interface PresentationEditorHost extends HTMLFormElement {
-  previewController?: { projectionFresh?: boolean } | null
+  previewController?: { projectionFresh?: boolean; refreshNow?: () => void } | null
   presentationEditorController?: PresentationEditor
 }
 
@@ -248,6 +248,12 @@ export class PresentationEditor {
   pendingProjectionEdits: Map<string, ProjectionEdit> | undefined
   activeProjectionBlock: Element | null | undefined
   lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
+  // Same reveal-sync throttle key as the document editor: skip the
+  // projection-wide math/inline scans while the caret stays in the same
+  // block and reveal marker (active spans and unrevealed revealable
+  // constructs alike). Reset on flush and reinstall (below).
+  lastRevealSyncBlockId: string | null | undefined
+  lastRevealSyncSpan: Element | null | undefined
   pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null; relativeOffset?: number } | null | undefined
   caretSyncEstablished = false
   suppressProjectionInput = false
@@ -804,6 +810,8 @@ export class PresentationEditor {
         this.setStatus("")
       }
       this.syncEngineSelectionFromCaret()
+      this.lastRevealSyncBlockId = null
+      this.lastRevealSyncSpan = null
       return
     }
 
@@ -817,6 +825,8 @@ export class PresentationEditor {
     })
     this.editorController.replaceRanges(changes)
     this.syncEngineSelectionFromCaret()
+    this.lastRevealSyncBlockId = null
+    this.lastRevealSyncSpan = null
   }
 
   scheduleProjectionFlush(): void {
@@ -828,15 +838,33 @@ export class PresentationEditor {
   }
 
   rememberProjectionCaret(): void {
-    this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
-    this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     const selection = this.getSelection()
-    if (!selection?.focusNode) return
+    if (!selection?.focusNode) {
+      this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+      this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
+      this.lastRevealSyncBlockId = null
+      this.lastRevealSyncSpan = null
+      return
+    }
     const focusNode = selection.focusNode
     const node = (focusNode.nodeType === this.Node.ELEMENT_NODE ? focusNode : focusNode.parentElement) as Element | null
     const block = node?.closest?.("[data-editor-block-id]")
     const canvas = this.canvas()
-    if (!block || !canvas?.contains(block)) return
+    if (!block || !canvas?.contains(block)) {
+      this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+      this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
+      this.lastRevealSyncBlockId = null
+      this.lastRevealSyncSpan = null
+      return
+    }
+    const blockId = (block as HTMLElement).dataset.editorBlockId ?? ""
+    const revealMarker = node?.closest?.(".editor-math-active, .editor-inline-active, [data-editor-math-source], em, strong, del, s, code, a, span.document-link.unresolved") ?? null
+    if (blockId !== this.lastRevealSyncBlockId || revealMarker !== this.lastRevealSyncSpan) {
+      this.deps.syncActiveMath(this.canvas(), () => this.flushPendingProjectionEdits())
+      this.deps.syncActiveInline(this.canvas(), (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
+      this.lastRevealSyncBlockId = blockId
+      this.lastRevealSyncSpan = revealMarker
+    }
     const visibleOffset = this.deps.visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
     if (visibleOffset === null) return
     this.lastProjectionCaret = { blockId: (block as HTMLElement).dataset.editorBlockId ?? "", visibleOffset }
@@ -972,7 +1000,10 @@ export class PresentationEditor {
     this.replaceSource(updated)
     // Preview installs hold while an editable has focus; yield it so the
     // new block installs and the pending restore lands the caret there.
+    // Request the install immediately instead of waiting out the typing
+    // debounce (same structural-commit path as the document editor).
     ;(blockElement as HTMLElement).blur()
+    this.element.previewController?.refreshNow?.()
   }
 
   alignmentChanged(event: ProjectionEvent): void {
@@ -1288,6 +1319,8 @@ export class PresentationEditor {
     }
     const wasPending = this.operationPending
     this.map = payload.editor_map
+    this.lastRevealSyncBlockId = null
+    this.lastRevealSyncSpan = null
     this.operationPending = false
     if (wasPending) this.setControlsDisabled(false)
     this.placeAlignmentPills()

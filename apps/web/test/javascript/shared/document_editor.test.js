@@ -100,7 +100,10 @@ test("presentation source edits shift nested slide ranges and leave directives a
 test("structured continuation appends the list marker through the editor seam", () => {
   const calls = []
   const editor = new DocumentEditor({})
-  Object.defineProperty(editor, "editorController", { value: { replaceRange: (text, from, to) => calls.push({ text, from, to }) } })
+  // value is a required DocumentEditorSeam member; the pending scope reads
+  // the post-edit length from it.
+  const source = "# T\n\n- one"
+  Object.defineProperty(editor, "editorController", { value: { get value() { return source }, replaceRange: (text, from, to) => calls.push({ text, from, to }) } })
   const blockElement = { dataset: { editorBlockId: "b1" }, blur() {} }
   const region = { content_range: { start: 10, end: 20 } }
 
@@ -108,13 +111,14 @@ test("structured continuation appends the list marker through the editor seam", 
 
   assert.equal(calls.length, 1)
   assert.deepEqual(calls[0], { text: "- one\n- ", from: 10, to: 20 })
-  assert.deepEqual(editor.pendingCaret, { sourceOffset: 10 + "- one\n- ".length, location: "list_item_end" })
+  assert.deepEqual(editor.pendingCaret, { sourceOffset: 10 + "- one\n- ".length, location: "list_item_end", sourceLength: source.length - (20 - 10) + "- one\n- ".length })
 })
 
 test("empty list markers collapse back to the previous lines", () => {
   const calls = []
   const editor = new DocumentEditor({})
-  Object.defineProperty(editor, "editorController", { value: { replaceRange: (text, from, to) => calls.push({ text, from, to }) } })
+  const source = "# T\n\n- one\n- "
+  Object.defineProperty(editor, "editorController", { value: { get value() { return source }, replaceRange: (text, from, to) => calls.push({ text, from, to }) } })
   const blockElement = { dataset: { editorBlockId: "b1" }, blur() {} }
   const region = { content_range: { start: 10, end: 22 } }
 

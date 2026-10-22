@@ -912,11 +912,13 @@ class DocumentsTest < ApplicationSystemTestCase
       selection.removeAllRanges();
       selection.addRange(range);
     JAVASCRIPT
+    page.save_screenshot("../../assets/pr-shots/visual-enter-flow/enter-split-before.png")
     block.send_keys(:enter)
 
     assert_field "Markdown source", with: "# Notes\n\nAlpha beta\n\ngamma", wait: 5
     assert_selector ".document-editor-block", text: "Alpha beta"
     assert_selector ".document-editor-block", text: "gamma"
+    page.save_screenshot("../../assets/pr-shots/visual-enter-flow/enter-split-after.png")
   end
 
   test "visual document blocks accept direct keyboard edits" do
