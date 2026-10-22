@@ -364,3 +364,84 @@ test("document restoreSelections tolerates a missing projection or editor", () =
   } as unknown as NonNullable<typeof elementless.editorController>;
   assert.doesNotThrow(() => elementless.restoreSelections());
 });
+
+test("intra-block caret steps skip repeated reveal syncs (measured)", () => {
+  // Holding a navigation key fires rememberProjectionCaret per step. Each
+  // math/inline sync scans the whole projection (the stubs below run one
+  // full-projection query pass per sync, mirroring the real syncs' scan),
+  // so the throttle key must collapse N intra-block steps into one sync
+  // pair. Counts are asserted (deterministic); wall ms is measured and
+  // printed for the PR evidence — the unthrottled loop replays the pre-fix
+  // shape (sync on every step) by clearing the throttle key each step.
+  const { editor, projection } = mountDocument();
+  const doc = (projection as unknown as { ownerDocument: Document }).ownerDocument;
+  for (let i = 3; i <= 50; i += 1) {
+    const block = doc.createElement("div");
+    block.setAttribute("class", "document-editor-block");
+    block.setAttribute("data-editor-block-id", `b${i}`);
+    block.textContent = `Block ${i} with `;
+    const math = doc.createElement("span");
+    math.setAttribute("data-editor-math-source", `x^${i}`);
+    math.textContent = `x^${i}`;
+    block.appendChild(math);
+    (projection as unknown as { appendChild(node: unknown): void }).appendChild(block);
+  }
+  const first = projection.querySelector("[data-editor-block-id='b1']");
+  assert.ok(first);
+  let mathSyncs = 0; let inlineSyncs = 0;
+  editor.deps.syncActiveMath = () => {
+    mathSyncs += 1;
+    projection.querySelectorAll("[data-editor-math-source], .editor-math-active");
+  };
+  editor.deps.syncActiveInline = () => {
+    inlineSyncs += 1;
+    projection.querySelectorAll("em, strong, del, s, code, a");
+  };
+  editor.deps.visibleOffsetAtPoint = () => 1;
+  const focus = { node: first.firstChild as unknown, offset: 0 };
+  const previousNode = Object.getOwnPropertyDescriptor(globalThis, "Node");
+  Object.defineProperty(globalThis, "Node", { configurable: true, writable: true, value: { ELEMENT_NODE: 1, TEXT_NODE: 3 } });
+  const previousCss = Object.getOwnPropertyDescriptor(globalThis, "CSS");
+  Object.defineProperty(globalThis, "CSS", { configurable: true, writable: true, value: { escape: (value: string) => value } });
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { getSelection: () => ({
+    isCollapsed: true, anchorNode: focus.node, anchorOffset: focus.offset,
+    focusNode: focus.node, focusOffset: focus.offset,
+  }) } });
+  const STEPS = 200;
+  try {
+    focus.offset = 0;
+    const throttledStart = performance.now();
+    for (let i = 0; i < STEPS; i += 1) {
+      focus.offset = i % 3;
+      editor.rememberProjectionCaret();
+    }
+    const throttledMs = performance.now() - throttledStart;
+    const throttledMath = mathSyncs; const throttledInline = inlineSyncs;
+    assert.equal(throttledMath, 1);
+    assert.equal(throttledInline, 1);
+    mathSyncs = 0; inlineSyncs = 0;
+    const unthrottledStart = performance.now();
+    for (let i = 0; i < STEPS; i += 1) {
+      focus.offset = i % 3;
+      editor.lastRevealSyncBlockId = null;
+      editor.lastRevealSyncSpan = null;
+      editor.rememberProjectionCaret();
+    }
+    const unthrottledMs = performance.now() - unthrottledStart;
+    assert.equal(mathSyncs, STEPS);
+    assert.equal(inlineSyncs, STEPS);
+    console.log(
+      `[perf] intra-block caret x${STEPS} over 50 blocks: ` +
+      `throttled ${throttledMath}/${throttledInline} math/inline syncs in ${throttledMs.toFixed(2)}ms ` +
+      `vs unthrottled ${mathSyncs}/${inlineSyncs} syncs in ${unthrottledMs.toFixed(2)}ms`,
+    );
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "window", previous);
+    else delete (globalThis as Record<string, unknown>).window;
+    if (previousNode) Object.defineProperty(globalThis, "Node", previousNode);
+    else delete (globalThis as Record<string, unknown>).Node;
+    if (previousCss) Object.defineProperty(globalThis, "CSS", previousCss);
+    else delete (globalThis as Record<string, unknown>).CSS;
+  }
+});
