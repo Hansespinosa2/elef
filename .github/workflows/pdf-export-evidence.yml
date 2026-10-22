@@ -63,7 +63,7 @@ jobs:
           ELEF_E2E_BUILD: "1"
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/ms-playwright
