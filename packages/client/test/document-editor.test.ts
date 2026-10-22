@@ -237,6 +237,105 @@ test("document restoreSelections clears without mapping in source mode", () => {
   assert.equal(appended.length, 0);
 });
 
+test("projection caret syncs reveal state once per block visit", () => {
+  // Holding j/arrows fires selectionchange per step; the math/inline syncs
+  // scan the whole projection, so repeats inside the same block and span
+  // must not re-sync. Any block or span change re-syncs fully.
+  const { editor, projection } = mountDocument();
+  const blocks = [...projection.querySelectorAll("[data-editor-block-id]")];
+  const first = blocks[0]; const second = blocks[1];
+  assert.ok(first && second);
+  let mathSyncs = 0; let inlineSyncs = 0;
+  editor.deps.syncActiveMath = () => { mathSyncs += 1; };
+  editor.deps.syncActiveInline = () => { inlineSyncs += 1; };
+  editor.deps.visibleOffsetAtPoint = () => 1;
+  let focus = { node: first.firstChild as unknown, offset: 0 };
+  const previousNode = Object.getOwnPropertyDescriptor(globalThis, "Node");
+  Object.defineProperty(globalThis, "Node", { configurable: true, writable: true, value: { ELEMENT_NODE: 1, TEXT_NODE: 3 } });
+  const previousCss = Object.getOwnPropertyDescriptor(globalThis, "CSS");
+  Object.defineProperty(globalThis, "CSS", { configurable: true, writable: true, value: { escape: (value: string) => value } });
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { getSelection: () => ({
+    isCollapsed: true, anchorNode: focus.node, anchorOffset: focus.offset,
+    focusNode: focus.node, focusOffset: focus.offset,
+  }) } });
+  try {
+    editor.rememberProjectionCaret();
+    assert.equal(mathSyncs, 1);
+    assert.equal(inlineSyncs, 1);
+    // Same block, different offset: no re-sync.
+    focus = { node: first.firstChild as unknown, offset: 2 };
+    editor.rememberProjectionCaret();
+    assert.equal(mathSyncs, 1);
+    assert.equal(inlineSyncs, 1);
+    // Entering an active span in the same block: re-sync.
+    first.innerHTML = `O<span class="editor-math-active">ne</span>`;
+    const spanText = first.querySelector(".editor-math-active")?.firstChild;
+    assert.ok(spanText);
+    focus = { node: spanText as unknown, offset: 0 };
+    editor.rememberProjectionCaret();
+    assert.equal(mathSyncs, 2);
+    assert.equal(inlineSyncs, 2);
+    // Same span again: no re-sync.
+    editor.rememberProjectionCaret();
+    assert.equal(mathSyncs, 2);
+    assert.equal(inlineSyncs, 2);
+    // Different block: re-sync.
+    focus = { node: second.firstChild as unknown, offset: 0 };
+    editor.rememberProjectionCaret();
+    assert.equal(mathSyncs, 3);
+    assert.equal(inlineSyncs, 3);
+  } finally {
+    if (previous) Object.defineProperty(globalThis, "window", previous);
+    else delete (globalThis as Record<string, unknown>).window;
+    if (previousNode) Object.defineProperty(globalThis, "Node", previousNode);
+    else delete (globalThis as Record<string, unknown>).Node;
+    if (previousCss) Object.defineProperty(globalThis, "CSS", previousCss);
+    else delete (globalThis as Record<string, unknown>).CSS;
+  }
+  assert.deepEqual(editor.lastProjectionCaret, { blockId: "b2", visibleOffset: 1 });
+});
+
+test("a superseded pending caret drops instead of teleporting", () => {
+  // A failed restore (block not yet in the map) stays armed for its own
+  // reinstall, but once a newer transaction rewrites the source the entry
+  // must drop: otherwise it fires on an unrelated update and yanks the
+  // caret to a stale offset.
+  const { editor } = mountDocument();
+  let value = "One\n\nTwo";
+  editor.readyEditor = {
+    get value() { return value; },
+  } as unknown as NonNullable<typeof editor.editorController>;
+  editor.pendingCaret = { sourceOffset: 2, location: "block_end", sourceLength: 8 };
+  editor.map = { slides: [{ blocks: [] }] } as unknown as typeof editor.map;
+  editor.restorePendingCaret();
+  assert.notEqual(editor.pendingCaret, null);
+  value = "One\n\nTwo!";
+  editor.restorePendingCaret();
+  assert.equal(editor.pendingCaret, null);
+});
+
+test("structural edits request an immediate preview refresh", () => {
+  // Enter splits must not wait out the typing debounce (each following
+  // keystroke resets it, pushing the consequence back indefinitely).
+  const { editor, host, projection } = mountDocument();
+  const block = projection.querySelector("[data-editor-block-id]");
+  assert.ok(block);
+  (block as unknown as { blur?: () => void }).blur = () => {};
+  let refreshed = 0;
+  (host as unknown as { previewController?: unknown }).previewController = { refreshNow: () => { refreshed += 1; } };
+  let value = "One";
+  editor.readyEditor = {
+    get value() { return value; },
+    replaceRange(insert: string, from: number, to: number) {
+      value = value.slice(0, from) + insert + value.slice(to);
+    },
+  } as unknown as NonNullable<typeof editor.editorController>;
+  editor.replaceAndFocus(block as unknown as Element, 0, 3, "One\n\n", { sourceOffset: 5, location: "empty_block" });
+  assert.equal(refreshed, 1);
+  assert.deepEqual(editor.pendingCaret, { sourceOffset: 5, location: "empty_block", sourceLength: 5 });
+});
+
 test("document restoreSelections tolerates a missing projection or editor", () => {
   const { editor } = mountDocument();
   editor.projection = null;

@@ -142,7 +142,7 @@ export interface DocumentEditorDeps {
 }
 
 export interface DocumentEditorHost extends HTMLElement {
-  previewController?: { projectionFresh?: boolean } | null
+  previewController?: { projectionFresh?: boolean; refreshNow?: () => void } | null
 }
 
 export interface DocumentEditorOptions {
@@ -203,7 +203,21 @@ export class DocumentEditor {
   pendingProjectionEdits: Map<string, DocumentProjectionEdit> | undefined
   pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null } | null | undefined
   suppressProjectionInput = false
-  pendingCaret: { sourceOffset: number; location: string } | null | undefined
+  // A pending caret is scoped to the transaction that armed it: sourceLength
+  // records the post-edit document length, so a later restore can tell a
+  // still-pending reinstall (same length) from a superseded entry a newer
+  // edit already invalidated (different length). Without the scope, a
+  // failed restore stays armed and yanks the caret on the next unrelated
+  // preview update.
+  pendingCaret: { sourceOffset: number; location: string; sourceLength: number } | null | undefined
+  // Throttle key for the reveal syncs below: the last block id and active
+  // span element a sync ran for. Both syncs are block- and span-scoped, so
+  // caret motion inside the same block and span repaints nothing and can
+  // skip the projection-wide scans (holding j/arrows otherwise pays
+  // O(blocks) plus KaTeX re-renders per step). Any block or span change,
+  // flush, or reinstall resets the key and re-syncs fully.
+  lastRevealSyncBlockId: string | null | undefined
+  lastRevealSyncSpan: Element | null | undefined
   lastProjectionCaret: { blockId: string; visibleOffset: number } | undefined
   updatingProjection: boolean | undefined
   initialTitleFocusSettled: boolean | undefined
@@ -791,6 +805,8 @@ export class DocumentEditor {
         if (blockElement) this.blockFragments(edit.blockId).forEach((fragment) => this.deps.renderInlineMath(fragment))
       })
       this.syncEngineSelectionFromCaret()
+      this.lastRevealSyncBlockId = null
+      this.lastRevealSyncSpan = null
       markStage("key-flush-end")
       return
     }
@@ -806,6 +822,10 @@ export class DocumentEditor {
     })
     this.editorController.replaceRanges(changes)
     this.syncEngineSelectionFromCaret()
+    // The commit may have revealed, concealed, or moved spans: reset the
+    // reveal-sync throttle key so the next caret observation re-syncs once.
+    this.lastRevealSyncBlockId = null
+    this.lastRevealSyncSpan = null
     markStage("key-flush-end")
   }
 
@@ -818,14 +838,35 @@ export class DocumentEditor {
   }
 
   rememberProjectionCaret(): void {
-    this.deps.syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
-    this.deps.syncActiveInline(this.projectionTarget, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
     const selection = window.getSelection()
-    if (!selection?.focusNode) return
+    if (!selection?.focusNode) {
+      // No caret to track, but spans may still need deactivating.
+      this.deps.syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
+      this.deps.syncActiveInline(this.projectionTarget, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
+      this.lastRevealSyncBlockId = null
+      this.lastRevealSyncSpan = null
+      return
+    }
     const focusNode = selection.focusNode
     const node = (focusNode.nodeType === Node.ELEMENT_NODE ? focusNode : focusNode.parentElement) as Element | null
     const block = node?.closest?.("[data-editor-block-id]")
-    if (!block || !this.projectionTarget?.contains(block)) return
+    if (!block || !this.projectionTarget?.contains(block)) {
+      // No projection caret: still give spans a chance to deactivate, then
+      // reset the key so re-entering re-syncs.
+      this.deps.syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
+      this.deps.syncActiveInline(this.projectionTarget, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
+      this.lastRevealSyncBlockId = null
+      this.lastRevealSyncSpan = null
+      return
+    }
+    const blockId = (block as HTMLElement).dataset.editorBlockId ?? ""
+    const activeSpan = node?.closest?.(".editor-math-active, .editor-inline-active") ?? null
+    if (blockId !== this.lastRevealSyncBlockId || activeSpan !== this.lastRevealSyncSpan) {
+      this.deps.syncActiveMath(this.projectionTarget, () => this.flushPendingProjectionEdits())
+      this.deps.syncActiveInline(this.projectionTarget, (block) => this.inlineRevealSource(block), () => this.flushPendingProjectionEdits())
+      this.lastRevealSyncBlockId = blockId
+      this.lastRevealSyncSpan = activeSpan
+    }
     const visibleOffset = this.visibleOffsetInBlockGroup(block, selection.focusNode, selection.focusOffset)
     if (visibleOffset === null) return
     this.lastProjectionCaret = { blockId: (block as HTMLElement).dataset.editorBlockId ?? "", visibleOffset }
@@ -903,7 +944,7 @@ export class DocumentEditor {
     const { from, to } = this.blockSourceRange(block)
     const updated = this.deps.removeEmptyBlockSource(source, from, to)
     if (updated === source) return
-    this.pendingCaret = { sourceOffset: Math.min(from, updated.length), location: "block_end" }
+    this.pendingCaret = { sourceOffset: Math.min(from, updated.length), location: "block_end", sourceLength: updated.length }
     void editor.commitSource(updated)
   }
 
@@ -1220,6 +1261,10 @@ export class DocumentEditor {
 
   previewUpdated(payload: { editor_map?: DocumentEditorMap } | null | undefined): void {
     if (payload?.editor_map) this.map = payload.editor_map
+    // The reinstall replaced the DOM under the cached key: reset it so the
+    // next caret observation re-syncs against the fresh tree.
+    this.lastRevealSyncBlockId = null
+    this.lastRevealSyncSpan = null
     this.syncProjectionEditability({ preserveActive: Boolean(this.focusedProjectionBlock()) })
     this.restorePendingCaret()
     this.restoreProjectionCaret()
@@ -1451,10 +1496,16 @@ export class DocumentEditor {
   }
 
   replaceAndFocus(blockElement: Element, from: number, to: number, replacement: string, caret: { sourceOffset: number; location: string }): void {
-    this.pendingCaret = caret
+    this.pendingCaret = { ...caret, sourceLength: this.editorController.value.length - (to - from) + replacement.length }
     this.shiftMapAfterEdit(from, to, replacement.length, (blockElement as HTMLElement).dataset.editorBlockId)
     this.editorController.replaceRange(replacement, from, to)
     ;(blockElement as HTMLElement).blur()
+    // Structural edits reinstall immediately instead of waiting out the
+    // typing debounce (which each subsequent keystroke resets). The blur
+    // above lets the install proceed; the scoped pendingCaret lands the
+    // caret when it arrives, and D2's guard drops it if newer input
+    // superseded this transaction first. The host may be absent in tests.
+    this.element?.previewController?.refreshNow?.()
   }
 
   replaceAndEnterDisplayMath(blockElement: Element, from: number, to: number, replacement: string, indentation: string, open: string, close: string, lineEnding: string): void {
@@ -1549,7 +1600,7 @@ export class DocumentEditor {
       if (!deleteFromMarker || deleteFromMarker.index === undefined) return false
       const deleteFrom = deleteFromMarker.index
       const deleteTo = block.range.start
-      this.pendingCaret = { sourceOffset: deleteFrom, location: "block_end" }
+      this.pendingCaret = { sourceOffset: deleteFrom, location: "block_end", sourceLength: source.length - (deleteTo - deleteFrom) }
       this.shiftMapAfterEdit(deleteFrom, deleteTo, 0, block.id)
       this.editorController.replaceRange("", deleteFrom, deleteTo)
       ;(blockElement as HTMLElement).blur()
@@ -1569,7 +1620,17 @@ export class DocumentEditor {
 
   restorePendingCaret(): void {
     const pending = this.pendingCaret
-    if (!pending || !this.map) return
+    const editor = this.editorController
+    if (!pending || !editor) return
+    // A newer transaction rewrote the source after this entry armed: the
+    // recorded offset belongs to a superseded document, so drop it instead
+    // of teleporting the caret on this unrelated update. An unchanged
+    // length keeps the entry armed for its own reinstall (deferral).
+    if (editor.value.length !== pending.sourceLength) {
+      this.pendingCaret = null
+      return
+    }
+    if (!this.map) return
 
     const blocks = this.map.slides?.flatMap((slide) => slide.blocks || []) || []
     const containsCaret = (block: DocumentEditorBlock): boolean => block.range.start <= pending.sourceOffset && block.range.end >= pending.sourceOffset
