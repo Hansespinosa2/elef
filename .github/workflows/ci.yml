@@ -384,7 +384,7 @@ jobs:
           npm audit --prefix apps/desktop/frontend --audit-level=high
           npm audit --prefix apps/desktop/e2e --audit-level=high
       - name: Cache the pinned Cargo audit binary
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cargo/bin/cargo-audit
           key: cargo-audit-0.22.2-${{ runner.os }}
@@ -438,7 +438,7 @@ jobs:
         run: bin/rails db:test:prepare
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           # Playwright browsers are pinned by @playwright/test in
           # apps/desktop/e2e/package-lock.json; the lockfile hash is the key.
@@ -679,7 +679,7 @@ jobs:
         run: bin/rails db:test:prepare
       - name: Cache Playwright browsers
         id: playwright-cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           # Playwright browsers are pinned by @playwright/test in
           # apps/desktop/e2e/package-lock.json; the lockfile hash is the key.
