@@ -21,7 +21,11 @@ jobs:
             apps/desktop/frontend/package-lock.json
       - uses: dtolnay/rust-toolchain@stable
       - run: npm ci
-      - run: npm run renderer:build
+      # dist/ is built, never committed, and the frontend bundle resolves
+      # every shared package: work-model must build before the renderer,
+      # and editor-runtime before the Tauri frontend (same order as the
+      # CI desktop lane's `build:packages`).
+      - run: npm run build:packages
       - run: npm ci --prefix apps/desktop/frontend
       - name: Prepare signed updater configuration
         env:
