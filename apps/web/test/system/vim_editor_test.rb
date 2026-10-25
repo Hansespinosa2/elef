@@ -1311,9 +1311,13 @@ class VimEditorTest < ApplicationSystemTestCase
     # host bundles upstream unpatched (#ff9696, Prec.highest), which outranks
     # the engine theme on precedence and ties-then-beats the
     # .editor-surface-scoped stylesheet on injection order. The injected sheet
-    # below replays that exact upstream configuration (same specificity
-    # shapes, runtime-injected after the stylesheets): without Elef's
-    # root-anchored guard the block computes red; with it, theme green.
+    # below replays that upstream configuration, runtime-injected after the
+    # stylesheets like style-mod does: same shape as upstream focused
+    # ((0,2,0)), one class stricter unfocused ((0,4,0) vs upstream (0,3,0)),
+    # so a guard that wins here wins against upstream a fortiori. Without
+    # Elef's root-anchored guard the block computes red; with it, theme
+    # green. The scope sits on the mount div, never on CodeMirror-managed
+    # DOM: the editor root drops foreign classes on focus.
     mount_result = page.evaluate_async_script(<<~JAVASCRIPT)
       (function (done) {
         (async () => {
@@ -1323,6 +1327,7 @@ class VimEditorTest < ApplicationSystemTestCase
             const mount = document.createElement("div");
             mount.id = "vim-guard-probe";
             mount.setAttribute("aria-label", "Vim cursor guard probe");
+            mount.classList.add("dl-red-probe");
             mount.style.cssText = "position:fixed;left:16px;bottom:16px;width:22rem;z-index:60;" +
               "border:1px solid #304047;border-radius:0.5rem;overflow:hidden;";
             document.body.appendChild(mount);
@@ -1335,13 +1340,10 @@ class VimEditorTest < ApplicationSystemTestCase
               extensions: [vim(), dark],
               parent: mount
             });
-            // Scope sits on the editor root, exactly where the vim theme
-            // class sits upstream: same specificity shapes, injected last.
-            mount.querySelector(".cm-editor").classList.add("dl-red-probe");
             const replay = document.createElement("style");
             replay.id = "dl-red-probe";
             replay.textContent = ".dl-red-probe .cm-fat-cursor { position: absolute; background: #ff9696; border: none; white-space: pre; }" +
-              ".dl-red-probe:not(.cm-focused) .cm-fat-cursor { background: none; outline: solid 1px #ff9696; }";
+              ".dl-red-probe .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline: solid 1px #ff9696; }";
             document.head.appendChild(replay);
             done("mounted");
           } catch (error) { done("error: " + (error && error.message)); }
