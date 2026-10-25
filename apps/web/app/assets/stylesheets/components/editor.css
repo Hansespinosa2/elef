@@ -322,18 +322,27 @@ li.editor-reveal-marker { list-style: none; }
 
 /* Defeats CodeMirror's gutter display when the editor's line numbers are disabled. */
 .editor-surface[data-line-numbers="off"] .cm-lineNumbers { display: none !important; }
+/* Root-anchored Vim block guard: CodeMirror's vim default paints #ff9696 red
+   from a runtime-injected, unlayered sheet, so it beats every layered normal
+   declaration below no matter the specificity. The guard (and the mode-aware
+   fat-cursor rules beneath it) therefore carry !important: unlayered red
+   loses to any layered !important, and among the layered !important rules
+   specificity still orders guard below mode-aware. This !important is only
+   for third-party injected styles, never for Elef utilities. */
+.elef-app .cm-editor .cm-fat-cursor { background-color: var(--oradia-vim-normal) !important; min-width: 1ch; }
+.elef-app .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline: solid 1px var(--oradia-vim-normal) !important; }
 .editor-surface .cm-fat-cursor { background-color: var(--oradia-vim-normal); min-width: 1ch; }
 .editor-surface .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline: solid 1px var(--oradia-vim-normal); }
 /* Overrides CodeMirror's injected cursor color with Elef's Vim mode colors. */
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="insert"] .cm-cursor { border-left-color: var(--oradia-vim-insert) !important; }
 /* Overrides CodeMirror's injected cursor color with Elef's Vim mode colors. */
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-cursor { border-left-color: var(--oradia-vim-visual) !important; }
-.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-fat-cursor { background-color: var(--oradia-vim-visual); }
-.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline-color: var(--oradia-vim-visual); }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-fat-cursor { background-color: var(--oradia-vim-visual) !important; }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="visual"] .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline-color: var(--oradia-vim-visual) !important; }
 /* Overrides CodeMirror's injected cursor color with Elef's Vim mode colors. */
 .editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-cursor { border-left-color: var(--oradia-vim-normal) !important; }
-.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-fat-cursor { background-color: var(--oradia-vim-normal); }
-.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline-color: var(--oradia-vim-normal); }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-fat-cursor { background-color: var(--oradia-vim-normal) !important; }
+.editor-surface[data-mode-aware-cursor="true"][data-editor-mode="normal"] .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline-color: var(--oradia-vim-normal) !important; }
 /* Defeats CodeMirror's injected selection backgrounds in visual and Vim modes. */
 .editor-surface[data-editor-mode="visual"] .cm-selectionBackground,
 .editor-surface[data-editor-vim-enabled="true"] .cm-selectionBackground { background-color: var(--oradia-vim-selection) !important; }
