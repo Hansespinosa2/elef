@@ -167,8 +167,13 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
 .presenting-work #desktop-preview { overflow: hidden; background: #000; }
 .presenting-work #desktop-preview.editor-projection.preview-pane { position: fixed; inset: 0; max-height: none; min-height: 0; height: 100vh; width: 100vw; overflow: hidden; border: 0; box-shadow: none; }
 .presenting-work .slide-frame { display: none !important; }
-.presenting-work .slide-frame.is-active-presentation-slide { display: block !important; position: fixed; inset: 0; width: 100vw; height: 100vh; aspect-ratio: auto; overflow: hidden; }
-.presenting-work .slide-frame > .slide { border: 0; border-radius: 0; height: 100vh; padding: 7vh 8vw; transform: none; width: 100vw; }
+/* Present mode pins the active slide to the fixed 16:9 design canvas and
+   letterboxes it in the viewport: the frame takes the largest centered 16:9
+   box (black bars from #desktop-preview fill the rest) and the slide keeps
+   its 1280x720 design size under the shared --slide-scale transform, so a
+   fullscreen monitor with a different aspect never stretches content. */
+.presenting-work .slide-frame.is-active-presentation-slide { display: block !important; position: fixed; inset: 0; margin: auto; width: min(100vw, calc(100vh * 16 / 9)); height: min(100vh, calc(100vw * 9 / 16)); aspect-ratio: 16 / 9; overflow: hidden; }
+.presenting-work .slide-frame.is-active-presentation-slide > .slide { border: 0; border-radius: 0; }
 .presenting-work .presentation-editor-block-controls,
 .presenting-work .presentation-editor-slide-toolbar { display: none !important; }
 .presenting-work .presentation-mode-exit { display: inline-flex; position: fixed; top: 16px; right: 20px; z-index: 10002; gap: 12px; align-items: center; padding: 9px 13px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: #fff; }
