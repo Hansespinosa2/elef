@@ -130,7 +130,9 @@ test("save drops the noted work folders so the next list sees the new mtime", as
     },
   })
   host.noteListedWorkFolders([workFolderSummary({ modified_ms: 1_000 })])
-  await host.works.saveWork(MANIFESTLESS_ID, "# new", { revision: "h1" })
+  // Plain body text on purpose: a changed h1 now renames the folder (see
+  // tauri-host-title-sync.test.js), and this test is about mtime refresh.
+  await host.works.saveWork(MANIFESTLESS_ID, "body without a heading", { revision: "h1" })
   const [work] = await host.library.listWorks()
   assert.equal(work.updatedAt, new Date(2_000).toISOString())
   assert.deepEqual(calls, ["save_source", "list_work_folders"])
