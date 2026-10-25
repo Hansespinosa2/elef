@@ -37,6 +37,10 @@
     "./style-vocab": {
       "types": "./src/style_vocab.ts",
       "default": "./dist/style-vocab.js"
+    },
+    "./heading": {
+      "types": "./src/heading.ts",
+      "default": "./dist/heading.js"
     }
   },
   "dependencies": {

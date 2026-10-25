@@ -28,6 +28,9 @@ export {
   withAppearanceValue,
   withFrontMatterValue
 } from "@elef/work-model/document-map"
+// The heading extractor is pure string parsing, not link/graph logic, so it
+// ships in the Stable barrel even though document links do not.
+export { extractFirstMarkdownHeading } from "@elef/work-model/heading"
 export type {
   EditorMap,
   EditorStructure,

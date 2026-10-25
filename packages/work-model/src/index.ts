@@ -83,12 +83,12 @@ export {
   createDocumentLinkResolver,
   extractDocumentLinkTitles,
   extractDocumentLinkTokens,
-  extractFirstMarkdownHeading,
   isLinkableDocumentTitle,
   linkableDocumentTitles,
   parseDocumentLinkAt,
   parsePortableDocumentLinks
 } from "@elef/work-model/document-links"
+export { extractFirstMarkdownHeading } from "@elef/work-model/heading"
 export type {
   DocumentGraph,
   DocumentGraphEdge,
