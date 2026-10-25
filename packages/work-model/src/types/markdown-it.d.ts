@@ -35,6 +35,8 @@ declare module "markdown-it" {
   export interface MarkdownItInlineState {
     src: string
     pos: number
+    posMax: number
+    pending: string
     env?: unknown
     push(type: string, tag: string, nesting: number): MarkdownItToken
   }
@@ -58,6 +60,7 @@ declare module "markdown-it" {
   export interface MarkdownItRuler<Rule> {
     before(beforeName: string, ruleName: string, fn: Rule): void
     after(afterName: string, ruleName: string, fn: Rule): void
+    at(name: string, fn: Rule): void
   }
 
   export type MarkdownItRenderRule = (
