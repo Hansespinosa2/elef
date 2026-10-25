@@ -1,5 +1,9 @@
 module PresentationsHelper
-  def render_markdown(markdown, work: @presentation, art: false, host_mode: "fixed")
+  # Saved presentation views (show/present/print share the slide partials)
+  # render bare blocks, exactly like the PPTX export model: no editor-only
+  # attributes (`data-editor-*`, `contenteditable`) leak into read-only
+  # output. Only the editable projection carries editor chrome.
+  def render_markdown(markdown, work: @presentation, art: false, host_mode: "fixed", bare: true)
     if art
       return Source::Renderer.render_art_block(
         markdown,
@@ -7,13 +11,13 @@ module PresentationsHelper
         media_resolver: presentation_media_resolver(work)
       )
     end
-    return Source::Renderer.render(markdown) unless work&.id
+    return Source::Renderer.render(markdown, bare: bare) unless work&.id
 
-    Source::Renderer.render(markdown, media_resolver: presentation_media_resolver(work))
+    Source::Renderer.render(markdown, media_resolver: presentation_media_resolver(work), bare: bare)
   end
 
   def render_editor_block(markdown, editor_block, work: @presentation)
-    rendered = render_markdown(markdown, work: work, art: !!editor_block&.dig(:art))
+    rendered = render_markdown(markdown, work: work, art: !!editor_block&.dig(:art), bare: false)
     return rendered unless editor_block&.dig(:kind) == "image"
 
     alt = markdown.to_s.match(/\A\s*!\[([^\]]*)\]/)&.[](1).to_s
