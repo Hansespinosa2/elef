@@ -217,13 +217,15 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
   .printing-work #work-notice,
   .printing-work .work-notice { display: none !important; }
   /* Editor affordances inside the projection never print: alignment selects,
-     slide toolbars, block controls, empty-slide actions, and media alt
-     captions are interactive chrome, not Work content. */
+     slide toolbars, block controls, and empty-slide actions are interactive
+     chrome, not Work content. Media captions stay: the figcaption carries
+     the author's image description, and the web print views render the same
+     editor-media-caption node unconditionally, so hiding it here drops Work
+     content from the desktop PDF only. */
   .printing-work .presentation-editor-block-controls,
   .printing-work .presentation-editor-slide-toolbar,
   .printing-work .document-block-position-control,
-  .printing-work .empty-slide-add-image,
-  .printing-work .editor-media-caption { display: none !important; }
+  .printing-work .empty-slide-add-image { display: none !important; }
   .printing-work #desktop-preview { display: block !important; position: static; max-height: none; min-height: 0; overflow: visible; background: #fff; color-adjust: exact; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   /* Presentations print one fixed 16:9 landscape page per slide, exactly as
      the web presentation print view does (components/documents.css). The

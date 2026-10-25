@@ -38,10 +38,20 @@ test("the desktop print stylesheet hides every app-shell and editor-chrome surfa
     ".presentation-editor-tools",
     ".document-block-position-control",
     ".empty-slide-add-image",
-    ".editor-media-caption",
   ]) {
     assert.ok(print.includes(selector), `expected the print stylesheet to hide ${selector}`)
   }
+})
+
+test("the desktop print keeps image captions like the web print views do", () => {
+  // The figcaption carries the author's image description: the web print
+  // partial renders the same editor-media-caption node unconditionally, so
+  // hiding it on desktop drops Work content from the desktop PDF only.
+  const print = printBlock(hostCss)
+  assert.ok(
+    !/\.editor-media-caption[^{]*\{[^}]*display:\s*none/.test(print),
+    "expected the print stylesheet to keep media captions printable",
+  )
 })
 
 test("the desktop presentation print geometry matches the web print views", () => {
