@@ -134,6 +134,22 @@ test("document projection keeps trailing list and quote lines editable", () => {
   assert.match(quote, /<blockquote>\s*<p>First line<\/p>\s*<p><br><\/p>/)
 })
 
+test("trailing whitespace at a line end never breaks the paragraph", () => {
+  // Two spaces, tabs, or a mix at a line end must flow like plain text:
+  // invisible trailing whitespace must not force a visible break.
+  for (const ending of ["  \n", " \n", "\t\n", " \t \n"]) {
+    const html = renderPreviewCore({ kind: "document", source: `He drives a small car.${ending}He can now buy his medicine.` }).html
+    assert.ok(!html.includes("<br"), `trailing ${JSON.stringify(ending)} must not emit a break`)
+    assert.match(html, /He drives a small car\.\s*He can now buy his medicine\./)
+  }
+  // An explicit backslash is a deliberate break, not whitespace: it stays.
+  const backslash = renderPreviewCore({ kind: "document", source: "He drives a small car.\\\nHe can now buy his medicine." }).html
+  assert.match(backslash, /He drives a small car\.<br>\s*He can now buy his medicine\./)
+  // Fenced code keeps trailing spaces byte for byte.
+  const fenced = renderPreviewCore({ kind: "document", source: "```\ncode  \nmore\n```" }).html
+  assert.match(fenced, /<code>code  \nmore\n<\/code>/)
+})
+
 test("wiki links resolve through local document IDs and math stays inert", () => {
   const preview = renderPreviewCore({
     kind: "document",
