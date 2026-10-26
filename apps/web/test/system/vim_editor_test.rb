@@ -1,4 +1,5 @@
 require "application_system_test_case"
+require "base64"
 
 class VimEditorTest < ApplicationSystemTestCase
   test "editor controls fit a narrow viewport and retain resizing" do
@@ -1295,5 +1296,104 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /!r2c1/, wait: 10
   ensure
     page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
+  test "Vim normal block never renders the upstream red, on any surface" do
+    document = Document.create!(title: "Cursor guard", source: "abcdef\nsecond line")
+    visit settings_path
+    find("#vim-enabled").check
+    visit edit_document_path(document)
+    assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
+
+    # A bare Vim-enabled CodeMirror with no .editor-surface ancestor: the shape
+    # every host reuses, carrying none of Elef's container-scoped overrides.
+    # The web bundle vendor-patches the vim default to green, but the desktop
+    # host bundles upstream unpatched (#ff9696, Prec.highest), which outranks
+    # the engine theme on precedence and ties-then-beats the
+    # .editor-surface-scoped stylesheet on injection order. The injected sheet
+    # below replays that upstream configuration, runtime-injected after the
+    # stylesheets like style-mod does: same shape as upstream focused
+    # ((0,2,0)), one class stricter unfocused ((0,4,0) vs upstream (0,3,0)),
+    # so a guard that wins here wins against upstream a fortiori. Without
+    # Elef's root-anchored guard the block computes red; with it, theme
+    # green. The scope sits on the mount div, never on CodeMirror-managed
+    # DOM: the editor root drops foreign classes on focus.
+    mount_result = page.evaluate_async_script(<<~JAVASCRIPT)
+      (function (done) {
+        (async () => {
+          try {
+            const { EditorView } = await import("@codemirror/view");
+            const { vim } = await import("@replit/codemirror-vim");
+            const mount = document.createElement("div");
+            mount.id = "vim-guard-probe";
+            mount.setAttribute("aria-label", "Vim cursor guard probe");
+            mount.classList.add("dl-red-probe");
+            mount.style.cssText = "position:fixed;left:16px;bottom:16px;width:22rem;z-index:60;" +
+              "border:1px solid #304047;border-radius:0.5rem;overflow:hidden;";
+            document.body.appendChild(mount);
+            const dark = EditorView.theme({
+              ".cm-content": { backgroundColor: "#11161a", color: "#e9eee9" },
+              ".cm-gutters": { backgroundColor: "#11161a", color: "#68716b" }
+            }, { dark: true });
+            window.__vimGuardView = new EditorView({
+              doc: "abcdef",
+              extensions: [vim(), dark],
+              parent: mount
+            });
+            const replay = document.createElement("style");
+            replay.id = "dl-red-probe";
+            replay.textContent = ".dl-red-probe .cm-fat-cursor { position: absolute; background: #ff9696; border: none; white-space: pre; }" +
+              ".dl-red-probe .cm-editor:not(.cm-focused) .cm-fat-cursor { background: none; outline: solid 1px #ff9696; }";
+            document.head.appendChild(replay);
+            done("mounted");
+          } catch (error) { done("error: " + (error && error.message)); }
+        })();
+      })(arguments[arguments.length - 1]);
+    JAVASCRIPT
+    assert_equal "mounted", mount_result
+    assert_selector "#vim-guard-probe .cm-fat-cursor", wait: 10
+
+    # Unfocused first: the hollow `[]` outline state.
+    blurred = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const fat = document.querySelector("#vim-guard-probe .cm-fat-cursor");
+        const style = getComputedStyle(fat);
+        return { background: style.backgroundColor, outline: style.outlineColor };
+      })()
+    JAVASCRIPT
+    assert_equal "rgb(159, 197, 169)", blurred["outline"], "unfocused [] outline must be Elef green, got #{blurred.inspect}"
+    refute_equal "rgb(255, 150, 150)", blurred["outline"], "upstream vim red leaked into the unfocused block"
+    page.save_screenshot("../../assets/pr-shots/vim-normal-cursor/normal-block-unfocused.png")
+    save_probe_closeup("../../assets/pr-shots/vim-normal-cursor/normal-block-unfocused-closeup.png")
+
+    # Focused: the solid block state.
+    page.execute_script("window.__vimGuardView.focus()")
+    assert_selector "#vim-guard-probe .cm-editor.cm-focused", wait: 10
+    focused = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const fat = document.querySelector("#vim-guard-probe .cm-fat-cursor");
+        return getComputedStyle(fat).backgroundColor;
+      })()
+    JAVASCRIPT
+    assert_equal "rgb(159, 197, 169)", focused, "focused block must be Elef green"
+    refute_equal "rgb(255, 150, 150)", focused, "upstream vim red leaked into the focused block"
+    page.save_screenshot("../../assets/pr-shots/vim-normal-cursor/normal-block-focused.png")
+    save_probe_closeup("../../assets/pr-shots/vim-normal-cursor/normal-block-focused-closeup.png")
+  ensure
+    page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
+  end
+
+  private
+
+  # Clipped 2x capture of the guard probe for PR evidence.
+  def save_probe_closeup(path)
+    clip = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const rect = document.querySelector("#vim-guard-probe").getBoundingClientRect();
+        return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, scale: 2 };
+      })()
+    JAVASCRIPT
+    shot = page.driver.browser.execute_cdp("Page.captureScreenshot", format: "png", clip: clip)
+    File.binwrite(File.expand_path(path, Dir.pwd), Base64.decode64(shot["data"]))
   end
 end
