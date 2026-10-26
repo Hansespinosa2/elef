@@ -79,13 +79,21 @@ module Presentations
 
     def block_payload(block)
       {
-        html: markdown_html(block.markdown),
+        html: markdown_html(block.markdown, art: !!block.art),
         position: block.position&.to_h
       }
     end
 
-    def markdown_html(markdown)
-      html = Source::Renderer.render(markdown, media_resolver: method(:resolve_asset), bare: true)
+    def markdown_html(markdown, art: false)
+      # Art blocks render through the same art pipeline as the saved preview
+      # (`render_art_block` carries no editor chrome), so the export model
+      # keeps the `elef-art` section wrapper the presentation views show
+      # instead of degrading to a plain list.
+      html = if art
+        Source::Renderer.render_art_block(markdown, host_mode: "fixed", media_resolver: method(:resolve_asset))
+      else
+        Source::Renderer.render(markdown, media_resolver: method(:resolve_asset), bare: true)
+      end
       fragment = Nokogiri::HTML::DocumentFragment.parse(html.to_s)
       fragment.css("img[src]").each do |image|
         source = image["src"].to_s

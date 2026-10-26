@@ -56,6 +56,11 @@ export default class extends Controller<HTMLElement> {
     this.localPreviewError = (event: any) => this.handleLocalPreviewError(event)
     this.localPreviewRecovered = () => this.handleLocalPreviewRecovered()
     this.artDiagnostic = (event: any) => this.handleArtDiagnostic(event)
+    // The boot projection is installed by the editor view before this
+    // controller connects, and no fetch has run yet to re-sync: scale the
+    // installed frames now so full-size slides never render unscaled
+    // (clipped by the projection container) until the first edit.
+    if (this.hasContainerTarget) this.syncSlideScaling()
     this.element.addEventListener("focusout", this.focusoutHandler)
     this.element.addEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered)

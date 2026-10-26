@@ -392,6 +392,58 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-surface .slide", text: "Card work"
   end
 
+  test "visual projection scales slides to fit on initial load" do
+    Presentations::SampleData.load!
+    sample = Presentation.find_by!(sample_id: "tables-and-media")
+
+    visit edit_presentation_path(sample)
+    wait_for_fresh_projection
+
+    # The boot projection arrives with the page (no preview fetch has run
+    # yet): every canvas frame must already carry a live --slide-scale so
+    # full-size slides fit instead of clipping at the projection edge.
+    state = { "count" => 0, "scales" => [] }
+    deadline = Time.now + 10
+    loop do
+      state = page.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const frames = Array.from(document.querySelectorAll(".editor-projection .slide-frame"));
+          return {
+            count: frames.length,
+            scales: frames.map((frame) => getComputedStyle(frame).getPropertyValue("--slide-scale").trim())
+          };
+        })()
+      JAVASCRIPT
+      break if state["count"] > 0 && state["scales"].all? { |scale| scale.to_f.positive? }
+      break if Time.now > deadline
+
+      sleep 0.1
+    end
+
+    assert_equal sample.slides.length, state["count"]
+    assert state["scales"].all? { |scale| scale.to_f.positive? },
+      "canvas frames never received --slide-scale: #{state.inspect}"
+
+    overflow = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const projection = document.querySelector(".editor-projection");
+        const bounds = projection.getBoundingClientRect();
+        return [...projection.querySelectorAll(".slide")].map((slide) => {
+          const rect = slide.getBoundingClientRect();
+          return {
+            left: Math.round(rect.left - bounds.left),
+            right: Math.round(rect.right - bounds.right),
+            width: Math.round(rect.width)
+          };
+        });
+      })()
+    JAVASCRIPT
+    overflow.each_with_index do |slide, index|
+      assert_operator slide["right"], :<=, 1, "slide #{index} overflows the visual projection"
+      assert_operator slide["left"], :>=, -1, "slide #{index} escapes the visual projection"
+    end
+  end
+
   test "library menus open for document and presentation cards" do
     document = Document.create!(title: "Menu document", source: "# Menu document")
     presentation = Presentation.create!(title: "Menu work", source: "# Menu work")
