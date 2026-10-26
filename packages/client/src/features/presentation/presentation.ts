@@ -77,7 +77,14 @@ export class PresentationController {
     this.keyTarget().addEventListener("keydown", this.onKeyDown)
     this.disposers.push(() => this.keyTarget().removeEventListener("keydown", this.onKeyDown))
     this.showCurrentSlide()
-    ;(this.stage as HTMLElement | null)?.focus?.()
+    // A bare stage div is not keyboard-focusable, so focus() would silently
+    // no-op and leave travel aimed at whatever held focus (e.g. a toolbar
+    // button, whose keydowns present-mode deliberately ignores) — then the
+    // first ArrowRight goes nowhere. Pin a programmatic-only tabindex unless
+    // the host chose its own, so entry always lands focus in the stage.
+    const stage = this.stage as HTMLElement | null
+    if (stage && !stage.hasAttribute("tabindex")) stage.tabIndex = -1
+    stage?.focus?.()
     return true
   }
 
