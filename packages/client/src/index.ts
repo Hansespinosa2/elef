@@ -120,3 +120,5 @@ export type {
   UpdaterStatus,
 } from "./application/types.js";
 export type { ElefHost } from "@elef/contracts";
+export { mountAppNavigation } from "./application/app_navigation.js";
+export type { AppNavigationOptions } from "./application/app_navigation.js";

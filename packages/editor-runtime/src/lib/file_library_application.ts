@@ -11,7 +11,7 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client"
+import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountAppNavigation, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client"
 import type { ExportMenuHandle, ExportMenuProps, GraphController, LibraryPaletteCommand } from "@elef/client"
 
 interface OpenedEditor {
@@ -111,6 +111,9 @@ function shellElement<T extends Element>(selector: string): T {
 }
 
 export function startFileLibraryApplication(platform: DesktopPlatform): void {
+  mountAppNavigation(shellElement<HTMLElement>("[data-app-navigation]"), {
+    libraryHref: "#library", settingsHref: "#settings", active: "library",
+  })
   const {
     fileLibrary, createLibraryHost, listen, getCurrentWindow,
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
@@ -1406,7 +1409,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     event.preventDefault()
     shellElement<HTMLElement>("#back-to-library").click()
   })
-  shellElement<HTMLElement>("#open-settings").addEventListener("click", () => void showSettings())
+  shellElement<HTMLElement>("#open-settings").addEventListener("click", event => {
+    event.preventDefault()
+    void showSettings()
+  })
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
   // The work-view Export menu is the shared client component: one trigger
@@ -1415,7 +1421,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   // native print pipeline (the same File → Print… command) and the PPTX
   // option the native save seam.
   exportMenu = mountExportMenu(shellElement<HTMLElement>("#export-menu-mount"), exportMenuProps())
-  shellElement<HTMLElement>("#back-to-library").addEventListener("click", () => {
+  shellElement<HTMLElement>("#back-to-library").addEventListener("click", event => {
+    event.preventDefault()
     if (hasUnsavedChanges()) {
       void flushSave().then(saved => {
         if (!saved) return

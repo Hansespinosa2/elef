@@ -17,15 +17,12 @@
     <%= javascript_importmap_tags %>
   </head>
   <body class="elef-app m-0 bg-[#f6f4ef] text-[#1e1c18] font-sans">
-    <header class="app-header sticky top-0 z-10 border-b border-[#ddd5c8] bg-[rgba(255,253,248,0.94)] px-[clamp(1rem,4vw,3rem)] py-4">
-      <div class="app-header-inner mx-auto flex max-w-[1440px] flex-wrap items-center gap-8">
-        <div class="app-header-identity flex shrink-0 items-center">
-          <%= link_to "Elef", root_path, class: "brand font-extrabold tracking-[-0.04em] no-underline", data: { turbo: false } %>
-        </div>
-        <nav class="app-nav mr-auto flex items-center gap-1" aria-label="Primary">
-          <%= link_to "Library", root_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[library presentations documents].include?(controller_name)}" %>
-          <%= link_to "Settings", settings_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[workspace_settings snippets math_shortcuts].include?(controller_name)}" %>
-        </nav>
+    <header class="app-header sticky top-0 z-10 border-b border-[#ddd5c8] bg-[rgba(255,253,248,0.94)]">
+      <div class="app-header-inner">
+        <div data-controller="app-navigation"
+          data-app-navigation-library-value="<%= root_path %>"
+          data-app-navigation-settings-value="<%= settings_path %>"
+          data-app-navigation-active-value="<%= %w[workspace_settings snippets math_shortcuts].include?(controller_name) ? 'settings' : 'library' %>"></div>
         <div class="bug-report-root" data-controller="bug-report" data-bug-report-endpoint-value="<%= bug_reports_path %>">
           <p id="bug-report-recording-disclosure" class="bug-report-disclosure">While you use Elef, recent clicks, typed text, keys, and page paths are automatically kept in memory for up to 60 seconds to prepare bug reports. If submitted, these may be included. Review and edit the generated steps first; recognized sensitive fields are redacted.</p>
           <button type="button" class="bug-report-trigger" data-action="bug-report#open" data-bug-report-ignore aria-haspopup="dialog" aria-controls="bug-report-dialog" aria-describedby="bug-report-recording-disclosure">Report Bug</button>
