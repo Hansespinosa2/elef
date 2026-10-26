@@ -246,7 +246,7 @@ test("the source editor component has matching web and desktop layout styles", a
   expect(measured.web[".editor-shell"].backgroundColor).toBe("rgb(24, 33, 38)")
 })
 
-test("desktop present mode keeps every aligned slide fully inside the viewport", async ({ page }) => {
+test("desktop present mode pins every aligned slide to a fixed 16:9 aspect with letterboxing", async ({ page }) => {
   const styles = await hostStylesheets()
   // All nine :::align positions across two slides, so the active-slide swap
   // is exercised too. Blocks stay short so no slide overflows by content.
@@ -291,8 +291,8 @@ test("desktop present mode keeps every aligned slide fully inside the viewport",
     ].join("\n")
   }).html
 
-  // Narrower than, near, and wider than the 1280px design canvas: the
-  // canvas scaler reports <1, ~1, and >1 across these sizes.
+  // 4:3, 16:10, and 16:9 viewports: only the last matches the fixed slide
+  // aspect, so the first two must letterbox instead of stretching.
   const viewports = [
     { width: 1024, height: 768 },
     { width: 1440, height: 900 },
@@ -318,11 +318,12 @@ test("desktop present mode keeps every aligned slide fully inside the viewport",
         }
         const rect = (element) => {
           const bounds = element.getBoundingClientRect()
-          return { top: bounds.top, left: bounds.left, right: bounds.right, bottom: bounds.bottom }
+          return { top: bounds.top, left: bounds.left, right: bounds.right, bottom: bounds.bottom, width: bounds.width, height: bounds.height }
         }
         const slide = frames[activeIndex].querySelector(":scope > .slide")
         return {
           transform: getComputedStyle(slide).transform,
+          frame: rect(frames[activeIndex]),
           slide: rect(slide),
           blocks: [...frames[activeIndex].querySelectorAll(".slide-block")].map((block) => ({
             label: block.textContent.trim().replace(/\s+/g, " ").slice(0, 24),
@@ -331,25 +332,37 @@ test("desktop present mode keeps every aligned slide fully inside the viewport",
           inactiveDisplays: frames.filter((_, index) => index !== activeIndex).map((frame) => getComputedStyle(frame).display)
         }
       }, active)
-      const within = (label, bounds) => {
-        expect(bounds.left, `${label} left`).toBeGreaterThanOrEqual(-1)
-        expect(bounds.top, `${label} top`).toBeGreaterThanOrEqual(-1)
-        expect(bounds.right, `${label} right`).toBeLessThanOrEqual(viewport.width + 1)
-        expect(bounds.bottom, `${label} bottom`).toBeLessThanOrEqual(viewport.height + 1)
-      }
-      // The viewport-sized present slide must not carry the design-canvas
-      // scale transform: it would multiply the 100vw/100vh box and push
-      // bottom/right aligned content off screen (or shrink it toward the
-      // top-left corner on narrow windows).
-      expect(measured.transform, `slide ${active} transform @ ${viewport.width}x${viewport.height}`).toBe("none")
-      within(`slide ${active} @ ${viewport.width}x${viewport.height}`, measured.slide)
-      // Fully on screen means filling the viewport, not drifting to a corner.
-      expect(measured.slide.left).toBeLessThanOrEqual(1)
-      expect(measured.slide.top).toBeLessThanOrEqual(1)
-      expect(measured.slide.right).toBeGreaterThanOrEqual(viewport.width - 1)
-      expect(measured.slide.bottom).toBeGreaterThanOrEqual(viewport.height - 1)
+      const tag = `slide ${active} @ ${viewport.width}x${viewport.height}`
+      // The active frame keeps the fixed slide aspect whatever the monitor.
+      expect(measured.frame.width / measured.frame.height, `${tag} frame aspect`).toBeCloseTo(16 / 9, 2)
+      // Letterboxed and centered: fully inside the viewport with symmetric
+      // bars on the non-fitting axis and no overflow on the fitting one.
+      expect(measured.frame.left, `${tag} frame left`).toBeGreaterThanOrEqual(-1)
+      expect(measured.frame.top, `${tag} frame top`).toBeGreaterThanOrEqual(-1)
+      expect(measured.frame.right, `${tag} frame right`).toBeLessThanOrEqual(viewport.width + 1)
+      expect(measured.frame.bottom, `${tag} frame bottom`).toBeLessThanOrEqual(viewport.height + 1)
+      expect(measured.frame.left, `${tag} frame centering x`).toBeCloseTo((viewport.width - measured.frame.width) / 2, 0)
+      expect(measured.frame.top, `${tag} frame centering y`).toBeCloseTo((viewport.height - measured.frame.height) / 2, 0)
+      // The slide keeps its design canvas under a uniform scale: no stretch.
+      const matrix = measured.transform.match(/^matrix\(([^)]+)\)$/)
+      expect(matrix, `${tag} uniform scale transform`).toBeTruthy()
+      const [a, b, c, d] = matrix[1].split(",").map(Number)
+      expect(b, `${tag} no skew/rotation`).toBeCloseTo(0, 3)
+      expect(c, `${tag} no skew/rotation`).toBeCloseTo(0, 3)
+      expect(a, `${tag} uniform x/y scale`).toBeCloseTo(d, 3)
+      expect(a, `${tag} scale fits frame width`).toBeCloseTo(measured.frame.width / 1280, 2)
+      // The scaled design canvas exactly covers the letterboxed frame.
+      expect(measured.slide.left, `${tag} slide aligns to frame`).toBeCloseTo(measured.frame.left, 0)
+      expect(measured.slide.top, `${tag} slide aligns to frame`).toBeCloseTo(measured.frame.top, 0)
+      expect(measured.slide.width, `${tag} slide fills frame`).toBeCloseTo(measured.frame.width, 0)
+      expect(measured.slide.height, `${tag} slide fills frame`).toBeCloseTo(measured.frame.height, 0)
       expect(measured.blocks.length).toBeGreaterThan(0)
-      for (const block of measured.blocks) within(`slide ${active} ${block.label} @ ${viewport.width}x${viewport.height}`, block)
+      for (const block of measured.blocks) {
+        expect(block.left, `${tag} ${block.label} left`).toBeGreaterThanOrEqual(measured.frame.left - 1)
+        expect(block.top, `${tag} ${block.label} top`).toBeGreaterThanOrEqual(measured.frame.top - 1)
+        expect(block.right, `${tag} ${block.label} right`).toBeLessThanOrEqual(measured.frame.left + measured.frame.width + 1)
+        expect(block.bottom, `${tag} ${block.label} bottom`).toBeLessThanOrEqual(measured.frame.top + measured.frame.height + 1)
+      }
       expect(measured.inactiveDisplays).toEqual(["none"])
     }
   }

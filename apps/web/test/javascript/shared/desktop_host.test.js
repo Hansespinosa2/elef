@@ -387,3 +387,18 @@ test("opening a work restores the visual toggle after the awaited refresh", () =
   assert.ok(restore < application.indexOf("return true", refresh), "the restore runs before the open resolves")
   assert.match(editorView, /projectionFresh !== true \|\| !projection\?\.childElementCount/, "the restore keeps the fresh-projection guard")
 })
+
+test("desktop present mode pins slides to a fixed 16:9 aspect with letterboxing", () => {
+  // Fullscreen on a different-sized monitor must not stretch slides: the
+  // active frame takes the largest centered 16:9 box and the slide keeps its
+  // 1280x720 design canvas under the shared --slide-scale transform.
+  const activeFrame = shellStyles.match(/\.presenting-work \.slide-frame\.is-active-presentation-slide\s*\{([^}]*)\}/)?.[1] || ""
+  assert.match(activeFrame, /aspect-ratio:\s*16\s*\/\s*9/)
+  assert.match(activeFrame, /width:\s*min\(100vw, calc\(100vh \* 16 \/ 9\)\)/)
+  assert.match(activeFrame, /height:\s*min\(100vh, calc\(100vw \* 9 \/ 16\)\)/)
+  assert.match(activeFrame, /margin:\s*auto/)
+  assert.doesNotMatch(activeFrame, /aspect-ratio:\s*auto/)
+  const activeSlide = shellStyles.match(/\.presenting-work \.slide-frame\.is-active-presentation-slide > \.slide\s*\{([^}]*)\}/)?.[1] || ""
+  assert.doesNotMatch(activeSlide, /transform:\s*none/)
+  assert.doesNotMatch(activeSlide, /100v[wh]/)
+})
