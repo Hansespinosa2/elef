@@ -6,6 +6,10 @@
   "description": "Pure semantics of an Elef Work (document | presentation): parsing, front matter, directives, structural ranges, links, pure source transforms. No DOM, React, filesystem, network, Rails or Tauri.",
   "types": "./src/index.ts",
   "exports": {
+    "./table-source": {
+      "types": "./src/table_source.ts",
+      "default": "./dist/table-source.js"
+    },
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/elef-work-model.js"
