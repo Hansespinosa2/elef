@@ -1,3 +1,4 @@
+import { reportDiagnosticsExport } from "./diagnostics_export.js"
 import { desktopMenuKeyAction } from "./desktop_menu_keys.js"
 import { createWorkOpenFlow, prepareWorkOpen } from "./work_open_flow.js"
 import { measurePaintedAction } from "./performance_measurement.js"
@@ -1052,6 +1053,17 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
   }
 
+  // Help → Export Diagnostics… writes the redacted event log to a ZIP the
+  // user picks. A completed export confirms in the status line, a cancelled
+  // panel stays silent, and a native failure surfaces through the shared
+  // error notice — the menu action must never look dead.
+  async function exportDiagnosticsArchive(): Promise<void> {
+    await reportDiagnosticsExport(() => fileLibrary.exportDiagnostics(), {
+      exported: () => setStatus("Diagnostics exported"),
+      failed: error => showError(error),
+    })
+  }
+
   async function exportPptxCurrentWork(): Promise<void> {
     if (!activeWorkFolder) {
       showNotice("Open a Work before exporting it.")
@@ -1382,7 +1394,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     if (action === "import-elef") return importWork()
     if (action === "settings") return showSettings()
     if (action === "check-for-updates") return checkForUpdates(true)
-    if (action === "export-diagnostics") return fileLibrary.exportDiagnostics()
+    if (action === "export-diagnostics") return exportDiagnosticsArchive()
     if (action === "about") return elements.aboutDialog.showModal()
     if (action === "start-presentation") return startPresentation()
     if (action === "print") return printCurrentWork()

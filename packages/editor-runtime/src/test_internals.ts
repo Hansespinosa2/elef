@@ -26,6 +26,7 @@ export { mermaidAssetUrl } from "./controllers/mermaid_runtime.js";
 export { translateElementMounts } from "./lib/client_mounts.js";
 export { createWorkOpenFlow, prepareWorkOpen } from "./lib/work_open_flow.js";
 export { focusOpenedEditor } from "./lib/file_library_application.js";
+export { reportDiagnosticsExport } from "./lib/diagnostics_export.js";
 export { createDocumentGraphCache } from "./lib/document_graph_cache.js";
 export { bindEditorAction, editorActionControl } from "./lib/editor_actions.js";
 export { createCodeMirrorBinding } from "./lib/editor_binding.js";
