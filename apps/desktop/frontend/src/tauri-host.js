@@ -6,6 +6,7 @@
 // deleteProgrammatic: false. Exported bytes come from the e2e harness export
 // file; import takes archive bytes through import_elef_bytes.
 import { createPortSession } from "@elef/client/port-session";
+import { extractFirstMarkdownHeading } from "@elef/work-model";
 
 export const tauriPolicy = {
   deleteProgrammatic: false,
@@ -70,6 +71,42 @@ export function createTauriHost({ invoke, readExportFile, initialStatus, updater
       throw result.__elefInvokeError;
     }
     return result;
+  }
+
+  // Folder-safe title from a Markdown heading: mirrors web
+  // Source::Document.normalize_folder_name plus the desktop store's
+  // validate_work_folder_name rejects (leading dots, separators, trailing
+  // dots/spaces). Returns null when the heading cannot name a folder, in
+  // which case the save keeps the current title.
+  function folderNameForHeading(heading) {
+    const flat = String(heading ?? "")
+      .normalize("NFKC")
+      .replace(/[<>:\"/\\|?*\u0000-\u001f]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const stem = flat.replace(/^\.+/, "").replace(/[. ]+$/, "").trim();
+    if (!stem || stem === "." || stem === "..") return null;
+    const capped = stem.slice(0, 120).replace(/[. ]+$/, "").trim();
+    return capped === "" ? null : capped;
+  }
+
+  // Document and presentation titles follow the first "# h1" below the
+  // YAML front matter: after a save, adopt a changed heading as the folder
+  // name so the library shows what the work is called now. No heading, an
+  // unrepresentable heading, an unchanged name, or a rejected rename all
+  // keep the current title; the save itself always succeeds.
+  async function syncTitleWithHeading(workFolderId, text) {
+    const name = folderNameForHeading(extractFirstMarkdownHeading(text));
+    if (!name) return;
+    const current =
+      summaries.get(String(workFolderId))?.title ?? (await snapshotOf(workFolderId)).title;
+    if (current === name) return;
+    try {
+      remember(await call("rename_work_folder", { id: workFolderId, name }));
+    } catch {
+      // A rejected rename (collision, locked folder) keeps the saved source
+      // under its current title; the save itself already succeeded.
+    }
   }
 
   async function snapshotOf(workFolderId) {
@@ -174,6 +211,7 @@ export function createTauriHost({ invoke, readExportFile, initialStatus, updater
           baseHash: baseline.revision,
         });
         baseHashes.set(workId, result.content_hash);
+        await syncTitleWithHeading(workId, text);
         return { kind: "saved", baseline: { revision: String(result.content_hash) } };
       } catch (error) {
         const failure = commandError(error);
