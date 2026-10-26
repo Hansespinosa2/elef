@@ -202,6 +202,30 @@ const markdown = new MarkdownIt({
   }
 })
 
+// Trailing whitespace is inert in Elef: spaces or tabs at a line end must
+// not force a visible break. This replaces markdown-it's `newline` rule
+// with an identical copy that never emits a hard break; the trailing space
+// run is still consumed so no invisible text leaks into output. Backslash
+// hard breaks come from the separate `escape` rule and keep working.
+markdown.inline.ruler.at("newline", (state, silent) => {
+  let pos = state.pos
+  if (state.src.charCodeAt(pos) !== 10) return false
+  const max = state.posMax
+  if (!silent) {
+    const pending = state.pending
+    let end = pending.length
+    while (end > 0 && (pending.charCodeAt(end - 1) === 32 || pending.charCodeAt(end - 1) === 9)) end -= 1
+    state.pending = pending.slice(0, end)
+    state.push("softbreak", "br", 0)
+  } else {
+    state.push("softbreak", "br", 0)
+  }
+  pos += 1
+  while (pos < max && (state.src.charCodeAt(pos) === 32 || state.src.charCodeAt(pos) === 9)) pos += 1
+  state.pos = pos
+  return true
+})
+
 markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, endLine, silent) => {
   const opener = state.getLines(startLine, startLine + 1, state.blkIndent, false).trim()
   const openDelimiter = opener === "$$" ? "$$" : opener === "\\[" ? "\\[" : null
