@@ -4,6 +4,7 @@ import { syntaxTree } from "@codemirror/language"
 import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
 import { MERMAID_ERROR_CLASS, renderMermaidSvg } from "./mermaid_runtime.js"
+import { scanMathSource } from "@elef/work-model/math-source"
 
 export const livePreviewMode = StateEffect.define<boolean>()
 
@@ -167,6 +168,26 @@ const replaceDecoration = (widget: WidgetType | null = null) => Decoration.repla
 const markDecoration = (className: string) => Decoration.mark({ class: className })
 const lineDecoration = (className: string) => Decoration.line({ class: className })
 
+interface DynamicPreviewRange {
+  readonly from: number
+  readonly to: number
+  readonly active: readonly Range<Decoration>[]
+  readonly inactive: readonly Range<Decoration>[]
+}
+
+// Compile source-dependent decorations once. Caret movement only swaps the
+// ranges whose reveal context changed; it never reparses Markdown or math.
+class DecorationPlan {
+  readonly ranges: Range<Decoration>[] = []
+  readonly dynamic: DynamicPreviewRange[] = []
+  push(...ranges: Range<Decoration>[]): void { this.ranges.push(...ranges) }
+  conditional(state: EditorState, from: number, to: number,
+    active: readonly Range<Decoration>[], inactive: readonly Range<Decoration>[]): void {
+    this.dynamic.push({ from, to, active, inactive })
+    this.push(...(activeRange(state, from, to) ? active : inactive))
+  }
+}
+
 function activeRange(state: EditorState, from: number, to: number): boolean {
   return state.selection.ranges.some((range) => {
     const cursor = range.from === range.to
@@ -180,18 +201,23 @@ function safeUrl(url: string): boolean {
   return /^(?:https?:|mailto:|tel:|#|\/|\.\.?\/|[^:]*$)/i.test(url)
 }
 
-function addHidden(decorations: Range<Decoration>[], state: EditorState, from: number, to: number, widget: WidgetType | null = null, context: [number, number] | null = null): void {
+function addHidden(decorations: DecorationPlan, state: EditorState, from: number, to: number, widget: WidgetType | null = null, context: [number, number] | null = null): void {
   if (from >= to) return
   const [activeFrom = from, activeTo = to] = context || [from, to]
-  if (activeRange(state, activeFrom, activeTo)) {
-    decorations.push(markDecoration("cm-live-active-syntax").range(from, to))
-    return
-  }
-  decorations.push(markDecoration("cm-live-syntax-marker").range(from, to))
-  decorations.push(replaceDecoration(widget || new PreviewWidget("syntax", state.sliceDoc(from, to))).range(from, to))
+  decorations.conditional(state, activeFrom, activeTo,
+    [markDecoration("cm-live-active-syntax").range(from, to)],
+    [markDecoration("cm-live-syntax-marker").range(from, to),
+      replaceDecoration(widget || new PreviewWidget("syntax", state.sliceDoc(from, to))).range(from, to)])
 }
 
-function addMark(decorations: Range<Decoration>[], state: EditorState, from: number, to: number, className: string): void {
+function addContextMark(decorations: DecorationPlan, state: EditorState, from: number, to: number, contextFrom: number, contextTo: number): void {
+  if (from >= to) return
+  decorations.conditional(state, contextFrom, contextTo,
+    [markDecoration("cm-live-active-syntax").range(from, to)],
+    [markDecoration("cm-live-syntax-marker").range(from, to)])
+}
+
+function addMark(decorations: DecorationPlan, state: EditorState, from: number, to: number, className: string): void {
   if (from >= to) return
   decorations.push(markDecoration(className).range(from, to))
 }
@@ -226,7 +252,7 @@ function inlineRangesOutsideFences(source: string): Array<{ from: number; to: nu
   return ranges
 }
 
-function addInlineMarkup(decorations: Range<Decoration>[], state: EditorState, source: string, ranges: Array<{ from: number; to: number }>): void {
+function addInlineMarkup(decorations: DecorationPlan, state: EditorState, source: string, ranges: Array<{ from: number; to: number }>): void {
   for (const range of ranges) {
     const segment = source.slice(range.from, range.to)
     const absolute = (offset: number): number => range.from + offset
@@ -281,14 +307,11 @@ function addInlineMarkup(decorations: Range<Decoration>[], state: EditorState, s
       addMark(decorations, state, labelStart, labelEnd, "cm-live-document-link")
     }
 
-    const mathPattern = /(?<!\\)\\\[([\s\S]+?)\\\]|(?<!\\)\$\$([\s\S]+?)\$\$|(?<!\\)\\\(([^\r\n]+?)\\\)|(?<!\$)\$(?!\s)(.+?)(?<!\s)\$(?!\$)/gs
-    for (const match of segment.matchAll(mathPattern)) {
-      const from = absolute(match.index ?? 0)
-      const to = from + (match[0] ?? "").length
+    for (const match of scanMathSource(segment)) {
+      const from = absolute(match.start)
+      const to = absolute(match.end)
       if (overlapsCode(from, to)) continue
-      const expression = match[1] ?? match[2] ?? match[3] ?? match[4] ?? ""
-      const isDisplay = match[1] !== undefined || match[2] !== undefined
-      const widget = new PreviewWidget(isDisplay ? "math-display" : "math", expression.trim())
+      const widget = new PreviewWidget(match.display ? "math-display" : "math", match.interior.trim())
       addHidden(decorations, state, from, to, widget, [from, to])
     }
 
@@ -327,20 +350,16 @@ function fencedDiagramSource(fencedSource: string): string {
   return fencedSource.split("\n").slice(1, -1).join("\n")
 }
 
-function addMermaidFence(decorations: Range<Decoration>[], state: EditorState, from: number, to: number, fencedSource: string): void {
+function addMermaidFence(decorations: DecorationPlan, state: EditorState, from: number, to: number, fencedSource: string): void {
   const diagramSource = fencedDiagramSource(fencedSource)
   if (from >= to || !diagramSource.trim()) return
-  if (activeRange(state, from, to)) {
-    decorations.push(markDecoration("cm-live-active-syntax").range(from, to))
-    return
-  }
-  decorations.push(markDecoration("cm-live-syntax-marker").range(from, to))
-  decorations.push(
-    Decoration.replace({ widget: new PreviewWidget("mermaid", diagramSource), block: true }).range(from, to)
-  )
+  decorations.conditional(state, from, to,
+    [markDecoration("cm-live-active-syntax").range(from, to)],
+    [markDecoration("cm-live-syntax-marker").range(from, to),
+      Decoration.replace({ widget: new PreviewWidget("mermaid", diagramSource), block: true }).range(from, to)])
 }
 
-function addBlockMarkup(decorations: Range<Decoration>[], state: EditorState, source: string): void {
+function addBlockMarkup(decorations: DecorationPlan, state: EditorState, source: string): void {
   const lines = source.split("\n")
   let offset = 0
   let fence: { marker: string; length: number; start: number; language: string } | null = null
@@ -397,13 +416,7 @@ function addBlockMarkup(decorations: Range<Decoration>[], state: EditorState, so
     const heading = line.match(/^(\s{0,3})(#{1,6})(\s+)(.*)$/)
     if (heading) {
       const markerStart = lineStart + (heading[1] ?? "").length
-      addMark(
-        decorations,
-        state,
-        markerStart,
-        markerStart + (heading[2] ?? "").length,
-        activeRange(state, lineStart, lineEnd) ? "cm-live-active-syntax" : "cm-live-syntax-marker"
-      )
+      addContextMark(decorations, state, markerStart, markerStart + (heading[2] ?? "").length, lineStart, lineEnd)
       addHidden(decorations, state, markerStart, markerStart + (heading[2] ?? "").length + (heading[3] ?? "").length, null, [lineStart, lineEnd])
       const headingTextStart = markerStart + (heading[2] ?? "").length + (heading[3] ?? "").length
       decorations.push(lineDecoration(`cm-live-heading cm-live-heading-${(heading[2] ?? "").length}`).range(lineStart))
@@ -429,13 +442,7 @@ function addBlockMarkup(decorations: Range<Decoration>[], state: EditorState, so
     const quote = line.match(/^(\s*>\s?)/)
     if (quote) {
       const markerStart = lineStart + (quote[1] ?? "").indexOf(">")
-      addMark(
-        decorations,
-        state,
-        markerStart,
-        markerStart + 1,
-        activeRange(state, lineStart, lineEnd) ? "cm-live-active-syntax" : "cm-live-syntax-marker"
-      )
+      addContextMark(decorations, state, markerStart, markerStart + 1, lineStart, lineEnd)
       addHidden(decorations, state, markerStart, markerStart + 1, new PreviewWidget("quote-marker", ">"), [lineStart, lineEnd])
       decorations.push(lineDecoration("cm-live-quote").range(lineStart))
     }
@@ -459,7 +466,7 @@ function invisibleDirectiveLine(line: string): boolean {
   return /^ {0,3}:::[ \t]*$/.test(line)
 }
 
-function addSyntaxTreeHints(decorations: Range<Decoration>[], state: EditorState): void {
+function addSyntaxTreeHints(decorations: DecorationPlan, state: EditorState): void {
   // The Markdown parser is the authority for fenced regions and inline node
   // boundaries. Regex projections above are intentionally conservative; this
   // traversal adds the same styling to parser-recognized nodes without
@@ -471,13 +478,7 @@ function addSyntaxTreeHints(decorations: Range<Decoration>[], state: EditorState
         decorations.push(lineDecoration("cm-live-quote").range(node.from))
       } else if (node.name === "ElefMetadata") {
         if (!invisibleDirectiveLine(state.sliceDoc(node.from, node.to))) {
-          addMark(
-            decorations,
-            state,
-            node.from,
-            node.to,
-            activeRange(state, node.from, node.to) ? "cm-live-active-syntax" : "cm-live-syntax-marker"
-          )
+          addContextMark(decorations, state, node.from, node.to, node.from, node.to)
           return
         }
         // Invisible directives occupy no reader output, so inactive lines
@@ -487,38 +488,38 @@ function addSyntaxTreeHints(decorations: Range<Decoration>[], state: EditorState
         const breakAfter = state.sliceDoc(to, to + 2)
         if (breakAfter.startsWith("\r\n")) to += 2
         else if (breakAfter.startsWith("\n")) to += 1
-        if (activeRange(state, node.from, to)) {
-          addMark(decorations, state, node.from, node.to, "cm-live-active-syntax")
-        } else {
-          decorations.push(Decoration.replace({}).range(node.from, to))
-        }
+        decorations.conditional(state, node.from, to,
+          [markDecoration("cm-live-active-syntax").range(node.from, node.to)],
+          [Decoration.replace({}).range(node.from, to)])
       }
     }
   })
 }
 
-function buildDecorations(state: EditorState, enabled: boolean): { decorations: DecorationSet; atomic: DecorationSet; error: string | null } {
-  if (!enabled) return { decorations: Decoration.none, atomic: Decoration.none, error: null }
+function buildDecorations(state: EditorState, enabled: boolean): Omit<LivePreviewValue, "enabled"> {
+  if (!enabled) return { decorations: Decoration.none, atomic: Decoration.none, error: null, dynamic: [] }
 
   try {
     const source = state.doc.toString()
-    const decorations: Range<Decoration>[] = []
+    const decorations = new DecorationPlan()
     addBlockMarkup(decorations, state, source)
     addInlineMarkup(decorations, state, source, inlineRangesOutsideFences(source))
     addSyntaxTreeHints(decorations, state)
-    const set = Decoration.set(decorations, true)
-    const atomic = Decoration.set(decorations.filter((range) => range.value.spec.widget), true)
-    return { decorations: set, atomic, error: null }
+    const set = Decoration.set(decorations.ranges, true)
+    const atomic = Decoration.set(decorations.ranges.filter((range) => range.value.spec.widget), true)
+    return { decorations: set, atomic, error: null, dynamic: decorations.dynamic }
   } catch (error) {
     return {
       decorations: Decoration.none,
       atomic: Decoration.none,
+      dynamic: [],
       error: error instanceof Error ? error.message : String(error)
     }
   }
 }
 
 export interface LivePreviewValue {
+  readonly dynamic: readonly DynamicPreviewRange[];
   enabled: boolean;
   decorations: DecorationSet;
   atomic: DecorationSet;
@@ -534,10 +535,25 @@ export const livePreviewField = StateField.define<LivePreviewValue>({
     for (const effect of transaction.effects) {
       if (effect.is(livePreviewMode)) enabled = Boolean(effect.value)
     }
-    if (transaction.docChanged || transaction.selection || enabled !== value.enabled) {
+    if (transaction.docChanged || enabled !== value.enabled) {
       return { enabled, ...buildDecorations(transaction.state, enabled) }
     }
-    return value
+    if (!transaction.selection || !enabled) return value
+    const removed = new Set<Decoration>()
+    const added: Range<Decoration>[] = []
+    for (const context of value.dynamic) {
+      const before = activeRange(transaction.startState, context.from, context.to)
+      const after = activeRange(transaction.state, context.from, context.to)
+      if (before === after) continue
+      for (const range of before ? context.active : context.inactive) removed.add(range.value)
+      added.push(...(after ? context.active : context.inactive))
+    }
+    if (removed.size === 0 && added.length === 0) return value
+    return { ...value,
+      decorations: value.decorations.update({ filter: (_from, _to, decoration) => !removed.has(decoration), add: added, sort: true }),
+      atomic: value.atomic.update({ filter: (_from, _to, decoration) => !removed.has(decoration),
+        add: added.filter(range => range.value.spec.widget), sort: true }),
+    }
   },
   provide: (field) => [
     EditorView.decorations.from(field, (value) => value.decorations),

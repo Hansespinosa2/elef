@@ -5,6 +5,39 @@ import { markdown } from "@codemirror/lang-markdown";
 import { livePreviewField, livePreviewMode } from "../src/features/editor/live_preview.js";
 import { elefMetadata } from "../src/features/editor/engine.js";
 
+test("caret movement reuses the compiled source plan and untouched equation widgets", () => {
+  const doc = "Plain prose here.\n\n**bold** then $x^2$ and $y^2$.\n"
+  const initial = previewState(doc, EditorSelection.cursor(1))
+  const sameContext = initial.update({ selection: EditorSelection.cursor(5) }).state
+  assert.equal(sameContext.field(livePreviewField), initial.field(livePreviewField))
+  const distantWidgets: unknown[] = []
+  initial.field(livePreviewField).decorations.between(doc.indexOf("$y"), doc.length, (_from, _to, value) => {
+    if (value.spec.widget) distantWidgets.push(value.spec.widget)
+  })
+  const revealed = sameContext.update({ selection: EditorSelection.cursor(doc.indexOf("bold") + 1) }).state
+  assert.equal(revealed.field(livePreviewField).dynamic, initial.field(livePreviewField).dynamic)
+  const afterWidgets: unknown[] = []
+  revealed.field(livePreviewField).decorations.between(doc.indexOf("$y"), doc.length, (_from, _to, value) => {
+    if (value.spec.widget) afterWidgets.push(value.spec.widget)
+  })
+  assert.deepEqual(afterWidgets, distantWidgets)
+  assert.equal(afterWidgets[0], distantWidgets[0])
+})
+
+test("incremental reveals match fresh projection after forward, backward, and ranged navigation", () => {
+  const doc = "# Heading\n\nA **bold** and *soft* [link](https://example.com) with $x^2$.\n\n> quote\n\n:::align{right}\n\n```mermaid\ngraph TD\nA-->B\n```\n"
+  let state = previewState(doc)
+  const positions = [0, doc.indexOf("bold"), doc.indexOf("$x") + 2, doc.indexOf("quote"),
+    doc.indexOf(":::"), doc.indexOf("A-->"), doc.length, 2, doc.indexOf("link")]
+  for (const position of positions) {
+    for (const selection of [EditorSelection.cursor(position), EditorSelection.range(position, Math.min(doc.length, position + 4))]) {
+      state = state.update({ selection }).state
+      assert.equal(state.field(livePreviewField).error, null)
+      assert.deepEqual(decorationsOf(state), decorationsOf(previewState(doc, selection)), `position ${position}`)
+    }
+  }
+})
+
 interface FoundDecoration {
   from: number;
   to: number;
