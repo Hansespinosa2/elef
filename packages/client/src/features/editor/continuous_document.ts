@@ -75,6 +75,7 @@ async function mountSurface(editor: ContinuousDocumentEditor): Promise<Continuou
         lineHeight: "var(--document-body-leading)", overflow: "visible" },
       "&.continuous-document .cm-content": { padding: "0", caretColor: "currentColor" },
       "&.continuous-document .cm-line": { padding: "0" },
+      "&.continuous-document .cm-continuous-gap": { height: "0", minHeight: "0", fontSize: "0", lineHeight: "0" },
       "&.continuous-document .cm-widgetBuffer": { height: "0", verticalAlign: "baseline" },
       "&.continuous-document .cm-gutters": { display: "none" },
       "&.continuous-document .cm-continuous-table-row": { display: "flex", alignItems: "stretch" },

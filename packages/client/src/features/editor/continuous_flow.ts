@@ -43,10 +43,19 @@ export function createContinuousFlow(margins: BlockMargins) {
       const key = heading ? `h${heading}` : block.kind
       const spacing = margins[key] ?? margins["paragraph"] ?? { before: 0, after: 0 }
       const gap = index === 0 ? 0 : Math.max(previousAfter, spacing.before)
-      if (previousEnd !== null && previousEnd < block.source_range.start && source.slice(previousEnd, block.source_range.start).trim() === "") {
-        decorations.push(Decoration.replace({ block: true, inclusive: false }).range(previousEnd, block.source_range.start))
+      const separator = previousEnd === null ? "" : source.slice(previousEnd, block.source_range.start)
+      // Keep one paragraph terminator outside the replacement, so
+      // CodeMirror can virtualize individual paragraphs rather than one
+      // document-sized visual line. Only the leftover empty source line
+      // has zero height; the block widget owns its visible reader margin.
+      const ending = /^(?:\r\n|\r|\n)/.exec(separator)?.[0].length ?? 0
+      const blankStart = previousEnd === null ? 0 : previousEnd + ending
+      if (previousEnd !== null && ending > 0 && blankStart < block.source_range.start && separator.trim() === "") {
+        decorations.push(Decoration.line({ class: "cm-continuous-gap" }).range(blankStart))
+        decorations.push(Decoration.replace({ widget: new FlowSpace(gap), block: true, inclusive: false }).range(blankStart, block.source_range.start))
+      } else if (gap > 0) {
+        decorations.push(Decoration.widget({ widget: new FlowSpace(gap), block: true, side: -1 }).range(block.source_range.start))
       }
-      if (gap > 0) decorations.push(Decoration.widget({ widget: new FlowSpace(gap), block: true, side: -1 }).range(block.source_range.start))
       previousAfter = spacing.after
       previousEnd = block.content_range.end
       if (block.kind !== "paragraph") continue

@@ -82,6 +82,41 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     end
   end
 
+  test "continuous authoring accepts math assists without moving focus to the old projection" do
+    document = Document.create!(title: "Math assists", source: "# Notes\n\nBody")
+    visit edit_document_path(document)
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+    mount_continuous_surface
+    find(".continuous-document .cm-line", text: "Body").click
+    page.driver.browser.action.send_keys(:end, " $@a").perform
+    assert_selector ".math-shortcut-palette:not([hidden]) .snippet-option", text: /alpha/i
+    page.driver.browser.action.send_keys(:enter, :escape, :end, "$").perform
+    assert_field "Markdown source", with: /\\alpha/
+    assert page.evaluate_script("document.querySelector('.continuous-document').contains(document.activeElement)")
+    assert_equal 1, page.evaluate_script("document.querySelector('.continuous-document').querySelectorAll('[contenteditable=true]').length")
+  end
+
+  test "the frozen math notebook keeps paragraph virtualization during sustained typing" do
+    source = File.read(Rails.root.join("test/fixtures/performance/elef-visual-100-math.md"))
+    document = Document.create!(title: "Mathematical notebook", source: source)
+    visit edit_document_path(document)
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 20
+    mount_continuous_surface
+    metrics = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        return { from: editor.view.viewport.from, to: editor.view.viewport.to, length: editor.view.state.doc.length,
+          renderedLines: editor.view.dom.querySelectorAll('.cm-line').length };
+      })()
+    JAVASCRIPT
+    assert_operator metrics["to"] - metrics["from"], :<, metrics["length"] / 2
+    assert_operator metrics["renderedLines"], :<, 100
+    burst = " Authoring mathematics with uninterrupted keyboard input."
+    page.driver.browser.action.key_down(:control).send_keys(:end).key_up(:control).send_keys(burst).perform
+    assert_equal source + burst, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+    assert page.evaluate_script("document.querySelector('.continuous-document').contains(document.activeElement)")
+  end
+
   test "continuous table columns preserve the renderer layout instead of equalizing widths" do
     source = "# Table layout\n\n| Parameter | Value |\n| --- | ---: |\n| A much longer parameter description that should receive more width | 2 |\n"
     document = Document.create!(title: "Table layout", source: source)

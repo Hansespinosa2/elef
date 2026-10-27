@@ -13,7 +13,9 @@ test("flow joins soft source lines without joining the next paragraph or fenced 
   })
   const paragraphEnd = source.indexOf("\n\n")
   assert.ok(replacements.some(([from, to]) => from === source.indexOf("\n") && to === from + 1))
-  assert.ok(replacements.some(([from, to]) => from === paragraphEnd && to === paragraphEnd + 2))
+  assert.ok(replacements.some(([from, to]) => from === paragraphEnd + 1 && to === paragraphEnd + 2))
+  assert.ok(replacements.every(([from, to]) => !(from <= paragraphEnd && to > paragraphEnd)),
+    "a paragraph terminator must survive so CodeMirror can virtualize individual visual lines")
   const codeStart = source.indexOf("```")
   assert.ok(replacements.every(([from]) => from < codeStart))
   const moved = state.update({ selection: EditorSelection.cursor(3) }).state
