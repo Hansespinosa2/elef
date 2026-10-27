@@ -1030,6 +1030,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     return result.kind === "clean" || result.kind === "saved"
   }
 
+  elements.editorForm.addEventListener("elef:save-request", (event: Event) => {
+    event.preventDefault()
+    void flushSave({ force: true })
+  })
+
   async function flushForClose(): Promise<string> {
     hasUnsavedChanges()
     if (titleFlow && !(await titleFlow.flush())) return "failed"

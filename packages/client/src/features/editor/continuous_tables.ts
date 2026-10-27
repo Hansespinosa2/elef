@@ -39,12 +39,13 @@ function buildTables(source: string, measure: (markdown: string) => readonly num
       let cursor = row.from
       for (const [column, cell] of row.cells.entries()) {
         const width = `${(fractions[column] ?? 1 / columns) * 100}%`
+        const alignment = cell.alignment === "default" ? (row.header ? "center" : "start") : cell.alignment
         if (cell.from > cursor) decorations.push(Decoration.mark({ class: "cm-continuous-table-syntax" }).range(cursor, cell.from))
         if (cell.from === cell.to) {
           decorations.push(Decoration.widget({ widget: new EmptyCell(cell.from, width), side: 1 }).range(cell.from))
         } else {
           cellMarks.push(Decoration.mark({ class: "cm-continuous-cell", attributes: {
-            style: `width:${width};text-align:${cell.alignment}`,
+            style: `width:${width};text-align:${alignment}`,
           } }).range(cell.from, cell.to))
         }
         cursor = cell.to

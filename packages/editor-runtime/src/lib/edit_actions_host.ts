@@ -1,4 +1,5 @@
 import { mountEditActions, renderKeyboardReference, type EditActionsEditor, type EditActionsHost, type EditActionsMount } from "@elef/client"
+import { projectionHostFor } from "./visual_assist.js"
 
 // Host-side composition for the shared Edit-actions menu: the client
 // session slice owns the menu, the shortcut feature owns the reference
@@ -30,7 +31,14 @@ export function mountHostEditActions(
       return { root: existing, dispose() {} }
     }
   }
-  const mounted = mountEditActions({ field, getEditor, host, renderReference: renderKeyboardReference })
+  const bridge: EditActionsHost = {
+    applyVisualAssistInsert(edit) {
+      const active = (form as HTMLElement).dataset.editorSurface === "continuous" ? projectionHostFor(form) : host
+      return active?.applyVisualAssistInsert?.(edit) ?? false
+    },
+    ...(typeof host?.applyVisualBlockAction === "function" ? { applyVisualBlockAction: action => host.applyVisualBlockAction!(action) } : {}),
+  }
+  const mounted = mountEditActions({ field, getEditor, host: bridge, renderReference: renderKeyboardReference })
   if (mounted) owner.editActionsMount = mounted
   return mounted
 }

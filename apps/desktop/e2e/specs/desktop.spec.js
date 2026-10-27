@@ -895,6 +895,16 @@ class DesktopEditorUi {
     await (await this.continuousTextElement(text, cell)).click()
   }
 
+  async continuousSourceMode() {
+    await $(".continuous-command-hint").click()
+    await $('[data-continuous-commands] [role="combobox"]').waitForDisplayed()
+    typeNativeText("Switch to source")
+    sendNativeKey("Enter")
+    await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
+      timeout: 5_000, timeoutMsg: "The command palette did not switch to source"
+    })
+  }
+
   async continuousKeys(text, special = false) {
     if (special) sendNativeKey(text)
     else typeNativeText(text)

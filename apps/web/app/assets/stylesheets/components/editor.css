@@ -394,7 +394,7 @@ li.editor-reveal-marker { list-style: none; }
    source strip, per-block focus, or projection selection overlays. */
 .visual-editor-form[data-editor-surface="continuous"][data-editor-mode="visual"] .editor-projection { display: none; }
 .visual-editor-form[data-editor-surface="continuous"][data-editor-mode="visual"] .editor-surface {
-  height: auto; min-height: 70vh; overflow: visible; resize: none;
+  height: auto; max-height: none; min-height: 70vh; overflow: visible; resize: none;
 }
 .visual-editor-form[data-editor-surface="continuous"][data-editor-mode="visual"] .continuous-document {
   background: var(--oradia-paper-bright); border: 0; border-radius: 0; box-shadow: none;
@@ -422,3 +422,23 @@ li.editor-reveal-marker { list-style: none; }
 .continuous-document .cm-continuous-table-delimiter { font-size: 0; height: 0; line-height: 0; min-height: 0; }
 
 .continuous-table-measure { left: -20000px; pointer-events: none; position: fixed; top: 0; visibility: hidden; width: var(--document-content-width); }
+
+/* Document focus keeps commands one keystroke away while the editor uses
+   the same paper width and type as the reader. Save errors remain visible. */
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .editor-shell {
+  background: var(--oradia-paper-bright); border: 0; border-radius: 0; box-shadow: none; padding: 1rem 0;
+}
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .source-pane {
+  background: transparent; border: 0; box-shadow: none;
+}
+#work-shell:has(form[data-editor-focus="continuous"][data-editor-mode="visual"]:not([data-editor-controls="open"])) > .page-title { display: none; }
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .editor-shell-header,
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"]:not([data-editor-controls="open"]) .editor-toolbar,
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .editor-mode-hint,
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .editor-actions > .button,
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .dirty-state[data-autosave-state=""] { display: none; }
+.continuous-command-hint {
+  background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 999px;
+  bottom: 1rem; color: var(--oradia-ink); cursor: pointer; font: inherit; font-size: 0.75rem;
+  padding: 0.4rem 0.65rem; position: fixed; right: 1rem; z-index: 15;
+}

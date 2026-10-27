@@ -10,7 +10,7 @@ math, mi, mo, mn, mtext {
   font-family: KaTeX_Main, KaTeX_AMS, KaTeX_Caligraphic, KaTeX_Script, KaTeX_Fraktur, KaTeX_SansSerif, KaTeX_Typewriter, KaTeX_Size1, "Times New Roman", serif;
 }
 .document-surface.is-paginated { background: transparent; border: 0; box-shadow: none; display: grid; gap: 24px; padding: 0; }
-.document-surface :is(h1, .cm-live-heading-1), .document-surface :is(h2, .cm-live-heading-2), .document-surface :is(h3, .cm-live-heading-3), .document-surface :is(h4, .cm-live-heading-4), .document-surface :is(h5, .cm-live-heading-5), .document-surface :is(h6, .cm-live-heading-6) { color: var(--document-heading-ink); font-weight: 700; margin-top: 0; }
+.document-surface :is(h1, .cm-live-heading-1), .document-surface :is(h2, .cm-live-heading-2), .document-surface :is(h3, .cm-live-heading-3), .document-surface :is(h4, .cm-live-heading-4), .document-surface :is(h5, .cm-live-heading-5), .document-surface :is(h6, .cm-live-heading-6) { color: var(--document-heading-ink); margin-top: 0; }
 .document-surface :is(h1, .cm-live-heading-1) { font-size: 48px; line-height: 1.05; margin-bottom: 24px; }
 .document-surface :is(h2, .cm-live-heading-2) { font-size: 32px; line-height: 1.15; margin-bottom: 16px; margin-top: 40px; }
 .document-surface :is(h3, .cm-live-heading-3) { font-size: 25px; line-height: 1.2; margin-bottom: 12px; margin-top: 30px; }

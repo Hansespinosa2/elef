@@ -40,7 +40,7 @@ export async function continuousAuthoringWorkflow(ui) {
     await ui.waitForSource(CONTINUOUS_SOURCE.replace("alpha beta gamma\n\n", "\nalpha beta gamma\n"))
     await ui.continuousKeys("uuG")
     await ui.waitForSource(CONTINUOUS_SOURCE)
-    await ui.showSourceMode()
+    await ui.continuousSourceMode()
     await ui.showVisualMode()
     await ui.assertContinuousText("alpha beta gamma")
     await ui.clickContinuousText("Final paragraph.")

@@ -21,7 +21,7 @@ export interface VisualAssistHost {
 // the assist pipeline methods.
 export function projectionHostFor(element: Element): VisualAssistHost | null {
   const editorForm = element.closest("form")
-  if (editorForm?.dataset.editorSurface === "continuous") {
+  if (editorForm?.dataset?.editorSurface === "continuous") {
     // Assists already commit through the engine. The continuous surface
     // renders that state directly, so follow-up must never patch or focus
     // the dormant block projection.

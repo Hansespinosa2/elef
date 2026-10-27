@@ -24,4 +24,5 @@ test("tables without outer pipes and rows with missing cells keep insertion poin
   const table = tableSourceProjection(source)[0]
   assert.ok(table)
   assert.deepEqual(table.rows.map(row => row.cells.map(cell => source.slice(cell.from, cell.to))), [["A", "B"], ["x", ""]])
+  assert.deepEqual(table.rows[0]?.cells.map(cell => cell.alignment), ["default", "default"])
 })

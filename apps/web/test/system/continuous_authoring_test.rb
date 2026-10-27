@@ -16,6 +16,17 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_equal "mounted", result
   end
 
+  def mount_focused_authoring
+    result = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      import('@elef/client/continuous-editor').then(async ({ mountContinuousAuthoring }) => {
+        window.continuousAuthoring = await mountContinuousAuthoring(document.querySelector('.source-field').editorController);
+        done('mounted');
+      }).catch(error => done(String(error)));
+    JAVASCRIPT
+    assert_equal "mounted", result
+  end
+
   test "visual Vim changes remain visible throughout an uninterrupted session" do
     document = Document.create!(title: "Authoring", source: SOURCE)
     visit edit_document_path(document)
@@ -117,6 +128,56 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert page.evaluate_script("document.querySelector('.continuous-document').contains(document.activeElement)")
   end
 
+  test "document focus exposes shared commands and restores the editor caret" do
+    document = Document.create!(title: "Focused", source: SOURCE)
+    visit edit_document_path(document)
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+    mount_focused_authoring
+    assert_no_selector ".editor-toolbar", visible: true
+    assert_selector ".continuous-command-hint", text: /Ctrl\+K|⌘K/
+    find(".continuous-document .cm-line", text: "alpha beta gamma").click
+    position = page.evaluate_script("document.querySelector('.source-field').editorController.selectionHead")
+    page.driver.browser.action.key_down(:control).send_keys("k").key_up(:control).perform
+    assert_selector '.command-palette [role="combobox"]', focused: true
+    page.driver.browser.action.send_keys(:escape).perform
+    assert_no_selector ".command-palette"
+    assert_equal position, page.evaluate_script("document.querySelector('.source-field').editorController.selectionHead")
+    assert page.evaluate_script("document.querySelector('.continuous-document').contains(document.activeElement)")
+
+    find(".continuous-command-hint").click
+    find('.command-palette [role="combobox"]').send_keys("Show editor controls", :enter)
+    assert_selector ".editor-toolbar", visible: true
+    find(".continuous-command-hint").click
+    find('.command-palette [role="combobox"]').send_keys("Switch to source", :enter)
+    assert_selector 'form[data-editor-mode="source"]'
+    click_on "Visual"
+    assert_selector ".continuous-document"
+    assert_selector "#bug-report-recording-disclosure", visible: true
+  end
+
+  test "focused commands preserve snippet placeholder selection" do
+    document = Document.create!(title: "Focused snippets", source: "# Notes\n\nBody")
+    visit edit_document_path(document)
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+    mount_focused_authoring
+    find(".continuous-document .cm-line", text: "Body").click
+    page.driver.browser.action.send_keys(:end, " ").perform
+    find(".continuous-command-hint").click
+    find('[data-continuous-commands] [role="combobox"]').send_keys("Insert snippet or directive", :enter)
+    assert_selector ".snippet-palette:not([hidden]) .snippet-option", wait: 5
+    page.driver.browser.action.send_keys("table").perform
+    assert_selector ".snippet-palette:not([hidden]) .snippet-option", text: "Table"
+    page.driver.browser.action.send_keys(:enter).perform
+    assert_field "Markdown source", with: /\| Column 1 \| Column 2 \|/
+    selection = page.evaluate_script(<<~JAVASCRIPT)
+      (() => { const e = document.querySelector('.source-field').editorController;
+        return e.value.slice(e.selectionStart, e.selectionEnd); })()
+    JAVASCRIPT
+    assert_equal "Column 1", selection
+    page.driver.browser.action.send_keys("Name").perform
+    assert_field "Markdown source", with: /\| Name \| Column 2 \|/
+  end
+
   test "continuous table columns preserve the renderer layout instead of equalizing widths" do
     source = "# Table layout\n\n| Parameter | Value |\n| --- | ---: |\n| A much longer parameter description that should receive more width | 2 |\n"
     document = Document.create!(title: "Table layout", source: source)
@@ -128,6 +189,8 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
         return [...table.querySelectorAll('th')].map(cell => cell.getBoundingClientRect().width / table.getBoundingClientRect().width);
       })()
     JAVASCRIPT
+    assert_equal "400", page.evaluate_script("getComputedStyle(document.querySelector('.document-surface h1')).fontWeight")
+    expected_alignment = page.evaluate_script("[...document.querySelectorAll('.document-reader table th, .document-reader table td')].map(cell => getComputedStyle(cell).textAlign)")
     reader_style = page.evaluate_script("(() => { const t = document.querySelector('.document-reader table'); const s = getComputedStyle(t.querySelector('th')); return {width:t.getBoundingClientRect().width,font:s.font,padding:s.padding}; })()")
     visit edit_document_path(document)
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
@@ -140,6 +203,8 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
         return [...row.querySelectorAll('.cm-continuous-cell')].map(cell => cell.getBoundingClientRect().width / row.getBoundingClientRect().width);
       })()
     JAVASCRIPT
+    actual_alignment = page.evaluate_script("[...document.querySelectorAll('.continuous-document .cm-continuous-cell')].map(cell => getComputedStyle(cell).textAlign)")
+    assert_equal expected_alignment, actual_alignment
     assert_equal expected.length, actual.length
     probe_style = page.evaluate_script("(() => { const t = document.querySelector('.continuous-table-measure table'); const s = getComputedStyle(t.querySelector('th')); return {width:t.getBoundingClientRect().width,font:s.font,padding:s.padding}; })()")
     expected.zip(actual).each { |reader, editor| assert_in_delta reader, editor, 0.005, "reader #{reader_style.inspect}; probe #{probe_style.inspect}" }

@@ -6,7 +6,7 @@ import { scanMathSource } from "./math_source.js"
 export interface TableSourceCell {
   readonly from: number
   readonly to: number
-  readonly alignment: "left" | "center" | "right"
+  readonly alignment: "default" | "left" | "center" | "right"
 }
 
 export interface TableSourceRow {
@@ -67,7 +67,7 @@ export function tableSourceProjection(source: string): readonly TableSource[] {
     const alignmentCells = cells(source, separator.start, separator.start + separator.text.length)
     const alignments = alignmentCells.map(({ from, to }): TableSourceCell["alignment"] => {
       const value = source.slice(from, to)
-      return value.endsWith(":") ? value.startsWith(":") ? "center" : "right" : "left"
+      return value.endsWith(":") ? value.startsWith(":") ? "center" : "right" : value.startsWith(":") ? "left" : "default"
     })
     const rows: TableSourceRow[] = []
     for (let index = firstIndex; index < endIndex; index++) {
@@ -79,7 +79,7 @@ export function tableSourceProjection(source: string): readonly TableSource[] {
       // length insertion position. They must remain editable in the grid.
       while (rowCells.length < alignments.length) rowCells.push({ from: line.start + line.text.length, to: line.start + line.text.length })
       rows.push({ from: line.start, to: line.start + line.text.length, header: index === firstIndex,
-        cells: rowCells.map((cell, column) => ({ ...cell, alignment: alignments[column] ?? "left" })) })
+        cells: rowCells.map((cell, column) => ({ ...cell, alignment: alignments[column] ?? "default" })) })
     }
     tables.push({ from: first.start, to: last.start + last.text.length,
       delimiter: { from: separator.start, to: separator.start + separator.text.length }, rows })

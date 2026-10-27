@@ -309,8 +309,8 @@ class WebEditorUi {
       const editor = field.editorController
       window.__continuousVimBefore = editor.vimEnabled
       editor.setVimEnabled(true)
-      const { mountContinuousDocument } = await import("@elef/client/continuous-editor")
-      window.__continuousAuthoring = await mountContinuousDocument(editor)
+      const { mountContinuousAuthoring } = await import("@elef/client/continuous-editor")
+      window.__continuousAuthoring = await mountContinuousAuthoring(editor)
     })
   }
 
@@ -328,6 +328,13 @@ class WebEditorUi {
   async clickContinuousText(text, cell = false) {
     await this.page.locator(cell ? ".continuous-document .cm-continuous-cell" : ".continuous-document .cm-line")
       .filter({ hasText: text }).last().click()
+  }
+
+  async continuousSourceMode() {
+    await this.page.locator(".continuous-command-hint").click()
+    await this.page.locator('[data-continuous-commands] [role="combobox"]').fill("Switch to source")
+    await this.page.keyboard.press("Enter")
+    await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
   }
 
   async continuousKeys(text, special = false) {

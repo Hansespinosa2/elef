@@ -23,7 +23,7 @@
   },
   "exports": {
     "./continuous-editor": {
-      "types": "./src/features/editor/continuous_document.ts",
+      "types": "./src/application/continuous_authoring.ts",
       "default": "./dist/continuous-editor.js"
     },
     ".": {

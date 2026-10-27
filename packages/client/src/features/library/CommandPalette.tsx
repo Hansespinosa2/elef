@@ -29,6 +29,7 @@ export interface CommandPaletteProps {
   readonly works: readonly PaletteWork[];
   readonly onOpenWork: (work: PaletteWork) => void;
   readonly onClose: () => void;
+  readonly searchAvailable?: boolean;
 }
 
 function commandMatches(command: LibraryPaletteCommand, query: string): boolean {
@@ -46,6 +47,7 @@ export function CommandPalette({
   works,
   onOpenWork,
   onClose,
+  searchAvailable = true,
 }: CommandPaletteProps): JSX.Element | null {
   const [mode, setMode] = useState<PaletteMode>(initialMode);
   const [query, setQuery] = useState("");
@@ -115,8 +117,22 @@ export function CommandPalette({
     }
   }
 
+  function onDialogKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
+    if (event.key === "Escape" && !event.defaultPrevented) {
+      event.preventDefault()
+      onClose()
+    }
+    if (event.key !== "Tab") return
+    const elements = [...event.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])')]
+    if (!elements.length) return
+    const current = elements.indexOf(event.currentTarget.ownerDocument.activeElement as HTMLElement)
+    const next = event.shiftKey ? (current <= 0 ? elements.length - 1 : current - 1) : (current + 1) % elements.length
+    event.preventDefault()
+    elements[next]?.focus()
+  }
+
   return (
-    <div className="command-palette" role="dialog" aria-modal="true" aria-labelledby={headingId}>
+    <div className="command-palette" role="dialog" aria-modal="true" aria-labelledby={headingId} onKeyDown={onDialogKeyDown}>
       <div className="command-palette-panel">
         <div className="command-palette-heading">
           <h2 id={headingId}>{mode === "commands" ? "Command palette" : "Search works"}</h2>
@@ -142,7 +158,7 @@ export function CommandPalette({
         <p id={`${headingId}-hint`} className="command-palette-hint">
           ↑/↓ move · Enter choose · Esc close
         </p>
-        <div className="command-palette-filters" role="group" aria-label="Palette mode">
+        {searchAvailable && <div className="command-palette-filters" role="group" aria-label="Palette mode">
           {(["commands", "search"] as const).map((candidate) => (
             <button
               key={candidate}
@@ -153,7 +169,7 @@ export function CommandPalette({
               {candidate === "commands" ? "Commands" : "Search works"}
             </button>
           ))}
-        </div>
+        </div>}
         <div id={resultsId} className="command-palette-results" role="listbox" aria-label="Results">
           {rows.length === 0 ? (
             <p className="command-palette-empty" role="status">
