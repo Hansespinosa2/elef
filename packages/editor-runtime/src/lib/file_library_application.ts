@@ -94,7 +94,7 @@ export interface DesktopPlatform {
   featureFlags?: any;
   documentGraphRuntime?: any;
   presentationEditorRuntime?: any;
-  continuousEditorRuntime?: { mount(editor: unknown): Promise<{ dispose(): void }> } | null;
+  continuousEditorRuntime?: { mount(editor: unknown, options?: { signal?: AbortSignal }): Promise<{ dispose(): void }> } | null;
   updateEnabled?: any;
 }
 
@@ -140,6 +140,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   ].join(" ")
   applyDesktopFeatureFlags(document, featureFlags)
   let continuousAuthoring: { dispose(): void } | null = null
+  let continuousMountAbort: AbortController | null = null
+  let continuousNextDocument = false
   if (!updateEnabled) document.querySelector("#check-for-updates")?.remove()
 
   const renderer = createRendererClient()
@@ -458,6 +460,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     let typingSave: { expected: string; saving: Promise<boolean> } | null = null
     Object.defineProperty(window, "__elefPerformanceTestHooks", {
       value: Object.freeze({
+        enableContinuousForNextDocument() {
+          if (!desktopFeatures.visualEditing || !continuousEditorRuntime) throw new Error("Continuous authoring is unavailable in this desktop profile")
+          continuousNextDocument = true
+          return true
+        },
         async enableContinuousAuthoring() {
           if (!desktopFeatures.visualEditing || !continuousEditorRuntime) throw new Error("Continuous authoring is unavailable in this desktop profile")
           const editor = await waitForEditorController(elements.editorField, editorFor)
@@ -465,6 +472,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
           return true
         },
         disableContinuousAuthoring() {
+          continuousMountAbort?.abort()
+          continuousMountAbort = null
           continuousAuthoring?.dispose()
           continuousAuthoring = null
           return true
@@ -600,6 +609,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
 
   let libraryShown = false
   function showLibrary(): void {
+    continuousMountAbort?.abort()
+    continuousMountAbort = null
     elements.editorForm.previewController?.finishEditing()
     document.body.dataset.desktopView = "library"
     elements.welcome.hidden = Boolean(library)
@@ -822,6 +833,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       const { work, prepared } = transition
       const { documentTitles } = prepared as { documentTitles: string[] }
       const isDocument = work.source_file === "document.md"
+      const openContinuous = isDocument && continuousNextDocument && Boolean(continuousEditorRuntime)
+      if (isDocument) continuousNextDocument = false
       if (work.id !== id) {
         workFolders = workFolders.map(item => item.id === id ? { ...item, id: work.id } : item)
         documentGraphCache?.invalidate()
@@ -830,6 +843,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // All asynchronous work is finished. Installing the buffer and changing
       // save ownership occur in one synchronous turn, with no stale A buffer
       // able to schedule a write for B during graph/controller preparation.
+      continuousMountAbort?.abort()
+      continuousMountAbort = null
       continuousAuthoring?.dispose()
       continuousAuthoring = null
       closeSession()
@@ -903,6 +918,24 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       shellElement<HTMLElement>("#breadcrumb-current").textContent = work.name
       setStatus("Work opened")
       if (viewSetupStartedAt !== null) recordOpenStage("workViewSetup", viewSetupStartedAt)
+      if (openContinuous && continuousEditorRuntime) {
+        const abort = new AbortController()
+        continuousMountAbort = abort
+        let handle: { dispose(): void }
+        try {
+          handle = await measureOpenStage("continuousMount", () => continuousEditorRuntime.mount(editorFor(elements.editorField), { signal: abort.signal }))
+        } catch (error) {
+          if (!abort.signal.aborted) editorFor(elements.editorField)?.setEditingMode("source")
+          throw error
+        }
+        if (abort.signal.aborted || activeWorkFolder !== work) { handle.dispose(); return false }
+        continuousMountAbort = null
+        continuousAuthoring = handle
+        elements.editorForm.previewController?.schedule()
+        if (visualButton) { visualButton.disabled = false; visualButton.title = "Edit the rendered Work visually" }
+        editorFor(elements.editorField)?.focus()
+        return true
+      }
       await measureOpenStage("previewRefresh", () => elements.editorForm.previewController?.refresh())
       // The refresh skips its enable event while projection editing is
       // active, and the deferred install waits on a focusout that may never
@@ -916,6 +949,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       focusOpenedEditor(editorFor(elements.editorField), elements.editorForm.dataset.editorMode || "source")
       return true
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return false
       showError(error)
       return false
     }

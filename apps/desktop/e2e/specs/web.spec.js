@@ -318,11 +318,20 @@ class WebEditorUi {
     await this.page.evaluate(() => {
       window.__continuousAuthoring?.dispose()
       window.__continuousAuthoring = null
+      const form = document.querySelector(".visual-editor-form")
+      const controller = form && window.Stimulus?.getControllerForElementAndIdentifier(form, "continuous-authoring")
+      controller?.handle?.dispose()
+      if (controller) controller.handle = null
       if (window.__continuousVimBefore !== undefined) {
         document.querySelector(".source-field")?.editorController?.setVimEnabled(window.__continuousVimBefore)
         delete window.__continuousVimBefore
       }
     })
+  }
+
+  async reopenContinuousWork() {
+    await this.page.goto(`/documents/${this.activeWorkId}/edit?editor_surface=continuous`)
+    await expect(this.page.locator(".continuous-document")).toBeVisible()
   }
 
   async clickContinuousText(text, cell = false) {

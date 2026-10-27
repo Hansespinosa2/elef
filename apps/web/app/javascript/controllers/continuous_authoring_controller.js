@@ -6,13 +6,14 @@ import { editorFor, waitForEditorController } from "@elef/editor-runtime"
 export default class extends Controller {
   async connect() {
     this.active = true
+    this.abort = new AbortController()
     const field = this.element.querySelector(".source-field")
     try {
       const [editor, { mountContinuousAuthoring }] = await Promise.all([
         waitForEditorController(field, editorFor), import("@elef/client/continuous-editor")
       ])
       if (!this.active) return
-      const handle = await mountContinuousAuthoring(editor)
+      const handle = await mountContinuousAuthoring(editor, { signal: this.abort.signal })
       if (this.active) this.handle = handle
       else handle.dispose()
     } catch (error) {
@@ -36,6 +37,7 @@ export default class extends Controller {
 
   disconnect() {
     this.active = false
+    this.abort?.abort()
     this.handle?.dispose()
     this.handle = null
   }

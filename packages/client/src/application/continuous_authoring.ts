@@ -8,8 +8,9 @@ export { mountContinuousDocument } from "../features/editor/continuous_document.
 // Compose the document surface and the existing shared command palette at
 // the application boundary. Both hosts contribute save/navigation through
 // their normal DOM adapters; the editor remains the sole owner of selection.
-export async function mountContinuousAuthoring(editor: EditorHandle) {
-  const surface = await mountContinuousDocument(editor)
+export async function mountContinuousAuthoring(editor: EditorHandle, options: { signal?: AbortSignal } = {}) {
+  const surface = await mountContinuousDocument(editor, options)
+  if (options.signal?.aborted) { surface.dispose(); throw new DOMException("Continuous authoring was cancelled", "AbortError") }
   const form = editor.element.closest("form")
   if (!form) { surface.dispose(); throw new Error("Continuous authoring requires an editor form") }
   const document = editor.element.ownerDocument

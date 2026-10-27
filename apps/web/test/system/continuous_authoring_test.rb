@@ -147,6 +147,27 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_equal SOURCE, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
   end
 
+  test "a cancelled continuous mount leaves no partial surface or commands" do
+    document = Document.create!(title: "Cancelled authoring", source: SOURCE)
+    visit edit_document_path(document)
+    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+    result = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      import('@elef/client/continuous-editor').then(async ({ mountContinuousAuthoring }) => {
+        const abort = new AbortController();
+        abort.abort();
+        try {
+          await mountContinuousAuthoring(document.querySelector('.source-field').editorController, { signal: abort.signal });
+          done('mounted');
+        } catch (error) { done(error.name); }
+      }).catch(error => done(String(error)));
+    JAVASCRIPT
+    assert_equal "AbortError", result
+    assert_no_selector ".continuous-document, .continuous-command-hint, [data-continuous-commands]", visible: :all
+    assert_nil page.evaluate_script("document.querySelector('.visual-editor-form').dataset.editorSurface")
+    assert_field "Markdown source", with: SOURCE
+  end
+
   test "continuous startup resolves work images through the existing asset endpoint" do
     source = "# Image\n\n![Chart](images/perf-1.svg)\n"
     document = Document.create!(title: "Image", source: source)

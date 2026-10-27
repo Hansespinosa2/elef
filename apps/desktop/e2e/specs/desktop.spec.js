@@ -874,6 +874,12 @@ class DesktopEditorUi {
     if (result !== true) throw new Error(`Continuous authoring did not mount: ${JSON.stringify(result)}`)
   }
 
+  async reopenContinuousWork() {
+    await browser.execute(() => window.__elefPerformanceTestHooks.enableContinuousForNextDocument())
+    await this.openWork("E2E document")
+    await $(".continuous-document").waitForDisplayed()
+  }
+
   async stopContinuousAuthoring() {
     await browser.execute(() => {
       window.__elefPerformanceTestHooks.disableContinuousAuthoring()

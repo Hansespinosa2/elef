@@ -5,6 +5,7 @@ import { livePreviewField } from "@elef/client/editor"
 import { sanitizePreview } from "@elef/client/sanitize"
 import { continuousFlowGeometryChanged, createContinuousFlow } from "./continuous_flow.js"
 import { registerContinuousVimMotions } from "./continuous_vim.js"
+import { readStyleOverrides } from "@elef/work-model/document-map"
 
 export interface ContinuousDocumentEditor {
   readonly view: EditorView
@@ -18,18 +19,19 @@ const mounting = new WeakSet<EditorView>()
 // A separate, explicitly mounted feasibility surface. It shares the existing
 // EditorView, history and Vim instance; merely loading the normal source
 // editor must not load or activate the candidate implementation.
-export async function mountContinuousDocument(editor: ContinuousDocumentEditor): Promise<ContinuousDocumentHandle> {
+export async function mountContinuousDocument(editor: ContinuousDocumentEditor, { signal }: { signal?: AbortSignal } = {}): Promise<ContinuousDocumentHandle> {
   if (mounting.has(editor.view)) throw new Error("Continuous authoring is already mounted")
   mounting.add(editor.view)
-  try { return await mountSurface(editor) }
+  try { return await mountSurface(editor, signal) }
   catch (error) { mounting.delete(editor.view); throw error }
 }
 
-async function mountSurface(editor: ContinuousDocumentEditor): Promise<ContinuousDocumentHandle> {
+async function mountSurface(editor: ContinuousDocumentEditor, signal?: AbortSignal): Promise<ContinuousDocumentHandle> {
   const form = editor.element.closest("form")
   if (!form) throw new Error("Continuous authoring requires an editor form")
   if (form.dataset.editorSurface === "continuous") throw new Error("Continuous authoring is already mounted")
   const { renderPreviewCore } = await import("@elef/client/preview-core")
+  if (signal?.aborted) throw new DOMException("Continuous authoring was cancelled", "AbortError")
   registerContinuousVimMotions()
   if (!editor.element.isConnected) throw new Error("The editor was closed before continuous authoring loaded")
   editor.projectionController()?.flushPendingProjectionEdits?.()
@@ -41,8 +43,9 @@ async function mountSurface(editor: ContinuousDocumentEditor): Promise<Continuou
   editor.element.append(probe)
   const projectionClasses = Array.from(form.querySelector(".editor-projection .document-reader")?.classList ?? [])
   const classValue = (prefix: string) => projectionClasses.find(value => value.startsWith(prefix))?.slice(prefix.length)
-  let theme = form.dataset.continuousTheme || classValue("document-theme-") || form.dataset.continuousDefaultTheme || "match"
-  let typography = form.dataset.continuousTypography || classValue("document-typography-") || form.dataset.continuousDefaultTypography || "book"
+  const overrides = readStyleOverrides(editor.view.state.doc.toString())
+  let theme = overrides.theme || form.dataset.continuousTheme || classValue("document-theme-") || form.dataset.continuousDefaultTheme || "match"
+  let typography = overrides.typography || form.dataset.continuousTypography || classValue("document-typography-") || form.dataset.continuousDefaultTypography || "book"
   const shell = editor.element.closest<HTMLElement>(".editor-shell")
   const addedFieldClasses = new Set<string>()
   const addedShellClasses = new Set<string>()
@@ -71,7 +74,12 @@ async function mountSurface(editor: ContinuousDocumentEditor): Promise<Continuou
       margins[kind] = { before: parseFloat(style?.marginTop ?? "0") || 0, after: parseFloat(style?.marginBottom ?? "0") || 0 }
     }
   }
-  measureMargins()
+  try { measureMargins() } catch (error) {
+    probe.remove()
+    editor.element.classList.remove(...addedFieldClasses)
+    shell?.classList.remove(...addedShellClasses)
+    throw error
+  }
   const measure = (markdown: string): readonly number[] => {
     const key = `${editor.element.clientWidth}:${markdown}`
     const cached = cache.get(key)

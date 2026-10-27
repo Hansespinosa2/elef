@@ -9,8 +9,8 @@ export const presentationEditorRuntime = Object.freeze({
 })
 
 export const continuousEditorRuntime = Object.freeze({
-  async mount(editor) {
+  async mount(editor, options) {
     const { mountContinuousAuthoring } = await import("@elef/client/continuous-editor")
-    return mountContinuousAuthoring(editor)
+    return mountContinuousAuthoring(editor, options)
   }
 })

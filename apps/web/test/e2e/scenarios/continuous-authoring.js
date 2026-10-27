@@ -49,7 +49,7 @@ export async function continuousAuthoringWorkflow(ui) {
     const saved = CONTINUOUS_SOURCE.replace("Final paragraph.", "Final paragraph. Saved.")
     await ui.waitForSaved(saved)
     await ui.stopContinuousAuthoring()
-    await ui.openWork("E2E document")
+    await ui.reopenContinuousWork()
     await ui.waitForSource(saved)
   } finally {
     await ui.stopContinuousAuthoring()
@@ -79,7 +79,7 @@ export async function continuousLongDocumentWorkflow(ui, source) {
     await ui.continuousKeys("u")
     await ui.waitForSaved(saved)
     await ui.stopContinuousAuthoring()
-    await ui.openWork("E2E document")
+    await ui.reopenContinuousWork()
     await ui.waitForSource(saved)
   } finally {
     await ui.stopContinuousAuthoring()
