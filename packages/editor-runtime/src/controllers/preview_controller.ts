@@ -71,7 +71,13 @@ export default class extends Controller<HTMLElement> {
     this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
     this.element.addEventListener("elef:art-diagnostic", this.artDiagnostic)
     this.continuousModeChanged = () => {
-      if (this.continuousEditing()) return
+      if (this.continuousEditing()) {
+        // A source-mode change may already have queued a full preview.
+        // Entering the continuous surface cancels that pending work before
+        // it can compete with the active authoring session.
+        if (this.timer || this.requestController || this.pendingProjection) this.schedule()
+        return
+      }
       if (this.deferredForContinuous) {
         this.deferredForContinuous = false
         this.refreshNow()

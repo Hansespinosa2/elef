@@ -38,6 +38,38 @@ test("incremental reveals match fresh projection after forward, backward, and ra
   }
 })
 
+test("plain edits preserve the same preview as a fresh parse across selection and offset changes", () => {
+  const source = "First paragraph.\n\n# Title\n\n**bold** and $x^2$.\n\nLast paragraph.\n"
+  let state = previewState(source, EditorSelection.cursor(source.indexOf("bold")))
+  const beforeWidget = state.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$x"))?.inactive.find(range => range.value.spec.widget)?.value.spec.widget
+  const edits = [
+    { from: 5, insert: " longer", select: 3 },
+    { from: -1, insert: " Text", select: -1 },
+    { from: 0, insert: "# ", select: 1 },
+  ]
+  for (const edit of edits) {
+    const from = edit.from < 0 ? state.doc.length - 1 : edit.from
+    const selection = edit.select < 0 ? from + edit.insert.length : edit.select
+    state = state.update({ changes: { from, insert: edit.insert }, selection: EditorSelection.cursor(selection) }).state
+    assert.equal(state.field(livePreviewField).error, null)
+    assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)), `edit at ${from}`)
+  }
+  const math = state.doc.toString().indexOf("$x")
+  const afterWidget = state.field(livePreviewField).dynamic.find(range => range.from === math)?.inactive.find(range => range.value.spec.widget)?.value.spec.widget
+  // The final structural edit rebuilds; the first plain edit must retain it.
+  assert.ok(beforeWidget && afterWidget)
+})
+
+test("ordinary typing away from math reuses its existing equation widget", () => {
+  const source = "Write here.\n\nEquation $x^2$.\n"
+  const state = previewState(source, EditorSelection.cursor(4))
+  const oldContext = state.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$x"))!
+  const changed = state.update({ changes: { from: 5, insert: " more" }, selection: EditorSelection.cursor(10) }).state
+  const newContext = changed.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$x") + 5)!
+  assert.equal(newContext.inactive.find(range => range.value.spec.widget)?.value, oldContext.inactive.find(range => range.value.spec.widget)?.value)
+  assert.deepEqual(decorationsOf(changed), decorationsOf(previewState(changed.doc.toString(), changed.selection.main)))
+})
+
 interface FoundDecoration {
   from: number;
   to: number;

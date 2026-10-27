@@ -1,5 +1,5 @@
 import { StateEffect, StateField } from "@codemirror/state"
-import type { EditorState, Range } from "@codemirror/state"
+import type { EditorState, Range, Transaction } from "@codemirror/state"
 import { syntaxTree } from "@codemirror/language"
 import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
@@ -531,6 +531,60 @@ export interface LivePreviewValue {
   error: string | null;
 }
 
+// Unadorned single-line prose cannot change Markdown structure or any
+// existing reveal context. Keep the parsed plan and widget identities for
+// those edits; syntax, multiline changes, and math/fence contexts rebuild.
+function canMapPlainEdit(value: LivePreviewValue, transaction: Transaction): boolean {
+  if (value.error) return false
+  let safe = true
+  transaction.changes.iterChangedRanges((from, to, newFrom, newTo) => {
+    if (!safe) return
+    const oldLine = transaction.startState.doc.lineAt(from)
+    const newLine = transaction.newDoc.lineAt(newFrom)
+    if (to > oldLine.to || newTo > newLine.to ||
+      value.dynamic.some(context => from <= context.to && to >= context.from)) { safe = false; return }
+    for (const line of [oldLine.text, newLine.text]) {
+      if (!/^[\p{L}\p{N} ,.!?]*$/u.test(line) || /^\s*\d+[.)]\s/.test(line)) { safe = false; return }
+    }
+  })
+  return safe
+}
+
+function mapPlainEdit(value: LivePreviewValue, transaction: Transaction): LivePreviewValue {
+  const changes = transaction.changes
+  let firstChange = transaction.startState.doc.length
+  changes.iterChangedRanges(from => { firstChange = Math.min(firstChange, from) })
+  const mapRanges = (ranges: readonly Range<Decoration>[]) => ranges.map(range =>
+    range.value.range(changes.mapPos(range.from, 1), changes.mapPos(range.to, 1)))
+  let shifted = false
+  const mapped = value.dynamic.map(context => {
+    if (context.to < firstChange) return context
+    shifted = true
+    return { from: changes.mapPos(context.from, 1), to: changes.mapPos(context.to, 1),
+      active: mapRanges(context.active), inactive: mapRanges(context.inactive) }
+  })
+  const dynamic = shifted ? mapped : value.dynamic
+  const removed = new Set<Decoration>()
+  const added: Range<Decoration>[] = []
+  for (let index = 0; index < value.dynamic.length; index++) {
+    const before = value.dynamic[index]!
+    const after = dynamic[index]!
+    const wasActive = activeRange(transaction.startState, before.from, before.to)
+    const isActive = activeRange(transaction.state, after.from, after.to)
+    if (wasActive === isActive) continue
+    for (const range of wasActive ? after.active : after.inactive) removed.add(range.value)
+    added.push(...(isActive ? after.active : after.inactive))
+  }
+  const decorations = value.decorations.map(changes)
+  const atomic = value.atomic.map(changes)
+  if (!removed.size && !added.length) return { ...value, decorations, atomic, dynamic }
+  return { ...value, dynamic,
+    decorations: decorations.update({ filter: (_from, _to, decoration) => !removed.has(decoration), add: added, sort: true }),
+    atomic: atomic.update({ filter: (_from, _to, decoration) => !removed.has(decoration),
+      add: added.filter(range => range.value.spec.widget), sort: true }),
+  }
+}
+
 export const livePreviewField = StateField.define<LivePreviewValue>({
   create(state) {
     return { enabled: true, ...buildDecorations(state, true) }
@@ -539,6 +593,9 @@ export const livePreviewField = StateField.define<LivePreviewValue>({
     let enabled = value.enabled
     for (const effect of transaction.effects) {
       if (effect.is(livePreviewMode)) enabled = Boolean(effect.value)
+    }
+    if (transaction.docChanged && enabled === value.enabled && enabled && canMapPlainEdit(value, transaction)) {
+      return mapPlainEdit(value, transaction)
     }
     if (transaction.docChanged || enabled !== value.enabled) {
       return { enabled, ...buildDecorations(transaction.state, enabled) }

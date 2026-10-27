@@ -1,4 +1,4 @@
-import { continuousAuthoringWorkflow } from "../../../../apps/web/test/e2e/scenarios/continuous-authoring.js"
+import { continuousAuthoringWorkflow, continuousLongDocumentWorkflow } from "../../../../apps/web/test/e2e/scenarios/continuous-authoring.js"
 import assert from "node:assert/strict"
 import { $, $$, browser } from "@wdio/globals"
 import { Key } from "webdriverio"
@@ -2614,6 +2614,12 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("keeps continuous Vim, math, tables, and saved source coherent", async () => {
     await continuousAuthoringWorkflow(new DesktopEditorUi())
+  })
+
+  it("navigates, edits, and saves the continuous long math fixture", async function () {
+    this.timeout(120_000)
+    const source = await readFile(path.resolve(process.cwd(), "../../web/test/fixtures/performance/elef-visual-100-math.md"), "utf8")
+    await continuousLongDocumentWorkflow(new DesktopEditorUi(), source)
   })
 
   it("updates Vim relative line numbers from CodeMirror cursor positions", async () => {

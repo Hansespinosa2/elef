@@ -1,4 +1,4 @@
-import { continuousAuthoringWorkflow } from "../../../../apps/web/test/e2e/scenarios/continuous-authoring.js"
+import { continuousAuthoringWorkflow, continuousLongDocumentWorkflow } from "../../../../apps/web/test/e2e/scenarios/continuous-authoring.js"
 import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../../apps/web/test/e2e/scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
@@ -1346,4 +1346,9 @@ test("slide position stacks and lanes align in the web preview", async ({ page }
 
 test("continuous authoring keeps Vim, math, tables, and saved source coherent", async ({ page }) => {
   await continuousAuthoringWorkflow(new WebEditorUi(page))
+})
+
+test("continuous authoring navigates, edits, and saves the long math fixture", async ({ page }) => {
+  const source = await readFile(path.resolve(process.cwd(), "../../../apps/web/test/fixtures/performance/elef-visual-100-math.md"), "utf8")
+  await continuousLongDocumentWorkflow(new WebEditorUi(page), source)
 })

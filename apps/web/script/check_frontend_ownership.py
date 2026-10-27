@@ -356,6 +356,7 @@ shared_workflows = {
     "artRenderingWorkflow",
     "authoringSettingsWorkflow",
     "continuousAuthoringWorkflow",
+    "continuousLongDocumentWorkflow",
     "displayMathEnterWorkflow",
     "documentLinkCompletionWorkflow",
     "documentPageAspectRatioWorkflow",

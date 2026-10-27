@@ -27,11 +27,14 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
   end
 
   test "continuous opening and sustained input meet the frozen fixture budgets" do
+    cpu_rate = Float(ENV.fetch("ELEF_CONTINUOUS_PERF_CPU_RATE", "1"))
+    raise "CPU throttling must be at least 1" if cpu_rate < 1
+    page.driver.browser.execute_cdp("Emulation.setCPUThrottlingRate", rate: cpu_rate)
     report = {
       checkout: IO.popen(["git", "rev-parse", "HEAD"], &:read).strip,
       tracked_changes: !system("git", "diff", "--quiet"),
       ruby: RUBY_VERSION, platform: RUBY_PLATFORM, browser: page.driver.browser.capabilities.browser_version,
-      viewport: [1400, 1000], runner: ENV["RUNNER_NAME"] || "local",
+      viewport: [1400, 1000], runner: ENV["RUNNER_NAME"] || "local", cpu_throttle: cpu_rate,
       budgets_ms: { open_p95: 3000, input_p95: 50, stall: 100 }, samples: SAMPLES, fixtures: {}
     }
     manifest = JSON.parse(File.read(ROOT.join("manifest.json")))

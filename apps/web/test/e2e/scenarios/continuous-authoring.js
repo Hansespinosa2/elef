@@ -58,3 +58,33 @@ export async function continuousAuthoringWorkflow(ui) {
     await ui.waitForSaved(original)
   }
 }
+
+// The same session on the frozen long mathematical document. Source seeding
+// is setup; all navigation, typing, deletion, undo and saves use the active
+// editor without repairing its selection or retrying characters.
+export async function continuousLongDocumentWorkflow(ui, source) {
+  await ui.openWork("E2E document")
+  const original = await ui.readSource()
+  try {
+    await ui.showSourceMode()
+    await ui.startContinuousAuthoring()
+    await ui.restoreSource(source)
+    await ui.showVisualMode()
+    await ui.continuousKeys("GiLong document session with equations")
+    await ui.continuousKeys("Escape", true)
+    const saved = source + "Long document session with equations"
+    await ui.waitForSource(saved)
+    await ui.continuousKeys("ggG0d2w")
+    await ui.waitForSource(source + "session with equations")
+    await ui.continuousKeys("u")
+    await ui.waitForSaved(saved)
+    await ui.stopContinuousAuthoring()
+    await ui.openWork("E2E document")
+    await ui.waitForSource(saved)
+  } finally {
+    await ui.stopContinuousAuthoring()
+    await ui.showSourceMode()
+    await ui.restoreSource(original)
+    await ui.waitForSaved(original)
+  }
+}

@@ -91,6 +91,7 @@ async function mountSurface(editor: ContinuousDocumentEditor): Promise<Continuou
     EditorView.contentAttributes.of(view => ({ class: view.state.field(livePreviewField).enabled ? "cm-lineWrapping" : "" })),
     Prec.highest(EditorView.theme({
       "&.continuous-document": { background: "var(--document-page-background)", color: "var(--document-page-ink)" },
+      "&.continuous-document.cm-focused": { outline: "none" },
       "&.continuous-document .cm-scroller": { fontFamily: "var(--oradia-sans)", fontSize: "var(--document-body-size)",
         lineHeight: "var(--document-body-leading)", overflow: "visible" },
       "&.continuous-document .cm-content": { padding: "0", caretColor: "currentColor" },
