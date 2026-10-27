@@ -1,3 +1,4 @@
+import { continuousAuthoringWorkflow } from "../../../../apps/web/test/e2e/scenarios/continuous-authoring.js"
 import assert from "node:assert/strict"
 import { $, $$, browser } from "@wdio/globals"
 import { Key } from "webdriverio"
@@ -860,6 +861,53 @@ class DesktopEditorUi {
     if (updated?.source !== source || updated.selectionStart !== source.length || updated.selectionEnd !== source.length || updated.editingMode !== "source") {
       throw new Error(`The desktop editor did not accept the shared scenario source at the end of the buffer: ${JSON.stringify(updated)}`)
     }
+  }
+
+  async startContinuousAuthoring() {
+    const result = await browser.executeAsync(done => {
+      const editor = document.querySelector("#desktop-editor-field").editorController
+      window.__continuousVimBefore = editor.vimEnabled
+      editor.setVimEnabled(true)
+      window.__elefPerformanceTestHooks.enableContinuousAuthoring()
+        .then(() => done(true), error => done({ error: String(error) }))
+    })
+    if (result !== true) throw new Error(`Continuous authoring did not mount: ${JSON.stringify(result)}`)
+  }
+
+  async stopContinuousAuthoring() {
+    await browser.execute(() => {
+      window.__elefPerformanceTestHooks.disableContinuousAuthoring()
+      if (window.__continuousVimBefore !== undefined) {
+        document.querySelector("#desktop-editor-field")?.editorController?.setVimEnabled(window.__continuousVimBefore)
+        delete window.__continuousVimBefore
+      }
+    })
+  }
+
+  async continuousTextElement(text, cell = false) {
+    const selector = cell ? ".continuous-document .cm-continuous-cell" : ".continuous-document .cm-line"
+    const elements = await $$(selector)
+    for (const element of elements) if ((await element.getText()).includes(text)) return element
+    throw new Error(`Continuous authoring text was not visible: ${text}`)
+  }
+
+  async clickContinuousText(text, cell = false) {
+    await (await this.continuousTextElement(text, cell)).click()
+  }
+
+  async continuousKeys(text, special = false) {
+    if (special) sendNativeKey(text)
+    else typeNativeText(text)
+  }
+
+  async assertContinuousText(text, cell = false) {
+    await (await this.continuousTextElement(text, cell)).waitForDisplayed()
+  }
+
+  async assertContinuousMath(text) {
+    await browser.waitUntil(async () => browser.execute(value =>
+      [...document.querySelectorAll(".continuous-document math mi")].some(node => node.textContent === value), text),
+    { timeout: 5000, timeoutMsg: `Continuous authoring did not render ${text}` })
   }
 
   async restoreSource(source) {
@@ -2548,6 +2596,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("keeps slide position stacks and lanes aligned in the desktop preview", async () => {
     await slidePositionGrammarWorkflow(new DesktopEditorUi())
+  })
+
+  it("keeps continuous Vim, math, tables, and saved source coherent", async () => {
+    await continuousAuthoringWorkflow(new DesktopEditorUi())
   })
 
   it("updates Vim relative line numbers from CodeMirror cursor positions", async () => {

@@ -94,6 +94,7 @@ export interface DesktopPlatform {
   featureFlags?: any;
   documentGraphRuntime?: any;
   presentationEditorRuntime?: any;
+  continuousEditorRuntime?: { mount(editor: unknown): Promise<{ dispose(): void }> } | null;
   updateEnabled?: any;
 }
 
@@ -120,7 +121,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     mediaUrlsForWorkFolder, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
     registerEditorRuntime, recordBootstrapFailure,
-    features, featureFlags, documentGraphRuntime, presentationEditorRuntime,
+    features, featureFlags, documentGraphRuntime, presentationEditorRuntime, continuousEditorRuntime,
     updateEnabled = true, updateRuntime = null
   } = platform
 
@@ -138,6 +139,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     "media"
   ].join(" ")
   applyDesktopFeatureFlags(document, featureFlags)
+  let continuousAuthoring: { dispose(): void } | null = null
   if (!updateEnabled) document.querySelector("#check-for-updates")?.remove()
 
   const renderer = createRendererClient()
@@ -456,6 +458,17 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     let typingSave: { expected: string; saving: Promise<boolean> } | null = null
     Object.defineProperty(window, "__elefPerformanceTestHooks", {
       value: Object.freeze({
+        async enableContinuousAuthoring() {
+          if (!desktopFeatures.visualEditing || !continuousEditorRuntime) throw new Error("Continuous authoring is unavailable in this desktop profile")
+          const editor = await waitForEditorController(elements.editorField, editorFor)
+          continuousAuthoring ??= await continuousEditorRuntime.mount(editor)
+          return true
+        },
+        disableContinuousAuthoring() {
+          continuousAuthoring?.dispose()
+          continuousAuthoring = null
+          return true
+        },
         get interactiveAt() { return interactiveAt },
         get nativeReadyAt() { return nativeReadyAt },
         get previousInstallationsRemoved() { return previousInstallationsRemoved },
@@ -817,6 +830,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // All asynchronous work is finished. Installing the buffer and changing
       // save ownership occur in one synchronous turn, with no stale A buffer
       // able to schedule a write for B during graph/controller preparation.
+      continuousAuthoring?.dispose()
+      continuousAuthoring = null
       closeSession()
       activeWorkFolder = null
       try {
