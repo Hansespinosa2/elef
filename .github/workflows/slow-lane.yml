@@ -79,6 +79,11 @@ jobs:
       - name: Install headless browser
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: npx --prefix apps/desktop/e2e playwright install chromium
+      - name: Build shared packages before fixtures
+        # dist/ is built, never committed: the fixture build resolves every
+        # shared package through the frontend bundle, so bootstrap first —
+        # the same order every CI lane and the release workflow use.
+        run: npm run build:packages
       - name: Build test-only N-1 and N desktop updater packages
         run: node apps/desktop/e2e/build-update-fixtures.mjs
       - name: Run the full release envelope with its time ceiling
