@@ -893,6 +893,10 @@ class DesktopEditorUi {
 
   async clickContinuousText(text, cell = false) {
     await (await this.continuousTextElement(text, cell)).click()
+    await browser.waitUntil(async () => browser.execute(value => {
+      const editor = document.querySelector("#desktop-editor-field")?.editorController
+      return editor?.view.state.doc.lineAt(editor.selectionHead).text.includes(value) === true
+    }, text), { timeout: 5_000, timeoutMsg: `Click did not place the native caret on ${text}` })
   }
 
   async continuousSourceMode() {

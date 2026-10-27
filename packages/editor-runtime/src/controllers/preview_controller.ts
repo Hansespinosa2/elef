@@ -28,6 +28,11 @@ export default class extends Controller<HTMLElement> {
     this.active = true
     this.pendingProjection = null
     this.projectionFresh = true
+    if (this.element.dataset?.editorSurface === "continuous-pending") {
+      this.projectionFresh = false
+      this.deferredForContinuous = true
+      this.element.dataset.previewProjectionStale = "true"
+    }
     this.serverWarnings = [...this.warningsTarget.querySelectorAll("li")].map((item: any) => item.textContent)
     this.localWarnings = []
     this.artWarnings = new Map()
@@ -283,7 +288,7 @@ export default class extends Controller<HTMLElement> {
   }
 
   continuousEditing(): boolean {
-    return this.element.dataset?.editorSurface === "continuous" && this.element.dataset?.editorMode === "visual"
+    return ["continuous", "continuous-pending"].includes(this.element.dataset?.editorSurface ?? "") && this.element.dataset?.editorMode === "visual"
   }
 
   finishEditing() {

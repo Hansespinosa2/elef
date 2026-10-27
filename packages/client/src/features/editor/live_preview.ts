@@ -112,6 +112,11 @@ class PreviewWidget extends WidgetType {
       else if (assetDigest && uploadUrl) image.src = `${uploadUrl}/${assetDigest}`
       else if (assetBaseUrl && source.startsWith("images/")) {
         image.src = `${assetBaseUrl}/path/${source.split("/").map(encodeURIComponent).join("/")}`
+      } else if (uploadUrl && !/^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(source)) {
+        // The supplied attachment endpoint can resolve original filenames;
+        // do not resolve a relative path against the current edit URL.
+        const filename = source.split("/").filter(Boolean).pop()
+        if (filename && filename !== "." && filename !== "..") image.src = `${uploadUrl}/${encodeURIComponent(filename)}`
       } else image.src = source
       image.title = this.attributes.alt || ""
       return image

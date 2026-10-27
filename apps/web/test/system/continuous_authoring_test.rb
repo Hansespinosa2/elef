@@ -110,9 +110,9 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
   test "the frozen math notebook keeps paragraph virtualization during sustained typing" do
     source = File.read(Rails.root.join("test/fixtures/performance/elef-visual-100-math.md"))
     document = Document.create!(title: "Mathematical notebook", source: source)
-    visit edit_document_path(document)
-    assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 20
-    mount_continuous_surface
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document", wait: 20
+    assert_no_selector ".editor-projection .document-page", visible: :all
     metrics = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const editor = document.querySelector('.source-field').editorController;
@@ -122,10 +122,78 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert_operator metrics["to"] - metrics["from"], :<, metrics["length"] / 2
     assert_operator metrics["renderedLines"], :<, 100
+    page.execute_script("window.scrollTo(0, document.documentElement.scrollHeight)")
+    page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
+    assert_selector ".continuous-document .cm-line", text: /A quick check uses/, wait: 10
+    end_viewport = page.evaluate_script("document.querySelector('.source-field').editorController.view.viewport.to")
+    assert_operator end_viewport, :>, metrics["length"] * 0.9
     burst = " Authoring mathematics with uninterrupted keyboard input."
     page.driver.browser.action.key_down(:control).send_keys(:end).key_up(:control).send_keys(burst).perform
     assert_equal source + burst, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
     assert page.evaluate_script("document.querySelector('.continuous-document').contains(document.activeElement)")
+  end
+
+  test "explicit continuous startup skips the old projection and restores source preview on demand" do
+    document = Document.create!(title: "Startup", source: SOURCE)
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document .cm-line", text: "alpha beta gamma"
+    assert_no_selector ".editor-projection .document-page", visible: :all
+    find(".continuous-command-hint").click
+    find('[data-continuous-commands] [role="combobox"]').send_keys("Switch to source", :enter)
+    assert_selector 'form[data-editor-mode="source"]'
+    assert_selector ".editor-projection .document-page", wait: 20
+    click_on "Visual"
+    assert_selector ".continuous-document .cm-line", text: "alpha beta gamma"
+    assert_equal SOURCE, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+  end
+
+  test "continuous startup resolves work images through the existing asset endpoint" do
+    source = "# Image\n\n![Chart](images/perf-1.svg)\n"
+    document = Document.create!(title: "Image", source: source)
+    image = Rails.root.join("test/fixtures/performance/assets/perf-1.svg")
+    File.open(image, "rb") { |file| document.assets.attach(io: file, filename: "perf-1.svg", content_type: "image/svg+xml") }
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document img.cm-live-image[alt='Chart']", wait: 5 do |image_element|
+      image_element.evaluate_script("this.complete && this.naturalWidth > 0")
+    end
+    assert_equal source, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+  end
+
+  test "continuous appearance follows reader theme and typography changes" do
+    source = "---\ntheme: dark\ntypography: technical\n---\n# Appearance\n\nBody text.\n"
+    light_source = source.sub("dark", "light").sub("technical", "modern")
+    light = Document.create!(title: "Light appearance", source: light_source)
+    dark = Document.create!(title: "Dark appearance", source: source)
+    reader_style = lambda do
+      page.evaluate_script(<<~JAVASCRIPT)
+        (() => { const heading = getComputedStyle(document.querySelector('.document-surface h1'));
+          const body = getComputedStyle(document.querySelector('.document-surface p'));
+          const paper = getComputedStyle(document.querySelector('.document-page'));
+          return { font: heading.font, heading: heading.color, body: body.color, background: paper.backgroundImage, backgroundColor: paper.backgroundColor }; })()
+      JAVASCRIPT
+    end
+    visit document_path(light)
+    light_style = reader_style.call
+    visit document_path(dark)
+    dark_style = reader_style.call
+    visit edit_document_path(dark, editor_surface: "continuous")
+    assert_selector ".continuous-document .cm-live-heading"
+    editor_style = lambda do
+      page.evaluate_script(<<~JAVASCRIPT)
+        (() => { const heading = getComputedStyle(document.querySelector('.continuous-document .cm-live-heading'));
+          const body = getComputedStyle([...document.querySelectorAll('.continuous-document .cm-line')].find(line => line.textContent.includes('Body text')));
+          const paper = getComputedStyle(document.querySelector('.continuous-document'));
+          return { font: heading.font, heading: heading.color, body: body.color, background: paper.backgroundImage, backgroundColor: paper.backgroundColor }; })()
+      JAVASCRIPT
+    end
+    assert_equal dark_style, editor_style.call
+    find(".continuous-command-hint").click
+    find('[data-continuous-commands] [role="combobox"]').send_keys("Show editor controls", :enter)
+    find(".appearance-settings summary").click
+    select "Light", from: "Theme"
+    select "Modern", from: "Typography"
+    assert_equal light_style, editor_style.call
+    assert_match(/theme: light.*typography: modern/m, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue"))
   end
 
   test "document focus exposes shared commands and restores the editor caret" do

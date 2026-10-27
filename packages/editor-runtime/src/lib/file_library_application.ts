@@ -882,6 +882,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       elements.editorForm.dataset.mediaWorkKindValue = work.source_file === "document.md" ? "document" : "presentation"
       elements.editorForm.dataset.mediaUploadUrlValue = mediaUrls.uploadUrl
       elements.editorForm.dataset.mediaAssetBaseUrlValue = mediaUrls.assetBaseUrl
+      elements.editorForm.dataset.continuousDefaultTheme = libraryConfig.theme
+      elements.editorForm.dataset.continuousDefaultTypography = libraryConfig.typography
       if (desktopFeatures.documentLinks) elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
       const visualButton = document.querySelector("#visual-mode") as HTMLButtonElement | null
       if (visualButton && desktopFeatures.visualEditing) {

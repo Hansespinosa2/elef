@@ -1,10 +1,9 @@
 import { Compartment, Prec, StateEffect } from "@codemirror/state"
 import { EditorView } from "@codemirror/view"
-import { createContinuousTables } from "./continuous_tables.js"
+import { continuousTableGeometryChanged, createContinuousTables } from "./continuous_tables.js"
 import { livePreviewField } from "@elef/client/editor"
 import { sanitizePreview } from "@elef/client/sanitize"
-import { createContinuousFlow } from "./continuous_flow.js"
-import type { BlockMargins } from "./continuous_flow.js"
+import { continuousFlowGeometryChanged, createContinuousFlow } from "./continuous_flow.js"
 import { registerContinuousVimMotions } from "./continuous_vim.js"
 
 export interface ContinuousDocumentEditor {
@@ -40,18 +39,39 @@ async function mountSurface(editor: ContinuousDocumentEditor): Promise<Continuou
   probe.className = "continuous-table-measure document-surface"
   probe.style.maxWidth = `${editor.element.clientWidth}px`
   editor.element.append(probe)
-  const styleClasses = ["document-reader", ...Array.from(form.querySelector(".editor-projection .document-reader")?.classList ?? [])]
-    .filter(className => !editor.element.classList.contains(className))
-  editor.element.classList.add(...styleClasses)
+  const projectionClasses = Array.from(form.querySelector(".editor-projection .document-reader")?.classList ?? [])
+  const classValue = (prefix: string) => projectionClasses.find(value => value.startsWith(prefix))?.slice(prefix.length)
+  let theme = form.dataset.continuousTheme || classValue("document-theme-") || form.dataset.continuousDefaultTheme || "match"
+  let typography = form.dataset.continuousTypography || classValue("document-typography-") || form.dataset.continuousDefaultTypography || "book"
+  const shell = editor.element.closest<HTMLElement>(".editor-shell")
+  const addedFieldClasses = new Set<string>()
+  const addedShellClasses = new Set<string>()
+  const applyStyleClasses = () => {
+    for (const name of addedFieldClasses) editor.element.classList.remove(name)
+    for (const name of addedShellClasses) shell?.classList.remove(name)
+    addedFieldClasses.clear()
+    addedShellClasses.clear()
+    const classes = ["document-reader", `document-theme-${theme}`, `work-theme-${theme}`,
+      `document-typography-${typography}`, `work-typography-${typography}`]
+    for (const name of classes) {
+      if (!editor.element.classList.contains(name)) { editor.element.classList.add(name); addedFieldClasses.add(name) }
+      if (name !== "document-reader" && shell && !shell.classList.contains(name)) { shell.classList.add(name); addedShellClasses.add(name) }
+    }
+  }
+  applyStyleClasses()
   const cache = new Map<string, readonly number[]>()
-  sanitizePreview(probe, renderPreviewCore({ source: "# H1\n\n## H2\n\n### H3\n\n#### H4\n\n##### H5\n\n###### H6\n\nParagraph.\n\n> Quotation\n\n- Item\n\n```\ncode\n```\n\n| A | B |\n| - | - |\n| x | y |", kind: "document" }).html, { interactive: false })
   const selectors: Readonly<Record<string, string>> = { h1: "h1", h2: "h2", h3: "h3", h4: "h4", h5: "h5", h6: "h6",
     paragraph: "p", quote: "blockquote", list: "ul", code: "pre", table: "table" }
-  const margins: BlockMargins = Object.fromEntries(Object.entries(selectors).map(([kind, selector]) => {
-    const element = probe.querySelector(selector)
-    const style = element ? getComputedStyle(element) : null
-    return [kind, { before: parseFloat(style?.marginTop ?? "0") || 0, after: parseFloat(style?.marginBottom ?? "0") || 0 }]
-  }))
+  const margins: Record<string, { before: number; after: number }> = {}
+  const measureMargins = () => {
+    sanitizePreview(probe, renderPreviewCore({ source: "# H1\n\n## H2\n\n### H3\n\n#### H4\n\n##### H5\n\n###### H6\n\nParagraph.\n\n> Quotation\n\n- Item\n\n```\ncode\n```\n\n| A | B |\n| - | - |\n| x | y |", kind: "document" }).html, { interactive: false })
+    for (const [kind, selector] of Object.entries(selectors)) {
+      const element = probe.querySelector(selector)
+      const style = element ? getComputedStyle(element) : null
+      margins[kind] = { before: parseFloat(style?.marginTop ?? "0") || 0, after: parseFloat(style?.marginBottom ?? "0") || 0 }
+    }
+  }
+  measureMargins()
   const measure = (markdown: string): readonly number[] => {
     const key = `${editor.element.clientWidth}:${markdown}`
     const cached = cache.get(key)
@@ -70,7 +90,7 @@ async function mountSurface(editor: ContinuousDocumentEditor): Promise<Continuou
   const extensions = [createContinuousTables(measure), createContinuousFlow(margins),
     EditorView.contentAttributes.of(view => ({ class: view.state.field(livePreviewField).enabled ? "cm-lineWrapping" : "" })),
     Prec.highest(EditorView.theme({
-      "&.continuous-document": { backgroundColor: "var(--oradia-paper-bright)", color: "var(--oradia-paper-ink)" },
+      "&.continuous-document": { background: "var(--document-page-background)", color: "var(--document-page-ink)" },
       "&.continuous-document .cm-scroller": { fontFamily: "var(--oradia-sans)", fontSize: "var(--document-body-size)",
         lineHeight: "var(--document-body-leading)", overflow: "visible" },
       "&.continuous-document .cm-content": { padding: "0", caretColor: "currentColor" },
@@ -88,21 +108,49 @@ async function mountSurface(editor: ContinuousDocumentEditor): Promise<Continuou
       : { "aria-label": "Markdown source", class: "" })]
   let configured = false
   let disposed = false
+  let measuredWidth = editor.element.clientWidth
+  const resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => {
+    const width = editor.element.clientWidth
+    if (disposed || width === measuredWidth || width <= 0) return
+    measuredWidth = width
+    probe.style.maxWidth = `${width}px`
+    cache.clear()
+    if (configured) editor.view.dispatch({ effects: continuousTableGeometryChanged.of() })
+  })
+  const appearanceChanged = () => {
+    const selectedTheme = form.querySelector<HTMLSelectElement>('[data-appearance-target="theme"]')?.value
+    const selectedTypography = form.querySelector<HTMLSelectElement>('[data-appearance-target="typography"]')?.value
+    const nextTheme = selectedTheme || form.dataset.continuousDefaultTheme || theme
+    const nextTypography = selectedTypography || form.dataset.continuousDefaultTypography || typography
+    if (nextTheme === theme && nextTypography === typography) return
+    theme = nextTheme
+    typography = nextTypography
+    applyStyleClasses()
+    cache.clear()
+    measureMargins()
+    if (configured) editor.view.dispatch({ effects: [continuousFlowGeometryChanged.of(), continuousTableGeometryChanged.of()] })
+  }
   const dispose = () => {
     if (disposed) return
     disposed = true
     if (configured && editor.view.dom.isConnected) editor.view.dispatch({ effects: compartment.reconfigure([]) })
+    resize?.disconnect()
+    form.removeEventListener("change", appearanceChanged)
+    form.removeEventListener("elef:preview-updated", appearanceChanged)
     delete form.dataset.editorSurface
     probe.remove()
-    editor.element.classList.remove(...styleClasses)
+    editor.element.classList.remove(...addedFieldClasses)
+    shell?.classList.remove(...addedShellClasses)
     mounting.delete(editor.view)
     editor.element.dispatchEvent(new CustomEvent("elef:editor-surface-change", { bubbles: true }))
   }
   try {
     editor.view.dispatch({ effects: StateEffect.appendConfig.of(compartment.of(extensions)) })
     configured = true
+    form.addEventListener("change", appearanceChanged)
+    form.addEventListener("elef:preview-updated", appearanceChanged)
+    resize?.observe(editor.element)
     editor.element.dispatchEvent(new CustomEvent("elef:editor-surface-change", { bubbles: true }))
-    await new Promise<void>(resolve => editor.view.requestMeasure({ read: () => null, write: () => resolve() }))
     editor.view.focus()
     return { dispose }
   } catch (error) {
