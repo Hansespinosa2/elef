@@ -52,6 +52,36 @@ test("client presentation controller starts, travels, and stops", () => {
   controller.destroy();
 });
 
+test("client presentation controller lands focus in the stage on start", () => {
+  const { document, scope, stage } = mount(2);
+  const element = stage as unknown as HTMLElement;
+  let focused = false;
+  element.focus = () => {
+    focused = true;
+  };
+  const controller = new PresentationController(scope, { document: document as unknown as Document, stage });
+
+  assert.equal(controller.start(), true);
+  // Bare stage divs are not focusable, so entry pins a programmatic-only
+  // tabindex (unless the host chose its own) and then focuses the stage —
+  // otherwise the first ArrowRight targets whatever held focus (e.g. a
+  // toolbar button, whose keydowns travel deliberately ignores).
+  assert.equal(element.getAttribute("tabindex"), "-1");
+  assert.equal(focused, true);
+  controller.destroy();
+
+  const hosted = mount(1);
+  const hostedStage = hosted.stage as unknown as HTMLElement;
+  hostedStage.setAttribute("tabindex", "0");
+  const hostedController = new PresentationController(hosted.scope, {
+    document: hosted.document as unknown as Document,
+    stage: hosted.stage,
+  });
+  assert.equal(hostedController.start(), true);
+  assert.equal(hostedStage.getAttribute("tabindex"), "0");
+  hostedController.destroy();
+});
+
 test("client presentation controller refuses empty stages", () => {
   const { document, scope, stage } = mount(0);
   const controller = new PresentationController(scope, { document: document as unknown as Document, stage });
