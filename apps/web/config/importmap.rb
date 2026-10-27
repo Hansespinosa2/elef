@@ -41,6 +41,7 @@ pin "@elef/client/sanitize", to: "client/dist/sanitize.js"
 pin "@elef/client/presentation-chrome", to: "client/dist/presentation-chrome.js"
 pin "@elef/client/vim-preferences", to: "client/dist/vim-preferences.js"
 pin "@elef/client/editor", to: "client/dist/editor.js" # CodeMirror editing engine shared by the editor shell
+pin "@elef/client/continuous-editor", to: "client/dist/continuous-editor.js", preload: false # explicit Dev feasibility surface; never replaces the editor before parity passes
 pin "host/rails-http-host", to: "host/rails-http-host.js", preload: false # client-shell pages only; fetch on mount
 pin "host/rails-authoring-settings-transport", to: "host/rails-authoring-settings-transport.js", preload: false # client-shell pages only; fetch on mount
 pin "bug_report_response", to: "bug_report_response.js"

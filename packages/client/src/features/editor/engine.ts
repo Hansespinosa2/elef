@@ -418,7 +418,8 @@ export class EditorEngine {
           }
           this.view.focus()
         } else if (restoreCaret) {
-          this.projectionController()?.restoreCaret?.(sourceOffset, preferredBlockId)
+          if (this.form?.dataset?.editorSurface === "continuous") this.view.focus()
+          else this.projectionController()?.restoreCaret?.(sourceOffset, preferredBlockId)
         }
       })
     }

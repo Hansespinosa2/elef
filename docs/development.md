@@ -82,6 +82,12 @@ Package TypeScript holds the strictest bar: `strict` + `exactOptionalPropertyTyp
 
 ## Web and desktop parity
 
+### Continuous authoring feasibility checks
+
+The continuous authoring candidate is an explicit `@elef/client/continuous-editor` mount on the existing editor engine. It is not the default visual editor and does not change desktop Stable's exclusions. Its browser checks live in `apps/web/test/system/continuous_authoring_test.rb`; they use actual input for Vim, table editing, equation editing, source-mode transitions and save/reopen, and compare typography, soft breaks, spacing and table columns against the read-only document renderer. Native parity, sustained large-document performance and the remaining rich-content coverage must pass before promotion.
+
+Run the focused browser suite from `apps/web` with `PARALLEL_WORKERS=1 bin/rails test test/system/continuous_authoring_test.rb`. As with other Rails browser checks, use isolated test data and the environment described above. The candidate does not use full-document preview refresh or pagination while writing; returning to source mode refreshes that derived view.
+
 The user-flow definitions live once in `apps/web/test/e2e/scenarios/` with the Rails test suite. Playwright and WebdriverIO adapters under `apps/desktop/e2e/` run those flows against Rails and the real Tauri binary. The runners differ because the Tauri driver uses WebDriver, but the scenarios and expected behavior are shared.
 
 The full local parity envelope is `bin/check all`, which runs the e2e harness plus every suite below it. The harness itself (`npm test --prefix apps/desktop/e2e`) seeds disposable Rails test records and a temporary desktop library, then runs web and native desktop scenarios, including offline and update paths; run it directly when iterating on e2e behavior only. Its Rails test server uses port 3000; do not run this harness while the user's development server occupies that port. CI runs the native matrix on Linux and macOS. A unit test, frontend bundle, or browser-only run does not establish native WebKit behavior.

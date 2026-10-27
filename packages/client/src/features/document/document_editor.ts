@@ -1481,6 +1481,7 @@ export class DocumentEditor {
   }
 
   focusNewDocumentTitle(): void {
+    if (this.element.dataset.editorSurface === "continuous") return
     const projection = this.projectionTarget
     if (!this.focusTitle || !projection || this.initialTitleFocusSettled) return
 
