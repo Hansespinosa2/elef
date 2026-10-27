@@ -1,6 +1,7 @@
 /// <reference path="./vendor.d.ts" />
 import { createDocumentState } from "./document_state.js"
-import { Compartment, EditorState } from "@codemirror/state"
+import { Compartment, EditorState, Transaction } from "@codemirror/state"
+import { isolateHistory } from "@codemirror/commands"
 import type { ChangeSet, Extension } from "@codemirror/state"
 import { EditorView, lineNumbers, panels, runScopeHandlers } from "@codemirror/view"
 import type { ViewUpdate } from "@codemirror/view"
@@ -171,6 +172,18 @@ export class EditorEngine {
       markdown({ extensions: elefMetadata }),
       livePreviewField,
       snippetStopsField,
+      EditorState.transactionFilter.of(transaction => {
+        if (!this.vimEnabled || !this.insertMode || !transaction.docChanged ||
+          !(transaction.isUserEvent("input") || transaction.isUserEvent("delete"))) return transaction
+        // Vim owns insert-session boundaries. In particular, `cw`'s
+        // deletion and the subsequent typed replacement form one undo.
+        // CodeMirror's ordinary typing groups split at the intervening
+        // selection update, so explicitly join this insert session.
+        const annotations = [Transaction.userEvent.of(this.vimInsertStartsHistory ? "input.type.compose.start" : "input.type.compose")]
+        if (this.vimInsertStartsHistory) annotations.push(isolateHistory.of("before"))
+        this.vimInsertStartsHistory = false
+        return [{ annotations }, transaction]
+      }),
       theme,
       EditorView.updateListener.of((update: ViewUpdate) => this.handleUpdate(update))
     ]
@@ -923,7 +936,11 @@ export class EditorEngine {
     this.unbindVimEvents()
     this.vim = this.vimEnabled ? getCM(this.view) : null
     if (!this.vim) return
-    this.handleVimModeChange = () => this.updateMode()
+    this.vimInsertStartsHistory = true
+    this.handleVimModeChange = () => {
+      if (this.insertMode) this.vimInsertStartsHistory = !this.vim.curOp?.change
+      this.updateMode()
+    }
     this.handleVimCommandDone = () => this.updateMode()
     this.vim.on("vim-mode-change", this.handleVimModeChange)
     this.vim.on("vim-command-done", this.handleVimCommandDone)

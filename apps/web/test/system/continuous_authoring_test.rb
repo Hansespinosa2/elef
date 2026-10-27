@@ -57,6 +57,31 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_equal 1, page.evaluate_script("document.querySelector('.continuous-document').querySelectorAll('[contenteditable=true]').length")
   end
 
+  test "Vim change and independent insert sessions have the same undo boundaries in both modes" do
+    source = "# History\n\nalpha beta gamma\n"
+    document = Document.create!(title: "History", source: source)
+    %w[source visual].each do |mode|
+      visit edit_document_path(document)
+      page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+      page.refresh
+      assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+      mode == "visual" ? mount_continuous_surface : click_on("Source")
+      find(".source-field .cm-content").click
+      page.driver.browser.action.send_keys("gg2j0cw", "delta", :escape).perform
+      assert_field "Markdown source", with: source.sub("alpha", "delta"), wait: 5
+      page.driver.browser.action.send_keys("u").perform
+      assert_field "Markdown source", with: source
+      page.driver.browser.action.key_down(:control).send_keys("r").key_up(:control).perform
+      assert_field "Markdown source", with: source.sub("alpha", "delta")
+      page.driver.browser.action.send_keys("A", " one", :escape, "A", " two", :escape, "u").perform
+      assert_field "Markdown source", with: source.sub("alpha beta gamma", "delta beta gamma one")
+      page.driver.browser.action.send_keys("u").perform
+      assert_field "Markdown source", with: source.sub("alpha", "delta")
+      page.driver.browser.action.send_keys("u").perform
+      assert_field "Markdown source", with: source
+    end
+  end
+
   test "continuous table columns preserve the renderer layout instead of equalizing widths" do
     source = "# Table layout\n\n| Parameter | Value |\n| --- | ---: |\n| A much longer parameter description that should receive more width | 2 |\n"
     document = Document.create!(title: "Table layout", source: source)
