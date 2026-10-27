@@ -62,38 +62,38 @@ li.editor-reveal-marker { list-style: none; }
 .editor-title-input { background: transparent; border: 0; border-bottom: 1px solid var(--oradia-slate-700); border-radius: 0; box-shadow: none; color: var(--oradia-ink); font-family: var(--oradia-serif); font-size: clamp(1.65rem, 4vw, 2.7rem); font-weight: 700; line-height: 1.1; outline: none; padding: 0.1rem 0 0.45rem; width: 100%; }
 .editor-title-input:focus { border-bottom-color: var(--oradia-green); box-shadow: 0 2px 0 var(--oradia-green); }
 .editor-kind-badge { border: 1px solid var(--oradia-slate-700); border-radius: 999px; color: var(--oradia-green); flex: 0 0 auto; font-size: 0.72rem; font-weight: 800; padding: 0.35rem 0.65rem; text-transform: uppercase; }
-.visual-editor-form[data-editor-mode="visual"] .source-field.is-source-hidden .editor-surface,
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { display: none; }
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { display: block; height: min(12rem, 30vh); min-height: 8rem; opacity: 1; }
-.visual-editor-form[data-editor-mode="visual"] .source-field.is-source-hidden .editor-surface { display: block; }
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { clip-path: inset(0); height: var(--editor-surface-height, 3.4rem); left: 0; min-height: 0; pointer-events: auto; position: absolute; right: 0; top: var(--editor-toolbar-height, 2.4rem); z-index: 6; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field.is-source-hidden .editor-surface,
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface { display: none; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface { display: block; height: min(12rem, 30vh); min-height: 8rem; opacity: 1; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field.is-source-hidden .editor-surface { display: block; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface { clip-path: inset(0); height: var(--editor-surface-height, 3.4rem); left: 0; min-height: 0; pointer-events: auto; position: absolute; right: 0; top: var(--editor-toolbar-height, 2.4rem); z-index: 6; }
 .visual-editor-form[data-editor-mode="visual"] .media-editor-controls { pointer-events: none; position: relative; z-index: 7; }
 .visual-editor-form[data-editor-mode="visual"] .media-editor-controls > * { pointer-events: auto; }
 /* Overrides CodeMirror's injected minimum heights in the hidden visual-mode source editor. */
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor,
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller,
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-content { min-height: 0 !important; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-editor,
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-scroller,
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-content { min-height: 0 !important; }
 /* Defeats CodeMirror's injected backgrounds for the visually hidden source editor. */
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor,
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller,
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-content,
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-line { background: transparent !important; }
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-editor { border-color: transparent; box-shadow: none; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-editor,
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-scroller,
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-content,
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-line { background: transparent !important; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-editor { border-color: transparent; box-shadow: none; }
 /* Overrides CodeMirror's injected text and caret colors hidden behind visual-mode widgets. */
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-content { color: transparent !important; caret-color: transparent !important; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-content { color: transparent !important; caret-color: transparent !important; }
 /* Defeats CodeMirror syntax colors on text hidden by visual-mode widgets. */
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-line span { color: transparent !important; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-line span { color: transparent !important; }
 /* Defeats CodeMirror token styling on the syntax text left visible in visual mode. */
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-line .cm-live-active-syntax { color: var(--oradia-ink) !important; font-size: inherit !important; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-line .cm-live-active-syntax { color: var(--oradia-ink) !important; font-size: inherit !important; }
 /* Overrides CodeMirror's injected gutter colors and opacity in the hidden visual-mode editor. */
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-gutters { color: transparent !important; opacity: 0 !important; }
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller { scrollbar-width: none; }
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-scroller::-webkit-scrollbar { display: none; }
-.visual-editor-form[data-editor-mode="visual"][data-editor-vim-enabled="true"] .source-field .editor-surface { display: block; margin-top: 0.75rem; }
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-cursorLayer { display: none; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-gutters { color: transparent !important; opacity: 0 !important; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-scroller { scrollbar-width: none; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-scroller::-webkit-scrollbar { display: none; }
+.visual-editor-form[data-editor-mode="visual"][data-editor-vim-enabled="true"]:not([data-editor-surface="continuous"]) .source-field .editor-surface { display: block; margin-top: 0.75rem; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-cursorLayer { display: none; }
 /* Vim visual ranges paint on the rendered text via the bridge; the hidden
    engine surface must not paint a second highlight in the source strip. */
-.visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface .cm-selectionLayer { display: none; }
+.visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface .cm-selectionLayer { display: none; }
 /* Vim normal-mode block indicator over the passage character under the
    caret. Out-of-flow and pointer-transparent: never shifts content. */
 .elef-vim-normal-caret { background-color: var(--oradia-vim-normal); border-radius: 2px; display: none; opacity: 0.55; pointer-events: none; position: fixed; z-index: 20; }
@@ -182,7 +182,7 @@ li.editor-reveal-marker { list-style: none; }
 .editor-projection[hidden], .source-field[hidden] { display: none; }
 .source-field { padding-bottom: 0.75rem; }
 @media (max-width: 540px) {
-  .visual-editor-form[data-editor-mode="visual"] .source-field .editor-surface { clip-path: inset(0); }
+  .visual-editor-form[data-editor-mode="visual"]:not([data-editor-surface="continuous"]) .source-field .editor-surface { clip-path: inset(0); }
 }
 .field-hint { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.45; margin: 0.5rem 0 0; }
 .editor-settings { position: relative; }
@@ -389,3 +389,57 @@ li.editor-reveal-marker { list-style: none; }
 .visual-engine-panels .cm-panel { padding: 0.65rem; }
 .visual-engine-panels input { background: var(--oradia-slate-800); border: 1px solid var(--oradia-line); border-radius: 0.3rem; color: inherit; padding: 0.25rem 0.4rem; }
 .visual-engine-panels button { color: inherit; margin-inline: 0.2rem; }
+
+/* Continuous authoring uses the engine's actual content surface. No hidden
+   source strip, per-block focus, or projection selection overlays. */
+.visual-editor-form[data-editor-surface="continuous"][data-editor-mode="visual"] .editor-projection { display: none; }
+.visual-editor-form[data-editor-surface="continuous"][data-editor-mode="visual"] .editor-surface {
+  height: auto; max-height: none; min-height: 70vh; overflow: visible; resize: none;
+}
+.visual-editor-form[data-editor-surface="continuous"][data-editor-mode="visual"] .continuous-document {
+  background: var(--document-page-background); border: 0; border-radius: 0; box-shadow: none;
+  color: var(--document-page-ink); margin: 0 auto; max-width: 100%; min-height: 70vh; width: var(--document-content-width);
+}
+.visual-editor-form[data-editor-surface="continuous"][data-editor-mode="visual"] .cm-scroller {
+  color: inherit; font-family: var(--oradia-sans); font-size: var(--document-body-size); line-height: var(--document-body-leading); overflow: visible;
+}
+.visual-editor-form[data-editor-surface="continuous"][data-editor-mode="visual"] .cm-content { caret-color: currentColor; padding: 0; }
+.visual-editor-form[data-editor-surface="continuous"][data-editor-mode="visual"] .cm-line { padding: 0; }
+.visual-editor-form[data-editor-surface="continuous"][data-editor-mode="visual"] :is(.cm-activeLine, .cm-activeLineGutter) { background: transparent; }
+.visual-editor-form[data-editor-surface="continuous"][data-editor-mode="visual"] .cm-gutters { display: none; }
+.continuous-document .cm-live-strong { font-weight: 700; }
+.continuous-document .cm-live-emphasis { font-style: italic; }
+.continuous-document .cm-live-code { font-family: var(--oradia-mono); }
+.continuous-document .cm-live-link { color: var(--oradia-green-deep); text-decoration: underline; }
+.continuous-document .cm-continuous-table-row { border-bottom: 1px solid var(--presentation-line); border-right: 1px solid var(--presentation-line); white-space: nowrap; }
+.continuous-document .cm-continuous-table-header { border-top: 1px solid var(--presentation-line); font-weight: 700; }
+.continuous-document .cm-continuous-table-syntax { font-size: 0; letter-spacing: 0; }
+.continuous-document .cm-continuous-cell {
+  border-left: 1px solid var(--presentation-line); box-sizing: border-box;
+  display: inline-block; flex-shrink: 0; overflow-wrap: anywhere; padding: 0.35rem 0.5rem;
+  vertical-align: top; white-space: pre-wrap;
+}
+.continuous-document .cm-continuous-table-delimiter { font-size: 0; height: 0; line-height: 0; min-height: 0; }
+
+.continuous-table-measure { left: -20000px; pointer-events: none; position: fixed; top: 0; visibility: hidden; width: var(--document-content-width); }
+
+/* Document focus keeps commands one keystroke away while the editor uses
+   the same paper width and type as the reader. Save errors remain visible. */
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .editor-shell {
+  background: var(--document-page-background); border: 0; border-radius: 0; box-shadow: none; padding: 1rem 0;
+}
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .source-pane {
+  background: transparent; border: 0; box-shadow: none;
+}
+#work-shell:has(form[data-editor-focus="continuous"][data-editor-mode="visual"]:not([data-editor-controls="open"])) > .page-title { display: none; }
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .editor-shell-header,
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"]:not([data-editor-controls="open"]) .editor-toolbar,
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"]:not([data-editor-controls="open"]) .media-editor-controls,
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .editor-mode-hint,
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .editor-actions > .button,
+.visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .dirty-state[data-autosave-state=""] { display: none; }
+.continuous-command-hint {
+  background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 999px;
+  bottom: 1rem; color: var(--oradia-ink); cursor: pointer; font: inherit; font-size: 0.75rem;
+  padding: 0.4rem 0.65rem; position: fixed; right: 1rem; z-index: 15;
+}

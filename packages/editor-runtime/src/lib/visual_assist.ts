@@ -20,6 +20,20 @@ export interface VisualAssistHost {
 // presentation editor exposes its instance directly; both surfaces carry
 // the assist pipeline methods.
 export function projectionHostFor(element: Element): VisualAssistHost | null {
+  const editorForm = element.closest("form")
+  if (editorForm?.dataset?.editorSurface === "continuous") {
+    // Assists already commit through the engine. The continuous surface
+    // renders that state directly, so follow-up must never patch or focus
+    // the dormant block projection.
+    const editor = editorForm.querySelector(".source-field")?.editorController
+    if (!editor) return null
+    const restoreCaret = (offset: number) => {
+      if (editor.selectionStart !== offset) editor.setSelectionRange(offset)
+      editor.focus()
+      return true
+    }
+    return { restoreCaret, applyVisualAssistInsert: edit => restoreCaret(edit.caret) }
+  }
   const form = element.closest("form") as unknown as {
     presentationEditorController?: VisualAssistHost;
     visualEditorController?: VisualAssistHost;

@@ -35,16 +35,16 @@
 .slides-typography-technical .slide p,
 .slides-typography-technical .slide li { font-size: 0.96em; }
 
-.document-surface h1,
-.document-surface h2,
-.document-surface h3,
-.document-surface h4,
-.document-surface h5,
-.document-surface h6 { font-family: var(--oradia-serif); letter-spacing: -0.025em; }
+.document-surface :is(h1, .cm-live-heading-1),
+.document-surface :is(h2, .cm-live-heading-2),
+.document-surface :is(h3, .cm-live-heading-3),
+.document-surface :is(h4, .cm-live-heading-4),
+.document-surface :is(h5, .cm-live-heading-5),
+.document-surface :is(h6, .cm-live-heading-6) { font-family: var(--oradia-serif); letter-spacing: -0.025em; }
 
-.document-reader.document-typography-book .document-surface :is(h1, h2, h3, h4, h5, h6) { font-family: var(--oradia-serif); }
-.document-reader.document-typography-modern .document-surface :is(h1, h2, h3, h4, h5, h6) { font-family: Baskerville, "Iowan Old Style", Georgia, serif; font-weight: 600; }
-.document-reader.document-typography-technical .document-surface :is(h1, h2, h3, h4, h5, h6) { font-family: var(--oradia-sans); font-weight: 750; letter-spacing: -0.04em; }
+.document-reader.document-typography-book .document-surface :is(h1, h2, h3, h4, h5, h6, .cm-live-heading) { font-family: var(--oradia-serif); }
+.document-reader.document-typography-modern .document-surface :is(h1, h2, h3, h4, h5, h6, .cm-live-heading) { font-family: Baskerville, "Iowan Old Style", Georgia, serif; font-weight: 600; }
+.document-reader.document-typography-technical .document-surface :is(h1, h2, h3, h4, h5, h6, .cm-live-heading) { font-family: var(--oradia-sans); font-weight: 750; letter-spacing: -0.04em; }
 
 /* Canonical presentation-theme headings. The doubled class outranks the
    legacy .slides-typography-* rules so the derived theme always wins on

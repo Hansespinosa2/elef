@@ -37,6 +37,7 @@ export {
 } from "./features/shortcuts/keyboard_reference.js";
 export type { KeyboardReferenceBlockKeys, KeyboardReferenceTrigger } from "./features/shortcuts/keyboard_reference.js";
 export { mountElef } from "./application/shell.js";
+export { mountCommandPalette } from "./application/command_palette_mount.js";
 export { mountNewWorkMenu } from "./application/new_work_menu_mount.js";
 export type { NewWorkMenuHandle } from "./application/new_work_menu_mount.js";
 export { isSettingsRoute, isWorkRoute, parseLibraryRoute, parseSettingsRoute, parseWorkRoute } from "./application/router.js";
@@ -120,3 +121,5 @@ export type {
   UpdaterStatus,
 } from "./application/types.js";
 export type { ElefHost } from "@elef/contracts";
+export { mountAppNavigation } from "./application/app_navigation.js";
+export type { AppNavigationOptions } from "./application/app_navigation.js";

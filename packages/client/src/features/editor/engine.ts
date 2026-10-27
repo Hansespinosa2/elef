@@ -1,6 +1,7 @@
 /// <reference path="./vendor.d.ts" />
 import { createDocumentState } from "./document_state.js"
-import { Compartment, EditorState } from "@codemirror/state"
+import { Compartment, EditorState, Transaction } from "@codemirror/state"
+import { isolateHistory } from "@codemirror/commands"
 import type { ChangeSet, Extension } from "@codemirror/state"
 import { EditorView, lineNumbers, panels, runScopeHandlers } from "@codemirror/view"
 import type { ViewUpdate } from "@codemirror/view"
@@ -171,6 +172,18 @@ export class EditorEngine {
       markdown({ extensions: elefMetadata }),
       livePreviewField,
       snippetStopsField,
+      EditorState.transactionFilter.of(transaction => {
+        if (!this.vimEnabled || !this.insertMode || !transaction.docChanged ||
+          !(transaction.isUserEvent("input") || transaction.isUserEvent("delete"))) return transaction
+        // Vim owns insert-session boundaries. In particular, `cw`'s
+        // deletion and the subsequent typed replacement form one undo.
+        // CodeMirror's ordinary typing groups split at the intervening
+        // selection update, so explicitly join this insert session.
+        const annotations = [Transaction.userEvent.of(this.vimInsertStartsHistory ? "input.type.compose.start" : "input.type.compose")]
+        if (this.vimInsertStartsHistory) annotations.push(isolateHistory.of("before"))
+        this.vimInsertStartsHistory = false
+        return [{ annotations }, transaction]
+      }),
       theme,
       EditorView.updateListener.of((update: ViewUpdate) => this.handleUpdate(update))
     ]
@@ -418,7 +431,8 @@ export class EditorEngine {
           }
           this.view.focus()
         } else if (restoreCaret) {
-          this.projectionController()?.restoreCaret?.(sourceOffset, preferredBlockId)
+          if (this.form?.dataset?.editorSurface === "continuous") this.view.focus()
+          else this.projectionController()?.restoreCaret?.(sourceOffset, preferredBlockId)
         }
       })
     }
@@ -875,6 +889,10 @@ export class EditorEngine {
 
   focusFromSurface(event: MouseEvent): void {
     if (event.target instanceof Element && event.target.closest("button, input, select, summary, .snippet-palette")) return
+    // CodeMirror owns pointer placement within its own DOM. Refocusing it
+    // on the later click can restore the previous selection before WebKit
+    // has synchronized the new native caret.
+    if (event.target instanceof Node && this.view.dom.contains(event.target)) return
     this.focus()
   }
 
@@ -922,7 +940,11 @@ export class EditorEngine {
     this.unbindVimEvents()
     this.vim = this.vimEnabled ? getCM(this.view) : null
     if (!this.vim) return
-    this.handleVimModeChange = () => this.updateMode()
+    this.vimInsertStartsHistory = true
+    this.handleVimModeChange = () => {
+      if (this.insertMode) this.vimInsertStartsHistory = !this.vim.curOp?.change
+      this.updateMode()
+    }
     this.handleVimCommandDone = () => this.updateMode()
     this.vim.on("vim-mode-change", this.handleVimModeChange)
     this.vim.on("vim-command-done", this.handleVimCommandDone)
@@ -1050,11 +1072,15 @@ export class EditorEngine {
   }
 
   scheduleLineNumberUpdate(): void {
-    if (this.destroyed || this.lineNumberMode === "off" || this.lineNumberFrame) return
+    const hiddenByContinuousView = () => this.form?.dataset?.editorSurface === "continuous" && this.editingMode === "visual"
+    // The document surface has no visible gutters. Measuring every hidden
+    // line-number element after each edit forces a full-page layout in long
+    // documents; source mode continues to update its visible gutter.
+    if (this.destroyed || this.lineNumberMode === "off" || this.lineNumberFrame || hiddenByContinuousView()) return
 
     this.lineNumberFrame = requestAnimationFrame(() => {
       this.lineNumberFrame = null
-      if (this.destroyed || this.lineNumberMode === "off") return
+      if (this.destroyed || this.lineNumberMode === "off" || hiddenByContinuousView()) return
 
       const gutter = this.view.dom.querySelector(".cm-lineNumbers")
       if (!gutter) return

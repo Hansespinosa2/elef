@@ -11,7 +11,7 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client"
+import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountAppNavigation, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client"
 import type { ExportMenuHandle, ExportMenuProps, GraphController, LibraryPaletteCommand } from "@elef/client"
 
 interface OpenedEditor {
@@ -94,6 +94,7 @@ export interface DesktopPlatform {
   featureFlags?: any;
   documentGraphRuntime?: any;
   presentationEditorRuntime?: any;
+  continuousEditorRuntime?: { mount(editor: unknown): Promise<{ dispose(): void }> } | null;
   updateEnabled?: any;
 }
 
@@ -111,13 +112,16 @@ function shellElement<T extends Element>(selector: string): T {
 }
 
 export function startFileLibraryApplication(platform: DesktopPlatform): void {
+  mountAppNavigation(shellElement<HTMLElement>("[data-app-navigation]"), {
+    libraryHref: "#library", settingsHref: "#settings", active: "library",
+  })
   const {
     fileLibrary, createLibraryHost, listen, getCurrentWindow,
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
     mediaUrlsForWorkFolder, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
     registerEditorRuntime, recordBootstrapFailure,
-    features, featureFlags, documentGraphRuntime, presentationEditorRuntime,
+    features, featureFlags, documentGraphRuntime, presentationEditorRuntime, continuousEditorRuntime,
     updateEnabled = true, updateRuntime = null
   } = platform
 
@@ -135,6 +139,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     "media"
   ].join(" ")
   applyDesktopFeatureFlags(document, featureFlags)
+  let continuousAuthoring: { dispose(): void } | null = null
   if (!updateEnabled) document.querySelector("#check-for-updates")?.remove()
 
   const renderer = createRendererClient()
@@ -453,6 +458,17 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     let typingSave: { expected: string; saving: Promise<boolean> } | null = null
     Object.defineProperty(window, "__elefPerformanceTestHooks", {
       value: Object.freeze({
+        async enableContinuousAuthoring() {
+          if (!desktopFeatures.visualEditing || !continuousEditorRuntime) throw new Error("Continuous authoring is unavailable in this desktop profile")
+          const editor = await waitForEditorController(elements.editorField, editorFor)
+          continuousAuthoring ??= await continuousEditorRuntime.mount(editor)
+          return true
+        },
+        disableContinuousAuthoring() {
+          continuousAuthoring?.dispose()
+          continuousAuthoring = null
+          return true
+        },
         get interactiveAt() { return interactiveAt },
         get nativeReadyAt() { return nativeReadyAt },
         get previousInstallationsRemoved() { return previousInstallationsRemoved },
@@ -814,6 +830,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // All asynchronous work is finished. Installing the buffer and changing
       // save ownership occur in one synchronous turn, with no stale A buffer
       // able to schedule a write for B during graph/controller preparation.
+      continuousAuthoring?.dispose()
+      continuousAuthoring = null
       closeSession()
       activeWorkFolder = null
       try {
@@ -864,6 +882,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       elements.editorForm.dataset.mediaWorkKindValue = work.source_file === "document.md" ? "document" : "presentation"
       elements.editorForm.dataset.mediaUploadUrlValue = mediaUrls.uploadUrl
       elements.editorForm.dataset.mediaAssetBaseUrlValue = mediaUrls.assetBaseUrl
+      elements.editorForm.dataset.continuousDefaultTheme = libraryConfig.theme
+      elements.editorForm.dataset.continuousDefaultTypography = libraryConfig.typography
       if (desktopFeatures.documentLinks) elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
       const visualButton = document.querySelector("#visual-mode") as HTMLButtonElement | null
       if (visualButton && desktopFeatures.visualEditing) {
@@ -1011,6 +1031,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     const result = await saveFlow.flush(options)
     return result.kind === "clean" || result.kind === "saved"
   }
+
+  elements.editorForm.addEventListener("elef:save-request", (event: Event) => {
+    event.preventDefault()
+    void flushSave({ force: true })
+  })
 
   async function flushForClose(): Promise<string> {
     hasUnsavedChanges()
@@ -1406,7 +1431,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     event.preventDefault()
     shellElement<HTMLElement>("#back-to-library").click()
   })
-  shellElement<HTMLElement>("#open-settings").addEventListener("click", () => void showSettings())
+  shellElement<HTMLElement>("#open-settings").addEventListener("click", event => {
+    event.preventDefault()
+    void showSettings()
+  })
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
   // The work-view Export menu is the shared client component: one trigger
@@ -1415,7 +1443,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   // native print pipeline (the same File → Print… command) and the PPTX
   // option the native save seam.
   exportMenu = mountExportMenu(shellElement<HTMLElement>("#export-menu-mount"), exportMenuProps())
-  shellElement<HTMLElement>("#back-to-library").addEventListener("click", () => {
+  shellElement<HTMLElement>("#back-to-library").addEventListener("click", event => {
+    event.preventDefault()
     if (hasUnsavedChanges()) {
       void flushSave().then(saved => {
         if (!saved) return

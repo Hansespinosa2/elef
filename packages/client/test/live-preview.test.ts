@@ -5,6 +5,71 @@ import { markdown } from "@codemirror/lang-markdown";
 import { livePreviewField, livePreviewMode } from "../src/features/editor/live_preview.js";
 import { elefMetadata } from "../src/features/editor/engine.js";
 
+test("caret movement reuses the compiled source plan and untouched equation widgets", () => {
+  const doc = "Plain prose here.\n\n**bold** then $x^2$ and $y^2$.\n"
+  const initial = previewState(doc, EditorSelection.cursor(1))
+  const sameContext = initial.update({ selection: EditorSelection.cursor(5) }).state
+  assert.equal(sameContext.field(livePreviewField), initial.field(livePreviewField))
+  const distantWidgets: unknown[] = []
+  initial.field(livePreviewField).decorations.between(doc.indexOf("$y"), doc.length, (_from, _to, value) => {
+    if (value.spec.widget) distantWidgets.push(value.spec.widget)
+  })
+  const revealed = sameContext.update({ selection: EditorSelection.cursor(doc.indexOf("bold") + 1) }).state
+  assert.equal(revealed.field(livePreviewField).dynamic, initial.field(livePreviewField).dynamic)
+  const afterWidgets: unknown[] = []
+  revealed.field(livePreviewField).decorations.between(doc.indexOf("$y"), doc.length, (_from, _to, value) => {
+    if (value.spec.widget) afterWidgets.push(value.spec.widget)
+  })
+  assert.deepEqual(afterWidgets, distantWidgets)
+  assert.equal(afterWidgets[0], distantWidgets[0])
+})
+
+test("incremental reveals match fresh projection after forward, backward, and ranged navigation", () => {
+  const doc = "# Heading\n\nA **bold** and *soft* [link](https://example.com) with $x^2$.\n\n> quote\n\n:::align{right}\n\n```mermaid\ngraph TD\nA-->B\n```\n"
+  let state = previewState(doc)
+  const positions = [0, doc.indexOf("bold"), doc.indexOf("$x") + 2, doc.indexOf("quote"),
+    doc.indexOf(":::"), doc.indexOf("A-->"), doc.length, 2, doc.indexOf("link")]
+  for (const position of positions) {
+    for (const selection of [EditorSelection.cursor(position), EditorSelection.range(position, Math.min(doc.length, position + 4))]) {
+      state = state.update({ selection }).state
+      assert.equal(state.field(livePreviewField).error, null)
+      assert.deepEqual(decorationsOf(state), decorationsOf(previewState(doc, selection)), `position ${position}`)
+    }
+  }
+})
+
+test("plain edits preserve the same preview as a fresh parse across selection and offset changes", () => {
+  const source = "First paragraph.\n\n# Title\n\n**bold** and $x^2$.\n\nLast paragraph.\n"
+  let state = previewState(source, EditorSelection.cursor(source.indexOf("bold")))
+  const beforeWidget = state.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$x"))?.inactive.find(range => range.value.spec.widget)?.value.spec.widget
+  const edits = [
+    { from: 5, insert: " longer", select: 3 },
+    { from: -1, insert: " Text", select: -1 },
+    { from: 0, insert: "# ", select: 1 },
+  ]
+  for (const edit of edits) {
+    const from = edit.from < 0 ? state.doc.length - 1 : edit.from
+    const selection = edit.select < 0 ? from + edit.insert.length : edit.select
+    state = state.update({ changes: { from, insert: edit.insert }, selection: EditorSelection.cursor(selection) }).state
+    assert.equal(state.field(livePreviewField).error, null)
+    assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)), `edit at ${from}`)
+  }
+  const math = state.doc.toString().indexOf("$x")
+  const afterWidget = state.field(livePreviewField).dynamic.find(range => range.from === math)?.inactive.find(range => range.value.spec.widget)?.value.spec.widget
+  // The final structural edit rebuilds; the first plain edit must retain it.
+  assert.ok(beforeWidget && afterWidget)
+})
+
+test("ordinary typing away from math reuses its existing equation widget", () => {
+  const source = "Write here.\n\nEquation $x^2$.\n"
+  const state = previewState(source, EditorSelection.cursor(4))
+  const oldContext = state.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$x"))!
+  const changed = state.update({ changes: { from: 5, insert: " more" }, selection: EditorSelection.cursor(10) }).state
+  const newContext = changed.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$x") + 5)!
+  assert.equal(newContext.inactive.find(range => range.value.spec.widget)?.value, oldContext.inactive.find(range => range.value.spec.widget)?.value)
+  assert.deepEqual(decorationsOf(changed), decorationsOf(previewState(changed.doc.toString(), changed.selection.main)))
+})
+
 interface FoundDecoration {
   from: number;
   to: number;

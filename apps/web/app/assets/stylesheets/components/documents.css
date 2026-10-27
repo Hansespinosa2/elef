@@ -1,3 +1,4 @@
+:root { --document-page-width: 210mm; --document-page-inset: 16mm; --document-content-width: calc(var(--document-page-width) - 2 * var(--document-page-inset) - 2px); --document-body-size: 18px; --document-body-leading: 1.6; }
 .document-reader { width: 100%; }
 .document-surface { color: var(--oradia-paper-ink); font-family: var(--oradia-sans); }
 /* MathML elements carry no KaTeX classes, so without this they inherit the
@@ -9,12 +10,12 @@ math, mi, mo, mn, mtext {
   font-family: KaTeX_Main, KaTeX_AMS, KaTeX_Caligraphic, KaTeX_Script, KaTeX_Fraktur, KaTeX_SansSerif, KaTeX_Typewriter, KaTeX_Size1, "Times New Roman", serif;
 }
 .document-surface.is-paginated { background: transparent; border: 0; box-shadow: none; display: grid; gap: 24px; padding: 0; }
-.document-surface h1, .document-surface h2, .document-surface h3, .document-surface h4, .document-surface h5, .document-surface h6 { color: var(--document-heading-ink); margin-top: 0; }
-.document-surface h1 { font-size: 48px; line-height: 1.05; margin-bottom: 24px; }
-.document-surface h2 { font-size: 32px; line-height: 1.15; margin-bottom: 16px; margin-top: 40px; }
-.document-surface h3 { font-size: 25px; line-height: 1.2; margin-bottom: 12px; margin-top: 30px; }
-.document-surface h4, .document-surface h5, .document-surface h6 { font-size: 20px; line-height: 1.25; margin-bottom: 10px; margin-top: 24px; }
-.document-surface p, .document-surface li, .document-surface blockquote, .document-surface td, .document-surface th { font-size: 18px; line-height: 1.6; }
+.document-surface :is(h1, .cm-live-heading-1), .document-surface :is(h2, .cm-live-heading-2), .document-surface :is(h3, .cm-live-heading-3), .document-surface :is(h4, .cm-live-heading-4), .document-surface :is(h5, .cm-live-heading-5), .document-surface :is(h6, .cm-live-heading-6) { color: var(--document-heading-ink); margin-top: 0; }
+.document-surface :is(h1, .cm-live-heading-1) { font-size: 48px; line-height: 1.05; margin-bottom: 24px; }
+.document-surface :is(h2, .cm-live-heading-2) { font-size: 32px; line-height: 1.15; margin-bottom: 16px; margin-top: 40px; }
+.document-surface :is(h3, .cm-live-heading-3) { font-size: 25px; line-height: 1.2; margin-bottom: 12px; margin-top: 30px; }
+.document-surface :is(h4, .cm-live-heading-4), .document-surface :is(h5, .cm-live-heading-5), .document-surface :is(h6, .cm-live-heading-6) { font-size: 20px; line-height: 1.25; margin-bottom: 10px; margin-top: 24px; }
+.document-surface p, .document-surface li, .document-surface blockquote, .document-surface td, .document-surface th { font-size: var(--document-body-size); line-height: var(--document-body-leading); }
 .document-surface p { margin-bottom: 18px; }
 .document-surface > :first-child, .document-page-content > :first-child { margin-top: 0; }
 .document-surface > :last-child, .document-page-content > :last-child { margin-bottom: 0; }
@@ -116,10 +117,10 @@ math, mi, mo, mn, mtext {
   margin: 0;
   max-width: none;
   overflow: hidden;
-  padding: 16mm;
+  padding: var(--document-page-inset);
   transform: scale(var(--document-page-scale, 1));
   transform-origin: top left;
-  width: 210mm;
+  width: var(--document-page-width);
   color: var(--document-page-ink);
 }
 .document-page-content { box-sizing: border-box; flex: 1 1 auto; min-height: 0; overflow: hidden; width: 100%; }
@@ -142,7 +143,7 @@ math, mi, mo, mn, mtext {
     max-width: none;
     overflow: hidden;
     page-break-after: always;
-    width: 210mm;
+    width: var(--document-page-width);
   }
   .document-print-pages .document-page-frame:last-child { break-after: auto; page-break-after: auto; }
   .document-print .document-page {
@@ -150,10 +151,10 @@ math, mi, mo, mn, mtext {
     border-radius: 0;
     box-shadow: none;
     height: 297mm;
-    padding: 16mm;
+    padding: var(--document-page-inset);
     position: static;
     transform: none;
-    width: 210mm;
+    width: var(--document-page-width);
   }
   .document-print .document-page-content { overflow: visible; }
   .document-reader { container-type: normal; }

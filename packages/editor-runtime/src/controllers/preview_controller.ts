@@ -28,6 +28,11 @@ export default class extends Controller<HTMLElement> {
     this.active = true
     this.pendingProjection = null
     this.projectionFresh = true
+    if (this.element.dataset?.editorSurface === "continuous-pending") {
+      this.projectionFresh = false
+      this.deferredForContinuous = true
+      this.element.dataset.previewProjectionStale = "true"
+    }
     this.serverWarnings = [...this.warningsTarget.querySelectorAll("li")].map((item: any) => item.textContent)
     this.localWarnings = []
     this.artWarnings = new Map()
@@ -65,6 +70,21 @@ export default class extends Controller<HTMLElement> {
     this.element.addEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
     this.element.addEventListener("elef:art-diagnostic", this.artDiagnostic)
+    this.continuousModeChanged = () => {
+      if (this.continuousEditing()) {
+        // A source-mode change may already have queued a full preview.
+        // Entering the continuous surface cancels that pending work before
+        // it can compete with the active authoring session.
+        if (this.timer || this.requestController || this.pendingProjection) this.schedule()
+        return
+      }
+      if (this.deferredForContinuous) {
+        this.deferredForContinuous = false
+        this.refreshNow()
+      }
+    }
+    this.element.addEventListener("elef:editor-mode-change", this.continuousModeChanged)
+    this.element.addEventListener("elef:editor-surface-change", this.continuousModeChanged)
   }
 
   // Slide frames carry no Stimulus hooks since the presentation canvas
@@ -90,6 +110,8 @@ export default class extends Controller<HTMLElement> {
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
     this.element.removeEventListener("elef:art-diagnostic", this.artDiagnostic)
+    this.element.removeEventListener("elef:editor-mode-change", this.continuousModeChanged)
+    this.element.removeEventListener("elef:editor-surface-change", this.continuousModeChanged)
     this.artWarningObserver?.disconnect()
     if (this.element.previewController === this) delete this.element.previewController
   }
@@ -99,6 +121,13 @@ export default class extends Controller<HTMLElement> {
     this.timer = null
     this.pendingProjection = null
     const revision = ++this.requestId
+    if (this.continuousEditing()) {
+      this.abortActiveRequest()
+      this.projectionFresh = false
+      this.element.dataset.previewProjectionStale = "true"
+      this.deferredForContinuous = true
+      return
+    }
     this.markProjectionStale(this.isEditingProjection())
     this.hideRetry()
     this.setStatus("Updating preview…")
@@ -188,6 +217,10 @@ export default class extends Controller<HTMLElement> {
         return
       }
 
+      if (this.continuousEditing()) {
+        this.deferredForContinuous = true
+        return false
+      }
       if (this.isEditingProjection()) {
         this.pendingProjection = { payload, response, source: requestedSource }
         this.hideRetry()
@@ -258,6 +291,10 @@ export default class extends Controller<HTMLElement> {
   isEditingProjection() {
     const activeEditable = document.activeElement?.closest?.("[contenteditable='true']")
     return Boolean(activeEditable && this.containerTarget.contains(activeEditable))
+  }
+
+  continuousEditing(): boolean {
+    return ["continuous", "continuous-pending"].includes(this.element.dataset?.editorSurface ?? "") && this.element.dataset?.editorMode === "visual"
   }
 
   finishEditing() {

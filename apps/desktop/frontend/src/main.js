@@ -11,7 +11,7 @@ import { createPreviewFetch } from "./preview-transport.js"
 import { createIdleUpdateCheck } from "./update-flow.js"
 import { createFileLibraryTransport } from "#desktop/file-library-transport"
 import { createDesktopUpdateRuntime } from "#desktop/update-runtime"
-import { presentationEditorRuntime, registerEditorRuntime } from "#desktop/editor-runtime"
+import { continuousEditorRuntime, presentationEditorRuntime, registerEditorRuntime } from "#desktop/editor-runtime"
 import { documentGraphRuntime } from "#desktop/document-graph-runtime"
 import { desktopFeatureFlags, desktopFeatures, desktopProfile } from "./desktop-profile.js"
 import { createTauriHost } from "./tauri-host.js"
@@ -35,6 +35,7 @@ startFileLibraryApplication({
   featureFlags: desktopFeatureFlags,
   documentGraphRuntime,
   presentationEditorRuntime,
+  continuousEditorRuntime,
   updateRuntime,
   updateEnabled: updateRuntime.enabled,
   createLibraryHost: (initialStatus) => createTauriHost({ invoke, initialStatus, updaterEnabled: updateRuntime.enabled }),

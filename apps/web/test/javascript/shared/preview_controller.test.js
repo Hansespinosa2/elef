@@ -27,6 +27,28 @@ const source = (await loadPackageSource("packages/editor-runtime/src/controllers
   .replace('import { markStage } from "../lib/stage_marks.js"', "")
 const preview = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
 
+test("continuous authoring defers full-document preview work until leaving the writing surface", () => {
+  const controller = new preview.default()
+  const request = new AbortController()
+  Object.assign(controller, {
+    element: { dataset: { editorSurface: "continuous", editorMode: "visual" } },
+    requestController: request,
+    requestId: 0,
+    projectionFresh: true,
+    markProjectionStale() { assert.fail("typing scanned the legacy projection") },
+    refresh() { assert.fail("typing started a full-document render") },
+  })
+  controller.schedule()
+  assert.equal(request.signal.aborted, true)
+  assert.equal(controller.timer, null)
+  assert.equal(controller.requestController, null)
+  assert.equal(controller.deferredForContinuous, true)
+  assert.equal(controller.projectionFresh, false)
+  assert.equal(controller.element.dataset.previewProjectionStale, "true")
+  controller.element.dataset.editorMode = "source"
+  assert.equal(controller.continuousEditing(), false)
+})
+
 test("preview timeout also bounds reading the JSON response body", async () => {
   const originalFetch = globalThis.fetch
   const originalDocument = globalThis.document

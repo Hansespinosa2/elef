@@ -1,3 +1,4 @@
+import { continuousAuthoringWorkflow, continuousLongDocumentWorkflow } from "../../../../apps/web/test/e2e/scenarios/continuous-authoring.js"
 import assert from "node:assert/strict"
 import { $, $$, browser } from "@wdio/globals"
 import { Key } from "webdriverio"
@@ -860,6 +861,67 @@ class DesktopEditorUi {
     if (updated?.source !== source || updated.selectionStart !== source.length || updated.selectionEnd !== source.length || updated.editingMode !== "source") {
       throw new Error(`The desktop editor did not accept the shared scenario source at the end of the buffer: ${JSON.stringify(updated)}`)
     }
+  }
+
+  async startContinuousAuthoring() {
+    const result = await browser.executeAsync(done => {
+      const editor = document.querySelector("#desktop-editor-field").editorController
+      window.__continuousVimBefore = editor.vimEnabled
+      editor.setVimEnabled(true)
+      window.__elefPerformanceTestHooks.enableContinuousAuthoring()
+        .then(() => done(true), error => done({ error: String(error) }))
+    })
+    if (result !== true) throw new Error(`Continuous authoring did not mount: ${JSON.stringify(result)}`)
+  }
+
+  async stopContinuousAuthoring() {
+    await browser.execute(() => {
+      window.__elefPerformanceTestHooks.disableContinuousAuthoring()
+      if (window.__continuousVimBefore !== undefined) {
+        document.querySelector("#desktop-editor-field")?.editorController?.setVimEnabled(window.__continuousVimBefore)
+        delete window.__continuousVimBefore
+      }
+    })
+  }
+
+  async continuousTextElement(text, cell = false) {
+    const selector = cell ? ".continuous-document .cm-continuous-cell" : ".continuous-document .cm-line"
+    const elements = await $$(selector)
+    for (const element of elements) if ((await element.getText()).includes(text)) return element
+    throw new Error(`Continuous authoring text was not visible: ${text}`)
+  }
+
+  async clickContinuousText(text, cell = false) {
+    await (await this.continuousTextElement(text, cell)).click()
+    await browser.waitUntil(async () => browser.execute(value => {
+      const editor = document.querySelector("#desktop-editor-field")?.editorController
+      return editor?.view.state.doc.lineAt(editor.selectionHead).text.includes(value) === true
+    }, text), { timeout: 5_000, timeoutMsg: `Click did not place the native caret on ${text}` })
+  }
+
+  async continuousSourceMode() {
+    await $(".continuous-command-hint").click()
+    await $('[data-continuous-commands] [role="combobox"]').waitForDisplayed()
+    typeNativeText("Switch to source")
+    sendNativeKey("Enter")
+    await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
+      timeout: 5_000, timeoutMsg: "The command palette did not switch to source"
+    })
+  }
+
+  async continuousKeys(text, special = false) {
+    if (special) sendNativeKey(text)
+    else typeNativeText(text)
+  }
+
+  async assertContinuousText(text, cell = false) {
+    await (await this.continuousTextElement(text, cell)).waitForDisplayed()
+  }
+
+  async assertContinuousMath(text) {
+    await browser.waitUntil(async () => browser.execute(value =>
+      [...document.querySelectorAll(".continuous-document math mi")].some(node => node.textContent === value), text),
+    { timeout: 5000, timeoutMsg: `Continuous authoring did not render ${text}` })
   }
 
   async restoreSource(source) {
@@ -2548,6 +2610,16 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("keeps slide position stacks and lanes aligned in the desktop preview", async () => {
     await slidePositionGrammarWorkflow(new DesktopEditorUi())
+  })
+
+  it("keeps continuous Vim, math, tables, and saved source coherent", async () => {
+    await continuousAuthoringWorkflow(new DesktopEditorUi())
+  })
+
+  it("navigates, edits, and saves the continuous long math fixture", async function () {
+    this.timeout(120_000)
+    const source = await readFile(path.resolve(process.cwd(), "../../web/test/fixtures/performance/elef-visual-100-math.md"), "utf8")
+    await continuousLongDocumentWorkflow(new DesktopEditorUi(), source)
   })
 
   it("updates Vim relative line numbers from CodeMirror cursor positions", async () => {
