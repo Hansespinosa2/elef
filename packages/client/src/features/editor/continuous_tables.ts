@@ -79,10 +79,16 @@ function canMapTables(value: TableDecorations, transaction: Transaction): boolea
     const inserted = transaction.newDoc.sliceString(newFrom, newTo)
     if (!/^[\p{L}\p{N} ,.!?]*$/u.test(removed + inserted)) { safe = false; return }
     for (const [doc, start, end] of [[transaction.startState.doc, from, to], [transaction.newDoc, newFrom, newTo]] as const) {
+      // Only a plain line can take this path: changing a fence, delimiter,
+      // or other structural line can affect a distant table. Math on an
+      // adjacent line does not affect table recognition, but a pipe can
+      // make this line part of a new table and needs the full parser.
+      const current = doc.lineAt(start)
+      if (end > current.to || !/^[\p{L}\p{N} ,.!?]*$/u.test(current.text)) { safe = false; return }
       const first = Math.max(1, doc.lineAt(start).number - 1)
       const last = Math.min(doc.lines, doc.lineAt(end).number + 1)
       for (let line = first; line <= last; line++) {
-        if (/[|:`~$\\>*+_\-]/.test(doc.line(line).text)) { safe = false; return }
+        if (/\|/.test(doc.line(line).text)) { safe = false; return }
       }
     }
   })
