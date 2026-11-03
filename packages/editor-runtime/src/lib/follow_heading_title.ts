@@ -1,25 +1,14 @@
-// Quiet-save title follow: after a session save adopts the source's first
-// "# h1" as the work's folder name (desktop host), the open work's shell
-// surfaces must mirror the adopted name at once. The title input mirror is
-// load-bearing: the title save flow reads the input as a pending manual
-// edit, so a stale input renames the work back on the next flush. Hosts
-// without the follow hook (web) skip everything and keep the save result.
+// Open-time H1 title adoption: when a work with no meaningful title yet
+// (a generated "Untitled ..." name, or blank) is opened and its source
+// already carries a first "# h1", the desktop host adopts the heading as
+// the folder name so the library shows what the work is called.
 //
-// The native quit flush suspends the follow: quitting guarantees byte
-// preservation at the work's path (the committed native-quit contract), and
-// silently reorganizing the user's folders on the way out — with no live UI
-// left to show the new title — is wrong. An explicit title-field edit still
-// applies on quit through the title save flow; only the inferred H1 rename
-// is suppressed.
-let suspended = false
-
-export function suspendHeadingTitleFollow(): void {
-  suspended = true
-}
-
-export function resumeHeadingTitleFollow(): void {
-  suspended = false
-}
+// Scope is deliberate: a named work keeps its folder name no matter what
+// its heading says — the editor source carries the H1 separately, and only
+// an explicit card or title rename moves the folder (the committed
+// shared-scenario contract: fixture paths and card captions stay stable
+// across edits). Hosts without the follow hook (web) skip everything.
+import { isDefaultWorkTitle } from "@elef/client"
 
 export interface HeadingTitleShell {
   folders: { id: string; name: string }[];
@@ -35,7 +24,10 @@ export async function followHeadingTitleAfterSave(
   source: string,
   shell: HeadingTitleShell
 ): Promise<string | null> {
-  if (suspended) return null
+  const folder = shell.folders.find(workFolder => workFolder.id === workFolderId)
+  const current = folder?.name ?? (shell.active && shell.active.id === workFolderId ? shell.active.name : null)
+  // Only untitled works adopt: a named folder never moves implicitly.
+  if (typeof current !== "string" || !isDefaultWorkTitle(current)) return null
   let name: string | null = null
   try {
     const follow = (host as { followHeadingTitle?: unknown } | null | undefined)?.followHeadingTitle
@@ -44,7 +36,6 @@ export async function followHeadingTitleAfterSave(
     name = null
   }
   if (typeof name !== "string" || name.length === 0) return null
-  const folder = shell.folders.find(workFolder => workFolder.id === workFolderId)
   if (folder) folder.name = name
   if (shell.active && shell.active.id === workFolderId) {
     shell.active.name = name

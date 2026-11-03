@@ -7,7 +7,7 @@ import { createRequestGuard } from "./request_identity.js"
 import { waitForEditorController } from "./editor_ready.js"
 import { createWorkSession, createTitleSaveFlow } from "@elef/client"
 import { createCodeMirrorBinding } from "./editor_binding.js"
-import { followHeadingTitleAfterSave, resumeHeadingTitleFollow, suspendHeadingTitleFollow } from "./follow_heading_title.js"
+import { followHeadingTitleAfterSave } from "./follow_heading_title.js"
 import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
@@ -337,22 +337,6 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       }
       const result = await transport.saveSource(id, source)
       if (isDocument) documentGraphCache?.invalidate()
-      // Desktop retitles the work from its H1 heading after every save
-      // (autosave included) except the native quit flush, which suspends
-      // the follow in flushForClose so quitting preserves bytes at the
-      // work's path instead of moving the folder on the way out. Hosts
-      // without the hook (web) skip this. The adopted name updates the
-      // open work, its card, the editor title, the breadcrumb, and the
-      // title input at once, without a refresh cycle. The input mirror
-      // keeps the title save flow from reading a stale input as a pending
-      // edit and renaming the work back.
-      await followHeadingTitleAfterSave(libraryHost, id, source, {
-        folders: workFolders,
-        active: activeWorkFolder,
-        setWorkTitle: name => { elements.workTitle.textContent = name },
-        setBreadcrumb: name => { shellElement<HTMLElement>("#breadcrumb-current").textContent = name },
-        setTitleInput: name => { elements.titleInput.value = name }
-      })
       return result
     }
   }
@@ -825,6 +809,18 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       const { work, prepared } = transition
       const { documentTitles } = prepared as { documentTitles: string[] }
       const isDocument = work.source_file === "document.md"
+      // Untitled works adopt their H1 as the folder name at open, so a
+      // work that already has a heading stops showing Untitled without
+      // waiting for an edit. Named works never move implicitly: the editor
+      // source carries the H1 separately and only an explicit card or title
+      // rename moves the folder. Hosts without the hook (web) skip this.
+      await followHeadingTitleAfterSave(libraryHost, work.id, work.source, {
+        folders: workFolders,
+        active: work,
+        setWorkTitle: name => { elements.workTitle.textContent = name },
+        setBreadcrumb: name => { shellElement<HTMLElement>("#breadcrumb-current").textContent = name },
+        setTitleInput: name => { elements.titleInput.value = name }
+      })
       if (work.id !== id) {
         workFolders = workFolders.map(item => item.id === id ? { ...item, id: work.id } : item)
         documentGraphCache?.invalidate()
@@ -1035,19 +1031,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     hasUnsavedChanges()
     if (titleFlow && !(await titleFlow.flush())) return "failed"
     if (!saveFlow) return "saved"
-    // The quit flush preserves bytes only: suspend the H1 title follow so a
-    // draft heading cannot move the folder out from under the work's path on
-    // the way out. The suspension resets even when the app stays open
-    // (conflict or failure), so later saves follow again.
-    suspendHeadingTitleFollow()
-    try {
-      const result = await saveFlow.flush()
-      if (result.kind === "clean" || result.kind === "saved") return "saved"
-      if (result.kind === "conflict") return "conflict"
-      return "failed"
-    } finally {
-      resumeHeadingTitleFollow()
-    }
+    const result = await saveFlow.flush()
+    if (result.kind === "clean" || result.kind === "saved") return "saved"
+    if (result.kind === "conflict") return "conflict"
+    return "failed"
   }
 
   function showConflict(conflict: any): void {

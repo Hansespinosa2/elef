@@ -5,17 +5,13 @@ import { fileURLToPath } from "node:url"
 import test from "node:test"
 
 import { createTitleSaveFlow } from "@elef/client"
-import {
-  followHeadingTitleAfterSave,
-  resumeHeadingTitleFollow,
-  suspendHeadingTitleFollow
-} from "@elef/editor-runtime/follow-heading-title"
+import { followHeadingTitleAfterSave } from "@elef/editor-runtime/follow-heading-title"
 
 // Mirror of the shell surfaces sessionTransport.saveSource wires into
 // followHeadingTitleAfterSave: the folder list, the open work, and the
 // three DOM setters (editor title, breadcrumb, title input).
-function harness({ activeName = "Old title", activeId = "work-1", host } = {}) {
-  const folders = [{ id: "work-1", name: "Old title" }]
+function harness({ activeName = "Untitled document", activeId = "work-1", host } = {}) {
+  const folders = [{ id: "work-1", name: activeName }]
   const active = { id: activeId, name: activeName }
   let titleInput = activeName
   const setterCalls = []
@@ -70,14 +66,14 @@ test("a host without the follow hook leaves every surface untouched", async () =
   const name = await followHeadingTitleAfterSave(host, "work-1", "# New title\n", state.shell)
 
   assert.equal(name, null)
-  assert.equal(state.folders[0].name, "Old title")
+  assert.equal(state.folders[0].name, "Untitled document")
   assert.deepEqual(state.setterCalls, [])
   assert.equal(state.flow.isDirty(), false)
 })
 
 test("an unchanged heading leaves the title flow untouched", async () => {
   const { state, host } = harness({ host: { followHeadingTitle: async () => null } })
-  const name = await followHeadingTitleAfterSave(host, "work-1", "# Old title\n", state.shell)
+  const name = await followHeadingTitleAfterSave(host, "work-1", "# Untitled document\n", state.shell)
 
   assert.equal(name, null)
   assert.deepEqual(state.setterCalls, [])
@@ -92,53 +88,52 @@ test("a rejected rename keeps the old title on every surface", async () => {
   const name = await followHeadingTitleAfterSave(host, "work-1", "# Taken name\n", state.shell)
 
   assert.equal(name, null)
-  assert.equal(state.folders[0].name, "Old title")
-  assert.equal(state.active.name, "Old title")
+  assert.equal(state.folders[0].name, "Untitled document")
+  assert.equal(state.active.name, "Untitled document")
   assert.deepEqual(state.setterCalls, [])
   assert.equal(state.flow.isDirty(), false)
 })
 
-test("a suspended follow preserves the work path on quit flush", async () => {
+test("a named work never moves implicitly, even when its H1 differs", async () => {
+  // The committed shared-scenario contract: fixture folders keep their
+  // names across edits (e.g. "E2E seed" holding "# Before E2E"). Only an
+  // explicit card or title rename moves a named folder.
   let hostCalls = 0
   const { state, host } = harness({
-    host: { followHeadingTitle: async () => { hostCalls += 1; return "New title" } }
+    activeName: "E2E seed",
+    host: { followHeadingTitle: async () => { hostCalls += 1; return "Before E2E" } }
   })
-  suspendHeadingTitleFollow()
-  try {
-    const name = await followHeadingTitleAfterSave(host, "work-1", "# New title\n", state.shell)
-    assert.equal(name, null)
-    assert.equal(hostCalls, 0)
-    assert.equal(state.folders[0].name, "Old title")
-    assert.deepEqual(state.setterCalls, [])
-  } finally {
-    resumeHeadingTitleFollow()
-  }
-  // The suspension resets: the next save follows again.
-  const name = await followHeadingTitleAfterSave(host, "work-1", "# New title\n", state.shell)
-  assert.equal(name, "New title")
-  assert.equal(hostCalls, 1)
-  assert.equal(state.folders[0].name, "New title")
+  const name = await followHeadingTitleAfterSave(host, "work-1", "# Before E2E\n\nSeed paragraph.\n", state.shell)
+
+  assert.equal(name, null)
+  assert.equal(hostCalls, 0)
+  assert.equal(state.folders[0].name, "E2E seed")
+  assert.equal(state.active.name, "E2E seed")
+  assert.deepEqual(state.setterCalls, [])
+  assert.equal(state.flow.isDirty(), false)
 })
 
-test("flushForClose suspends the H1 follow around the quit save with reset", async () => {
-  // Source-pattern pin in the desktop_host.test.js style: the helper test
-  // above pins suspension semantics, but only this pins that the quit path
-  // actually suspends and resets. Removing the wiring must fail here.
+test("the open flow adopts untitled titles before installing the session", async () => {
+  // Source-pattern pin in the desktop_host.test.js style: adoption happens
+  // at open (never on session saves), so the pin asserts the opener calls
+  // the helper with the opening work before the session installs.
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
   const application = await readFile(
     path.join(root, "packages/editor-runtime/src/lib/file_library_application.ts"), "utf8"
   )
-  const start = application.indexOf("async function flushForClose()")
-  assert.ok(start >= 0, "flushForClose exists")
-  const block = application.slice(start, application.indexOf("\n  }\n", start))
-  assert.ok(block.includes("suspendHeadingTitleFollow()"), "quit flush suspends the H1 follow")
+  const anchor = application.indexOf("const { work, prepared } = transition")
+  assert.ok(anchor >= 0, "open flow exists")
+  const block = application.slice(anchor, application.indexOf("transport.activateWorkFolder(work, id)", anchor))
   assert.ok(
-    block.indexOf("suspendHeadingTitleFollow()") < block.indexOf("await saveFlow.flush()"),
-    "suspension starts before the quit save"
+    block.includes("followHeadingTitleAfterSave(libraryHost, work.id, work.source"),
+    "open adopts the H1 before the session installs"
   )
+  const saveStart = application.indexOf("saveSource: async (id: string, source: string)")
+  const saveEnd = application.indexOf("function openSession(workFolder: WorkFolder)")
+  assert.ok(saveStart >= 0 && saveEnd > saveStart, "session transport exists")
   assert.ok(
-    block.includes("finally") && block.includes("resumeHeadingTitleFollow()"),
-    "suspension resets even when the app stays open"
+    !application.slice(saveStart, saveEnd).includes("followHeadingTitleAfterSave("),
+    "session saves never rename"
   )
 })
 
