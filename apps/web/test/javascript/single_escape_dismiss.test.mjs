@@ -142,6 +142,7 @@ const snippet = await loadModule("controllers/snippet_palette_controller.js", {
     "const editorInsideCode = () => false\nconst editorInsideMath = () => false\n",
   'import { authoringRegistryFor } from "./authoring_registry.js";': "const authoringRegistryFor = () => []\n",
   'import { snippetStopsEffect } from "./snippet_stops.js";': "const snippetStopsEffect = { of: (value) => value }\n",
+  'import { parseAssistQuery, parseTableDimensions, tableGridBody } from "./snippet_table_dimensions.js";': "const parseAssistQuery = () => null\nconst parseTableDimensions = () => null\nconst tableGridBody = () => \"\"\n",
   'import { expandSnippet } from "@elef/work-model/document-transforms";': "const expandSnippet = () => null\n",
 })
 

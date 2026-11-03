@@ -5,6 +5,7 @@ import { assistsInMode, mirrorPopupAccessibility, placePaletteBelow, placeVisual
 import { editorInsideCode, editorInsideMath } from "./math_shorthand_controller.js"
 import { authoringRegistryFor } from "./authoring_registry.js"
 import { snippetStopsEffect } from "./snippet_stops.js"
+import { parseAssistQuery, parseTableDimensions, tableGridBody } from "./snippet_table_dimensions.js"
 import { expandSnippet } from "@elef/work-model/document-transforms"
 import type { RegistryEntry } from "../lib/authoring_registry_merge.js"
 
@@ -16,6 +17,7 @@ export default class extends Controller<HTMLElement> {
     this.matches = []
     this.selectedIndex = 0
     this.stops = []
+    this.tableDimensions = null
     this.editorController = editorFor(this.element)
     this.editorReady = () => this.setupEditor()
     this.editorSelectionChange = () => this.scheduleStopPrune()
@@ -235,6 +237,14 @@ export default class extends Controller<HTMLElement> {
     this.query = query.text
     this.queryPrefix = query.prefix
     this.queryStart = query.start
+    // Only the `/table` trigger consumes trailing text, as WxH dimensions;
+    // everything else keeps its exact old matching behavior.
+    const rest = "rest" in query ? query.rest : ""
+    this.tableDimensions = query.prefix === "/" && query.text === "table" ? parseTableDimensions(rest) : null
+    // Trailing text that is not valid table dimensions is not a query at
+    // all: without this, any `/word free text` prose would pop the palette
+    // (previously only a bare trailing trigger matched).
+    if (rest !== "" && !this.tableDimensions) return this.close()
     this.matches = this.registry
       .filter((entry: RegistryEntry) => entry.namespace === query.prefix)
       .filter((entry: RegistryEntry) => (entry.contexts || []).includes("source"))
@@ -247,32 +257,29 @@ export default class extends Controller<HTMLElement> {
     this.renderPalette()
   }
 
-  queryAtCaret(): { prefix: string; text: string; start: number } | null {
+  queryAtCaret(): { prefix: string; text: string; start: number; rest: string } | null {
     const editor = this.editorController
     if (!editor || editor.selectionStart !== editor.selectionEnd) return null
 
     const line = editor.view.state.doc.lineAt(editor.selectionStart)
     const beforeCaret = line.text.slice(0, editor.selectionStart - line.from)
-    const match = beforeCaret.match(/([/:])([a-z0-9-]*)$/i)
-    if (!match) return null
+    const query = parseAssistQuery(beforeCaret)
+    if (!query) return null
 
-    const triggerStart = match.index ?? 0
-    const previousCharacter = beforeCaret[triggerStart - 1]
-    if (previousCharacter === ":" || previousCharacter === "/" || previousCharacter === "\\") return null
-
-    if ((match[1] ?? "") === ":") {
+    if (query.prefix === ":") {
       // Colon directives are block-level own-line constructs, so a bare `:`
       // in prose is punctuation: only trigger on a blank line (whitespace
       // around the query is allowed for indented empty lines).
-      const beforeTrigger = beforeCaret.slice(0, triggerStart)
+      const beforeTrigger = beforeCaret.slice(0, query.start)
       const afterCaret = line.text.slice(editor.selectionStart - line.from)
       if (!/^\s*$/.test(beforeTrigger) || !/^\s*$/.test(afterCaret)) return null
     }
 
     return {
-      prefix: match[1] ?? "",
-      text: (match[2] ?? "").toLowerCase(),
-      start: line.from + triggerStart
+      prefix: query.prefix,
+      text: query.text,
+      start: line.from + query.start,
+      rest: query.rest
     }
   }
 
@@ -351,7 +358,8 @@ export default class extends Controller<HTMLElement> {
       option.setAttribute("aria-selected", String(index === this.selectedIndex))
       option.className = `snippet-option${index === this.selectedIndex ? " is-selected" : ""}`
       const trigger = document.createElement("strong")
-      trigger.textContent = this.argumentQuery ? snippet.trigger : `${this.queryPrefix || "/"}${snippet.trigger}`
+      const dimensions = snippet.trigger === "table" && this.tableDimensions ? ` ${this.tableDimensions.cols}x${this.tableDimensions.rows}` : ""
+      trigger.textContent = this.argumentQuery ? snippet.trigger : `${this.queryPrefix || "/"}${snippet.trigger}${dimensions}`
       const details = document.createElement("span")
       details.textContent = `${snippet.name} · ${snippet.category}`
       option.append(trigger, details)
@@ -403,7 +411,11 @@ export default class extends Controller<HTMLElement> {
       return
     }
     const before = editor.value.slice(0, this.queryStart)
-    const expansion = expandSnippet(snippet.body)
+    // A `/table WxH` query replaces the whole query (trigger plus
+    // dimensions) with the generated grid; every other snippet expands its
+    // registry template exactly as before.
+    const dimensions = snippet.namespace === "/" && snippet.trigger === "table" ? this.tableDimensions : null
+    const expansion = expandSnippet(dimensions ? tableGridBody(dimensions.cols, dimensions.rows) : snippet.body)
     const base = before.length
     this.stops = expansion.stops.map((stop: any) => ({
       ...stop,
@@ -498,6 +510,7 @@ export default class extends Controller<HTMLElement> {
     this.paletteTarget.hidden = true
     this.matches = []
     this.argumentQuery = null
+    this.tableDimensions = null
     this.updateAccessibility()
   }
 }
