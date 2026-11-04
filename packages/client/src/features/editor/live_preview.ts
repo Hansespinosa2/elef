@@ -689,7 +689,18 @@ function addSyntaxTreeHints(decorations: Range<Decoration>[], state: EditorState
 }
 
 function buildDecorations(state: EditorState, enabled: boolean): { decorations: DecorationSet; atomic: DecorationSet; error: string | null } {
-  if (!enabled) return { decorations: Decoration.none, atomic: Decoration.none, error: null }
+  if (!enabled) {
+    const activeFence = findExecutablePythonFenceAt(state, state.selection.main.head)
+    if (activeFence && activeFence.code.trim()) {
+      const controlWidget = Decoration.widget({
+        widget: new PreviewWidget("python-controls", activeFence.code, { showCode: String(activeFence.showCode) }),
+        side: 1,
+        block: true
+      }).range(activeFence.to)
+      return { decorations: Decoration.set([controlWidget], true), atomic: Decoration.none, error: null }
+    }
+    return { decorations: Decoration.none, atomic: Decoration.none, error: null }
+  }
 
   try {
     const source = state.doc.toString()

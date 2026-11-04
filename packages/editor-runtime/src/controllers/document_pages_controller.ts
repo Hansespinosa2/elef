@@ -523,6 +523,7 @@ export default class extends Controller<HTMLElement> {
   }
 
   splitBlock(block: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {
+    if (block.matches(".elef-python-block") || block.querySelector(".elef-python-block")) return null
     const art = this.artRoot(block)
     if (art) return this.splitArtBlock(block, art, page)
 

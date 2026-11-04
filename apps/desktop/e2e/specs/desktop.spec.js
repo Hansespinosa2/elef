@@ -1567,15 +1567,15 @@ class DesktopEditorUi {
   }
 
   async readPythonBlockSemantics() {
-    return browser.execute(() => [...document.querySelectorAll("#desktop-preview .elef-python-block[data-elef-python]")].map(block => {
+    return browser.execute(() => [...document.querySelectorAll("#desktop-preview .elef-python-block")].map(block => {
       const activeFrame = block.querySelector(".elef-python-frame:not([hidden])") || block
       const sliderValue = block.querySelector(".elef-python-slider-value")
       return {
-        mode: block.dataset.pythonMode,
+        mode: block.classList.contains("elef-python-show-code") ? "run-show-code" : "run",
         processed: block.dataset.processed,
         hasCode: Boolean(block.querySelector(":scope > pre.elef-python-code")),
-        svgCount: activeFrame.querySelectorAll(".elef-python-figure svg").length,
-        tableCount: activeFrame.querySelectorAll(".elef-python-dataframe table").length,
+        svgCount: activeFrame.querySelectorAll(".elef-python-figures svg").length,
+        tableCount: activeFrame.querySelectorAll(".elef-python-dataframe-wrap table").length,
         stdout: activeFrame.querySelector(".elef-python-stdout")?.textContent || "",
         sliderValue: sliderValue?.textContent || null
       }

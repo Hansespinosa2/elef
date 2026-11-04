@@ -723,15 +723,15 @@ class WebEditorUi {
   }
 
   async readPythonBlockSemantics() {
-    return this.page.locator(".editor-projection .elef-python-block[data-elef-python]").evaluateAll(blocks => blocks.map(block => {
+    return this.page.locator(".editor-projection .elef-python-block").evaluateAll(blocks => blocks.map(block => {
       const activeFrame = block.querySelector(".elef-python-frame:not([hidden])") || block
       const sliderValue = block.querySelector(".elef-python-slider-value")
       return {
-        mode: block.dataset.pythonMode,
+        mode: block.classList.contains("elef-python-show-code") ? "run-show-code" : "run",
         processed: block.dataset.processed,
         hasCode: Boolean(block.querySelector(":scope > pre.elef-python-code")),
-        svgCount: activeFrame.querySelectorAll(".elef-python-figure svg").length,
-        tableCount: activeFrame.querySelectorAll(".elef-python-dataframe table").length,
+        svgCount: activeFrame.querySelectorAll(".elef-python-figures svg").length,
+        tableCount: activeFrame.querySelectorAll(".elef-python-dataframe-wrap table").length,
         stdout: activeFrame.querySelector(".elef-python-stdout")?.textContent || "",
         sliderValue: sliderValue?.textContent || null
       }

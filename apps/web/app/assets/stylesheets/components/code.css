@@ -117,6 +117,11 @@
   max-width: 100%;
 }
 
+.slide .elef-python-figures svg {
+  max-height: 14rem;
+  width: auto;
+}
+
 .elef-python-dataframe-wrap {
   overflow-x: auto;
 }

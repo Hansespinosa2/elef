@@ -124,4 +124,9 @@ test("live preview projects executable python fences as widgets when inactive an
   const active = decorationsOf(previewState(doc, EditorSelection.cursor(22)));
   assert.deepEqual(specsAt(active, fenceStart, fenceEnd), ["mark:cm-live-active-syntax"]);
   assert.ok(specsAt(active, fenceEnd, fenceEnd).includes("widget:python-controls:print(1 + 1)"));
+
+  const sourceModeActive = decorationsOf(
+    previewState(doc, EditorSelection.cursor(22)).update({ effects: livePreviewMode.of(false) }).state
+  );
+  assert.deepEqual(specsAt(sourceModeActive, fenceEnd, fenceEnd), ["widget:python-controls:print(1 + 1)"]);
 });

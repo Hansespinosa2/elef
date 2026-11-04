@@ -182,6 +182,18 @@ function opaqueBackground(element: Element | Document | null | undefined): strin
 }
 
 function surfaceIsDark(element: Element | Document | null | undefined): boolean {
+  if (isElementNode(element) && typeof element.closest === "function") {
+    const themed = element.closest(
+      ".work-theme-dark, .document-theme-dark, .slides-theme-dark, .work-theme-light, .document-theme-light, .slides-theme-light, .work-theme-match, .document-theme-match, .slides-theme-match"
+    )
+    if (themed) {
+      return (
+        themed.classList.contains("work-theme-dark") ||
+        themed.classList.contains("document-theme-dark") ||
+        themed.classList.contains("slides-theme-dark")
+      )
+    }
+  }
   const channels = (opaqueBackground(element).match(/[\d.]+/g) || []).slice(0, 3).map(Number)
   if (channels.length !== 3 || channels.some((channel) => Number.isNaN(channel))) return false
   const [red = 0, green = 0, blue = 0] = channels.map((channel) => channel / 255)
