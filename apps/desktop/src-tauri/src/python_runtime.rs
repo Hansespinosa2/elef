@@ -181,11 +181,7 @@ fn write_verified_cache_file(
     verify_artifact_bytes(artifact, bytes)?;
     fs::create_dir_all(version_dir).map_err(|err| PythonRuntimeError::Io(err.to_string()))?;
     let target = version_dir.join(artifact.filename);
-    let temp = version_dir.join(format!(
-        ".{}.{}.tmp",
-        artifact.filename,
-        std::process::id()
-    ));
+    let temp = version_dir.join(format!(".{}.{}.tmp", artifact.filename, std::process::id()));
     fs::write(&temp, bytes).map_err(|err| PythonRuntimeError::Io(err.to_string()))?;
     fs::rename(&temp, &target).map_err(|err| {
         let _ = fs::remove_file(&temp);
@@ -231,7 +227,9 @@ pub(crate) fn ensure_cached_artifact(
 ) -> Result<(Vec<u8>, &'static str), PythonRuntimeError> {
     let artifact = lookup_pinned_artifact(filename)
         .ok_or_else(|| PythonRuntimeError::UnknownArtifact(filename.to_owned()))?;
-    let version_dir = cache_root.join("python-runtime").join(PYTHON_RUNTIME_VERSION);
+    let version_dir = cache_root
+        .join("python-runtime")
+        .join(PYTHON_RUNTIME_VERSION);
     let cached_path = version_dir.join(artifact.filename);
 
     if let Ok(existing_bytes) = fs::read(&cached_path) {
@@ -243,8 +241,7 @@ pub(crate) fn ensure_cached_artifact(
 
     if let Some(pack_dir) = local_pack_dir {
         let candidate = pack_dir.join(artifact.filename);
-        let bytes =
-            fs::read(&candidate).map_err(|err| PythonRuntimeError::Io(err.to_string()))?;
+        let bytes = fs::read(&candidate).map_err(|err| PythonRuntimeError::Io(err.to_string()))?;
         write_verified_cache_file(&version_dir, artifact, &bytes)?;
         return Ok((bytes, artifact.content_type));
     }
@@ -369,7 +366,10 @@ mod tests {
     #[test]
     fn verify_artifact_bytes_accepts_exact_sha256_and_rejects_tampered_bytes() {
         let manifest = lookup_pinned_artifact("runtime-manifest.json").unwrap();
-        assert_eq!(verify_artifact_bytes(manifest, BOOTSTRAP_MANIFEST_BYTES), Ok(()));
+        assert_eq!(
+            verify_artifact_bytes(manifest, BOOTSTRAP_MANIFEST_BYTES),
+            Ok(())
+        );
 
         let pyodide = lookup_pinned_artifact("pyodide.mjs").unwrap();
         assert_eq!(
@@ -392,8 +392,7 @@ mod tests {
 
         // Populate a tampered pyodide.mjs in pack_dir: must be rejected and never cached.
         fs::write(pack_dir.join("pyodide.mjs"), b"export const evil = true;").unwrap();
-        let tampered_result =
-            ensure_cached_artifact(&cache_root, "pyodide.mjs", Some(&pack_dir));
+        let tampered_result = ensure_cached_artifact(&cache_root, "pyodide.mjs", Some(&pack_dir));
         assert!(matches!(
             tampered_result,
             Err(PythonRuntimeError::DigestMismatch { .. })
