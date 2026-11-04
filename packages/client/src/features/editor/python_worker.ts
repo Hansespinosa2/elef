@@ -833,6 +833,11 @@ function executeFallbackSingleFrame(
       for (const arg of args) {
         if (arg && typeof arg === "object" && "__kw__" in (arg as Record<string, unknown>)) {
           const kw = (arg as { __kw__: Record<string, unknown> }).__kw__
+          for (const key of Object.keys(kw)) {
+            if (!["label", "min", "min_val", "max", "max_val", "step", "value"].includes(key)) {
+              throw new Error(`TypeError: slider() got an unexpected keyword argument '${key}'`)
+            }
+          }
           if ("label" in kw) kwLabel = kw.label
           if ("min" in kw) kwMin = kw.min
           if ("min_val" in kw) kwMin = kw.min_val
