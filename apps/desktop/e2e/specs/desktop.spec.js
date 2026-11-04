@@ -204,6 +204,7 @@ function typeNativeText(value, { activate = true } = {}) {
     return
   }
   if (process.platform === "darwin") {
+    if (activate) focusDesktopWindow()
     const escaped = value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')
     execFileSync("osascript", ["-e", `tell application "System Events" to keystroke "${escaped}"`], { timeout: 10_000 })
     return
@@ -898,7 +899,47 @@ class DesktopEditorUi {
   }
 
   async clickContinuousText(text, cell = false) {
-    await (await this.continuousTextElement(text, cell)).click()
+    // The embedded driver's element-click endpoint calls el.click(), which
+    // does not perform a pointer hit test or place a caret. Use an actual OS
+    // click on rendered text, and keep the caret assertion below.
+    const selector = cell ? ".continuous-document .cm-continuous-cell" : ".continuous-document .cm-line"
+    await this.continuousTextElement(text, cell)
+    const target = await browser.execute((query, value) => {
+      const element = [...document.querySelectorAll(query)].find(candidate => candidate.textContent.includes(value))
+      if (!element) return false
+      element.scrollIntoView({ block: "center", inline: "nearest" })
+      return true
+    }, selector, text)
+    if (!target) throw new Error(`Continuous authoring text was not found: ${text}`)
+    await browser.executeAsync(done => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))
+    const point = await browser.execute((query, value) => {
+      const element = [...document.querySelectorAll(query)].find(candidate => candidate.textContent.includes(value))
+      if (!element) return null
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      const box = [...range.getClientRects()].find(rect => rect.width > 0 && rect.height > 0)
+      if (!box) return null
+      const x = box.left + box.width / 2
+      const y = box.top + box.height / 2
+      const hit = document.elementFromPoint(x, y)
+      return { x, y, width: innerWidth, height: innerHeight, scale: devicePixelRatio,
+        hit: Boolean(hit && element.contains(hit)) }
+    }, selector, text)
+    if (!point?.hit) throw new Error(`Continuous authoring text is not clickable: ${JSON.stringify(point)}`)
+    const windowRect = await browser.getWindowRect()
+    const x = windowRect.x + (windowRect.width - point.width) / 2 + point.x
+    const y = windowRect.y + windowRect.height - point.height + point.y
+    focusDesktopWindow()
+    if (process.platform === "linux") {
+      execFileSync("xdotool", ["mousemove", "--sync", String(Math.round(x * point.scale)), String(Math.round(y * point.scale)), "click", "1"], { timeout: 5_000 })
+    } else if (process.platform === "darwin") {
+      execFileSync("swift", ["-e", `import CoreGraphics
+let point = CGPoint(x: ${x}, y: ${y})
+CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)`], { timeout: 15_000 })
+    } else {
+      throw new Error(`Native pointer input is unsupported on ${process.platform}`)
+    }
     await browser.waitUntil(async () => browser.execute(value => {
       const editor = document.querySelector("#desktop-editor-field")?.editorController
       return editor?.view.state.doc.lineAt(editor.selectionHead).text.includes(value) === true
