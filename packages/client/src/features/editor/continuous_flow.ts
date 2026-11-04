@@ -5,6 +5,7 @@ import type { DecorationSet } from "@codemirror/view"
 import { buildEditorStructure } from "@elef/work-model/document-map"
 import { scanMathSource } from "@elef/work-model/math-source"
 import { livePreviewField, livePreviewMode } from "@elef/client/editor"
+import { localMathEdit } from "./continuous_math_edit.js"
 
 export const continuousFlowGeometryChanged = StateEffect.define<void>()
 
@@ -17,6 +18,7 @@ function plainParagraph(text: string): boolean {
 }
 
 function canMapFlow(value: FlowDecorations, transaction: Transaction): boolean {
+  if (localMathEdit(transaction)) return true
   let safe = true
   transaction.changes.iterChangedRanges((from, to, newFrom, newTo) => {
     const range = value.plain.find(item => from >= item.from && to <= item.to)

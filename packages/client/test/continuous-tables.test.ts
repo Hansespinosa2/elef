@@ -58,3 +58,20 @@ test("prose next to an equation maps tables without reparsing the document", () 
   }
   assert.equal(measurements, before, "an adjacent equation does not change table structure")
 })
+
+test("typing within a closed equation preserves distant table annotations", () => {
+  const source = "| A | B |\n| - | - |\n| one | two |\n\nEquation $f(x) = x^{2}$.\n"
+  let measurements = 0
+  const tables = createContinuousTables(() => { measurements++; return [0.5, 0.5] })
+  let state = EditorState.create({ doc: source, extensions: [tables] })
+  const before = measurements
+  for (const insert of [" + \\alpha", "_{i}"]) {
+    const from = state.doc.toString().indexOf(" = x")
+    state = state.update({ changes: { from, insert } }).state
+    const freshField = createContinuousTables(() => [0.5, 0.5])
+    const fresh = EditorState.create({ doc: state.doc, extensions: [freshField] }).field(freshField)
+    assert.deepEqual(ranges(state.field(tables).cells, state.doc.length), ranges(fresh.cells, state.doc.length))
+    assert.deepEqual(ranges(state.field(tables).syntax, state.doc.length), ranges(fresh.syntax, state.doc.length))
+  }
+  assert.equal(measurements, before)
+})

@@ -5,6 +5,7 @@ import type { DecorationSet } from "@codemirror/view"
 import type { Range } from "@codemirror/state"
 import { tableSourceProjection } from "@elef/work-model/table-source"
 import { livePreviewField, livePreviewMode } from "@elef/client/editor"
+import { localMathEdit } from "./continuous_math_edit.js"
 
 export const continuousTableGeometryChanged = StateEffect.define<void>()
 
@@ -72,19 +73,20 @@ function buildTables(source: string, measure: (markdown: string) => readonly num
 // syntax, table cells, and empty-cell widget anchors take the full path.
 function canMapTables(value: TableDecorations, transaction: Transaction): boolean {
   let safe = true
+  const math = localMathEdit(transaction)
   transaction.changes.iterChangedRanges((from, to, newFrom, newTo) => {
     if (!safe) return
     if (value.ranges.some(table => from <= table.to && to >= table.from) || value.emptyCells.some(position => position >= from)) { safe = false; return }
     const removed = transaction.startState.sliceDoc(from, to)
     const inserted = transaction.newDoc.sliceString(newFrom, newTo)
-    if (!/^[\p{L}\p{N} ,.!?]*$/u.test(removed + inserted)) { safe = false; return }
+    if (!math && !/^[\p{L}\p{N} ,.!?]*$/u.test(removed + inserted)) { safe = false; return }
     for (const [doc, start, end] of [[transaction.startState.doc, from, to], [transaction.newDoc, newFrom, newTo]] as const) {
       // Only a plain line can take this path: changing a fence, delimiter,
       // or other structural line can affect a distant table. Math on an
       // adjacent line does not affect table recognition, but a pipe can
       // make this line part of a new table and needs the full parser.
       const current = doc.lineAt(start)
-      if (end > current.to || !/^[\p{L}\p{N} ,.!?]*$/u.test(current.text)) { safe = false; return }
+      if (end > current.to || (!math && !/^[\p{L}\p{N} ,.!?]*$/u.test(current.text))) { safe = false; return }
       const first = Math.max(1, doc.lineAt(start).number - 1)
       const last = Math.min(doc.lines, doc.lineAt(end).number + 1)
       for (let line = first; line <= last; line++) {

@@ -42,3 +42,21 @@ test("incremental plain prose and structural edits agree with a fresh flow proje
     assert.deepEqual(snapshot(state.field(flow).decorations, state.doc.length), snapshot(fresh.field(freshFlow).decorations, state.doc.length))
   }
 })
+
+test("local equation edits keep the same reader flow as a fresh parse", () => {
+  const margins = { paragraph: { before: 0, after: 18 }, h1: { before: 0, after: 24 } }
+  const flow = createContinuousFlow(margins)
+  let state = EditorState.create({ doc: "# Heading\n\nEquation $f(x) = x^{2}$.\n\nAfter.\n", extensions: [flow] })
+  for (const insert of [" + \\alpha", "_{i}", " + 1"]) {
+    const from = state.doc.toString().indexOf(" = x")
+    state = state.update({ changes: { from, insert } }).state
+    const freshFlow = createContinuousFlow(margins)
+    const fresh = EditorState.create({ doc: state.doc, extensions: [freshFlow] })
+    const snapshot = (set: DecorationSet) => {
+      const found: unknown[] = []
+      set.between(0, state.doc.length, (start, end, value) => { found.push([start, end, value.spec.class, value.spec.widget?.constructor.name, value.spec.widget?.height]) })
+      return found
+    }
+    assert.deepEqual(snapshot(state.field(flow).decorations), snapshot(fresh.field(freshFlow).decorations))
+  }
+})

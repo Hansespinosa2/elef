@@ -4,6 +4,7 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { livePreviewField, livePreviewMode } from "../src/features/editor/live_preview.js";
 import { elefMetadata } from "../src/features/editor/engine.js";
+import { localMathEdit } from "../src/features/editor/continuous_math_edit.js";
 
 test("caret movement reuses the compiled source plan and untouched equation widgets", () => {
   const doc = "Plain prose here.\n\n**bold** then $x^2$ and $y^2$.\n"
@@ -68,6 +69,50 @@ test("ordinary typing away from math reuses its existing equation widget", () =>
   const newContext = changed.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$x") + 5)!
   assert.equal(newContext.inactive.find(range => range.value.spec.widget)?.value, oldContext.inactive.find(range => range.value.spec.widget)?.value)
   assert.deepEqual(decorationsOf(changed), decorationsOf(previewState(changed.doc.toString(), changed.selection.main)))
+})
+
+test("equation typing keeps distant widgets and matches a fresh parse when leaving math", () => {
+  const source = "Start.\n\nEquation $f(x) = x^{2} + 5$ and another $z^2$.\n"
+  let cursor = source.indexOf("f(x)") + "f(x)".length
+  let state = previewState(source, EditorSelection.cursor(cursor))
+  const original = state.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$z"))!
+    .inactive.find(range => range.value.spec.widget)?.value
+  for (const character of " + \\alpha_{i} + 1") {
+    state = state.update({ changes: { from: cursor, insert: character }, selection: EditorSelection.cursor(++cursor) }).state
+    assert.equal(state.field(livePreviewField).error, null)
+    assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)), `after ${character}`)
+  }
+  const other = state.doc.toString().indexOf("$z")
+  const retained = state.field(livePreviewField).dynamic.find(range => range.from === other)!
+    .inactive.find(range => range.value.spec.widget)?.value
+  assert.equal(retained, original)
+  state = state.update({ selection: EditorSelection.cursor(0) }).state
+  assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)))
+  assert.ok(decorationsOf(state).some(item => item.spec === "widget:math:f(x) + \\alpha_{i} + 1 = x^{2} + 5"))
+})
+
+test("typing in an equation after another equation with subscripts keeps unrelated widgets", () => {
+  const source = "Before $\\sum_{i=1}^{N} x_{i}$ and $f(x) = x^{2}$, then $z^2$.\n"
+  let cursor = source.indexOf("f(x)") + "f(x)".length
+  let state = previewState(source, EditorSelection.cursor(cursor))
+  const widget = state.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$z"))!
+    .inactive.find(range => range.value.spec.widget)?.value
+  for (const character of " + \\alpha_{i} + 1") {
+    state = state.update({ changes: { from: cursor, insert: character }, selection: EditorSelection.cursor(++cursor) }).state
+    assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)), `after ${character}`)
+    const other = state.doc.toString().indexOf("$z")
+    assert.equal(state.field(livePreviewField).dynamic.find(range => range.from === other)!
+      .inactive.find(range => range.value.spec.widget)?.value, widget)
+  }
+})
+
+test("a Markdown emphasis span crossing the edited equation requires a full parse", () => {
+  const source = "Previous $a_i$ and $x$ then_x.\n"
+  const position = source.indexOf("$x$") + 2
+  const state = previewState(source, EditorSelection.cursor(position))
+  const transaction = state.update({ changes: { from: position, insert: "y" }, selection: EditorSelection.cursor(position + 1) })
+  assert.equal(localMathEdit(transaction), null)
+  assert.deepEqual(decorationsOf(transaction.state), decorationsOf(previewState(transaction.state.doc.toString(), transaction.state.selection.main)))
 })
 
 interface FoundDecoration {

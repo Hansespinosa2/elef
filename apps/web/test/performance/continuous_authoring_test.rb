@@ -10,6 +10,8 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
   ROOT = Rails.root.join("test/fixtures/performance")
   SAMPLES = 20
   BURST = " A sustained authoring session with mathematics and prose."
+  EQUATION_BURST = ' + \\alpha_{i} + 1'
+  TABLE_BURST = " revised quickly"
 
   def p95(values)
     values.sort.fetch((values.length * 0.95).ceil - 1)
@@ -100,6 +102,96 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           input_p95_ms: p95(measurements.fetch("keys")).round(1),
           long_tasks_ms: measurements.fetch("stalls").map { |value| value.round(1) }
         }
+        if name == "mixed"
+          # Exercise a real rendered cell in the long mixed fixture. As with
+          # the equation probe, selection is setup; the burst itself is not
+          # paced or repaired by the harness.
+          page.evaluate_script(<<~JAVASCRIPT)
+            (() => {
+              const editor = document.querySelector('.source-field').editorController;
+              const marker = '| queue worker';
+              const start = editor.view.state.doc.toString().lastIndexOf(marker);
+              if (start < 0) throw new Error('The frozen table cell was not found');
+              editor.view.dispatch({ selection: { anchor: start + marker.length }, scrollIntoView: true });
+              editor.view.focus();
+            })()
+          JAVASCRIPT
+          page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
+          page.evaluate_script(<<~JAVASCRIPT)
+            (() => {
+              const editor = document.querySelector('.continuous-document .cm-content');
+              window.tablePerf = { start: performance.now(), keys: [], stalls: [] };
+              new PerformanceObserver(list => window.tablePerf.stalls.push(...list.getEntries()
+                .filter(entry => entry.startTime >= window.tablePerf.start).map(entry => entry.duration)))
+                .observe({ type: 'longtask' });
+              editor.addEventListener('keydown', event => {
+                if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
+                const start = performance.now();
+                requestAnimationFrame(() => window.tablePerf.keys.push(performance.now() - start));
+              });
+            })()
+          JAVASCRIPT
+          page.driver.browser.action.send_keys(TABLE_BURST).perform
+          table = page.evaluate_async_script(<<~JAVASCRIPT)
+            const done = arguments[arguments.length - 1];
+            requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(window.tablePerf), 100)));
+          JAVASCRIPT
+          before_table = source + BURST
+          insertion = before_table.rindex("| queue worker") + "| queue worker".length
+          assert_equal before_table[0...insertion] + TABLE_BURST + before_table[insertion..],
+            page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+          assert_equal TABLE_BURST.length, table.fetch("keys").length, "every table character is measured"
+          assert_selector ".continuous-document .cm-continuous-cell", text: "queue worker revised quickly"
+          report[:table] = {
+            input_ms: table.fetch("keys").map { |value| value.round(1) },
+            input_p95_ms: p95(table.fetch("keys")).round(1),
+            long_tasks_ms: table.fetch("stalls").map { |value| value.round(1) }
+          }
+        end
+        next unless name == "math_heavy"
+
+        # Type real TeX inside an existing equation in the long document.
+        # Positioning is setup; the subsequent native keyboard burst runs
+        # continuously and must preserve every character without repair.
+        page.evaluate_script(<<~JAVASCRIPT)
+          (() => {
+            const editor = document.querySelector('.source-field').editorController;
+            const position = editor.view.state.doc.toString().lastIndexOf('$f(x)') + '$f(x)'.length;
+            if (position < '$f(x)'.length) throw new Error('The frozen equation was not found');
+            editor.view.dispatch({ selection: { anchor: position } });
+            editor.view.focus();
+          })()
+        JAVASCRIPT
+        page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
+        page.evaluate_script(<<~JAVASCRIPT)
+          (() => {
+            const editor = document.querySelector('.continuous-document .cm-content');
+            window.equationPerf = { start: performance.now(), keys: [], stalls: [] };
+            new PerformanceObserver(list => window.equationPerf.stalls.push(...list.getEntries()
+              .filter(entry => entry.startTime >= window.equationPerf.start).map(entry => entry.duration)))
+              .observe({ type: 'longtask' });
+            editor.addEventListener('keydown', event => {
+              if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
+              const start = performance.now();
+              requestAnimationFrame(() => window.equationPerf.keys.push(performance.now() - start));
+            });
+          })()
+        JAVASCRIPT
+        page.driver.browser.action.send_keys(EQUATION_BURST).perform
+        equation = page.evaluate_async_script(<<~JAVASCRIPT)
+          const done = arguments[arguments.length - 1];
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(window.equationPerf), 100)));
+        JAVASCRIPT
+        before_equation = source + BURST
+        insertion = before_equation.rindex("$f(x)") + "$f(x)".length
+        assert_equal before_equation[0...insertion] + EQUATION_BURST + before_equation[insertion..],
+          page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+        assert_equal EQUATION_BURST.length, equation.fetch("keys").length, "every equation character is measured"
+        report[:equation] = {
+          input_ms: equation.fetch("keys").map { |value| value.round(1) },
+          input_p95_ms: p95(equation.fetch("keys")).round(1),
+          long_tasks_ms: equation.fetch("stalls").map { |value| value.round(1) }
+        }
       end
     ensure
       path = ENV.fetch("ELEF_CONTINUOUS_PERF_REPORT", "/tmp/elef-continuous-performance.json")
@@ -111,5 +203,9 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
       assert_operator result[:input_p95_ms], :<=, 50, "#{name}: sustained input p95"
       assert_empty result[:long_tasks_ms].select { |duration| duration > 100 }, "#{name}: authoring stalls over 100ms"
     end
+    assert_operator report.fetch(:equation).fetch(:input_p95_ms), :<=, 50, "math-heavy: equation input p95"
+    assert_empty report.fetch(:equation).fetch(:long_tasks_ms).select { |duration| duration > 100 }, "math-heavy: equation authoring stalls over 100ms"
+    assert_operator report.fetch(:table).fetch(:input_p95_ms), :<=, 50, "mixed: table input p95"
+    assert_empty report.fetch(:table).fetch(:long_tasks_ms).select { |duration| duration > 100 }, "mixed: table authoring stalls over 100ms"
   end if ENV["ELEF_PERF_MODE"] == "continuous"
 end

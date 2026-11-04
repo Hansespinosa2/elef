@@ -5,6 +5,7 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
 import { MERMAID_ERROR_CLASS, renderMermaidSvg } from "./mermaid_runtime.js"
 import { scanMathSource } from "@elef/work-model/math-source"
+import { localMathEdit, type LocalMathEdit } from "./continuous_math_edit.js"
 
 export const livePreviewMode = StateEffect.define<boolean>()
 
@@ -550,7 +551,7 @@ function canMapPlainEdit(value: LivePreviewValue, transaction: Transaction): boo
   return safe
 }
 
-function mapPlainEdit(value: LivePreviewValue, transaction: Transaction): LivePreviewValue {
+function mapPlainEdit(value: LivePreviewValue, transaction: Transaction, math?: LocalMathEdit): LivePreviewValue {
   const changes = transaction.changes
   let firstChange = transaction.startState.doc.length
   changes.iterChangedRanges(from => { firstChange = Math.min(firstChange, from) })
@@ -560,8 +561,14 @@ function mapPlainEdit(value: LivePreviewValue, transaction: Transaction): LivePr
   const mapped = value.dynamic.map(context => {
     if (context.to < firstChange) return context
     shifted = true
-    return { from: changes.mapPos(context.from, 1), to: changes.mapPos(context.to, 1),
+    const next = { from: changes.mapPos(context.from, 1), to: changes.mapPos(context.to, 1),
       active: mapRanges(context.active), inactive: mapRanges(context.inactive) }
+    if (math && context.from === math.from && context.to === math.to) {
+      next.inactive = next.inactive.map(range => range.value.spec.widget instanceof PreviewWidget
+        ? replaceDecoration(new PreviewWidget(math.display ? "math-display" : "math", math.interior)).range(range.from, range.to)
+        : range)
+    }
+    return next
   })
   const dynamic = shifted ? mapped : value.dynamic
   const removed = new Set<Decoration>()
@@ -594,8 +601,17 @@ export const livePreviewField = StateField.define<LivePreviewValue>({
     for (const effect of transaction.effects) {
       if (effect.is(livePreviewMode)) enabled = Boolean(effect.value)
     }
-    if (transaction.docChanged && enabled === value.enabled && enabled && canMapPlainEdit(value, transaction)) {
-      return mapPlainEdit(value, transaction)
+    if (transaction.docChanged && enabled === value.enabled && enabled) {
+      if (canMapPlainEdit(value, transaction)) return mapPlainEdit(value, transaction)
+      const math = localMathEdit(transaction)
+      if (math && !value.error) {
+        const context = value.dynamic.find(item => item.from === math.from && item.to === math.to &&
+          item.inactive.some(range => range.value.spec.widget instanceof PreviewWidget &&
+            ["math", "math-display"].includes(range.value.spec.widget.kind)))
+        const overlaps = value.dynamic.some(item => item !== context && item.from < math.to && item.to > math.from)
+        if (context && !overlaps && activeRange(transaction.startState, math.from, math.to) &&
+            activeRange(transaction.state, math.nextFrom, math.nextTo)) return mapPlainEdit(value, transaction, math)
+      }
     }
     if (transaction.docChanged || enabled !== value.enabled) {
       return { enabled, ...buildDecorations(transaction.state, enabled) }
