@@ -22,9 +22,9 @@ math, mi, mo, mn, mtext {
    KaTeX_Size2-Regular via pyftsubset; keep the three formats together. */
 @font-face {
   font-family: "KaTeX_DisplayOps";
-  src: url("../katex/fonts/KaTeX_DisplayOps-Regular.woff2") format("woff2"),
-    url("../katex/fonts/KaTeX_DisplayOps-Regular.woff") format("woff"),
-    url("../katex/fonts/KaTeX_DisplayOps-Regular.ttf") format("truetype");
+  src: url("../fonts/KaTeX_DisplayOps-Regular.woff2") format("woff2"),
+    url("../fonts/KaTeX_DisplayOps-Regular.woff") format("woff"),
+    url("../fonts/KaTeX_DisplayOps-Regular.ttf") format("truetype");
   font-style: normal;
   font-weight: 400;
 }

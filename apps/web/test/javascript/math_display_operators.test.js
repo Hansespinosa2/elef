@@ -23,8 +23,12 @@ test("display large operators resolve through the dedicated subset family", () =
     ["KaTeX_DisplayOps-Regular.ttf", "truetype"],
   ]) {
     assert.ok(
-      face[0].includes(`katex/fonts/${file}`) && face[0].includes(`format("${format}")`),
+      face[0].includes(`fonts/${file}`) && face[0].includes(`format("${format}")`),
       `DisplayOps @font-face must reference ${file} as ${format}`,
+    )
+    assert.ok(
+      !face[0].includes(`katex/fonts/${file}`),
+      "DisplayOps files must live outside the byte-checked vendored KaTeX tree",
     )
   }
 
@@ -48,7 +52,7 @@ test("display-operator subset fonts exist and parse as fonts", async () => {
   const magic = { woff2: "774f4632", woff: "774f4646", ttf: "00010000" }
   for (const [format, expected] of Object.entries(magic)) {
     const url = new URL(
-      `../../app/assets/stylesheets/katex/fonts/KaTeX_DisplayOps-Regular.${format}`,
+      `../../app/assets/stylesheets/fonts/KaTeX_DisplayOps-Regular.${format}`,
       import.meta.url,
     )
     const bytes = await readFile(url)
