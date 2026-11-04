@@ -94,18 +94,21 @@ export function createTauriHost({ invoke, readExportFile, initialStatus, updater
   // YAML front matter: after a save, adopt a changed heading as the folder
   // name so the library shows what the work is called now. No heading, an
   // unrepresentable heading, an unchanged name, or a rejected rename all
-  // keep the current title; the save itself always succeeds.
+  // keep the current title; the save itself always succeeds. Returns the
+  // adopted name, or null when the title is unchanged.
   async function syncTitleWithHeading(workFolderId, text) {
     const name = folderNameForHeading(extractFirstMarkdownHeading(text));
-    if (!name) return;
+    if (!name) return null;
     const current =
       summaries.get(String(workFolderId))?.title ?? (await snapshotOf(workFolderId)).title;
-    if (current === name) return;
+    if (current === name) return null;
     try {
       remember(await call("rename_work_folder", { id: workFolderId, name }));
+      return name;
     } catch {
       // A rejected rename (collision, locked folder) keeps the saved source
       // under its current title; the save itself already succeeded.
+      return null;
     }
   }
 
@@ -491,6 +494,13 @@ export function createTauriHost({ invoke, readExportFile, initialStatus, updater
     settings: settingsPort,
     search: searchPort,
     transfer: transferPort,
+    // Desktop-internal title follow, not part of the ElefHost ports: the
+    // application calls this after every successful session save (autosave
+    // included) so H1 edits retitle the work, not just at creation time.
+    // Web hosts simply lack this method, so shared code skips them.
+    followHeadingTitle(workFolderId, text) {
+      return syncTitleWithHeading(workFolderId, text);
+    },
     // Desktop-internal list coordination, not part of the ElefHost ports:
     // the application hands its same-tick list over so the client's reload
     // in the same refresh consumes it instead of listing twice.

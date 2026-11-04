@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core"
 import { listen } from "@tauri-apps/api/event"
 import { getCurrentWindow } from "@tauri-apps/api/window"
+import { getVersion } from "@tauri-apps/api/app"
 import { completeBootstrap } from "./bootstrap-flow.js"
 import { createCloseFlow } from "./close-flow.js"
 import { createDiagnosticFailures } from "./diagnostic-failures.js"
@@ -41,6 +42,7 @@ startFileLibraryApplication({
   createLibraryHost: (initialStatus) => createTauriHost({ invoke, initialStatus, updaterEnabled: updateRuntime.enabled }),
   listen,
   getCurrentWindow,
+  getAppVersion: getVersion,
   completeBootstrap,
   createCloseFlow,
   createTransportAdapter: options => createTransportAdapter({ invoke, ...options }),

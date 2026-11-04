@@ -24,6 +24,17 @@ export function nextDefaultWorkTitle(kind: WorkKind, existingTitles: Iterable<st
   return `${base} ${suffix}`;
 }
 
+// True for the generated untitled names (bare, numbered, either kind):
+// the only titles the H1 follow may adopt. A named work keeps its folder
+// name no matter what its heading says; only an explicit card or title
+// rename moves it.
+export function isDefaultWorkTitle(title: unknown): boolean {
+  if (typeof title !== "string") return false;
+  const bare = title.normalize("NFC").trim();
+  if (bare.length === 0) return true;
+  return /^untitled( document| presentation)?( \d+)?$/i.test(bare);
+}
+
 function foldTitle(value: string): string {
   return value.normalize("NFC").toLowerCase();
 }

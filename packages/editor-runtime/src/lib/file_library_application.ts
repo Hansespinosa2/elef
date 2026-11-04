@@ -7,6 +7,7 @@ import { createRequestGuard } from "./request_identity.js"
 import { waitForEditorController } from "./editor_ready.js"
 import { createWorkSession, createTitleSaveFlow } from "@elef/client"
 import { createCodeMirrorBinding } from "./editor_binding.js"
+import { followHeadingTitleAfterSave } from "./follow_heading_title.js"
 import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
@@ -67,6 +68,7 @@ export interface DesktopPlatform {
   createLibraryHost: any;
   listen: any;
   getCurrentWindow: any;
+  getAppVersion?: any;
   completeBootstrap: any;
   createCloseFlow: any;
   createTransportAdapter: any;
@@ -112,7 +114,7 @@ function shellElement<T extends Element>(selector: string): T {
 
 export function startFileLibraryApplication(platform: DesktopPlatform): void {
   const {
-    fileLibrary, createLibraryHost, listen, getCurrentWindow,
+    fileLibrary, createLibraryHost, listen, getCurrentWindow, getAppVersion,
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
     mediaUrlsForWorkFolder, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
@@ -198,6 +200,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     status: document.querySelector("#status-text") as HTMLElement,
     settingsDialog: document.querySelector("#settings-dialog") as HTMLDialogElement,
     aboutDialog: document.querySelector("#about-dialog") as HTMLDialogElement,
+    aboutVersion: document.querySelector("#about-version") as HTMLElement,
     editorField: document.querySelector("#desktop-editor-field") as HTMLElement,
     editorForm: document.querySelector("#desktop-editor-form") as HTMLFormElement,
     editorInput: document.querySelector("#work-source") as HTMLTextAreaElement,
@@ -806,6 +809,18 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       const { work, prepared } = transition
       const { documentTitles } = prepared as { documentTitles: string[] }
       const isDocument = work.source_file === "document.md"
+      // Untitled works adopt their H1 as the folder name at open, so a
+      // work that already has a heading stops showing Untitled without
+      // waiting for an edit. Named works never move implicitly: the editor
+      // source carries the H1 separately and only an explicit card or title
+      // rename moves the folder. Hosts without the hook (web) skip this.
+      await followHeadingTitleAfterSave(libraryHost, work.id, work.source, {
+        folders: workFolders,
+        active: work,
+        setWorkTitle: name => { elements.workTitle.textContent = name },
+        setBreadcrumb: name => { shellElement<HTMLElement>("#breadcrumb-current").textContent = name },
+        setTitleInput: name => { elements.titleInput.value = name }
+      })
       if (work.id !== id) {
         workFolders = workFolders.map(item => item.id === id ? { ...item, id: work.id } : item)
         documentGraphCache?.invalidate()
@@ -1395,7 +1410,23 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     if (action === "settings") return showSettings()
     if (action === "check-for-updates") return checkForUpdates(true)
     if (action === "export-diagnostics") return exportDiagnosticsArchive()
-    if (action === "about") return elements.aboutDialog.showModal()
+    if (action === "about") {
+      // The version line fills in at open time so the dialog never shows a
+      // stale build number; hosts without a version source hide the line
+      // instead of leaving a blank row.
+      if (elements.aboutVersion) {
+        let label = ""
+        try {
+          const version = typeof getAppVersion === "function" ? await getAppVersion() : null
+          if (typeof version === "string" && version.length > 0) label = `Version ${version}`
+        } catch {
+          label = ""
+        }
+        elements.aboutVersion.textContent = label
+        elements.aboutVersion.hidden = label.length === 0
+      }
+      return elements.aboutDialog.showModal()
+    }
     if (action === "start-presentation") return startPresentation()
     if (action === "print") return printCurrentWork()
   }
