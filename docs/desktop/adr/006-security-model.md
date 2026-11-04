@@ -18,7 +18,7 @@ The web threat model doesn't transfer: on desktop the webview has IPC to a backe
 
 ## Decision
 
-Adopt the layered model in [data-format.md](../data-format.md#trust-boundary): sanitization, strict CSP (`script-src` never relaxed), strict Mermaid, least-privilege capabilities, backend path discipline, import hardening, fingerprinted writes, hostility-safe commands, and signed updates with supply-chain hygiene. No new Tauri command ships without a capability review. Accepted after the shared hostile-work corpus passed on Linux and macOS ([CI run 37061835922](https://github.com/Hansespinosa2/elef/actions/runs/37061835922)); that acceptance covers the tested corpus, not arbitrary hostile works.
+Adopt the layered model in [data-format.md](../data-format.md#trust-boundary): sanitization, strict CSP (`script-src` never permits `'unsafe-inline'` or `'unsafe-eval'`; `'wasm-unsafe-eval'` and the SHA-256-verified `elefpython:` protocol are scoped to local WebAssembly Python execution), strict Mermaid, least-privilege capabilities, backend path discipline, import hardening, fingerprinted writes, hostility-safe commands, and signed updates with supply-chain hygiene. No new Tauri command ships without a capability review. Accepted after the shared hostile-work corpus passed on Linux and macOS ([CI run 37061835922](https://github.com/Hansespinosa2/elef/actions/runs/37061835922)); that acceptance covers the tested corpus, not arbitrary hostile works.
 
 ## Consequences
 

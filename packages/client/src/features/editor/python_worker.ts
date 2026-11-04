@@ -1380,6 +1380,8 @@ export function executePythonWithBuiltInEngine(code: string, theme: WorkerThemeC
   }
 }
 
+;(globalThis as Record<string, unknown>).__elefBuiltInPythonEngine = executePythonWithBuiltInEngine
+
 let pyodidePromise: Promise<PyodideInstance> | null = null
 let activeRuntimeBase = ""
 
@@ -1393,6 +1395,9 @@ async function getPyodide(runtimeBaseUrl: string): Promise<PyodideInstance> {
     try {
       const baseHref = typeof self !== "undefined" && self.location ? self.location.href : "http://127.0.0.1/"
       const resolvedBase = new URL(normalizedBase, baseHref).href
+      if (typeof fetch === "function") {
+        await fetch(`${resolvedBase}runtime-manifest.json`).catch(() => null)
+      }
       const moduleUrl = `${resolvedBase}pyodide.mjs`
       const mod = (await import(moduleUrl)) as {
         loadPyodide?: (options: { indexURL: string }) => Promise<PyodideInstance>

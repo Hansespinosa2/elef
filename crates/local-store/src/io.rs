@@ -215,7 +215,7 @@ pub(crate) fn sync_directory(path: &Path) -> Result<(), CoreError> {
     Ok(())
 }
 
-pub(crate) fn sha256(bytes: &[u8]) -> String {
+pub fn sha256(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
 }
 

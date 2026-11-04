@@ -7,6 +7,7 @@ mod exports;
 mod library;
 mod menus;
 mod printing;
+mod python_runtime;
 mod remote_images;
 mod single_instance;
 mod state;
@@ -34,6 +35,7 @@ use crate::library::{
 };
 use crate::menus::build_menu;
 use crate::printing::print_work;
+use crate::python_runtime::python_protocol_response;
 use crate::remote_images::fetch_remote_image;
 use crate::state::DesktopState;
 use crate::updates::confirm_app_ready;
@@ -186,6 +188,12 @@ pub fn run(context: tauri::Context<tauri::Wry>) {
     let app = builder
         .register_asynchronous_uri_scheme_protocol("elefasset", |context, request, responder| {
             responder.respond(asset_protocol_response(context.app_handle(), &request));
+        })
+        .register_asynchronous_uri_scheme_protocol("elefpython", |context, request, responder| {
+            let app_handle = context.app_handle().clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                responder.respond(python_protocol_response(&app_handle, &request));
+            });
         })
         .manage(DesktopState::default())
         .setup(|app| {
