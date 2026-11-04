@@ -16,6 +16,7 @@ import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.j
 import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scenarios/slide-position-grammar.js"
 import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
 import { artRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/art-rendering.js"
+import { pythonRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/python-rendering.js"
 import { richRenderingMediaWorkflow, RICH_RENDERING_SOURCE, RICH_RENDERING_TITLE } from "../../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
@@ -715,6 +716,38 @@ class WebEditorUi {
     await expect.poll(() => this.page.locator(".editor-projection [data-elef-art-root]").count()).toBe(count)
   }
 
+  async waitForPythonBlocks(count) {
+    await expect.poll(() => this.page.locator('.editor-projection .elef-python-block[data-processed="true"]').count(), {
+      timeout: 15_000
+    }).toBe(count)
+  }
+
+  async readPythonBlockSemantics() {
+    return this.page.locator(".editor-projection .elef-python-block[data-elef-python]").evaluateAll(blocks => blocks.map(block => {
+      const activeFrame = block.querySelector(".elef-python-frame:not([hidden])") || block
+      const sliderValue = block.querySelector(".elef-python-slider-value")
+      return {
+        mode: block.dataset.pythonMode,
+        processed: block.dataset.processed,
+        hasCode: Boolean(block.querySelector(":scope > pre.elef-python-code")),
+        svgCount: activeFrame.querySelectorAll(".elef-python-figure svg").length,
+        tableCount: activeFrame.querySelectorAll(".elef-python-dataframe table").length,
+        stdout: activeFrame.querySelector(".elef-python-stdout")?.textContent || "",
+        sliderValue: sliderValue?.textContent || null
+      }
+    }))
+  }
+
+  async scrubPythonSlider(value) {
+    const updated = await this.page.locator(".editor-projection .elef-python-slider").first().evaluate((slider, nextValue) => {
+      slider.value = String(nextValue)
+      slider.dispatchEvent(new Event("input", { bubbles: true }))
+      slider.dispatchEvent(new Event("change", { bubbles: true }))
+      return slider.value
+    }, value)
+    expect(updated).toBe(String(value))
+  }
+
   async readArtSemantics() {
     return this.page.locator(".editor-projection [data-elef-art-root]").evaluateAll(roots => roots.map(root => {
       const list = root.querySelector(":scope > .elef-art-list")
@@ -1263,6 +1296,10 @@ test("the source editor has matching styles in Rails and the desktop asset bundl
 
 test("shared Art semantics render consistently in the web app", async ({ page }) => {
   await artRenderingWorkflow(new WebEditorUi(page))
+})
+
+test("shared executable Python blocks render figures, tables, and sliders in the web app", async ({ page }) => {
+  await pythonRenderingWorkflow(new WebEditorUi(page))
 })
 
 test("the rich release fixture renders, presents, saves, and reopens in the web app", async ({ page }) => {

@@ -367,6 +367,7 @@ shared_workflows = {
     "libraryDeepLinksWorkflow",
     "mathInputWorkflow",
     "presentationModeWorkflow",
+    "pythonRenderingWorkflow",
     "richRenderingMediaWorkflow",
     "slidePositionGrammarWorkflow",
     "snippetInsertWorkflow",
