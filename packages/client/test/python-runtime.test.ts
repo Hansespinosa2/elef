@@ -149,6 +149,17 @@ print(f"active={freq}")</pre>
   assert.equal(frames[3]?.hidden, false);
   assert.match(frames[3]?.textContent ?? "", /active=4/);
 
+  // Validate keyword min/max arguments.
+  const kwSlider = await runPythonCode(
+    'import elef\ns = elef.slider("Slope", min=10, max=12, step=1, value=11)\nprint(f"s={s}")',
+    block,
+  );
+  assert.equal(kwSlider.ok, true);
+  assert.deepEqual(kwSlider.slider?.values, [10, 11, 12]);
+  assert.equal(kwSlider.slider?.min, 10);
+  assert.equal(kwSlider.slider?.max, 12);
+  assert.equal(kwSlider.slider?.defaultValue, 11);
+
   // Validate >25 step rejection and >1 slider rejection in v0.
   const tooManySteps = await runPythonCode(
     'import elef\nk = elef.slider("Count", 1, 30, step=1)',
@@ -165,7 +176,7 @@ print(f"active={freq}")</pre>
   assert.match(twoSliders.error ?? "", /Only one elef\.slider is supported per block/);
 });
 
-test("in-memory cache deduplicates identical runs until force is requested", async () => {
+test("in-memory cache deduplicates identical runs across trailing-newline differences until force is requested", async () => {
   clearPythonExecutionCache();
   setPythonExecutorForTests(null);
   resetPythonWorkerMessageCount();
@@ -173,7 +184,7 @@ test("in-memory cache deduplicates identical runs until force is requested", asy
 
   const code = "print(21 * 2)";
   const r1 = await runPythonCode(code, root);
-  const r2 = await runPythonCode(code, root);
+  const r2 = await runPythonCode(`${code}\n`, root);
   assert.equal(r1.frames[0]?.stdout, "42\n");
   assert.equal(r2.frames[0]?.stdout, "42\n");
   assert.equal(getPythonWorkerMessageCount(), 1);
@@ -206,10 +217,10 @@ test("worker timeout terminates a hung block after the timeout and recovers for 
 
     const timedOut = await runPythonCode("while True:\n  pass", block);
     assert.equal(timedOut.ok, false);
-    assert.equal(timedOut.error, "Execution timed out after 10 seconds.");
+    assert.equal(timedOut.error, "Execution timed out after 35ms.");
     mountPythonExecutionResult(block, timedOut);
     assert.ok(block.classList.contains(PYTHON_ERROR_CLASS));
-    assert.match(block.textContent ?? "", /Execution timed out after 10 seconds/);
+    assert.match(block.textContent ?? "", /Execution timed out after 35ms/);
 
     const nextRun = await runPythonCode("print('recovered')", block);
     assert.equal(nextRun.ok, true);
@@ -220,19 +231,23 @@ test("worker timeout terminates a hung block after the timeout and recovers for 
   }
 });
 
-test("sanitizePythonSvg and sanitizePythonTable strip scripts, event handlers, and external URLs", () => {
+test("sanitizePythonSvg and sanitizePythonTable strip scripts, styles, animation setters, event handlers, and external URLs", () => {
   const { document } = setupDom("");
 
-  const dirtySvg = `<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(2)</script><foreignObject><iframe></iframe></foreignObject><use href="#safe-id"/><use href="https://evil.example/payload.svg#x"/><path d="M 0 0 L 10 10" onclick="evil()"/></svg>`;
+  const dirtySvg = `<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"><script>alert(2)</script><style>body { display: none; }</style><set attributeName="onload" to="alert(3)"/><animate attributeName="href" to="javascript:alert(4)"/><foreignObject><iframe></iframe></foreignObject><use href="#safe-id"/><use href="https://evil.example/payload.svg#x"/><path d="M 0 0 L 10 10" filter="url(https://evil.example/filter#f)" clip-path="url(#local-clip)" onclick="evil()"/></svg>`;
   const cleanSvg = sanitizePythonSvg(dirtySvg, document);
   assert.ok(cleanSvg);
   const serializedSvg = cleanSvg.outerHTML;
   assert.ok(!serializedSvg.includes("<script"));
+  assert.ok(!serializedSvg.includes("<style"));
+  assert.ok(!serializedSvg.includes("<set"));
+  assert.ok(!serializedSvg.includes("<animate"));
   assert.ok(!serializedSvg.includes("foreignObject"));
   assert.ok(!serializedSvg.includes("onload"));
   assert.ok(!serializedSvg.includes("onclick"));
   assert.ok(!serializedSvg.includes("evil.example"));
   assert.ok(serializedSvg.includes('href="#safe-id"'));
+  assert.ok(serializedSvg.includes('clip-path="url(#local-clip)"'));
 
   const dirtyTable = `<table class="dataframe" onclick="evil()"><thead><tr style="text-align: right;"><th>col</th></tr></thead><tbody><tr><td style="background:url(javascript:alert(1))">val<script>evil()</script></td></tr></tbody></table>`;
   const cleanTableFrag = sanitizePythonTable(dirtyTable, document);

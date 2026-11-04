@@ -10,6 +10,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 use local_store::sha256_hex;
@@ -19,6 +20,7 @@ use tauri::{AppHandle, Manager};
 pub(crate) const PYTHON_RUNTIME_VERSION: &str = "0.27.3-elef1";
 pub(crate) const PYTHON_RUNTIME_CDN_BASE: &str = "https://cdn.jsdelivr.net/pyodide/v0.27.3/full/";
 const MAX_RUNTIME_ARTIFACT_BYTES: usize = 35 * 1024 * 1024;
+static TEMP_FILE_NONCE: AtomicU64 = AtomicU64::new(0);
 
 const BOOTSTRAP_MANIFEST_BYTES: &[u8] = br#"{
   "version": "0.27.3-elef1",
@@ -181,7 +183,13 @@ fn write_verified_cache_file(
     verify_artifact_bytes(artifact, bytes)?;
     fs::create_dir_all(version_dir).map_err(|err| PythonRuntimeError::Io(err.to_string()))?;
     let target = version_dir.join(artifact.filename);
-    let temp = version_dir.join(format!(".{}.{}.tmp", artifact.filename, std::process::id()));
+    let nonce = TEMP_FILE_NONCE.fetch_add(1, Ordering::Relaxed);
+    let temp = version_dir.join(format!(
+        ".{}.{}.{}.tmp",
+        artifact.filename,
+        std::process::id(),
+        nonce
+    ));
     fs::write(&temp, bytes).map_err(|err| PythonRuntimeError::Io(err.to_string()))?;
     fs::rename(&temp, &target).map_err(|err| {
         let _ = fs::remove_file(&temp);
@@ -201,7 +209,7 @@ fn download_pinned_artifact_bytes(filename: &str) -> Result<Vec<u8>, PythonRunti
             .read_timeout(Duration::from_secs(30))
             .build()
             .map_err(|err| PythonRuntimeError::FetchFailed(err.to_string()))?;
-        let response = client
+        let mut response = client
             .get(&url)
             .send()
             .await
@@ -212,11 +220,24 @@ fn download_pinned_artifact_bytes(filename: &str) -> Result<Vec<u8>, PythonRunti
                 response.status()
             )));
         }
-        let bytes = response
-            .bytes()
+        if response
+            .content_length()
+            .is_some_and(|len| len > MAX_RUNTIME_ARTIFACT_BYTES as u64)
+        {
+            return Err(PythonRuntimeError::ArtifactTooLarge(filename.to_owned()));
+        }
+        let mut out = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
             .await
-            .map_err(|err| PythonRuntimeError::FetchFailed(err.to_string()))?;
-        Ok(bytes.to_vec())
+            .map_err(|err| PythonRuntimeError::FetchFailed(err.to_string()))?
+        {
+            if out.len().saturating_add(chunk.len()) > MAX_RUNTIME_ARTIFACT_BYTES {
+                return Err(PythonRuntimeError::ArtifactTooLarge(filename.to_owned()));
+            }
+            out.extend_from_slice(&chunk);
+        }
+        Ok(out)
     })
 }
 

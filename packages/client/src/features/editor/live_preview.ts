@@ -4,7 +4,8 @@ import { syntaxTree } from "@codemirror/language"
 import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
 import { MERMAID_ERROR_CLASS, renderMermaidSvg } from "./mermaid_runtime.js"
-import { mountPythonExecutionResult, runPythonCode } from "./python_runtime.js"
+import { mountPythonExecutionResult, normalizePythonCode, runPythonCode } from "./python_runtime.js"
+import { parsePythonFenceInfo } from "@elef/work-model/document-map"
 
 export const livePreviewMode = StateEffect.define<boolean>()
 export const pythonFenceRunEffect = StateEffect.define<number>()
@@ -387,19 +388,6 @@ function fenceLanguage(info: string): string {
   return (info.trim().split(/[\s{]/)[0] ?? "").toLowerCase()
 }
 
-function parsePythonFenceHeader(info: string): { executable: boolean; showCode: boolean } {
-  const tokens = info
-    .trim()
-    .toLowerCase()
-    .split(/[\s,{]+/)
-    .map((token) => token.replace(/[}]+$/g, ""))
-    .filter(Boolean)
-  if (tokens[0] !== "python" && tokens[0] !== "py") return { executable: false, showCode: false }
-  const executable = tokens.slice(1).includes("run")
-  const showCode = executable && tokens.slice(1).includes("show-code")
-  return { executable, showCode }
-}
-
 function fencedDiagramSource(fencedSource: string): string {
   return fencedSource.split("\n").slice(1, -1).join("\n")
 }
@@ -466,7 +454,7 @@ export function findExecutablePythonFenceAt(state: EditorState, pos: number): Ex
     const fenceMatch = line.match(/^(\s{0,3})(`{3,}|~{3,})(.*)$/)
     if (fenceMatch) {
       if (!fence) {
-        const py = parsePythonFenceHeader(fenceMatch[3] ?? "")
+        const py = parsePythonFenceInfo(fenceMatch[3] ?? "")
         if (py.executable) {
           fence = {
             marker: fenceMatch[2]?.[0] ?? "",
@@ -500,10 +488,11 @@ export function runActivePythonFence(view: EditorView): boolean {
   const head = view.state.selection.main.head
   const fence = findExecutablePythonFenceAt(view.state, head)
   if (!fence || !fence.code.trim()) return false
+  const normalizedTarget = normalizePythonCode(fence.code)
   runPythonCode(fence.code, view.dom, { force: true }).then((result) => {
     const controls = view.dom.querySelectorAll<HTMLElement>(".elef-python-editor-controls")
     controls.forEach((panel) => {
-      if ((panel.dataset.pythonCode ?? "") === fence.code) {
+      if (normalizePythonCode(panel.dataset.pythonCode ?? "") === normalizedTarget) {
         mountPythonExecutionResult(panel, result)
       }
     })
@@ -531,7 +520,7 @@ function addBlockMarkup(decorations: Range<Decoration>[], state: EditorState, so
     const fenceMatch = line.match(/^(\s{0,3})(`{3,}|~{3,})(.*)$/)
     if (fenceMatch) {
       if (!fence) {
-        const pyInfo = parsePythonFenceHeader(fenceMatch[3] ?? "")
+        const pyInfo = parsePythonFenceInfo(fenceMatch[3] ?? "")
         fence = {
           marker: fenceMatch[2]?.[0] ?? "",
           length: (fenceMatch[2] ?? "").length,

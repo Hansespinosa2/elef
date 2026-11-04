@@ -116,7 +116,7 @@ app_host_sources = [*app_frontend.rglob("*.js"), ROOT / "apps/web/app/views/desk
 desktop_protocol_violations = [
     path.relative_to(ROOT).as_posix()
     for path in app_host_sources
-    if re.search(r"\belef(?:-preview|-upload|asset)://", path.read_text())
+    if re.search(r"\belef(?:-preview|-upload|asset|python)://", path.read_text())
 ]
 assert not desktop_protocol_violations, (
     "Desktop media URL schemes must stay in desktop transport adapters: "

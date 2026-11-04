@@ -26,6 +26,7 @@ const fileLibrary = createFileLibraryTransport({ invoke })
 const updateRuntime = createDesktopUpdateRuntime({ invoke })
 const diagnosticFailures = createDiagnosticFailures(invoke)
 const nativeFetch = globalThis.fetch.bind(globalThis)
+globalThis.__ELEF_PYTHON_RUNTIME_BASE__ = "elefpython://localhost/"
 installDesktopDropGuard()
 
 startFileLibraryApplication({

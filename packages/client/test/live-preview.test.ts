@@ -129,4 +129,9 @@ test("live preview projects executable python fences as widgets when inactive an
     previewState(doc, EditorSelection.cursor(22)).update({ effects: livePreviewMode.of(false) }).state
   );
   assert.deepEqual(specsAt(sourceModeActive, fenceEnd, fenceEnd), ["widget:python-controls:print(1 + 1)"]);
+
+  const nonExecutable = decorationsOf(
+    previewState("Title\n\n```python show-code run\nprint(1)\n```\n", EditorSelection.cursor(0))
+  );
+  assert.ok(!nonExecutable.some((item) => item.spec.startsWith("widget:python")));
 });

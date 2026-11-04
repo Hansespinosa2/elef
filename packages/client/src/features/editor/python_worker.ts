@@ -66,6 +66,10 @@ def _elef_build_slider_values(min_val, max_val, step_val, default_val):
     min_f = float(min_val)
     max_f = float(max_val)
     step_f = float(step_val)
+    if not (math.isfinite(min_f) and math.isfinite(max_f) and math.isfinite(step_f)):
+        raise ValueError("elef.slider arguments must be finite numbers")
+    if default_val is not None and not math.isfinite(float(default_val)):
+        raise ValueError("elef.slider arguments must be finite numbers")
     if step_f <= 0:
         raise ValueError("elef.slider step must be positive")
     if max_f < min_f:
@@ -96,10 +100,21 @@ def _elef_run_single_frame(code_str, theme, slider_override, record_slider):
     slider_calls = [0]
 
     elef_mod = types.ModuleType("elef")
-    def slider(label, min_val, max_val, step=1, value=None):
+    def slider(label="Value", min_val=None, max_val=None, step=1, value=None, **kwargs):
         slider_calls[0] += 1
         if slider_calls[0] > 1:
             raise _ElefSliderLimitError("Only one elef.slider is supported per block in v0")
+        if min_val is None:
+            min_val = kwargs.pop("min", 0)
+        else:
+            kwargs.pop("min", None)
+        if max_val is None:
+            max_val = kwargs.pop("max", 10)
+        else:
+            kwargs.pop("max", None)
+        if kwargs:
+            unexpected = next(iter(kwargs.keys()))
+            raise TypeError(f"slider() got an unexpected keyword argument '{unexpected}'")
         values, default_val = _elef_build_slider_values(min_val, max_val, step, value)
         if record_slider:
             slider_spec[0] = {
@@ -810,20 +825,28 @@ function executeFallbackSingleFrame(
         throw new Error("ValueError: Only one elef.slider is supported per block in v0")
       }
       const positional: unknown[] = []
+      let kwLabel: unknown
+      let kwMin: unknown
+      let kwMax: unknown
       let kwStep: unknown
       let kwValue: unknown
       for (const arg of args) {
         if (arg && typeof arg === "object" && "__kw__" in (arg as Record<string, unknown>)) {
           const kw = (arg as { __kw__: Record<string, unknown> }).__kw__
+          if ("label" in kw) kwLabel = kw.label
+          if ("min" in kw) kwMin = kw.min
+          if ("min_val" in kw) kwMin = kw.min_val
+          if ("max" in kw) kwMax = kw.max
+          if ("max_val" in kw) kwMax = kw.max_val
           if ("step" in kw) kwStep = kw.step
           if ("value" in kw) kwValue = kw.value
         } else {
           positional.push(arg)
         }
       }
-      const label = String(positional[0] ?? "Value")
-      const minVal = Number(positional[1] ?? 0)
-      const maxVal = Number(positional[2] ?? 10)
+      const label = String(kwLabel ?? positional[0] ?? "Value")
+      const minVal = Number(kwMin ?? positional[1] ?? 0)
+      const maxVal = Number(kwMax ?? positional[2] ?? 10)
       const stepVal = Number(kwStep ?? positional[3] ?? 1)
       const defaultVal = kwValue !== undefined ? Number(kwValue) : positional[4] !== undefined ? Number(positional[4]) : null
       const spec = buildSliderSpec(label, minVal, maxVal, stepVal, defaultVal)

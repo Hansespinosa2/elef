@@ -24,23 +24,55 @@ export type PythonExecutor = (
 const TRANSPARENT_BACKGROUNDS = ["transparent", "rgba(0, 0, 0, 0)"]
 const DARK_LUMINANCE_THRESHOLD = 0.5
 
-const DISALLOWED_SVG_TAGS = new Set([
-  "SCRIPT",
-  "FOREIGNOBJECT",
-  "IFRAME",
-  "OBJECT",
-  "EMBED",
-  "AUDIO",
-  "VIDEO",
-  "CANVAS",
-  "FORM",
-  "INPUT",
-  "BUTTON",
-  "SELECT",
-  "TEXTAREA",
-  "A",
-  "IMAGE",
-  "FEIMAGE"
+const ALLOWED_SVG_TAGS = new Set([
+  "SVG",
+  "G",
+  "PATH",
+  "RECT",
+  "CIRCLE",
+  "ELLIPSE",
+  "LINE",
+  "POLYLINE",
+  "POLYGON",
+  "TEXT",
+  "TSPAN",
+  "DEFS",
+  "LINEARGRADIENT",
+  "RADIALGRADIENT",
+  "STOP",
+  "CLIPPATH",
+  "MASK",
+  "PATTERN",
+  "MARKER",
+  "SYMBOL",
+  "USE",
+  "TITLE",
+  "DESC",
+  "METADATA",
+  "FILTER",
+  "FEGAUSSIANBLUR",
+  "FEOFFSET",
+  "FEBLEND",
+  "FECOLORMATRIX",
+  "FECOMPONENTTRANSFER",
+  "FECOMPOSITE",
+  "FECONVOLVEMATRIX",
+  "FEDIFFUSELIGHTING",
+  "FEDISPLACEMENTMAP",
+  "FEDROPSHADOW",
+  "FEFLOOD",
+  "FEFUNCA",
+  "FEFUNCB",
+  "FEFUNCG",
+  "FEFUNCR",
+  "FEMERGE",
+  "FEMERGENODE",
+  "FEMORPHOLOGY",
+  "FEPOINTLIGHT",
+  "FESPECULARLIGHTING",
+  "FESPOTLIGHT",
+  "FETILE",
+  "FETURBULENCE"
 ])
 
 const ALLOWED_TABLE_TAGS = new Set([
@@ -96,7 +128,15 @@ export function setPythonExecutionTimeoutForTests(timeoutMs: number): void {
   executionTimeoutMs = timeoutMs > 0 ? timeoutMs : PYTHON_EXECUTION_TIMEOUT_MS
 }
 
-export function terminatePythonWorker(): void {
+function timeoutErrorMessage(ms = executionTimeoutMs): string {
+  const seconds = ms / 1000
+  if (Number.isInteger(seconds)) {
+    return `Execution timed out after ${seconds} second${seconds === 1 ? "" : "s"}.`
+  }
+  return `Execution timed out after ${ms}ms.`
+}
+
+export function terminatePythonWorker(reason = timeoutErrorMessage()): void {
   if (workerInstance) {
     try {
       workerInstance.terminate()
@@ -111,7 +151,7 @@ export function terminatePythonWorker(): void {
       ok: false,
       frames: [],
       slider: null,
-      error: "Execution timed out after 10 seconds."
+      error: reason
     })
   }
   workerPending.clear()
@@ -152,11 +192,20 @@ export function pythonWorkerUrl(): string | null {
 }
 
 export function pythonRuntimeBaseUrl(): string {
+  const globalBase = (globalThis as { __ELEF_PYTHON_RUNTIME_BASE__?: string }).__ELEF_PYTHON_RUNTIME_BASE__
+  if (typeof globalBase === "string" && globalBase.trim()) return globalBase.trim()
   if (typeof document === "undefined") return "/python-runtime/"
   return (
     document.querySelector<HTMLMetaElement>('meta[name="elef-python-runtime-base"]')?.content ||
     "/python-runtime/"
   )
+}
+
+function rgbLuminance(rgbString: string): number | null {
+  const channels = (rgbString.match(/[\d.]+/g) || []).slice(0, 3).map(Number)
+  if (channels.length !== 3 || channels.some((channel) => Number.isNaN(channel))) return null
+  const [red = 0, green = 0, blue = 0] = channels.map((channel) => channel / 255)
+  return 0.2126 * red + 0.7152 * green + 0.0722 * blue
 }
 
 function opaqueBackground(element: Element | Document | null | undefined): string {
@@ -183,21 +232,38 @@ function opaqueBackground(element: Element | Document | null | undefined): strin
 
 function surfaceIsDark(element: Element | Document | null | undefined): boolean {
   if (isElementNode(element) && typeof element.closest === "function") {
-    const themed = element.closest(
-      ".work-theme-dark, .document-theme-dark, .slides-theme-dark, .work-theme-light, .document-theme-light, .slides-theme-light, .work-theme-match, .document-theme-match, .slides-theme-match"
+    const explicitTheme = element.closest(
+      ".work-theme-dark, .document-theme-dark, .slides-theme-dark, .work-theme-light, .document-theme-light, .slides-theme-light"
     )
-    if (themed) {
+    if (explicitTheme) {
       return (
-        themed.classList.contains("work-theme-dark") ||
-        themed.classList.contains("document-theme-dark") ||
-        themed.classList.contains("slides-theme-dark")
+        explicitTheme.classList.contains("work-theme-dark") ||
+        explicitTheme.classList.contains("document-theme-dark") ||
+        explicitTheme.classList.contains("slides-theme-dark")
       )
     }
   }
-  const channels = (opaqueBackground(element).match(/[\d.]+/g) || []).slice(0, 3).map(Number)
-  if (channels.length !== 3 || channels.some((channel) => Number.isNaN(channel))) return false
-  const [red = 0, green = 0, blue = 0] = channels.map((channel) => channel / 255)
-  return 0.2126 * red + 0.7152 * green + 0.0722 * blue < DARK_LUMINANCE_THRESHOLD
+  if (typeof window !== "undefined" && typeof window.getComputedStyle === "function") {
+    let node: Element | null = isElementNode(element) && element.isConnected ? element : null
+    while (node && node.nodeType === 1 && node !== document.body) {
+      const style = window.getComputedStyle(node)
+      if (
+        style.backgroundColor &&
+        !TRANSPARENT_BACKGROUNDS.includes(style.backgroundColor) &&
+        !style.backgroundColor.endsWith(", 0)")
+      ) {
+        const lum = rgbLuminance(style.backgroundColor)
+        if (lum !== null) return lum < DARK_LUMINANCE_THRESHOLD
+      }
+      if (style.backgroundImage && style.backgroundImage !== "none") {
+        const textLum = rgbLuminance(style.color || "")
+        if (textLum !== null) return textLum > DARK_LUMINANCE_THRESHOLD
+      }
+      node = node.parentElement
+    }
+  }
+  const lum = rgbLuminance(opaqueBackground(element))
+  return lum !== null ? lum < DARK_LUMINANCE_THRESHOLD : false
 }
 
 export function pythonThemeConfig(element: Element | Document | null | undefined): PythonThemeConfig {
@@ -240,8 +306,12 @@ export function pythonThemeConfig(element: Element | Document | null | undefined
   }
 }
 
+export function normalizePythonCode(code: string): string {
+  return code.replace(/\r\n/g, "\n").trimEnd()
+}
+
 function cacheKeyFor(code: string, theme: PythonThemeConfig): string {
-  return `${code}\0${theme.darkMode ? "dark" : "light"}\0${theme.surface}\0${theme.accent}`
+  return `${normalizePythonCode(code)}\0${theme.darkMode ? "dark" : "light"}\0${theme.surface}\0${theme.accent}`
 }
 
 function ensureWorker(workerUrl: string): Worker {
@@ -299,13 +369,14 @@ async function executeWithTimeout(
     const controller = new AbortController()
     let timer: ReturnType<typeof setTimeout> | null = null
     const timeoutPromise = new Promise<PythonExecutionResult>((resolve) => {
+      const timeoutMsg = timeoutErrorMessage(executionTimeoutMs)
       timer = setTimeout(() => {
         controller.abort()
         resolve({
           ok: false,
           frames: [],
           slider: null,
-          error: "Execution timed out after 10 seconds."
+          error: timeoutMsg
         })
       }, executionTimeoutMs)
     })
@@ -345,14 +416,15 @@ async function executeWithTimeout(
       workerRequestId += 1
       const id = workerRequestId
       workerMessageCount += 1
+      const timeoutMsg = timeoutErrorMessage(executionTimeoutMs)
       const timer = setTimeout(() => {
         workerPending.delete(id)
-        terminatePythonWorker()
+        terminatePythonWorker(timeoutMsg)
         resolve({
           ok: false,
           frames: [],
           slider: null,
-          error: "Execution timed out after 10 seconds."
+          error: timeoutMsg
         })
       }, executionTimeoutMs)
       workerPending.set(id, { resolve, timer })
@@ -375,15 +447,16 @@ export async function runPythonCode(
   element: Element | Document | null | undefined,
   options: { force?: boolean } = {}
 ): Promise<PythonExecutionResult> {
+  const normalizedCode = normalizePythonCode(code)
   const theme = pythonThemeConfig(element)
-  const key = cacheKeyFor(code, theme)
+  const key = cacheKeyFor(normalizedCode, theme)
   if (options.force) {
     executionCache.delete(key)
   }
   const cached = executionCache.get(key)
   if (cached) return cached
 
-  const pending = executeWithTimeout(code, theme).then((result) => {
+  const pending = executeWithTimeout(normalizedCode, theme).then((result) => {
     if (!result.ok && result.error?.includes("timed out")) {
       executionCache.delete(key)
     }
@@ -391,6 +464,12 @@ export async function runPythonCode(
   })
   executionCache.set(key, pending)
   return pending
+}
+
+function hasUnsafeUrlReference(value: string): boolean {
+  const matches = value.match(/url\s*\([^)]*\)/gi)
+  if (!matches) return false
+  return matches.some((token) => !/^url\(\s*['"]?#[A-Za-z0-9_.:-]+['"]?\s*\)$/i.test(token.trim()))
 }
 
 export function sanitizePythonSvg(svgMarkup: string, doc: Document): Element | null {
@@ -403,7 +482,7 @@ export function sanitizePythonSvg(svgMarkup: string, doc: Document): Element | n
 
   for (const el of elements) {
     const tag = el.tagName.toUpperCase()
-    if (DISALLOWED_SVG_TAGS.has(tag)) {
+    if (!ALLOWED_SVG_TAGS.has(tag)) {
       el.remove()
       continue
     }
@@ -420,7 +499,11 @@ export function sanitizePythonSvg(svgMarkup: string, doc: Document): Element | n
         }
         continue
       }
-      if (name === "style" && /(?:url\s*\(|expression\s*\(|javascript:|data:|-moz-binding)/i.test(value)) {
+      if (hasUnsafeUrlReference(value)) {
+        el.removeAttribute(attr.name)
+        continue
+      }
+      if (name === "style" && /(?:@import|expression\s*\(|javascript:|data:|-moz-binding)/i.test(value)) {
         el.removeAttribute(attr.name)
       }
     }
