@@ -112,3 +112,16 @@ test("unknown directives stay visible so broken syntax is never hidden", () => {
   assert.ok(!specsAt(inactive, 0, 13).includes("replace:empty"));
   assert.ok(specsAt(inactive, 0, 13).includes("mark:cm-live-syntax-marker"));
 });
+
+test("live preview projects executable python fences as widgets when inactive and reveals run controls when active", () => {
+  const doc = "Title\n\n```python run\nprint(1 + 1)\n```\n";
+  const fenceStart = 7;
+  const fenceEnd = 37;
+
+  const inactive = decorationsOf(previewState(doc, EditorSelection.cursor(0)));
+  assert.ok(specsAt(inactive, fenceStart, fenceEnd).includes("widget:python:print(1 + 1)"));
+
+  const active = decorationsOf(previewState(doc, EditorSelection.cursor(22)));
+  assert.deepEqual(specsAt(active, fenceStart, fenceEnd), ["mark:cm-live-active-syntax"]);
+  assert.ok(specsAt(active, fenceEnd, fenceEnd).includes("widget:python-controls:print(1 + 1)"));
+});

@@ -52,6 +52,144 @@
   white-space: pre-wrap;
 }
 
+/* Executable Python blocks (```python run and ```python run show-code). */
+.elef-python-block {
+  display: block;
+  margin: 1.1rem 0;
+  max-width: 100%;
+}
+
+.elef-python-source {
+  display: none;
+}
+
+.elef-python-code {
+  margin-bottom: 0.75rem;
+}
+
+.elef-python-output {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.elef-python-controls {
+  background: rgba(127, 145, 134, 0.1);
+  border: 1px solid rgba(127, 145, 134, 0.28);
+  border-radius: 0.65rem;
+  padding: 0.55rem 0.85rem;
+}
+
+.elef-python-slider-label {
+  align-items: center;
+  display: flex;
+  font-size: 0.88rem;
+  font-weight: 600;
+  gap: 0.75rem;
+}
+
+.elef-python-slider-title {
+  min-width: 5rem;
+}
+
+.elef-python-slider {
+  accent-color: var(--oradia-green-deep, #4f8b68);
+  cursor: pointer;
+  flex: 1 1 auto;
+}
+
+.elef-python-slider-value {
+  font-family: var(--oradia-mono, monospace);
+  font-size: 0.85rem;
+  min-width: 2.5rem;
+  text-align: right;
+}
+
+.elef-python-figures {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.elef-python-figures svg {
+  height: auto;
+  max-width: 100%;
+}
+
+.elef-python-dataframe-wrap {
+  overflow-x: auto;
+}
+
+.elef-python-dataframe {
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  width: 100%;
+}
+
+.elef-python-dataframe th,
+.elef-python-dataframe td {
+  border: 1px solid rgba(127, 145, 134, 0.32);
+  padding: 0.35rem 0.6rem;
+}
+
+.elef-python-stdout {
+  background: rgba(17, 22, 26, 0.06);
+  border-radius: 0.5rem;
+  font-family: var(--oradia-mono, monospace);
+  font-size: 0.85rem;
+  margin: 0;
+  overflow-x: auto;
+  padding: 0.65rem 0.85rem;
+  white-space: pre-wrap;
+}
+
+.elef-python-traceback,
+.elef-python-block.elef-python-error .elef-python-output {
+  background: rgba(166, 58, 45, 0.08);
+  border: 1px dashed var(--presentation-danger, #c24738);
+  border-radius: 0.75rem;
+  color: var(--presentation-danger, #c24738);
+  font-family: var(--oradia-mono, monospace);
+  font-size: 0.84rem;
+  margin: 0;
+  padding: 0.75rem 0.95rem;
+  text-align: left;
+  white-space: pre-wrap;
+}
+
+.elef-python-editor-controls {
+  border-top: 1px solid rgba(127, 145, 134, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.35rem 0 0.75rem;
+  padding-top: 0.45rem;
+}
+
+.elef-python-editor-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 0.65rem;
+}
+
+.elef-python-run-button {
+  background: var(--oradia-slate-800, #202c32);
+  border: 1px solid var(--oradia-green, #9fc5a9);
+  border-radius: 0.45rem;
+  color: var(--oradia-ink, #e9eee9);
+  cursor: pointer;
+  font-family: var(--oradia-sans, sans-serif);
+  font-size: 0.78rem;
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+}
+
+.elef-python-run-hint {
+  color: var(--oradia-muted, #aab7b1);
+  font-size: 0.75rem;
+}
+
 /* Rouge token colors keep generated code readable without coupling it to a work theme. */
 .presentation-surface .highlight .k,
 .presentation-surface .highlight .kd,
