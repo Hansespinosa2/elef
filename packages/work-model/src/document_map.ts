@@ -716,8 +716,34 @@ function editableBlockKind(markdown: string): string {
   return "paragraph"
 }
 
+export interface PythonFenceInfo {
+  readonly executable: boolean;
+  readonly showCode: boolean;
+}
+
+export function parsePythonFenceInfo(info: unknown): PythonFenceInfo {
+  if (typeof info !== "string") return { executable: false, showCode: false }
+  const tokens = info.trim().toLowerCase().split(/\s+/).filter(Boolean)
+  if (tokens.length < 2) return { executable: false, showCode: false }
+  const [lang, second, third, ...rest] = tokens
+  if (lang !== "python" && lang !== "py") return { executable: false, showCode: false }
+  if (second !== "run" || rest.length > 0) return { executable: false, showCode: false }
+  if (third === undefined) return { executable: true, showCode: false }
+  if (third === "show-code") return { executable: true, showCode: true }
+  return { executable: false, showCode: false }
+}
+
+export function isExecutablePythonFence(markdown: unknown): boolean {
+  if (typeof markdown !== "string") return false
+  const firstLine = markdown.split(/\r?\n/, 1)[0] ?? ""
+  const match = /^\s{0,3}(?:`{3,}|~{3,})(.*)$/.exec(firstLine)
+  if (!match) return false
+  return parsePythonFenceInfo(match[1] ?? "").executable
+}
+
 function clientCanRoundTrip(markdown: string, kind: string): boolean {
   if (kind === "code" && /^\s{0,3}(?:`{3,}|~{3,})[ \t]*mermaid\b/i.test(markdown)) return false
+  if (kind === "code" && isExecutablePythonFence(markdown)) return false
   if (kind === "code" && fencedCodeSource(markdown)) return supportedFencedCode(markdown)
   if (kind === "code" || kind === "rule") return false
   if (kind === "heading" && sourceLines(markdown).length !== 1) return false

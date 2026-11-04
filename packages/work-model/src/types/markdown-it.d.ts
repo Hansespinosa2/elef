@@ -12,6 +12,7 @@ declare module "markdown-it" {
   export interface MarkdownItToken {
     type: string
     content: string
+    info?: string
     level: number
     nesting: number
     map?: number[] | null
@@ -67,7 +68,8 @@ declare module "markdown-it" {
     tokens: MarkdownItToken[],
     index: number,
     options: unknown,
-    env: unknown
+    env: unknown,
+    self?: unknown
   ) => string
 
   export interface MarkdownItOptions {
