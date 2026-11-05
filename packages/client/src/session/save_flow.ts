@@ -367,7 +367,11 @@ export function createSaveFlow({
     }
     if (wasClean) return checkExternalChange(id, snapshot)
     const work = activeWork
-    if (!(await applySource(outcome.source, work, { preserveMetadata: true })) || activeWork !== work) {
+    // The merge was computed from localSource before asynchronous snapshot
+    // and merge work. Typing during either wait must not be replaced by that
+    // older result, even if the disk baseline has not changed.
+    if (getSource() !== localSource) return checkExternalChange(id, snapshot)
+    if (!(await applySource(outcome.source, work, { preserveMetadata: true, expectedSource: localSource })) || activeWork !== work) {
       if (activeWork?.id === id) return checkExternalChange(id, snapshot)
       return "inactive"
     }
@@ -504,18 +508,24 @@ export function createSaveFlow({
     if (dirty && !activeConflict) schedule(0)
   }
 
-  async function applySource(source: string, work: SaveWork, options: { preserveMetadata?: boolean } = {}): Promise<boolean> {
+  async function applySource(source: string, work: SaveWork, options: { preserveMetadata?: boolean; expectedSource?: string } = {}): Promise<boolean> {
     if (sourceMutation) return false
     const token = {}
+    const revisionBeforeMutation = revision
     sourceMutation = token
     try {
-      const applied = await setSource(source, { id: work.id, expectedSource: getSource(), ...options })
+      const applied = await setSource(source, { id: work.id, ...options, expectedSource: options.expectedSource ?? getSource() })
       return applied !== false && activeWork === work
     } catch (error) {
       onError(error)
       return false
     } finally {
-      if (sourceMutation === token) sourceMutation = null
+      if (sourceMutation === token) {
+        sourceMutation = null
+        // A save timer may have fired while an adapter was waiting. Resume
+        // autosave for edits made during that wait once the guard is lifted.
+        if (activeWork === work && revision !== revisionBeforeMutation && dirty && !activeConflict) schedule()
+      }
     }
   }
 
