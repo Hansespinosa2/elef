@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { pointAtVisibleOffset, visibleOffsetAtPoint } from "./editor_caret.js"
 import { markStage } from "../lib/stage_marks.js"
+import { preserveSurfaceScroll } from "../lib/scroll_preservation.js"
 
 interface DocumentPage {
   content: HTMLElement;
@@ -291,6 +292,12 @@ export default class extends Controller<HTMLElement> {
     blocks.forEach((block) => this.clearArtItemTooTall(block))
     blocks.forEach((block) => this.ensureFlowId(block))
 
+    // Replacing the surface collapses its scroll height and clamps every
+    // scroller to the top; capture first so the rebuild below restores the
+    // viewport. Caret restore in the finalize frame refines this when a
+    // caret survived, but the no-caret case (blurred repagination) would
+    // otherwise strand the reader at page one.
+    const preservedScroll = preserveSurfaceScroll(this.surfaceTarget)
     this.surfaceTarget.replaceChildren()
     this.surfaceTarget.classList.add("is-paginated")
     const pages: DocumentPage[] = []
@@ -337,6 +344,9 @@ export default class extends Controller<HTMLElement> {
     if (preview && this.resizeObserver) this.resizeObserver.observe(preview)
 
     this.resizeFrames()
+    // Restore synchronously in the same task so no paint shows the
+    // collapsed top; the finalize frame then places any surviving caret.
+    preservedScroll.restore()
     this.mutationObserver?.takeRecords()
     this.paginatedOnce = true
     // Perf Q2: quiet settled frames so off-screen pages skip rendering
