@@ -1108,8 +1108,8 @@ export class EditorEngine {
 
   syncGutterVisibility(): void {
     if (!this.view || this.destroyed) return
-    const hidden = this.form?.dataset.editorSurface === "continuous" && this.editingMode === "visual"
-    if (hidden === this.continuousGuttersHidden) return
+    const hidden = this.form?.dataset?.editorSurface === "continuous" && this.editingMode === "visual"
+    if (hidden === Boolean(this.continuousGuttersHidden)) return
     this.continuousGuttersHidden = hidden
     this.view.dispatch({ effects: [
       this.lineNumbersCompartment.reconfigure(hidden ? [] : this.createLineNumbersExtension()),
