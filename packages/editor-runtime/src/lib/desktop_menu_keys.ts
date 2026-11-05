@@ -23,3 +23,17 @@ export function desktopMenuKeyAction(event: DesktopMenuKeyEvent): DesktopMenuKey
   if (key === "enter" && !event.shiftKey && !event.altKey && !event.isComposing) return "start-presentation"
   return null
 }
+
+// Palette surface state: the palette portals to document.body, so a hidden
+// library view no longer gates it — ⌘K keeps its surface while editing. A
+// live presentation (full-delivery surface) and an open modal host dialog (a
+// plain div cannot paint above a modal dialog's top layer, so the palette
+// would open invisibly and steal focus) still do.
+export interface PaletteSurfaceState {
+  readonly presenting: boolean
+  readonly modalOpen: boolean
+}
+
+export function canOpenPalette(state: PaletteSurfaceState): boolean {
+  return !state.presenting && !state.modalOpen
+}

@@ -65,7 +65,7 @@ async function press(node: Element, key: string): Promise<void> {
   await settled();
 }
 
-function optionLabels(element: Element): string[] {
+function optionLabels(element: Element | Document): string[] {
   return [...element.querySelectorAll(".command-palette-option strong")].map(
     (node) => node.textContent?.trim() ?? "",
   );
@@ -175,20 +175,102 @@ test("palette opens through the shell control and quick-open navigates", async (
     navigate: (target) => seen.push(target),
     palette: paletteSeam(ran),
   };
-  const { element, shell } = await mountInto(host, options);
+  const { document, element, shell } = await mountInto(host, options);
   try {
-    assert.equal(element.querySelector(".command-palette"), null, "palette starts closed");
+    assert.equal(document.querySelector(".command-palette"), null, "palette starts closed");
     shell.openPalette("search");
     await settled();
-    const palette = element.querySelector(".command-palette");
+    const palette = document.querySelector(".command-palette");
     assert.notEqual(palette, null, "shell control opens the palette");
     assert.match(palette?.querySelector("h2")?.textContent ?? "", /Search works/);
     await setInputValue(palette?.querySelector(".command-palette-panel > input"), "café");
-    assert.deepEqual(optionLabels(element), ["Café Work"]);
+    assert.deepEqual(optionLabels(document), ["Café Work"]);
     await press(palette?.querySelector(".command-palette-panel > input") as Element, "Enter");
     assert.deepEqual(seen, [{ workId: cafe.id, kind: "presentation" }]);
-    assert.equal(element.querySelector(".command-palette"), null, "choosing closes the palette");
+    assert.equal(document.querySelector(".command-palette"), null, "choosing closes the palette");
     assert.deepEqual(ran, []);
+  } finally {
+    shell.unmount();
+  }
+});
+
+test("palette portals outside a hidden mount and restores invoking focus", async () => {
+  const host: ElefHost = typedHost();
+  const { cafe } = await seed(host);
+  const seen: unknown[] = [];
+  const { document, element, shell } = await mountInto(host, {
+    navigate: (target) => seen.push(target),
+    palette: paletteSeam([]),
+  });
+  try {
+    // Desktop while editing: the whole mount subtree is hidden, exactly like
+    // #library-view under the editor. ⌘K must still find a surface.
+    (element as unknown as { hidden: boolean }).hidden = true;
+    // Invoke from outside the mount, like the desktop editor field.
+    const invoker = document.createElement("button");
+    invoker.id = "editor-field";
+    document.body.append(invoker);
+    // Linkedom's focus() never tracks activeElement (the property does not
+    // exist there), so stage the invoker as the focused element by hand and
+    // record the restore call: the product contract is that onClose targets
+    // the invoking element, while the actual focus switch is platform
+    // behavior. Harness-only: product code is untouched.
+    (document as unknown as Record<string, unknown>).activeElement = invoker;
+    let focusedElement: unknown = null;
+    invoker.focus = () => {
+      focusedElement = invoker;
+    };
+    invoker.focus();
+    shell.openPalette("search");
+    await settled();
+    const palette = document.querySelector(".command-palette");
+    assert.notEqual(palette, null, "palette opens while the mount subtree is hidden");
+    assert.equal(element.querySelector(".command-palette"), null, "palette escapes the hidden subtree");
+    assert.deepEqual(optionLabels(document), ["Alpha doc", "Café Work"]);
+    await setInputValue(palette?.querySelector(".command-palette-panel > input"), "café");
+    await press(palette?.querySelector(".command-palette-panel > input") as Element, "Enter");
+    assert.deepEqual(seen, [{ workId: cafe.id, kind: "presentation" }]);
+    assert.equal(document.querySelector(".command-palette"), null, "choosing closes the palette");
+    // Boolean comparison on purpose: asserting on linkedom nodes directly
+    // makes node:test inspect them, which exhausts memory. The behavior
+    // under test is that onClose re-targets the invoking element.
+    assert.equal(focusedElement === invoker, true, "focus returns to the invoker");
+  } finally {
+    shell.unmount();
+  }
+});
+
+test("a second open while the palette is open keeps the original invoker", async () => {
+  const host: ElefHost = typedHost();
+  await seed(host);
+  const { document, shell } = await mountInto(host, { palette: paletteSeam([]) });
+  try {
+    // Focusing a pristine input makes React's select-event polyfill read
+    // getSelection, which linkedom lacks — shim it like the attachEvent
+    // shim in press(). Harness-only: product code is untouched.
+    const view = (document as unknown as { defaultView?: Record<string, unknown> }).defaultView;
+    if (view !== undefined && typeof view["getSelection"] !== "function") {
+      view["getSelection"] = () => ({ anchorNode: null, anchorOffset: 0, focusNode: null, focusOffset: 0 });
+    }
+    const invoker = document.createElement("button");
+    document.body.append(invoker);
+    (document as unknown as Record<string, unknown>).activeElement = invoker;
+    let focusedElement: unknown = null;
+    invoker.focus = () => {
+      focusedElement = invoker;
+    };
+    shell.openPalette("search");
+    await settled();
+    // Double-press / key auto-repeat: the palette autofocuses its own input
+    // on open, so the second ⌘K sees the palette input focused. The
+    // original invoker must survive.
+    const paletteInput = document.querySelector(".command-palette-panel > input") as Element;
+    (document as unknown as Record<string, unknown>).activeElement = paletteInput;
+    shell.openPalette("search");
+    await settled();
+    await press(paletteInput, "Escape");
+    assert.equal(document.querySelector(".command-palette"), null, "Escape closes the palette");
+    assert.equal(focusedElement === invoker, true, "close restores the first invoker, not the palette input");
   } finally {
     shell.unmount();
   }
@@ -198,23 +280,23 @@ test("palette commands mode filters and runs through the keyboard", async () => 
   const host: ElefHost = typedHost();
   await seed(host);
   const ran: string[] = [];
-  const { element, shell } = await mountInto(host, { palette: paletteSeam(ran) });
+  const { document, shell } = await mountInto(host, { palette: paletteSeam(ran) });
   try {
     shell.openPalette("commands");
     await settled();
-    assert.deepEqual(optionLabels(element), ["New presentation", "New document"]);
-    const input = element.querySelector(".command-palette-panel > input") as Element;
+    assert.deepEqual(optionLabels(document), ["New presentation", "New document"]);
+    const input = document.querySelector(".command-palette-panel > input") as Element;
     await setInputValue(input, "document");
-    assert.deepEqual(optionLabels(element), ["New document"]);
+    assert.deepEqual(optionLabels(document), ["New document"]);
     await press(input, "Enter");
     assert.deepEqual(ran, ["new-document"]);
-    assert.equal(element.querySelector(".command-palette"), null);
+    assert.equal(document.querySelector(".command-palette"), null);
     shell.openPalette("commands");
     await settled();
-    const reopened = element.querySelector(".command-palette-panel > input") as Element;
+    const reopened = document.querySelector(".command-palette-panel > input") as Element;
     await press(reopened, "Escape");
     await settled();
-    assert.equal(element.querySelector(".command-palette"), null, "Escape closes the palette");
+    assert.equal(document.querySelector(".command-palette"), null, "Escape closes the palette");
   } finally {
     shell.unmount();
   }
@@ -224,17 +306,17 @@ test("palette mode toggle switches between commands and search", async () => {
   const host: ElefHost = typedHost();
   await seed(host);
   const ran: string[] = [];
-  const { element, shell } = await mountInto(host, { palette: paletteSeam(ran) });
+  const { document, shell } = await mountInto(host, { palette: paletteSeam(ran) });
   try {
     shell.openPalette("commands");
     await settled();
-    const toggle = [...element.querySelectorAll(".command-palette-filters button")].find(
+    const toggle = [...document.querySelectorAll(".command-palette-filters button")].find(
       (button) => button.textContent?.trim() === "Search works",
     );
     assert.notEqual(toggle, null);
     await click(toggle);
-    assert.match(element.querySelector(".command-palette h2")?.textContent ?? "", /Search works/);
-    assert.deepEqual(optionLabels(element), ["Alpha doc", "Café Work"]);
+    assert.match(document.querySelector(".command-palette h2")?.textContent ?? "", /Search works/);
+    assert.deepEqual(optionLabels(document), ["Alpha doc", "Café Work"]);
   } finally {
     shell.unmount();
   }
@@ -243,11 +325,11 @@ test("palette mode toggle switches between commands and search", async () => {
 test("no palette surface without the seam", async () => {
   const host: ElefHost = typedHost();
   await seed(host);
-  const { element, shell } = await mountInto(host);
+  const { document, shell } = await mountInto(host);
   try {
     shell.openPalette("commands");
     await settled();
-    assert.equal(element.querySelector(".command-palette"), null);
+    assert.equal(document.querySelector(".command-palette"), null);
   } finally {
     shell.unmount();
   }

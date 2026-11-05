@@ -31,9 +31,10 @@ global keydown, desktop webview keydown + native menu accelerators).
 
 ## Final shortcut map
 
-`⌘` = Cmd on Mac, `Ctrl` elsewhere. "Palette" = listed in the web command
-palette (`⌘K`) with description + chord chip; the desktop has no palette and
-falls back to its native menu bar.
+`⌘` = Cmd on Mac, `Ctrl` elsewhere. "Palette" = listed in the command
+palette (`⌘K`) with description + chord chip; the palette is the shared
+`CommandPalette` component on both hosts, while desktop editor-scoped
+actions ride the native menu and editor chrome.
 
 | Action | Web | Desktop | Palette |
 |---|---|---|---|
