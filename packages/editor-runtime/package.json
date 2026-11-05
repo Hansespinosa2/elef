@@ -26,6 +26,10 @@
       "types": "./src/lib/art_layout.ts",
       "default": "./dist/lib/art_layout.js"
     },
+    "./follow-heading-title": {
+      "types": "./src/lib/follow_heading_title.ts",
+      "default": "./dist/lib/follow_heading_title.js"
+    },
     "./desktop-menu-keys": {
       "types": "./src/lib/desktop_menu_keys.ts",
       "default": "./dist/lib/desktop_menu_keys.js"

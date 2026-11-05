@@ -112,3 +112,33 @@ test("saveWork syncs presentation titles through the same folder path", async ()
   await host.works.saveWork(WORK_ID, "# New deck\n\n---\n", { revision: "h1" })
   assert.deepEqual(renameCalls(calls), [["rename_work_folder", { id: WORK_ID, name: "New deck" }]])
 })
+
+test("followHeadingTitle adopts a changed h1 after a quiet save and reports the new name", async () => {
+  const calls = []
+  const host = hostWith(calls)
+  await host.library.listWorks()
+  const name = await host.followHeadingTitle(WORK_ID, "# New title\n\nBody.\n")
+  assert.equal(name, "New title")
+  assert.deepEqual(renameCalls(calls), [["rename_work_folder", { id: WORK_ID, name: "New title" }]])
+  const snapshot = await host.works.getWork(WORK_ID)
+  assert.equal(snapshot.title, "New title")
+})
+
+test("followHeadingTitle reports null when the heading is unchanged or missing", async () => {
+  const calls = []
+  const host = hostWith(calls)
+  await host.library.listWorks()
+  assert.equal(await host.followHeadingTitle(WORK_ID, "# Old title\n\nBody.\n"), null)
+  assert.equal(await host.followHeadingTitle(WORK_ID, "Just prose, no heading.\n"), null)
+  assert.deepEqual(renameCalls(calls), [])
+})
+
+test("followHeadingTitle reports null when the rename is rejected", async () => {
+  const calls = []
+  const host = hostWith(calls, { rename: Object.assign(new Error("taken"), { code: "InvalidInput" }) })
+  await host.library.listWorks()
+  assert.equal(await host.followHeadingTitle(WORK_ID, "# Taken name\n\nBody.\n"), null)
+  assert.equal(renameCalls(calls).length, 1)
+  const snapshot = await host.works.getWork(WORK_ID)
+  assert.equal(snapshot.title, "Old title")
+})

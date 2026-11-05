@@ -38,6 +38,7 @@ function replaceGlobal(name, value) {
 
 const CommandPaletteController = await loadController("command_palette")
 const visualAssistSource = await loadPackageSource("packages/editor-runtime/src/lib/visual_assist.ts")
+const tableDimensionsSource = await loadPackageSource("packages/editor-runtime/src/controllers/snippet_table_dimensions.ts")
 const SnippetPaletteController = await loadController("snippet_palette", {
   base: sharedControllerPath,
   overrides: {
@@ -46,6 +47,7 @@ const SnippetPaletteController = await loadController("snippet_palette", {
     "./math_shorthand_controller.js": "const editorInsideMath = () => false\nconst editorInsideCode = () => false\n",
     "./authoring_registry.js": "const authoringRegistryFor = () => []\n",
     "./snippet_stops.js": "const snippetStopsEffect = { of: (stops) => stops }\n",
+    "./snippet_table_dimensions.js": tableDimensionsSource,
     "@elef/work-model/document-transforms": "const expandSnippet = (body) => ({ text: body, stops: [] })\n"
   }
 })
