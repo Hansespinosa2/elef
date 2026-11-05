@@ -1,5 +1,5 @@
 import { reportDiagnosticsExport } from "./diagnostics_export.js"
-import { desktopMenuKeyAction } from "./desktop_menu_keys.js"
+import { canOpenPalette, desktopMenuKeyAction } from "./desktop_menu_keys.js"
 import { createWorkOpenFlow, prepareWorkOpen } from "./work_open_flow.js"
 import { measurePaintedAction } from "./performance_measurement.js"
 import { editorFor } from "./editor_controller_lookup.js"
@@ -724,8 +724,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
 
   // Library-meaningful palette commands: labels, descriptions, and chord
   // chips come from the shared registry so the palette cannot drift from
-  // the documented shortcut map. Editor-scoped actions (save, present,
-  // print) stay out: the palette mounts in the library view.
+  // the documented shortcut map. The palette portals to document.body, so
+  // ⌘K keeps its surface while editing; the command list stays
+  // library-scoped anyway (editor-scoped actions ride the native menu and
+  // editor chrome, exactly as before).
   function desktopPaletteCommands(): LibraryPaletteCommand[] {
     const platform = /Mac|iPhone|iPad|iPod/i.test(
       ((navigator as any).userAgentData?.platform || navigator.platform || "")
@@ -1517,12 +1519,22 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     const action = desktopMenuKeyAction(event)
     if (action === "focus-search") {
       event.preventDefault()
-      // Library-scoped: ⌘K opens the shared palette in search mode — the
-      // same keyboard-first entry the old inline-search focus gave (type to
-      // filter, Enter to open), with every library command one toggle away.
-      // In the editor the palette has no surface, so the key stays a no-op
-      // there exactly as before.
-      if (!elements.library.hidden) shell?.openPalette("search")
+      // Global: ⌘K opens the shared palette in search mode from anywhere —
+      // the same keyboard-first entry the old inline-search focus gave (type
+      // to filter, Enter to open), with every library command one toggle
+      // away. The palette portals to document.body, so the hidden library
+      // view no longer gates it while editing. Never over a live
+      // presentation or a modal host dialog, where it would be invisible or
+      // disruptive.
+      if (
+        !canOpenPalette({
+          presenting: document.body.classList.contains("presenting-work"),
+          modalOpen: document.querySelector("dialog[open]") !== null,
+        })
+      ) {
+        return
+      }
+      shell?.openPalette("search")
     } else if (action === "start-presentation") {
       event.preventDefault()
       void handleMenuAction("start-presentation")

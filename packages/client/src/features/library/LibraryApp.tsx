@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, JSX, MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import type { ElefHost, WorkKind, WorkSummary } from "@elef/contracts";
 import type { ElefMountOptions, LibraryFilter, NoticeTone } from "../../application/types.js";
 import { parseLibraryRoute } from "../../application/router.js";
@@ -63,6 +64,9 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
   const [dialogName, setDialogName] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteMode, setPaletteMode] = useState<PaletteMode>("commands");
+  // Wherever ⌘K was pressed: restoring it on close returns the caret to the
+  // editor when editing, the search box when browsing.
+  const invokeRef = useRef<HTMLElement | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dialogRef = useRef<HTMLDialogElement | null>(null);
   const loadMoreRef = useRef<HTMLButtonElement | null>(null);
@@ -136,6 +140,22 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
         setVisibleCount(LIBRARY_RENDER_BATCH_SIZE);
       },
       openPalette: (mode) => {
+        // Linkedom (client tests) leaves activeElement undefined; real DOM
+        // always yields an Element or null. Capture the invoker only when
+        // focus sits outside the palette: a second ⌘K while open
+        // (double-press, key auto-repeat — the palette autofocuses its own
+        // input on open) must not re-capture the palette input, or close
+        // would restore focus into the unmounted surface and drop the caret
+        // to the body. Null (no focused element) keeps the previous invoker
+        // for the same reason.
+        if (typeof document !== "undefined") {
+          const active = (document.activeElement as HTMLElement | null | undefined) ?? null;
+          if (active !== null && active.closest?.(".command-palette") === null) {
+            invokeRef.current = active;
+          }
+        } else {
+          invokeRef.current = null;
+        }
         setPaletteMode(mode);
         setPaletteOpen(true);
       },
@@ -446,26 +466,37 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
         </p>
       </section>
 
-      {options.palette !== undefined && (
-        <CommandPalette
-          open={paletteOpen}
-          initialMode={paletteMode}
-          commands={options.palette.commands}
-          works={works.map((work) => ({ id: work.id, title: work.title, kind: work.kind }))}
-          onOpenWork={(selected) => {
-            const kind = selected.kind === "document" ? "document" : "presentation";
-            options.navigate?.({ workId: selected.id, kind });
-          }}
-          onClose={() => {
-            setPaletteOpen(false);
-            // Keyboard home: ⌘K came from the search box, so Esc returns
-            // focus there instead of dropping it to the body. Command runs
-            // that open a surface re-focus afterwards through their own
-            // autofocus, so this never steals a dialog's focus.
-            rootRef.current?.querySelector<HTMLElement>("#library-search")?.focus?.();
-          }}
-        />
-      )}
+      {options.palette !== undefined &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <CommandPalette
+            open={paletteOpen}
+            initialMode={paletteMode}
+            commands={options.palette.commands}
+            works={works.map((work) => ({ id: work.id, title: work.title, kind: work.kind }))}
+            onOpenWork={(selected) => {
+              const kind = selected.kind === "document" ? "document" : "presentation";
+              options.navigate?.({ workId: selected.id, kind });
+            }}
+            onClose={() => {
+              setPaletteOpen(false);
+              // Keyboard home: return focus where ⌘K was pressed — the
+              // editor caret when editing, the search box when browsing. A
+              // disconnected invoker (navigated away mid-palette) falls back
+              // to library search, the old behavior. Command runs that open
+              // a surface re-focus afterwards through their own autofocus, so
+              // this never steals a dialog's focus.
+              const invoker = invokeRef.current;
+              invokeRef.current = null;
+              if (invoker !== null && invoker.isConnected && typeof invoker.focus === "function") {
+                invoker.focus();
+              } else {
+                rootRef.current?.querySelector<HTMLElement>("#library-search")?.focus?.();
+              }
+            }}
+          />,
+          document.body,
+        )}
 
       <dialog ref={dialogRef} id="create-dialog" className="app-dialog" onCancel={() => setDialogOpen(false)}>
         <form id="create-form" onSubmit={(event) => void create(event)}>

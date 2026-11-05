@@ -3,7 +3,7 @@ import test from "node:test"
 import { readFile } from "node:fs/promises"
 
 import { PALETTE_ACTION_IDS } from "@elef/client/shortcuts"
-import { desktopMenuKeyAction } from "@elef/editor-runtime/desktop-menu-keys"
+import { canOpenPalette, desktopMenuKeyAction } from "@elef/editor-runtime/desktop-menu-keys"
 
 // Web-host keyboard suite: the shared registry (packages/client) owns the
 // WHAT; this file proves the web Stimulus adapter honors it — new chords,
@@ -214,6 +214,19 @@ test("desktop webview dispatch keeps Cmd+K and adds Cmd+Enter for present", () =
   assert.equal(desktopMenuKeyAction(key("Enter")), null)
   assert.equal(desktopMenuKeyAction(key("k")), null)
   assert.equal(desktopMenuKeyAction(key("s", { metaKey: true })), null)
+})
+
+test("desktop palette surface stays available while editing, never over present or modal", () => {
+  // Editing hides the library view but mounts nothing over it: the palette
+  // portals to document.body, so neither state gates it.
+  assert.equal(canOpenPalette({ presenting: false, modalOpen: false }), true)
+  // A live presentation owns the full-delivery surface; the palette would
+  // fight it, so Cmd+K stays a no-op there exactly as before.
+  assert.equal(canOpenPalette({ presenting: true, modalOpen: false }), false)
+  // An open modal dialog paints in the top layer: the plain-div palette
+  // could not paint above it and would steal focus invisibly.
+  assert.equal(canOpenPalette({ presenting: false, modalOpen: true }), false)
+  assert.equal(canOpenPalette({ presenting: true, modalOpen: true }), false)
 })
 
 test("Vim normal mode still swallows unmodified keys (no global collision)", () => {
