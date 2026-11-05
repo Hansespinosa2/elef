@@ -555,7 +555,7 @@ function addSyntaxTreeHints(decorations: DecorationPlan, state: EditorState): vo
 }
 
 function buildDecorations(state: EditorState, enabled: boolean): Omit<LivePreviewValue, "enabled"> {
-  if (!enabled) return { decorations: Decoration.none, atomic: Decoration.none, error: null, dynamic: [] }
+  if (!enabled) return { decorations: Decoration.none, atomic: Decoration.none, error: null, dynamic: [], maxDynamicEnd: 0 }
 
   try {
     const source = state.doc.toString()
@@ -565,12 +565,14 @@ function buildDecorations(state: EditorState, enabled: boolean): Omit<LivePrevie
     addSyntaxTreeHints(decorations, state)
     const set = Decoration.set(decorations.ranges, true)
     const atomic = Decoration.set(decorations.ranges.filter((range) => range.value.spec.widget), true)
-    return { decorations: set, atomic, error: null, dynamic: decorations.dynamic }
+    return { decorations: set, atomic, error: null, dynamic: decorations.dynamic,
+      maxDynamicEnd: decorations.dynamic.reduce((end, context) => Math.max(end, context.to), 0) }
   } catch (error) {
     return {
       decorations: Decoration.none,
       atomic: Decoration.none,
       dynamic: [],
+      maxDynamicEnd: 0,
       error: error instanceof Error ? error.message : String(error)
     }
   }
@@ -578,6 +580,7 @@ function buildDecorations(state: EditorState, enabled: boolean): Omit<LivePrevie
 
 export interface LivePreviewValue {
   readonly dynamic: readonly DynamicPreviewRange[];
+  readonly maxDynamicEnd: number;
   enabled: boolean;
   decorations: DecorationSet;
   atomic: DecorationSet;
@@ -595,7 +598,7 @@ function canMapPlainEdit(value: LivePreviewValue, transaction: Transaction): boo
     const oldLine = transaction.startState.doc.lineAt(from)
     const newLine = transaction.newDoc.lineAt(newFrom)
     if (to > oldLine.to || newTo > newLine.to ||
-      value.dynamic.some(context => from <= context.to && to >= context.from)) { safe = false; return }
+      from <= value.maxDynamicEnd && value.dynamic.some(context => from <= context.to && to >= context.from)) { safe = false; return }
     for (const line of [oldLine.text, newLine.text]) {
       if (!/^[\p{L}\p{N} ,.!?]*$/u.test(line) || /^\s*\d+[.)]\s/.test(line)) { safe = false; return }
     }
@@ -607,6 +610,11 @@ function mapPlainEdit(value: LivePreviewValue, transaction: Transaction, math?: 
   const changes = transaction.changes
   let firstChange = transaction.startState.doc.length
   changes.iterChangedRanges(from => { firstChange = Math.min(firstChange, from) })
+  if (!math && firstChange > value.maxDynamicEnd &&
+      transaction.startState.selection.ranges.every(range => range.from > value.maxDynamicEnd) &&
+      transaction.state.selection.ranges.every(range => range.from > value.maxDynamicEnd)) {
+    return { ...value, decorations: value.decorations.map(changes), atomic: value.atomic.map(changes) }
+  }
   const mapRanges = (ranges: readonly Range<Decoration>[]) => ranges.map(range =>
     range.value.range(changes.mapPos(range.from, 1), changes.mapPos(range.to, 1)))
   let shifted = false
@@ -623,6 +631,7 @@ function mapPlainEdit(value: LivePreviewValue, transaction: Transaction, math?: 
     return next
   })
   const dynamic = shifted ? mapped : value.dynamic
+  const maxDynamicEnd = shifted ? changes.mapPos(value.maxDynamicEnd, 1) : value.maxDynamicEnd
   const removed = new Set<Decoration>()
   const added: Range<Decoration>[] = []
   for (let index = 0; index < value.dynamic.length; index++) {
@@ -636,8 +645,8 @@ function mapPlainEdit(value: LivePreviewValue, transaction: Transaction, math?: 
   }
   const decorations = value.decorations.map(changes)
   const atomic = value.atomic.map(changes)
-  if (!removed.size && !added.length) return { ...value, decorations, atomic, dynamic }
-  return { ...value, dynamic,
+  if (!removed.size && !added.length) return { ...value, decorations, atomic, dynamic, maxDynamicEnd }
+  return { ...value, dynamic, maxDynamicEnd,
     decorations: decorations.update({ filter: (_from, _to, decoration) => !removed.has(decoration), add: added, sort: true }),
     atomic: atomic.update({ filter: (_from, _to, decoration) => !removed.has(decoration),
       add: added.filter(range => range.value.spec.widget), sort: true }),
@@ -645,7 +654,8 @@ function mapPlainEdit(value: LivePreviewValue, transaction: Transaction, math?: 
 }
 
 function updateInlineMathLine(value: LivePreviewValue, transaction: Transaction, line: InlineMathLineEdit): LivePreviewValue | null {
-  if (value.dynamic.some(context => context.from < line.from && context.to > line.from)) return null
+  if (value.dynamic.some(context => context.from < line.from && context.to > line.from ||
+      context.from < line.oldTo && context.to > line.oldTo)) return null
   const mapped = mapPlainEdit(value, transaction)
   const plan = new DecorationPlan()
   const state = transaction.state
@@ -655,10 +665,12 @@ function updateInlineMathLine(value: LivePreviewValue, transaction: Transaction,
     filter: (from, to) => from < line.from || to > line.to,
     add: additions, sort: true,
   })
+  const dynamic = [...mapped.dynamic.filter(context => context.to <= line.from), ...plan.dynamic,
+    ...mapped.dynamic.filter(context => context.from >= line.to)]
   return { ...mapped,
     decorations: replace(mapped.decorations, plan.ranges),
     atomic: replace(mapped.atomic, plan.ranges.filter(range => range.value.spec.widget)),
-    dynamic: [...mapped.dynamic.filter(context => context.to <= line.from), ...plan.dynamic],
+    dynamic, maxDynamicEnd: dynamic.reduce((end, context) => Math.max(end, context.to), 0),
   }
 }
 

@@ -4,8 +4,7 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
 import { buildEditorStructure } from "@elef/work-model/document-map"
 import { scanMathSource } from "@elef/work-model/math-source"
-import { livePreviewField, livePreviewMode, isContinuousPlainTableEdit } from "@elef/client/editor"
-import { localMathEdit, localInlineMathLineEdit } from "./continuous_math_edit.js"
+import { livePreviewField, livePreviewMode, isContinuousPlainTableEdit, localMathEdit, localInlineMathLineEdit } from "@elef/client/editor"
 
 export const continuousFlowGeometryChanged = StateEffect.define<void>()
 
@@ -22,6 +21,12 @@ function canMapFlow(value: FlowDecorations, transaction: Transaction): boolean {
   let safe = true
   transaction.changes.iterChangedRanges((from, to, newFrom, newTo) => {
     const range = value.plain.find(item => from >= item.from && to <= item.to)
+    const oldLine = transaction.startState.doc.lineAt(from)
+    const newLine = transaction.newDoc.lineAt(newFrom)
+    // Appending whitespace to the trailing empty line does not create a
+    // visible block. Avoid reparsing the whole document for that first key.
+    if (!range && from === transaction.startState.doc.length && to === from &&
+        !oldLine.text.trim() && !newLine.text.trim() && newTo === transaction.newDoc.length) return
     if (!range || !/^[\p{L}\p{N} ,.!?]*$/u.test(transaction.startState.sliceDoc(from, to) + transaction.newDoc.sliceString(newFrom, newTo))) {
       safe = false; return
     }

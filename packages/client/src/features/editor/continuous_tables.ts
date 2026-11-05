@@ -4,8 +4,7 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
 import type { Range } from "@codemirror/state"
 import { tableSourceProjection } from "@elef/work-model/table-source"
-import { livePreviewField, livePreviewMode, continuousPlainTableEdit } from "@elef/client/editor"
-import { localMathEdit, localInlineMathLineEdit } from "./continuous_math_edit.js"
+import { livePreviewField, livePreviewMode, continuousPlainTableEdit, localMathEdit, localInlineMathLineEdit } from "@elef/client/editor"
 
 export const continuousTableGeometryChanged = StateEffect.define<void>()
 

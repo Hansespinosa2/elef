@@ -60,3 +60,22 @@ test("local equation edits keep the same reader flow as a fresh parse", () => {
     assert.deepEqual(snapshot(state.field(flow).decorations), snapshot(fresh.field(freshFlow).decorations))
   }
 })
+
+test("a new paragraph at the end acquires the reader's spacing when text arrives", () => {
+  const margins = { paragraph: { before: 0, after: 18 }, h1: { before: 0, after: 24 } }
+  const flow = createContinuousFlow(margins)
+  let state = EditorState.create({ doc: "# Heading\n\nEarlier paragraph.\n\n", extensions: [flow] })
+  for (const insert of [" ", "A", " new paragraph."]) {
+    state = state.update({ changes: { from: state.doc.length, insert } }).state
+    const freshFlow = createContinuousFlow(margins)
+    const fresh = EditorState.create({ doc: state.doc, extensions: [freshFlow] })
+    const snapshot = (set: DecorationSet) => {
+      const result: unknown[] = []
+      set.between(0, state.doc.length, (from, to, decoration) => {
+        result.push([from, to, decoration.spec.class, decoration.spec.widget?.constructor.name, decoration.spec.widget?.height])
+      })
+      return result
+    }
+    assert.deepEqual(snapshot(state.field(flow).decorations), snapshot(fresh.field(freshFlow).decorations))
+  }
+})

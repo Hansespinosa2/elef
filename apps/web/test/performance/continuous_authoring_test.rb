@@ -225,6 +225,49 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           input_p95_ms: p95(new_equation.fetch("keys")).round(1),
           long_tasks_ms: new_equation.fetch("stalls").map { |value| value.round(1) }
         }
+
+        # Repeat in a standalone paragraph near the middle, with many later
+        # equations and tables still present in the document.
+        current_source = after_equation + NEW_EQUATION_BURST
+        marker = "Two masses joined by springs exchange energy at the beat frequency. The normal modes diagonalize the motion cleanly."
+        middle = current_source.index(marker, current_source.length / 2)
+        assert middle, "math-heavy: middle paragraph exists"
+        middle += marker.length
+        page.evaluate_script(<<~JAVASCRIPT, middle)
+          ((position) => {
+            const editor = document.querySelector('.source-field').editorController;
+            editor.view.dispatch({ selection: { anchor: position }, scrollIntoView: true });
+            editor.view.focus();
+          })(arguments[0])
+        JAVASCRIPT
+        page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
+        page.evaluate_script(<<~JAVASCRIPT)
+          (() => {
+            const editor = document.querySelector('.continuous-document .cm-content');
+            window.middleEquationPerf = { start: performance.now(), keys: [], stalls: [] };
+            new PerformanceObserver(list => window.middleEquationPerf.stalls.push(...list.getEntries()
+              .filter(entry => entry.startTime >= window.middleEquationPerf.start).map(entry => entry.duration)))
+              .observe({ type: 'longtask' });
+            editor.addEventListener('keydown', event => {
+              if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
+              const start = performance.now();
+              requestAnimationFrame(() => window.middleEquationPerf.keys.push(performance.now() - start));
+            });
+          })()
+        JAVASCRIPT
+        page.driver.browser.action.send_keys(NEW_EQUATION_BURST).perform
+        middle_equation = page.evaluate_async_script(<<~JAVASCRIPT)
+          const done = arguments[arguments.length - 1];
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(window.middleEquationPerf), 100)));
+        JAVASCRIPT
+        assert_equal current_source[0...middle] + NEW_EQUATION_BURST + current_source[middle..],
+          page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+        assert_equal NEW_EQUATION_BURST.length, middle_equation.fetch("keys").length, "every middle equation character is measured"
+        report[:middle_equation] = {
+          input_ms: middle_equation.fetch("keys").map { |value| value.round(1) },
+          input_p95_ms: p95(middle_equation.fetch("keys")).round(1),
+          long_tasks_ms: middle_equation.fetch("stalls").map { |value| value.round(1) }
+        }
       end
     ensure
       path = ENV.fetch("ELEF_CONTINUOUS_PERF_REPORT", "/tmp/elef-continuous-performance.json")
@@ -240,6 +283,8 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
     assert_empty report.fetch(:equation).fetch(:long_tasks_ms).select { |duration| duration > 100 }, "math-heavy: equation authoring stalls over 100ms"
     assert_operator report.fetch(:new_equation).fetch(:input_p95_ms), :<=, 50, "math-heavy: new equation input p95"
     assert_empty report.fetch(:new_equation).fetch(:long_tasks_ms).select { |duration| duration > 100 }, "math-heavy: new equation authoring stalls over 100ms"
+    assert_operator report.fetch(:middle_equation).fetch(:input_p95_ms), :<=, 50, "math-heavy: middle equation input p95"
+    assert_empty report.fetch(:middle_equation).fetch(:long_tasks_ms).select { |duration| duration > 100 }, "math-heavy: middle equation authoring stalls over 100ms"
     assert_operator report.fetch(:table).fetch(:input_p95_ms), :<=, 50, "mixed: table input p95"
     assert_empty report.fetch(:table).fetch(:long_tasks_ms).select { |duration| duration > 100 }, "mixed: table authoring stalls over 100ms"
   end if ENV["ELEF_PERF_MODE"] == "continuous"

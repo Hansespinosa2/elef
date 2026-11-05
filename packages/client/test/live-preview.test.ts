@@ -71,6 +71,19 @@ test("ordinary typing away from math reuses its existing equation widget", () =>
   assert.deepEqual(decorationsOf(changed), decorationsOf(previewState(changed.doc.toString(), changed.selection.main)))
 })
 
+test("typing at the document end preserves earlier math and reveals it on return", () => {
+  const source = "# Heading\n\nEarlier $x^2$.\n\n"
+  let state = previewState(source, EditorSelection.cursor(source.length))
+  for (const insert of " A short paragraph.") {
+    const cursor = state.doc.length
+    state = state.update({ changes: { from: cursor, insert }, selection: EditorSelection.cursor(cursor + 1) }).state
+    assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)))
+  }
+  const selection = EditorSelection.cursor(source.indexOf("$x") + 2)
+  state = state.update({ selection }).state
+  assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), selection)))
+})
+
 test("equation typing keeps distant widgets and matches a fresh parse when leaving math", () => {
   const source = "Start.\n\nEquation $f(x) = x^{2} + 5$ and another $z^2$.\n"
   let cursor = source.indexOf("f(x)") + "f(x)".length
@@ -264,14 +277,30 @@ test("auto-paired math stays incremental through escaped closers and trailing sp
   assert.ok(decorationsOf(state).some(item => item.spec === "widget:math:\\sqrt{a_{i} + b^{2}}"))
 })
 
-test("incremental equation edits reject fenced code, later lines and cross-line math", () => {
-  for (const source of ["```tex\n\nWrite here $x$", "Write here $x$\n\nLater text", "Earlier $z\n\nWrite here$x$"]) {
+test("incremental equation edits reject fenced code and cross-line math", () => {
+  for (const source of ["```tex\n\nWrite here $x$", "Earlier $z\nWrite here$x$"]) {
     const position = source.indexOf("$x$") + 2
     const state = previewState(source, EditorSelection.cursor(position))
     const transaction = state.update({ changes: { from: position, insert: "y" }, selection: EditorSelection.cursor(position + 1) })
     assert.equal(localInlineMathLineEdit(transaction), null, source)
     assert.deepEqual(decorationsOf(transaction.state), decorationsOf(previewState(transaction.state.doc.toString(), transaction.state.selection.main)))
   }
+})
+
+test("auto-paired math in the middle preserves equations before and after it", () => {
+  const source = "Before $x^2$.\n\nWrite here $$\n\nAfter $y^2$.\n\n$$z^2$$\n"
+  let cursor = source.indexOf("$$") + 1
+  let state = previewState(source, EditorSelection.cursor(cursor))
+  for (const insert of "\\sqrt{a_{i} + b^{2}}") {
+    const transaction = state.update({ changes: { from: cursor, insert }, selection: EditorSelection.cursor(cursor + 1) })
+    assert.ok(localInlineMathLineEdit(transaction), `incremental after ${insert}`)
+    state = transaction.state
+    cursor++
+    assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)), `after ${insert}`)
+  }
+  state = state.update({ selection: EditorSelection.cursor(0) }).state
+  assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)))
+  assert.ok(decorationsOf(state).some(item => item.spec === "widget:math:\\sqrt{a_{i} + b^{2}}"))
 })
 
 test("live preview reveals heading and fence markers on their lines", () => {

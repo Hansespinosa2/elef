@@ -11,14 +11,14 @@ export interface LocalMathEdit {
   display: boolean
 }
 
-export interface InlineMathLineEdit { from: number; to: number }
+export interface InlineMathLineEdit { from: number; oldTo: number; to: number }
 
 const inlineMathLineCache = new WeakMap<Transaction, InlineMathLineEdit | null>()
 
-// Edits in a last, standalone prose line may temporarily make an auto-paired
+// Edits in a standalone prose line may temporarily make an auto-paired
 // equation invalid (an empty pair, trailing space, or escaped closing $).
 // Reparse that line only after verifying that no math span crosses into it
-// and all earlier equations remain unchanged. Ambiguous changes take the full
+// and all surrounding equations remain unchanged. Ambiguous changes take the full
 // path. The result is cached for the preview, flow and table fields.
 export function localInlineMathLineEdit(transaction: Transaction): InlineMathLineEdit | null {
   if (inlineMathLineCache.has(transaction)) return inlineMathLineCache.get(transaction) ?? null
@@ -31,7 +31,7 @@ export function localInlineMathLineEdit(transaction: Transaction): InlineMathLin
     const inserted = transaction.newDoc.sliceString(newFrom, newTo)
     if (!/^[\p{L}\p{N} \t\\{}^_+=(),.:$-]*$/u.test(removed + inserted)) return
     const line = transaction.startState.doc.lineAt(from), next = transaction.newDoc.lineAt(newFrom)
-    if (line.to !== transaction.startState.doc.length || next.to !== transaction.newDoc.length || to > line.to || newTo > next.to) return
+    if (to > line.to || newTo > next.to) return
     const plainMathLine = /^[ \t]{0,3}[\p{L}\p{N}][\p{L}\p{N} \t\\{}^_+=(),.:!?$-]*$/u
     if (!plainMathLine.test(line.text) || !plainMathLine.test(next.text)) return
     const firstDollar = line.text.indexOf("$")
@@ -39,6 +39,7 @@ export function localInlineMathLineEdit(transaction: Transaction): InlineMathLin
     const firstMarker = firstDollar < 0 ? nextDollar : firstDollar
     if (firstMarker < 0 || from < line.from + firstMarker) return
     if (line.number > 1 && transaction.startState.doc.line(line.number - 1).text.trim()) return
+    if (line.number < transaction.startState.doc.lines && transaction.startState.doc.line(line.number + 1).text.trim()) return
     let node = syntaxTree(transaction.startState).resolveInner(line.from + 1, 1)
     while (node) {
       if (!["Document", "Paragraph"].includes(node.name)) return
@@ -47,12 +48,15 @@ export function localInlineMathLineEdit(transaction: Transaction): InlineMathLin
     }
     const before = scanMathSource(transaction.startState.doc.toString())
     const after = scanMathSource(transaction.newDoc.toString())
-    if ([...before, ...after].some(span => span.start < line.from && span.end > line.from)) return
-    const earlierBefore = before.filter(span => span.end <= line.from)
-    const earlierAfter = after.filter(span => span.end <= line.from)
-    if (earlierBefore.length !== earlierAfter.length || !earlierBefore.every((span, index) =>
-      earlierAfter[index]?.start === span.start && earlierAfter[index]?.end === span.end)) return
-    result = { from: line.from, to: transaction.newDoc.length }
+    const crosses = (span: { start: number; end: number }, start: number, end: number) =>
+      span.start < start && span.end > start || span.start < end && span.end > end
+    if (before.some(span => crosses(span, line.from, line.to)) || after.some(span => crosses(span, next.from, next.to))) return
+    const outsideBefore = before.filter(span => span.end <= line.from || span.start >= line.to)
+    const outsideAfter = after.filter(span => span.end <= next.from || span.start >= next.to)
+    if (outsideBefore.length !== outsideAfter.length || !outsideBefore.every((span, index) =>
+      outsideAfter[index]?.start === transaction.changes.mapPos(span.start, 1) &&
+      outsideAfter[index]?.end === transaction.changes.mapPos(span.end, -1))) return
+    result = { from: line.from, oldTo: line.to, to: next.to }
   })
   const safe = count === 1 ? result : null
   inlineMathLineCache.set(transaction, safe)

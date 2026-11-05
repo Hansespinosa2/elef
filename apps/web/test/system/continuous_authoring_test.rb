@@ -177,6 +177,26 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_equal source, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
   end
 
+  test "creating an equation leaves later paragraphs and display math in place" do
+    source = "# Math\n\nStart.\n\nLater $$x^2$$.\n\nAfter.\n"
+    document = Document.create!(title: "Math", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document .cm-live-widget-math-display math", wait: 10
+    after_top = -> { page.evaluate_script("[...document.querySelectorAll('.continuous-document .cm-line')].find(line => line.textContent.trim() === 'After.').getBoundingClientRect().top") }
+    before = after_top.call
+    find(".continuous-document .cm-line", text: "Start.").click
+    page.driver.browser.action.send_keys(:end, "$").perform
+    assert_field "Markdown source", with: source.sub("Start.", "Start.$$")
+    assert_selector ".continuous-document .cm-live-widget-math-display math", count: 1
+    assert_in_delta before, after_top.call, 1
+    page.driver.browser.action.send_keys('\\sqrt{a_{i}}$').perform
+    expected = source.sub("Start.", 'Start.$\\sqrt{a_{i}}$')
+    assert_field "Markdown source", with: expected
+    find(".continuous-document .cm-line", text: "After.").click
+    assert_selector ".continuous-document .cm-live-widget-math math", count: 1, wait: 10
+    assert_selector ".continuous-document .cm-live-widget-math-display math", count: 1
+  end
+
   test "the frozen math notebook keeps paragraph virtualization during sustained typing" do
     source = File.read(Rails.root.join("test/fixtures/performance/elef-visual-100-math.md"))
     document = Document.create!(title: "Mathematical notebook", source: source)
