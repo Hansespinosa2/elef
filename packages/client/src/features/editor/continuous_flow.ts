@@ -4,7 +4,7 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
 import { buildEditorStructure } from "@elef/work-model/document-map"
 import { scanMathSource } from "@elef/work-model/math-source"
-import { livePreviewField, livePreviewMode, isContinuousPlainTableEdit, localMathEdit, localInlineMathLineEdit } from "@elef/client/editor"
+import { livePreviewField, livePreviewMode, isContinuousPlainTableEdit, localMathEdit, localInlineMathLineEdit, localParagraphEndEdit } from "@elef/client/editor"
 
 export const continuousFlowGeometryChanged = StateEffect.define<void>()
 
@@ -55,6 +55,38 @@ class SoftBreak extends WidgetType {
     element.textContent = " "
     return element
   }
+}
+
+function mapParagraphEnd(value: FlowDecorations, transaction: Transaction, paragraph: PlainRange): FlowDecorations | null {
+  const gapStart = paragraph.to + 1
+  const removed = new Set<Decoration>()
+  const gap: { end: number; widget: Decoration }[] = []
+  if (gapStart <= transaction.startState.doc.length) {
+    value.decorations.between(gapStart, gapStart, (from, to, decoration) => {
+      if (from !== gapStart) return
+      if (decoration.spec.class === "cm-continuous-gap") removed.add(decoration)
+      if (decoration.spec.widget instanceof FlowSpace) {
+        removed.add(decoration)
+        gap.push({ end: to, widget: decoration })
+      }
+    })
+  }
+  // A gap always consists of both the zero-height line and its space widget.
+  // Decline the optimization if the decoration set is not in that shape.
+  if ((gap.length && (gap.length !== 1 || removed.size !== 2)) || (!gap.length && removed.size)) return null
+  let decorations = value.decorations.map(transaction.changes)
+  if (gap[0]) {
+    const end = transaction.changes.mapPos(gap[0].end, 1)
+    decorations = decorations.update({
+      filter: (_from, _to, decoration) => !removed.has(decoration),
+      add: [Decoration.line({ class: "cm-continuous-gap" }).range(gapStart), gap[0].widget.range(gapStart, end)],
+      sort: true,
+    })
+  }
+  return { decorations, plain: value.plain.map(range => ({
+    from: transaction.changes.mapPos(range.from, -1),
+    to: transaction.changes.mapPos(range.to, range === paragraph ? -1 : 1),
+  })) }
 }
 
 // Source lines and reader paragraphs are different units. Keep their source
@@ -125,6 +157,12 @@ export function createContinuousFlow(margins: BlockMargins) {
         return { enabled, ...build(transaction.newDoc.toString()) }
       }
       if (!transaction.docChanged) return value
+      const paragraphEnd = localParagraphEndEdit(transaction)
+      const paragraph = paragraphEnd && value.plain.find(range => range.from === paragraphEnd.from && range.to === paragraphEnd.to)
+      if (paragraph) {
+        const mapped = mapParagraphEnd(value, transaction, paragraph)
+        if (mapped) return { enabled, ...mapped }
+      }
       if (!canMapFlow(value, transaction)) return { enabled, ...build(transaction.newDoc.toString()) }
       return { enabled, decorations: value.decorations.map(transaction.changes),
         plain: value.plain.map(range => ({ from: transaction.changes.mapPos(range.from, -1), to: transaction.changes.mapPos(range.to, 1) })) }

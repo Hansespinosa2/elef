@@ -4,7 +4,7 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
 import type { Range } from "@codemirror/state"
 import { tableSourceProjection } from "@elef/work-model/table-source"
-import { livePreviewField, livePreviewMode, continuousPlainTableEdit, localMathEdit, localInlineMathLineEdit } from "@elef/client/editor"
+import { livePreviewField, livePreviewMode, continuousPlainTableEdit, localMathEdit, localInlineMathLineEdit, localParagraphEndEdit } from "@elef/client/editor"
 
 export const continuousTableGeometryChanged = StateEffect.define<void>()
 
@@ -147,10 +147,12 @@ function updateLocalTable(value: TableDecorations, transaction: Transaction, tab
 // syntax, table cells, and empty-cell widget anchors take the full path.
 function canMapTables(value: TableDecorations, transaction: Transaction): boolean {
   let safe = true
+  const paragraphEnd = localParagraphEndEdit(transaction)
   const math = localMathEdit(transaction) || localInlineMathLineEdit(transaction)
   transaction.changes.iterChangedRanges((from, to, newFrom, newTo) => {
     if (!safe) return
     if (value.ranges.some(table => from <= table.to && to >= table.from) || value.emptyCells.some(position => position >= from)) { safe = false; return }
+    if (paragraphEnd) return
     const removed = transaction.startState.sliceDoc(from, to)
     const inserted = transaction.newDoc.sliceString(newFrom, newTo)
     if (!math && !/^[\p{L}\p{N} ,.!?]*$/u.test(removed + inserted)) { safe = false; return }

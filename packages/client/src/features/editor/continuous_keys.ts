@@ -4,7 +4,7 @@ import { syntaxTree } from "@codemirror/language"
 import { EditorView, keymap } from "@codemirror/view"
 import { getCM } from "@replit/codemirror-vim"
 import { scanMathSource } from "@elef/work-model/math-source"
-import { livePreviewField } from "@elef/client/editor"
+import { livePreviewField, liveMathAt } from "@elef/client/editor"
 
 function canEdit(view: EditorView): boolean {
   if (!view.state.field(livePreviewField, false)?.enabled || view.composing) return false
@@ -23,7 +23,7 @@ function inCode(view: EditorView, position: number): boolean {
 }
 
 function inMath(view: EditorView, position: number): boolean {
-  return scanMathSource(view.state.doc.toString()).some(span => span.start < position && position < span.end)
+  return liveMathAt(view.state, position) ?? scanMathSource(view.state.doc.toString()).some(span => span.start < position && position < span.end)
 }
 
 function enter(view: EditorView): boolean {

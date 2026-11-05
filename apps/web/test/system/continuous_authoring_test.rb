@@ -34,6 +34,7 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     page.refresh
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
     mount_continuous_surface
+    assert_no_selector ".continuous-document .cm-gutters", visible: :all
     assert_selector ".continuous-document", visible: :all
     block = find(".continuous-document .cm-line", text: "alpha beta gamma")
     block.click
@@ -151,6 +152,51 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
       page.driver.browser.action.send_keys("u").perform
       assert_field "Markdown source", with: source
     end
+  end
+
+  test "Vim operators, text objects, macros, and search agree in source and continuous visual" do
+    source = "# Heading\n\nalpha beta gamma\n\ndelta epsilon zeta\n\nEquation $x^2$.\n"
+    cases = {
+      "counted delete" => { keys: ["2dw"], expected: source.sub("alpha beta ", "") },
+      "inner word change" => { keys: ["wciwBETA", :escape], expected: source.sub("beta", "BETA") },
+      "visual delete" => { keys: ["v2wd"], expected: source.sub("alpha beta g", "") },
+      "macro" => { keys: ["qadwq@a"], expected: source.sub("alpha beta ", "") },
+      "linewise delete and paste" => { keys: ["ddp"], expected: source.sub("alpha beta gamma\n\n", "\nalpha beta gamma\n") },
+      "replace inside math" => { keys: ["Gk0fxry"], expected: source.sub("$x^2$", "$y^2$") },
+      "whole document selection" => { keys: ["ggVGd"], expected: "" },
+      "search" => { keys: ["/epsilon", :enter], expected: source }
+    }
+    results = {}
+    %w[source visual].each do |mode|
+      document = Document.create!(title: "Vim parity #{mode}", source: source)
+      visit edit_document_path(document)
+      page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+      page.refresh
+      assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+      mount_continuous_surface
+      click_on "Source" if mode == "source"
+      results[mode] = {}
+      cases.each do |name, scenario|
+        page.execute_script(<<~JAVASCRIPT, source)
+          const editor = document.querySelector('.source-field').editorController;
+          editor.loadDocument(arguments[0]);
+          editor.setVimEnabled(true);
+          editor.setSelectionRange(arguments[0].indexOf('alpha'));
+          editor.view.focus();
+        JAVASCRIPT
+        page.driver.browser.action.send_keys(*scenario.fetch(:keys)).perform
+        page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
+        results[mode][name] = page.evaluate_script(<<~JAVASCRIPT)
+          (() => {
+            const editor = document.querySelector('.source-field').editorController;
+            return { source: editor.sourceValue, head: editor.selectionHead, mode: editor.vimMode };
+          })()
+        JAVASCRIPT
+        assert_equal scenario.fetch(:expected), results[mode][name].fetch("source"), "#{mode}: #{name}"
+      end
+    end
+    cases.each_key { |name| assert_equal results.fetch("source").fetch(name), results.fetch("visual").fetch(name), name }
+    assert_equal source.index("epsilon"), results.fetch("visual").fetch("search").fetch("head")
   end
 
   test "continuous authoring accepts math assists without moving focus to the old projection" do
@@ -374,6 +420,38 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_nil result.last.fetch("frontmatter")
   end
 
+  test "the input proxy normalizes mixed line endings without changing saved source" do
+    document = Document.create!(title: "Line endings", source: "# Notes\n")
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document"
+    source = "# Notes\r\n\r\nBody\rcontinued"
+    result = page.evaluate_script(<<~JAVASCRIPT, source)
+      ((source) => {
+        const editor = document.querySelector('.source-field').editorController;
+        editor.loadDocument(source);
+        const snapshots = [];
+        editor.inputTarget.addEventListener('input', () => snapshots.push(editor.inputTarget.value));
+        editor.replaceRange('!', editor.value.length);
+        return { source: editor.sourceValue, proxy: editor.inputTarget.value, snapshots };
+      })(arguments[0])
+    JAVASCRIPT
+    assert_equal "#{source}!", result.fetch("source")
+    assert_equal "# Notes\n\nBody\ncontinued!", result.fetch("proxy")
+    assert_equal [result.fetch("proxy")], result.fetch("snapshots")
+    page.execute_script("document.querySelector('form.visual-editor-form').requestSubmit()")
+    assert_text "Document saved."
+    assert_equal "#{source}!", document.reload.source
+    replacement = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        editor.inputTarget.value = '# External\\n\\nChanged';
+        editor.inputTarget.dispatchEvent(new Event('input', { bubbles: true }));
+        return editor.sourceValue;
+      })()
+    JAVASCRIPT
+    assert_equal "# External\r\n\r\nChanged", replacement
+  end
+
   test "focused commands preserve snippet placeholder selection" do
     document = Document.create!(title: "Focused snippets", source: "# Notes\n\nBody")
     visit edit_document_path(document)
@@ -506,10 +584,12 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     page.execute_script("window.authoringView = document.querySelector('.source-field').editorController.view")
     click_on "Source"
     assert_no_selector ".continuous-document"
+    assert_selector ".source-field .cm-lineNumbers", visible: :all
     assert_match /mono/i, page.evaluate_script("getComputedStyle(document.querySelector('.source-field .cm-scroller')).fontFamily")
     assert_equal "pre", page.evaluate_script("getComputedStyle(document.querySelector('.source-field .cm-content')).whiteSpace")
     click_on "Visual"
     assert_selector ".continuous-document .cm-line", exact_text: "alpha beta gamma delta"
+    assert_no_selector ".continuous-document .cm-gutters", visible: :all
     assert page.evaluate_script("window.authoringView === document.querySelector('.source-field').editorController.view")
     click_on "Save document"
     assert_text "Document saved."

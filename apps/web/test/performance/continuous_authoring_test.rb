@@ -74,27 +74,34 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
         supported = page.evaluate_script(<<~JAVASCRIPT)
           (() => {
             if (!PerformanceObserver.supportedEntryTypes.includes('longtask')) return false;
-            const editor = document.querySelector('.continuous-document .cm-content');
-            window.continuousPerf = { start: performance.now(), keys: [], stalls: [], keyEvents: [], stallDetails: [] };
-            new PerformanceObserver(list => {
-              for (const entry of list.getEntries()) {
-                if (entry.startTime < window.continuousPerf.start) continue;
-                window.continuousPerf.stalls.push(entry.duration);
-                window.continuousPerf.stallDetails.push({ start: entry.startTime - window.continuousPerf.start,
-                  duration: entry.duration, name: entry.name,
-                  attribution: entry.attribution.map(item => ({ name: item.name, containerType: item.containerType })) });
-              }
-            }).observe({ type: 'longtask' });
-            editor.addEventListener('keydown', event => {
-              if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
-              const start = performance.now();
-              const sample = { key: event.key, start: start - window.continuousPerf.start };
-              window.continuousPerf.keyEvents.push(sample);
-              requestAnimationFrame(() => {
-                sample.frame = performance.now() - start;
-                window.continuousPerf.keys.push(sample.frame);
+            window.startAuthoringPerf = () => {
+              window.stopAuthoringPerf?.();
+              const editor = document.querySelector('.continuous-document .cm-content');
+              const perf = { start: performance.now(), keys: [], stalls: [], keyEvents: [], stallDetails: [] };
+              const observer = new PerformanceObserver(list => {
+                for (const entry of list.getEntries()) {
+                  if (entry.startTime < perf.start) continue;
+                  perf.stalls.push(entry.duration);
+                  perf.stallDetails.push({ start: entry.startTime - perf.start, duration: entry.duration, name: entry.name,
+                    attribution: entry.attribution.map(item => ({ name: item.name, containerType: item.containerType })) });
+                }
               });
-            });
+              observer.observe({ type: 'longtask' });
+              const keydown = event => {
+                if (!editor.contains(event.target) || event.ctrlKey || event.metaKey || event.altKey ||
+                    (event.key.length !== 1 && !['Enter', 'Backspace'].includes(event.key))) return;
+                const start = performance.now();
+                const sample = { key: event.key, start: start - perf.start };
+                perf.keyEvents.push(sample);
+                requestAnimationFrame(() => { sample.frame = performance.now() - start; perf.keys.push(sample.frame); });
+              };
+              // Listen before editor capture/keymap handlers, so their work
+              // is included rather than hidden before the measurement starts.
+              document.addEventListener('keydown', keydown, true);
+              window.stopAuthoringPerf = () => { observer.disconnect(); document.removeEventListener('keydown', keydown, true); };
+              return perf;
+            };
+            window.continuousPerf = window.startAuthoringPerf();
             return true;
           })()
         JAVASCRIPT
@@ -102,7 +109,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
         page.driver.browser.action.send_keys(BURST).perform
         measurements = page.evaluate_async_script(<<~JAVASCRIPT)
           const done = arguments[arguments.length - 1];
-          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(window.continuousPerf), 100)));
+            requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { window.stopAuthoringPerf(); done(window.continuousPerf); }, 100)));
         JAVASCRIPT
         assert_equal source + BURST, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
         assert_equal BURST.length, measurements.fetch("keys").length, "#{name}: every typed character is measured"
@@ -128,24 +135,11 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
             })()
           JAVASCRIPT
           page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
-          page.evaluate_script(<<~JAVASCRIPT)
-            (() => {
-              const editor = document.querySelector('.continuous-document .cm-content');
-              window.tablePerf = { start: performance.now(), keys: [], stalls: [] };
-              new PerformanceObserver(list => window.tablePerf.stalls.push(...list.getEntries()
-                .filter(entry => entry.startTime >= window.tablePerf.start).map(entry => entry.duration)))
-                .observe({ type: 'longtask' });
-              editor.addEventListener('keydown', event => {
-                if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
-                const start = performance.now();
-                requestAnimationFrame(() => window.tablePerf.keys.push(performance.now() - start));
-              });
-            })()
-          JAVASCRIPT
+          page.evaluate_script("window.tablePerf = window.startAuthoringPerf()")
           page.driver.browser.action.send_keys(TABLE_BURST).perform
           table = page.evaluate_async_script(<<~JAVASCRIPT)
             const done = arguments[arguments.length - 1];
-            requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(window.tablePerf), 100)));
+            requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { window.stopAuthoringPerf(); done(window.tablePerf); }, 100)));
           JAVASCRIPT
           before_table = source + BURST
           insertion = before_table.rindex("| queue worker") + "| queue worker".length
@@ -156,10 +150,40 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           report[:table] = {
             input_ms: table.fetch("keys").map { |value| value.round(1) },
             input_p95_ms: p95(table.fetch("keys")).round(1),
-            long_tasks_ms: table.fetch("stalls").map { |value| value.round(1) }
+            long_tasks_ms: table.fetch("stalls").map { |value| value.round(1) },
+            long_task_details: table.fetch("stallDetails"), key_events: table.fetch("keyEvents")
           }
         end
         next unless name == "math_heavy"
+
+        # Splitting and joining a paragraph must remain responsive too. Both
+        # keys run through the editor's real keymap with no pacing or repair.
+        marker = "Two masses joined by springs exchange energy at the beat frequency. The normal modes diagonalize the motion cleanly."
+        paragraph = source.index(marker, source.length / 2)
+        assert paragraph, "math-heavy: middle paragraph exists"
+        paragraph += marker.length
+        page.evaluate_script(<<~JAVASCRIPT, paragraph)
+          ((position) => {
+            const editor = document.querySelector('.source-field').editorController;
+            editor.view.dispatch({ selection: { anchor: position }, scrollIntoView: true });
+            editor.view.focus();
+          })(arguments[0])
+        JAVASCRIPT
+        page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
+        page.evaluate_script("window.paragraphPerf = window.startAuthoringPerf()")
+        page.driver.browser.action.send_keys(*Array.new(10) { [ :enter, :backspace ] }.flatten).perform
+        paragraph_measurements = page.evaluate_async_script(<<~JAVASCRIPT)
+          const done = arguments[arguments.length - 1];
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { window.stopAuthoringPerf(); done(window.paragraphPerf); }, 100)));
+        JAVASCRIPT
+        assert_equal source + BURST, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+        assert_equal 20, paragraph_measurements.fetch("keys").length, "every paragraph split and join is measured"
+        report[:paragraph] = {
+          input_ms: paragraph_measurements.fetch("keys").map { |value| value.round(1) },
+          input_p95_ms: p95(paragraph_measurements.fetch("keys")).round(1),
+          long_tasks_ms: paragraph_measurements.fetch("stalls").map { |value| value.round(1) },
+          long_task_details: paragraph_measurements.fetch("stallDetails"), key_events: paragraph_measurements.fetch("keyEvents")
+        }
 
         # Type real TeX inside an existing equation in the long document.
         # Positioning is setup; the subsequent native keyboard burst runs
@@ -169,29 +193,16 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
             const editor = document.querySelector('.source-field').editorController;
             const position = editor.view.state.doc.toString().lastIndexOf('$f(x)') + '$f(x)'.length;
             if (position < '$f(x)'.length) throw new Error('The frozen equation was not found');
-            editor.view.dispatch({ selection: { anchor: position } });
+            editor.view.dispatch({ selection: { anchor: position }, scrollIntoView: true });
             editor.view.focus();
           })()
         JAVASCRIPT
         page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
-        page.evaluate_script(<<~JAVASCRIPT)
-          (() => {
-            const editor = document.querySelector('.continuous-document .cm-content');
-            window.equationPerf = { start: performance.now(), keys: [], stalls: [] };
-            new PerformanceObserver(list => window.equationPerf.stalls.push(...list.getEntries()
-              .filter(entry => entry.startTime >= window.equationPerf.start).map(entry => entry.duration)))
-              .observe({ type: 'longtask' });
-            editor.addEventListener('keydown', event => {
-              if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
-              const start = performance.now();
-              requestAnimationFrame(() => window.equationPerf.keys.push(performance.now() - start));
-            });
-          })()
-        JAVASCRIPT
+        page.evaluate_script("window.equationPerf = window.startAuthoringPerf()")
         page.driver.browser.action.send_keys(EQUATION_BURST).perform
         equation = page.evaluate_async_script(<<~JAVASCRIPT)
           const done = arguments[arguments.length - 1];
-          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(window.equationPerf), 100)));
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { window.stopAuthoringPerf(); done(window.equationPerf); }, 100)));
         JAVASCRIPT
         before_equation = source + BURST
         insertion = before_equation.rindex("$f(x)") + "$f(x)".length
@@ -201,31 +212,19 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
         report[:equation] = {
           input_ms: equation.fetch("keys").map { |value| value.round(1) },
           input_p95_ms: p95(equation.fetch("keys")).round(1),
-          long_tasks_ms: equation.fetch("stalls").map { |value| value.round(1) }
+          long_tasks_ms: equation.fetch("stalls").map { |value| value.round(1) },
+          long_task_details: equation.fetch("stallDetails"), key_events: equation.fetch("keyEvents")
         }
 
         # Creating an equation starts with an unmatched delimiter, unlike
         # editing a closed expression. Measure the whole uninterrupted path.
         page.driver.browser.action.key_down(:control).send_keys(:end).key_up(:control).perform
         page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
-        page.evaluate_script(<<~JAVASCRIPT)
-          (() => {
-            const editor = document.querySelector('.continuous-document .cm-content');
-            window.newEquationPerf = { start: performance.now(), keys: [], stalls: [] };
-            new PerformanceObserver(list => window.newEquationPerf.stalls.push(...list.getEntries()
-              .filter(entry => entry.startTime >= window.newEquationPerf.start).map(entry => entry.duration)))
-              .observe({ type: 'longtask' });
-            editor.addEventListener('keydown', event => {
-              if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
-              const start = performance.now();
-              requestAnimationFrame(() => window.newEquationPerf.keys.push(performance.now() - start));
-            });
-          })()
-        JAVASCRIPT
+        page.evaluate_script("window.newEquationPerf = window.startAuthoringPerf()")
         page.driver.browser.action.send_keys(NEW_EQUATION_BURST).perform
         new_equation = page.evaluate_async_script(<<~JAVASCRIPT)
           const done = arguments[arguments.length - 1];
-          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(window.newEquationPerf), 100)));
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { window.stopAuthoringPerf(); done(window.newEquationPerf); }, 100)));
         JAVASCRIPT
         after_equation = before_equation[0...insertion] + EQUATION_BURST + before_equation[insertion..]
         assert_equal after_equation + NEW_EQUATION_BURST, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
@@ -233,7 +232,8 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
         report[:new_equation] = {
           input_ms: new_equation.fetch("keys").map { |value| value.round(1) },
           input_p95_ms: p95(new_equation.fetch("keys")).round(1),
-          long_tasks_ms: new_equation.fetch("stalls").map { |value| value.round(1) }
+          long_tasks_ms: new_equation.fetch("stalls").map { |value| value.round(1) },
+          long_task_details: new_equation.fetch("stallDetails"), key_events: new_equation.fetch("keyEvents")
         }
 
         # Repeat in a standalone paragraph near the middle, with many later
@@ -251,24 +251,11 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           })(arguments[0])
         JAVASCRIPT
         page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
-        page.evaluate_script(<<~JAVASCRIPT)
-          (() => {
-            const editor = document.querySelector('.continuous-document .cm-content');
-            window.middleEquationPerf = { start: performance.now(), keys: [], stalls: [] };
-            new PerformanceObserver(list => window.middleEquationPerf.stalls.push(...list.getEntries()
-              .filter(entry => entry.startTime >= window.middleEquationPerf.start).map(entry => entry.duration)))
-              .observe({ type: 'longtask' });
-            editor.addEventListener('keydown', event => {
-              if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
-              const start = performance.now();
-              requestAnimationFrame(() => window.middleEquationPerf.keys.push(performance.now() - start));
-            });
-          })()
-        JAVASCRIPT
+        page.evaluate_script("window.middleEquationPerf = window.startAuthoringPerf()")
         page.driver.browser.action.send_keys(NEW_EQUATION_BURST).perform
         middle_equation = page.evaluate_async_script(<<~JAVASCRIPT)
           const done = arguments[arguments.length - 1];
-          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(window.middleEquationPerf), 100)));
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { window.stopAuthoringPerf(); done(window.middleEquationPerf); }, 100)));
         JAVASCRIPT
         assert_equal current_source[0...middle] + NEW_EQUATION_BURST + current_source[middle..],
           page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
@@ -276,7 +263,8 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
         report[:middle_equation] = {
           input_ms: middle_equation.fetch("keys").map { |value| value.round(1) },
           input_p95_ms: p95(middle_equation.fetch("keys")).round(1),
-          long_tasks_ms: middle_equation.fetch("stalls").map { |value| value.round(1) }
+          long_tasks_ms: middle_equation.fetch("stalls").map { |value| value.round(1) },
+          long_task_details: middle_equation.fetch("stallDetails"), key_events: middle_equation.fetch("keyEvents")
         }
       end
     ensure
@@ -289,6 +277,8 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
       assert_operator result[:input_p95_ms], :<=, 50, "#{name}: sustained input p95"
       assert_empty result[:long_tasks_ms].select { |duration| duration > 100 }, "#{name}: authoring stalls over 100ms"
     end
+    assert_operator report.fetch(:paragraph).fetch(:input_p95_ms), :<=, 50, "math-heavy: paragraph split and join p95"
+    assert_empty report.fetch(:paragraph).fetch(:long_tasks_ms).select { |duration| duration > 100 }, "math-heavy: paragraph split and join stalls over 100ms"
     assert_operator report.fetch(:equation).fetch(:input_p95_ms), :<=, 50, "math-heavy: equation input p95"
     assert_empty report.fetch(:equation).fetch(:long_tasks_ms).select { |duration| duration > 100 }, "math-heavy: equation authoring stalls over 100ms"
     assert_operator report.fetch(:new_equation).fetch(:input_p95_ms), :<=, 50, "math-heavy: new equation input p95"

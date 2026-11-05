@@ -1,4 +1,4 @@
-import type { Transaction } from "@codemirror/state"
+import type { Text, Transaction } from "@codemirror/state"
 import { syntaxTree } from "@codemirror/language"
 import { scanMathSource } from "@elef/work-model/math-source"
 
@@ -14,6 +14,19 @@ export interface LocalMathEdit {
 export interface InlineMathLineEdit { from: number; oldTo: number; to: number }
 
 const inlineMathLineCache = new WeakMap<Transaction, InlineMathLineEdit | null>()
+const documentMathCache = new WeakMap<Text, ReturnType<typeof scanMathSource>>()
+
+// Transactions share their immutable document with the next transaction's
+// starting state. Reuse that scan rather than scanning the same long source
+// twice for each character of a new equation.
+export function scanDocumentMath(doc: Text): ReturnType<typeof scanMathSource> {
+  let spans = documentMathCache.get(doc)
+  if (!spans) {
+    spans = scanMathSource(doc.toString())
+    documentMathCache.set(doc, spans)
+  }
+  return spans
+}
 
 // Edits in a standalone prose line may temporarily make an auto-paired
 // equation invalid (an empty pair, trailing space, or escaped closing $).
@@ -46,8 +59,8 @@ export function localInlineMathLineEdit(transaction: Transaction): InlineMathLin
       if (!node.parent) break
       node = node.parent
     }
-    const before = scanMathSource(transaction.startState.doc.toString())
-    const after = scanMathSource(transaction.newDoc.toString())
+    const before = scanDocumentMath(transaction.startState.doc)
+    const after = scanDocumentMath(transaction.newDoc)
     const crosses = (span: { start: number; end: number }, start: number, end: number) =>
       span.start < start && span.end > start || span.start < end && span.end > end
     if (before.some(span => crosses(span, line.from, line.to)) || after.some(span => crosses(span, next.from, next.to))) return

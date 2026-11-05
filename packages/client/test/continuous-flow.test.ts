@@ -1,6 +1,7 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
 import { EditorSelection, EditorState } from "@codemirror/state"
+import { markdown } from "@codemirror/lang-markdown"
 import type { DecorationSet } from "@codemirror/view"
 import { createContinuousFlow } from "../src/features/editor/continuous_flow.js"
 
@@ -77,5 +78,32 @@ test("a new paragraph at the end acquires the reader's spacing when text arrives
       return result
     }
     assert.deepEqual(snapshot(state.field(flow).decorations), snapshot(fresh.field(freshFlow).decorations))
+  }
+})
+
+test("splitting and joining at a plain paragraph end preserves surrounding flow", () => {
+  const margins = { paragraph: { before: 0, after: 18 }, h1: { before: 0, after: 24 } }
+  const snapshot = (set: DecorationSet, length: number) => {
+    const result: unknown[] = []
+    set.between(0, length, (from, to, value) => { result.push([from, to, value.spec.class, value.spec.widget?.constructor.name, value.spec.widget?.height]) })
+    return result
+  }
+  for (const suffix of ["\n\nNext paragraph.\n", "\n\n# Next heading\n", ""]) {
+    const source = `# Heading\n\nPlain paragraph.${suffix}`
+    const position = source.indexOf("Plain paragraph.") + "Plain paragraph.".length
+    const flow = createContinuousFlow(margins)
+    let state = EditorState.create({ doc: source, extensions: [markdown(), flow] })
+    let oldWidget: unknown
+    state.field(flow).decorations.between(0, position, (_from, _to, decoration) => { oldWidget ||= decoration.spec.widget })
+    for (const changes of [{ from: position, insert: "\n\n" }, { from: position, to: position + 2 }]) {
+      state = state.update({ changes }).state
+      const freshFlow = createContinuousFlow(margins)
+      const fresh = EditorState.create({ doc: state.doc, extensions: [markdown(), freshFlow] })
+      assert.deepEqual(snapshot(state.field(flow).decorations, state.doc.length), snapshot(fresh.field(freshFlow).decorations, state.doc.length))
+      assert.deepEqual(state.field(flow).plain, fresh.field(freshFlow).plain)
+      let retained: unknown
+      state.field(flow).decorations.between(0, position, (_from, _to, decoration) => { retained ||= decoration.spec.widget })
+      assert.equal(retained, oldWidget, "untouched reader spacing should keep its widget")
+    }
   }
 })

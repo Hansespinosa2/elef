@@ -6,6 +6,7 @@ import type { DecorationSet } from "@codemirror/view"
 import { MERMAID_ERROR_CLASS, renderMermaidSvg } from "./mermaid_runtime.js"
 import { scanMathSource } from "@elef/work-model/math-source"
 import { localMathEdit, localInlineMathLineEdit, type LocalMathEdit, type InlineMathLineEdit } from "./continuous_math_edit.js"
+import { localParagraphEndEdit } from "./continuous_paragraph_edit.js"
 import { isContinuousPlainTableEdit } from "./continuous_table_edit.js"
 
 export const livePreviewMode = StateEffect.define<boolean>()
@@ -587,6 +588,18 @@ export interface LivePreviewValue {
   error: string | null;
 }
 
+// The compiled reveal plan already contains every rendered math span. Reuse
+// it for key commands instead of rescanning the entire document on Enter or
+// Backspace. Null means the projection is unavailable and callers must use
+// the conservative source scanner.
+export function liveMathAt(state: EditorState, position: number): boolean | null {
+  const preview = state.field(livePreviewField, false)
+  if (!preview?.enabled || preview.error) return null
+  return preview.dynamic.some(context => context.from < position && context.to > position &&
+    context.inactive.some(range => range.value.spec.widget instanceof PreviewWidget &&
+      ["math", "math-display"].includes(range.value.spec.widget.kind)))
+}
+
 // Unadorned single-line prose cannot change Markdown structure or any
 // existing reveal context. Keep the parsed plan and widget identities for
 // those edits; syntax, multiline changes, and math/fence contexts rebuild.
@@ -685,6 +698,9 @@ export const livePreviewField = StateField.define<LivePreviewValue>({
     }
     if (transaction.docChanged && enabled === value.enabled && enabled) {
       if (canMapPlainEdit(value, transaction)) return mapPlainEdit(value, transaction)
+      const paragraphEnd = localParagraphEndEdit(transaction)
+      if (paragraphEnd && !value.error && !value.dynamic.some(context =>
+        context.from <= paragraphEnd.to && context.to >= paragraphEnd.from)) return mapPlainEdit(value, transaction)
       if (!value.error && isContinuousPlainTableEdit(transaction)) {
         let overlaps = false
         transaction.changes.iterChangedRanges((from, to) => {

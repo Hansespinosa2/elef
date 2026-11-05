@@ -2,9 +2,11 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
-import { livePreviewField, livePreviewMode } from "../src/features/editor/live_preview.js";
+import { livePreviewField, livePreviewMode, liveMathAt } from "../src/features/editor/live_preview.js";
+import { scanMathSource } from "@elef/work-model/math-source";
 import { elefMetadata } from "../src/features/editor/engine.js";
 import { localMathEdit, localInlineMathLineEdit } from "../src/features/editor/continuous_math_edit.js";
+import { localParagraphEndEdit } from "../src/features/editor/continuous_paragraph_edit.js";
 
 test("caret movement reuses the compiled source plan and untouched equation widgets", () => {
   const doc = "Plain prose here.\n\n**bold** then $x^2$ and $y^2$.\n"
@@ -23,6 +25,17 @@ test("caret movement reuses the compiled source plan and untouched equation widg
   })
   assert.deepEqual(afterWidgets, distantWidgets)
   assert.equal(afterWidgets[0], distantWidgets[0])
+})
+
+test("compiled math context agrees with the source scanner at every position", () => {
+  const source = "Text $x^2$ and `code $no$`.\n\n$$\na + b\n\nc + d\n$$\n\n```tex\n$not_math$\n```\n\nAfter \\(y + 1\\)."
+  const state = previewState(source)
+  const spans = scanMathSource(source)
+  for (let position = 0; position <= source.length; position++) {
+    assert.equal(liveMathAt(state, position), spans.some(span => span.start < position && position < span.end), `offset ${position}`)
+  }
+  const disabled = state.update({ effects: livePreviewMode.of(false) }).state
+  assert.equal(liveMathAt(disabled, source.indexOf("$x") + 1), null)
 })
 
 test("incremental reveals match fresh projection after forward, backward, and ranged navigation", () => {
@@ -69,6 +82,27 @@ test("ordinary typing away from math reuses its existing equation widget", () =>
   const newContext = changed.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$x") + 5)!
   assert.equal(newContext.inactive.find(range => range.value.spec.widget)?.value, oldContext.inactive.find(range => range.value.spec.widget)?.value)
   assert.deepEqual(decorationsOf(changed), decorationsOf(previewState(changed.doc.toString(), changed.selection.main)))
+})
+
+test("paragraph breaks preserve distant math while rejecting code and actual joins", () => {
+  const source = "Before $x^2$.\n\nPlain paragraph.\n\nAfter $y^2$.\n"
+  const position = source.indexOf("Plain paragraph.") + "Plain paragraph.".length
+  let state = previewState(source, EditorSelection.cursor(position))
+  const widget = state.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$y"))?.inactive.find(range => range.value.spec.widget)?.value.spec.widget
+  for (const changes of [{ from: position, insert: "\n\n" }, { from: position, to: position + 2 }]) {
+    const transaction = state.update({ changes, selection: EditorSelection.cursor(position) })
+    assert.ok(localParagraphEndEdit(transaction))
+    state = transaction.state
+    assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)))
+    const math = state.doc.toString().indexOf("$y")
+    assert.equal(state.field(livePreviewField).dynamic.find(range => range.from === math)?.inactive.find(range => range.value.spec.widget)?.value.spec.widget, widget)
+  }
+  for (const text of ["```\n\nPlain paragraph.\n\n```", "$$\n\nPlain paragraph.\n\n$$", "Plain paragraph.\n\nNext"]) {
+    const start = text.indexOf("Plain paragraph.") + "Plain paragraph.".length
+    const initial = previewState(text, EditorSelection.cursor(start))
+    const changes = text.startsWith("```") || text.startsWith("$$") ? { from: start, insert: "\n\n" } : { from: start, to: start + 2 }
+    assert.equal(localParagraphEndEdit(initial.update({ changes })), null, text)
+  }
 })
 
 test("typing at the document end preserves earlier math and reveals it on return", () => {

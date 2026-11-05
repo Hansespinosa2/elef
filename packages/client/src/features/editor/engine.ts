@@ -151,6 +151,8 @@ export class EditorEngine {
     this.element.appendChild(this.visualPanels)
     this.vimCompartment = new Compartment()
     this.lineNumbersCompartment = new Compartment()
+    this.otherGuttersCompartment = new Compartment()
+    this.continuousGuttersHidden = false
     this.updateVisualSurfaceGeometry = () => this.syncVisualSurfaceGeometry()
     this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this.updateVisualSurfaceGeometry)
     window.addEventListener("resize", this.updateVisualSurfaceGeometry)
@@ -158,8 +160,12 @@ export class EditorEngine {
     this.resizeObserver?.observe(this.element)
     if (this.toolbar) this.resizeObserver?.observe(this.toolbar)
     this.syncVisualSurfaceGeometry()
-    this.inputTarget.addEventListener("input", this.handleExternalInput = () => this.handleExternalInputEvent())
-    this.inputTarget.addEventListener("change", this.handleExternalChange = () => this.handleExternalInputEvent())
+    this.inputTarget.addEventListener("input", this.handleExternalInput = (event: Event) => {
+      if (event !== this.internalFieldEvent) this.handleExternalInputEvent()
+    })
+    this.inputTarget.addEventListener("change", this.handleExternalChange = (event: Event) => {
+      if (event !== this.internalFieldEvent) this.handleExternalInputEvent()
+    })
     this.inputTarget.addEventListener("click", this.handleProxyClick = () => this.focus())
     this.surfaceTarget.addEventListener("click", this.handleSurfaceClick = (event: MouseEvent) => this.focusFromSurface(event))
 
@@ -167,7 +173,11 @@ export class EditorEngine {
       this.panelCompartment.of(panels()),
       this.vimCompartment.of(this.vimEnabled ? vim() : []),
       this.lineNumbersCompartment.of(this.createLineNumbersExtension()),
-      ...basicSetup.slice(1),
+      // Keep gutter plugins independently reconfigurable without removing
+      // history or any other part of CodeMirror's shared editor state.
+      this.otherGuttersCompartment.of([basicSetup[1]!, basicSetup[4]!]),
+      ...basicSetup.slice(2, 4),
+      ...basicSetup.slice(5),
       editorTabKeymap,
       markdown({ extensions: elefMetadata }),
       livePreviewField,
@@ -225,6 +235,8 @@ export class EditorEngine {
     })
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event: KeyboardEvent) => this.forwardProxyKeydown(event))
     this.form = this.element.closest("form")
+    this.handleEditorSurfaceChange = () => this.syncGutterVisibility()
+    this.element.addEventListener("elef:editor-surface-change", this.handleEditorSurfaceChange)
     this.observeProjectionNavigation()
     this.form?.addEventListener("submit", this.handleSubmit = () => {
       this.projectionController()?.flushPendingProjectionEdits?.()
@@ -269,6 +281,7 @@ export class EditorEngine {
     this.surfaceTarget.removeEventListener("click", this.handleSurfaceClick)
     this.view?.dom.removeEventListener("focusin", this.handleFocusIn)
     this.view?.dom.removeEventListener("focusout", this.handleFocusOut)
+    this.element.removeEventListener("elef:editor-surface-change", this.handleEditorSurfaceChange)
     this.view?.dom.removeEventListener("keydown", this.handleVimKeydown)
     this.view?.dom.removeEventListener("keydown", this.handleEscapeTabFocus)
     this.unbindVimEvents()
@@ -401,6 +414,7 @@ export class EditorEngine {
     this.view?.dispatch({ effects: livePreviewMode.of(this.editingMode === "visual") })
     this.element.dataset.editorEditingMode = this.editingMode
     this.form?.setAttribute("data-editor-mode", this.editingMode)
+    this.syncGutterVisibility()
     const modeInput = this.form?.querySelector('[name="editor_mode"]')
     if (modeInput) modeInput.value = this.editingMode
     if (this.hasEditingModeTarget) this.editingModeTarget.textContent = this.editingMode === "visual" ? "Visual" : "Source"
@@ -758,7 +772,7 @@ export class EditorEngine {
       this.syncFrontmatterVisibility()
       // The proxy was already synchronized above; listeners must observe it
       // before the event, but synchronizing it a second time is unnecessary.
-      this.inputTarget.dispatchEvent(new Event("input", { bubbles: true }))
+      this.emitFieldEvent("input")
     }
     if (update.selectionSet || update.docChanged) this.updateMode()
     if (update.selectionSet || update.docChanged || update.viewportChanged) this.scheduleLineNumberUpdate()
@@ -823,8 +837,13 @@ export class EditorEngine {
   }
 
   handleExternalInputEvent(): void {
-    const source = this.normalizeLineEndings(this.inputTarget.value)
-    if (this.syncingInput || source === this.value) return
+    if (this.syncingInput) return
+    // Textarea values use LF even when a CodeMirror line contains a literal
+    // CR. Treat equivalent normalized content as an echo of our own input,
+    // not as an external replacement that rewrites the document's endings.
+    const source = this.inputTarget.value
+    const current = this.value
+    if (source === current || (current.includes("\r") && source === this.normalizeLineEndings(current))) return
 
     const selection = {
       anchor: this.inputTarget.selectionStart ?? source.length,
@@ -842,6 +861,7 @@ export class EditorEngine {
     this.frontmatterAutoRevealed = false
     const document = createDocumentState(EditorState, source, this.documentExtensions)
     this.lineSeparator = document.lineSeparator
+    this.continuousGuttersHidden = false
     this.view.setState(document.state)
     this.pendingMediaRanges.clear()
     this.inputTarget.value = source
@@ -865,7 +885,11 @@ export class EditorEngine {
   syncInput(): void {
     const value = this.value
     this.syncingInput = true
-    if (this.normalizeLineEndings(this.inputTarget.value) !== this.normalizeLineEndings(value)) this.inputTarget.value = value
+    // A textarea exposes normalized LF line breaks, as does the editor's
+    // value getter. Mixed source endings can still contain a literal CR in
+    // a CodeMirror line, so normalize only that uncommon case.
+    const comparable = value.includes("\r") ? this.normalizeLineEndings(value) : value
+    if (this.inputTarget.value !== comparable) this.inputTarget.value = value
     this.inputTarget.setSelectionRange(this.selectionStart, this.selectionEnd)
     this.syncingInput = false
   }
@@ -890,7 +914,15 @@ export class EditorEngine {
 
   dispatchFieldEvent(type: string): void {
     this.syncInput()
-    this.inputTarget.dispatchEvent(new Event(type, { bubbles: true }))
+    this.emitFieldEvent(type)
+  }
+
+  emitFieldEvent(type: string): void {
+    const event = new Event(type, { bubbles: true })
+    const previous = this.internalFieldEvent
+    this.internalFieldEvent = event
+    try { this.inputTarget.dispatchEvent(event) }
+    finally { this.internalFieldEvent = previous }
   }
 
   focusFromSurface(event: MouseEvent): void {
@@ -1072,6 +1104,18 @@ export class EditorEngine {
     const gutter = this.view.dom.querySelector(".cm-lineNumbers")
     if (gutter instanceof HTMLElement) gutter.style.display = this.lineNumberMode === "off" ? "none" : ""
     this.scheduleLineNumberUpdate()
+  }
+
+  syncGutterVisibility(): void {
+    if (!this.view || this.destroyed) return
+    const hidden = this.form?.dataset.editorSurface === "continuous" && this.editingMode === "visual"
+    if (hidden === this.continuousGuttersHidden) return
+    this.continuousGuttersHidden = hidden
+    this.view.dispatch({ effects: [
+      this.lineNumbersCompartment.reconfigure(hidden ? [] : this.createLineNumbersExtension()),
+      this.otherGuttersCompartment.reconfigure(hidden ? [] : [basicSetup[1]!, basicSetup[4]!]),
+    ] })
+    this.applyLineNumbers()
   }
 
   createLineNumbersExtension(): Extension {
