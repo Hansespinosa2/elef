@@ -77,10 +77,19 @@ export async function continuousLongDocumentWorkflow(ui, source) {
     await ui.continuousKeys("ggG0d2w")
     await ui.waitForSource(source + "session with equations")
     await ui.continuousKeys("u")
-    await ui.waitForSaved(saved)
+    await ui.waitForSource(saved)
+    // Create real TeX in the same long-document session, then leave the
+    // equation and verify that the rendered expression remains visible.
+    await ui.continuousKeys("A Equation $x^2 + \\alpha$")
+    await ui.continuousKeys("Escape", true)
+    const withEquation = saved + " Equation $x^2 + \\alpha$"
+    await ui.waitForSource(withEquation)
+    await ui.continuousKeys("0")
+    await ui.assertContinuousMath("x", "Long document session with equations Equation")
+    await ui.waitForSaved(withEquation)
     await ui.stopContinuousAuthoring()
     await ui.reopenContinuousWork()
-    await ui.waitForSource(saved)
+    await ui.waitForSource(withEquation)
   } finally {
     await ui.stopContinuousAuthoring()
     await ui.showSourceMode()

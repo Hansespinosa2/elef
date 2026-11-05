@@ -1026,9 +1026,10 @@ CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: poi
     await (await this.continuousTextElement(text, cell)).waitForDisplayed()
   }
 
-  async assertContinuousMath(text) {
-    await browser.waitUntil(async () => browser.execute(value =>
-      [...document.querySelectorAll(".continuous-document math mi")].some(node => node.textContent === value), text),
+  async assertContinuousMath(text, lineText) {
+    await browser.waitUntil(async () => browser.execute((value, line) =>
+      [...document.querySelectorAll(".continuous-document math mi")].some(node => node.textContent === value &&
+        (!line || node.closest(".cm-line")?.textContent.includes(line))), text, lineText ?? null),
     { timeout: 5000, timeoutMsg: `Continuous authoring did not render ${text}` })
   }
 

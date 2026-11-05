@@ -356,8 +356,11 @@ class WebEditorUi {
       .filter({ hasText: text }).last()).toBeVisible()
   }
 
-  async assertContinuousMath(text) {
-    await expect(this.page.locator(".continuous-document math mi").filter({ hasText: text })).toBeVisible()
+  async assertContinuousMath(text, lineText) {
+    const root = lineText
+      ? this.page.locator(".continuous-document .cm-line").filter({ hasText: lineText })
+      : this.page.locator(".continuous-document")
+    await expect(root.locator("math mi").filter({ hasText: text })).toBeVisible()
   }
 
   async replaceSource(source) {
