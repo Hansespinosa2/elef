@@ -5,7 +5,7 @@ import type { DecorationSet } from "@codemirror/view"
 import type { Range } from "@codemirror/state"
 import { tableSourceProjection } from "@elef/work-model/table-source"
 import { livePreviewField, livePreviewMode, continuousPlainTableEdit } from "@elef/client/editor"
-import { localMathEdit } from "./continuous_math_edit.js"
+import { localMathEdit, localInlineMathLineEdit } from "./continuous_math_edit.js"
 
 export const continuousTableGeometryChanged = StateEffect.define<void>()
 
@@ -148,7 +148,7 @@ function updateLocalTable(value: TableDecorations, transaction: Transaction, tab
 // syntax, table cells, and empty-cell widget anchors take the full path.
 function canMapTables(value: TableDecorations, transaction: Transaction): boolean {
   let safe = true
-  const math = localMathEdit(transaction)
+  const math = localMathEdit(transaction) || localInlineMathLineEdit(transaction)
   transaction.changes.iterChangedRanges((from, to, newFrom, newTo) => {
     if (!safe) return
     if (value.ranges.some(table => from <= table.to && to >= table.from) || value.emptyCells.some(position => position >= from)) { safe = false; return }

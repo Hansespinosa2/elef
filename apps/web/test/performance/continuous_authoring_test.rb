@@ -11,6 +11,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
   SAMPLES = 20
   BURST = " A sustained authoring session with mathematics and prose."
   EQUATION_BURST = ' + \\alpha_{i} + 1'
+  NEW_EQUATION_BURST = ' $\\sqrt{a_{i} + b^{2}}$'
   TABLE_BURST = " revised quickly"
 
   def p95(values)
@@ -192,6 +193,38 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           input_p95_ms: p95(equation.fetch("keys")).round(1),
           long_tasks_ms: equation.fetch("stalls").map { |value| value.round(1) }
         }
+
+        # Creating an equation starts with an unmatched delimiter, unlike
+        # editing a closed expression. Measure the whole uninterrupted path.
+        page.driver.browser.action.key_down(:control).send_keys(:end).key_up(:control).perform
+        page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
+        page.evaluate_script(<<~JAVASCRIPT)
+          (() => {
+            const editor = document.querySelector('.continuous-document .cm-content');
+            window.newEquationPerf = { start: performance.now(), keys: [], stalls: [] };
+            new PerformanceObserver(list => window.newEquationPerf.stalls.push(...list.getEntries()
+              .filter(entry => entry.startTime >= window.newEquationPerf.start).map(entry => entry.duration)))
+              .observe({ type: 'longtask' });
+            editor.addEventListener('keydown', event => {
+              if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
+              const start = performance.now();
+              requestAnimationFrame(() => window.newEquationPerf.keys.push(performance.now() - start));
+            });
+          })()
+        JAVASCRIPT
+        page.driver.browser.action.send_keys(NEW_EQUATION_BURST).perform
+        new_equation = page.evaluate_async_script(<<~JAVASCRIPT)
+          const done = arguments[arguments.length - 1];
+          requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => done(window.newEquationPerf), 100)));
+        JAVASCRIPT
+        after_equation = before_equation[0...insertion] + EQUATION_BURST + before_equation[insertion..]
+        assert_equal after_equation + NEW_EQUATION_BURST, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+        assert_equal NEW_EQUATION_BURST.length, new_equation.fetch("keys").length, "every new equation character is measured"
+        report[:new_equation] = {
+          input_ms: new_equation.fetch("keys").map { |value| value.round(1) },
+          input_p95_ms: p95(new_equation.fetch("keys")).round(1),
+          long_tasks_ms: new_equation.fetch("stalls").map { |value| value.round(1) }
+        }
       end
     ensure
       path = ENV.fetch("ELEF_CONTINUOUS_PERF_REPORT", "/tmp/elef-continuous-performance.json")
@@ -205,6 +238,8 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
     end
     assert_operator report.fetch(:equation).fetch(:input_p95_ms), :<=, 50, "math-heavy: equation input p95"
     assert_empty report.fetch(:equation).fetch(:long_tasks_ms).select { |duration| duration > 100 }, "math-heavy: equation authoring stalls over 100ms"
+    assert_operator report.fetch(:new_equation).fetch(:input_p95_ms), :<=, 50, "math-heavy: new equation input p95"
+    assert_empty report.fetch(:new_equation).fetch(:long_tasks_ms).select { |duration| duration > 100 }, "math-heavy: new equation authoring stalls over 100ms"
     assert_operator report.fetch(:table).fetch(:input_p95_ms), :<=, 50, "mixed: table input p95"
     assert_empty report.fetch(:table).fetch(:long_tasks_ms).select { |duration| duration > 100 }, "mixed: table authoring stalls over 100ms"
   end if ENV["ELEF_PERF_MODE"] == "continuous"

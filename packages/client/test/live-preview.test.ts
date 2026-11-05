@@ -4,7 +4,7 @@ import { EditorSelection, EditorState } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { livePreviewField, livePreviewMode } from "../src/features/editor/live_preview.js";
 import { elefMetadata } from "../src/features/editor/engine.js";
-import { localMathEdit } from "../src/features/editor/continuous_math_edit.js";
+import { localMathEdit, localInlineMathLineEdit } from "../src/features/editor/continuous_math_edit.js";
 
 test("caret movement reuses the compiled source plan and untouched equation widgets", () => {
   const doc = "Plain prose here.\n\n**bold** then $x^2$ and $y^2$.\n"
@@ -225,6 +225,53 @@ test("typing several subscripts inside an equation keeps the incremental preview
   const other = state.doc.toString().indexOf("$z")
   assert.equal(state.field(livePreviewField).dynamic.find(range => range.from === other)!
     .inactive.find(range => range.value.spec.widget)?.value, later)
+})
+
+test("a new equation keeps the same decorations as a fresh parse after every character", () => {
+  const source = "Previous $y^2$.\n\nWrite here $"
+  let state = previewState(source, EditorSelection.cursor(source.length))
+  const oldContext = state.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$y"))
+  assert.ok(oldContext)
+  const original = oldContext.inactive.find(range => range.value.spec.widget)?.value
+  for (const insert of "\\sqrt{a_{i} + b^{2}}$") {
+    const cursor = state.doc.length
+    const transaction = state.update({ changes: { from: cursor, insert }, selection: EditorSelection.cursor(cursor + 1) })
+    assert.ok(localInlineMathLineEdit(transaction), `incremental after ${insert}`)
+    state = transaction.state
+    assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)), `after ${insert}`)
+  }
+  const retained = state.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$y"))
+  assert.ok(retained)
+  assert.equal(retained.inactive.find(range => range.value.spec.widget)?.value, original)
+  state = state.update({ selection: EditorSelection.cursor(0) }).state
+  assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)))
+  assert.ok(decorationsOf(state).some(item => item.spec === "widget:math:\\sqrt{a_{i} + b^{2}}"))
+})
+
+test("auto-paired math stays incremental through escaped closers and trailing spaces", () => {
+  const source = "Earlier $z^2$.\n\nWrite here $$"
+  let cursor = source.length - 1
+  let state = previewState(source, EditorSelection.cursor(cursor))
+  for (const insert of "\\sqrt{a_{i} + b^{2}}") {
+    const transaction = state.update({ changes: { from: cursor, insert }, selection: EditorSelection.cursor(cursor + 1) })
+    assert.ok(localInlineMathLineEdit(transaction), `incremental after ${insert}`)
+    state = transaction.state
+    cursor++
+    assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)), `after ${insert}`)
+  }
+  state = state.update({ selection: EditorSelection.cursor(0) }).state
+  assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)))
+  assert.ok(decorationsOf(state).some(item => item.spec === "widget:math:\\sqrt{a_{i} + b^{2}}"))
+})
+
+test("incremental equation edits reject fenced code, later lines and cross-line math", () => {
+  for (const source of ["```tex\n\nWrite here $x$", "Write here $x$\n\nLater text", "Earlier $z\n\nWrite here$x$"]) {
+    const position = source.indexOf("$x$") + 2
+    const state = previewState(source, EditorSelection.cursor(position))
+    const transaction = state.update({ changes: { from: position, insert: "y" }, selection: EditorSelection.cursor(position + 1) })
+    assert.equal(localInlineMathLineEdit(transaction), null, source)
+    assert.deepEqual(decorationsOf(transaction.state), decorationsOf(previewState(transaction.state.doc.toString(), transaction.state.selection.main)))
+  }
 })
 
 test("live preview reveals heading and fence markers on their lines", () => {

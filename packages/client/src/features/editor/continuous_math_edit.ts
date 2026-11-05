@@ -1,4 +1,5 @@
 import type { Transaction } from "@codemirror/state"
+import { syntaxTree } from "@codemirror/language"
 import { scanMathSource } from "@elef/work-model/math-source"
 
 export interface LocalMathEdit {
@@ -8,6 +9,54 @@ export interface LocalMathEdit {
   nextTo: number
   interior: string
   display: boolean
+}
+
+export interface InlineMathLineEdit { from: number; to: number }
+
+const inlineMathLineCache = new WeakMap<Transaction, InlineMathLineEdit | null>()
+
+// Edits in a last, standalone prose line may temporarily make an auto-paired
+// equation invalid (an empty pair, trailing space, or escaped closing $).
+// Reparse that line only after verifying that no math span crosses into it
+// and all earlier equations remain unchanged. Ambiguous changes take the full
+// path. The result is cached for the preview, flow and table fields.
+export function localInlineMathLineEdit(transaction: Transaction): InlineMathLineEdit | null {
+  if (inlineMathLineCache.has(transaction)) return inlineMathLineCache.get(transaction) ?? null
+  let result: InlineMathLineEdit | null = null
+  let count = 0
+  transaction.changes.iterChangedRanges((from, to, newFrom, newTo) => {
+    count++
+    if (count !== 1) return
+    const removed = transaction.startState.sliceDoc(from, to)
+    const inserted = transaction.newDoc.sliceString(newFrom, newTo)
+    if (!/^[\p{L}\p{N} \t\\{}^_+=(),.:$-]*$/u.test(removed + inserted)) return
+    const line = transaction.startState.doc.lineAt(from), next = transaction.newDoc.lineAt(newFrom)
+    if (line.to !== transaction.startState.doc.length || next.to !== transaction.newDoc.length || to > line.to || newTo > next.to) return
+    const plainMathLine = /^[ \t]{0,3}[\p{L}\p{N}][\p{L}\p{N} \t\\{}^_+=(),.:!?$-]*$/u
+    if (!plainMathLine.test(line.text) || !plainMathLine.test(next.text)) return
+    const firstDollar = line.text.indexOf("$")
+    const nextDollar = next.text.indexOf("$")
+    const firstMarker = firstDollar < 0 ? nextDollar : firstDollar
+    if (firstMarker < 0 || from < line.from + firstMarker) return
+    if (line.number > 1 && transaction.startState.doc.line(line.number - 1).text.trim()) return
+    let node = syntaxTree(transaction.startState).resolveInner(line.from + 1, 1)
+    while (node) {
+      if (!["Document", "Paragraph"].includes(node.name)) return
+      if (!node.parent) break
+      node = node.parent
+    }
+    const before = scanMathSource(transaction.startState.doc.toString())
+    const after = scanMathSource(transaction.newDoc.toString())
+    if ([...before, ...after].some(span => span.start < line.from && span.end > line.from)) return
+    const earlierBefore = before.filter(span => span.end <= line.from)
+    const earlierAfter = after.filter(span => span.end <= line.from)
+    if (earlierBefore.length !== earlierAfter.length || !earlierBefore.every((span, index) =>
+      earlierAfter[index]?.start === span.start && earlierAfter[index]?.end === span.end)) return
+    result = { from: line.from, to: transaction.newDoc.length }
+  })
+  const safe = count === 1 ? result : null
+  inlineMathLineCache.set(transaction, safe)
+  return safe
 }
 
 // An edit wholly inside one still-closed, single-line equation cannot

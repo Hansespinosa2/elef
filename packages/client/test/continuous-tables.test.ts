@@ -6,6 +6,7 @@ import { markdown } from "@codemirror/lang-markdown"
 import { createContinuousTables, continuousTableEditSupport } from "../src/features/editor/continuous_tables.js"
 import { livePreviewField } from "@elef/client/editor"
 import { createContinuousFlow } from "../src/features/editor/continuous_flow.js"
+import { localInlineMathLineEdit } from "../src/features/editor/continuous_math_edit.js"
 
 function ranges(set: DecorationSet, length: number) {
   const result: unknown[] = []
@@ -107,4 +108,30 @@ test("plain cell typing updates only its table and agrees with fresh document pr
     assert.equal(state.field(livePreviewField).dynamic.find(item => item.from === offset)!
       .inactive.find(item => item.value.spec.widget)?.value, widget)
   }
+})
+
+test("creating an equation at the end preserves the rest of the document projection", () => {
+  const source = "| A | B |\n| - | - |\n| one | two |\n\nPrevious $y^2$.\n\nWrite here $"
+  let measurements = 0
+  const tables = createContinuousTables(() => { measurements++; return [0.5, 0.5] })
+  const margins = { paragraph: { before: 0, after: 18 }, table: { before: 0, after: 0 } }
+  const flow = createContinuousFlow(margins)
+  let state = EditorState.create({ doc: source, selection: EditorSelection.cursor(source.length),
+    extensions: [markdown(), livePreviewField, tables, continuousTableEditSupport(tables), flow] })
+  const before = measurements
+  for (const insert of "\\sqrt{a_{i} + b^{2}}$") {
+    const cursor = state.doc.length
+    const transaction = state.update({ changes: { from: cursor, insert }, selection: EditorSelection.cursor(cursor + insert.length) })
+    assert.ok(localInlineMathLineEdit(transaction), `incremental after ${insert}`)
+    state = transaction.state
+    const freshTables = createContinuousTables(() => [0.5, 0.5])
+    const freshFlow = createContinuousFlow(margins)
+    const fresh = EditorState.create({ doc: state.doc, selection: state.selection,
+      extensions: [markdown(), livePreviewField, freshTables, continuousTableEditSupport(freshTables), freshFlow] })
+    assert.deepEqual(ranges(state.field(tables).cells, state.doc.length), ranges(fresh.field(freshTables).cells, state.doc.length))
+    assert.deepEqual(ranges(state.field(tables).syntax, state.doc.length), ranges(fresh.field(freshTables).syntax, state.doc.length))
+    assert.deepEqual(ranges(state.field(flow).decorations, state.doc.length), ranges(fresh.field(freshFlow).decorations, state.doc.length))
+    assert.deepEqual(ranges(state.field(livePreviewField).decorations, state.doc.length), ranges(fresh.field(livePreviewField).decorations, state.doc.length))
+  }
+  assert.equal(measurements, before, "creating an equation never measures unrelated tables")
 })

@@ -5,7 +5,7 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
 import { MERMAID_ERROR_CLASS, renderMermaidSvg } from "./mermaid_runtime.js"
 import { scanMathSource } from "@elef/work-model/math-source"
-import { localMathEdit, type LocalMathEdit } from "./continuous_math_edit.js"
+import { localMathEdit, localInlineMathLineEdit, type LocalMathEdit, type InlineMathLineEdit } from "./continuous_math_edit.js"
 import { isContinuousPlainTableEdit } from "./continuous_table_edit.js"
 
 export const livePreviewMode = StateEffect.define<boolean>()
@@ -644,6 +644,24 @@ function mapPlainEdit(value: LivePreviewValue, transaction: Transaction, math?: 
   }
 }
 
+function updateInlineMathLine(value: LivePreviewValue, transaction: Transaction, line: InlineMathLineEdit): LivePreviewValue | null {
+  if (value.dynamic.some(context => context.from < line.from && context.to > line.from)) return null
+  const mapped = mapPlainEdit(value, transaction)
+  const plan = new DecorationPlan()
+  const state = transaction.state
+  addInlineMarkup(plan, state, state.doc.toString(), [{ from: line.from, to: line.to }])
+  const replace = (set: DecorationSet, additions: readonly Range<Decoration>[]) => set.update({
+    filterFrom: line.from, filterTo: line.to,
+    filter: (from, to) => from < line.from || to > line.to,
+    add: additions, sort: true,
+  })
+  return { ...mapped,
+    decorations: replace(mapped.decorations, plan.ranges),
+    atomic: replace(mapped.atomic, plan.ranges.filter(range => range.value.spec.widget)),
+    dynamic: [...mapped.dynamic.filter(context => context.to <= line.from), ...plan.dynamic],
+  }
+}
+
 export const livePreviewField = StateField.define<LivePreviewValue>({
   create(state) {
     return { enabled: true, ...buildDecorations(state, true) }
@@ -670,6 +688,11 @@ export const livePreviewField = StateField.define<LivePreviewValue>({
         const overlaps = value.dynamic.some(item => item !== context && item.from < math.to && item.to > math.from)
         if (context && !overlaps && activeRange(transaction.startState, math.from, math.to) &&
             activeRange(transaction.state, math.nextFrom, math.nextTo)) return mapPlainEdit(value, transaction, math)
+      }
+      const line = localInlineMathLineEdit(transaction)
+      if (line && !value.error) {
+        const updated = updateInlineMathLine(value, transaction, line)
+        if (updated) return updated
       }
     }
     if (transaction.docChanged || enabled !== value.enabled) {
