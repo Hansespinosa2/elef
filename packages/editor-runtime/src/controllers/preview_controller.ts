@@ -3,6 +3,7 @@ import { installPreviewHtml } from "../lib/editor_view.js"
 import { buildPreviewRequestBody } from "../lib/preview_request_body.js"
 import { markStage } from "../lib/stage_marks.js"
 import { attachCanvasScaling } from "@elef/client"
+import { preserveSurfaceScroll } from "../lib/scroll_preservation.js"
 
 const ART_WARNING_MESSAGES: Record<string, string> = Object.freeze({
   ART_NO_FIT: "Art does not fit the fixed slide. All authored content remains available.",
@@ -319,11 +320,26 @@ export default class extends Controller<HTMLElement> {
       return
     }
 
+    const previousSurface = this.containerTarget.querySelector(".document-editor-projection .document-surface.is-paginated") as HTMLElement | null
+    const preservedScroll = previousSurface ? preserveSurfaceScroll(previousSurface) : null
+    const previousHeight = previousSurface?.getBoundingClientRect().height ?? 0
     const scrollLeft = this.containerTarget.scrollLeft
     const scrollTop = this.containerTarget.scrollTop
     recordPreviewTrace("preview-install-start")
     this.clearSlideScaling()
     installPreviewHtml(this.containerTarget, payload.html)
+    const nextSurface = this.containerTarget.querySelector(".document-editor-projection .document-surface") as HTMLElement | null
+    if (preservedScroll && nextSurface && previousHeight > 0) {
+      // The new surface waits for pagination and may briefly have no height.
+      // Keep the previous scroll extent until the new pages are ready, so
+      // the browser cannot clamp the viewport to the top during the swap.
+      const previousMinHeight = nextSurface.style.minHeight
+      nextSurface.style.minHeight = `${previousHeight}px`
+      nextSurface.addEventListener("elef:document-pages-settled", () => {
+        nextSurface.style.minHeight = previousMinHeight
+      }, { once: true })
+      preservedScroll.restore(nextSurface)
+    }
     this.syncSlideScaling()
     recordPreviewTrace("preview-install-ready")
     this.containerTarget.scrollLeft = scrollLeft

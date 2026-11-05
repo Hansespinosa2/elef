@@ -70,6 +70,25 @@ test("a rebuild without the anchor block keeps its natural top", () => {
   assert.equal(outer.scrollTop, 0)
 })
 
+test("a replacement surface restores the old scroll chain only for the same anchor", () => {
+  const { outer, surface, document } = harness()
+  const preserved = preserveSurfaceScroll(surface)
+  const replacement = layout(document.createElement("div"), { scrollHeight: 2000, clientHeight: 500 })
+  replacement.innerHTML = '<div data-editor-block-id="b2">two</div>'
+  surface.replaceWith(replacement)
+  outer.scrollTop = 0
+  preserved.restore(replacement)
+  assert.equal(outer.scrollTop, 931)
+  assert.equal(replacement.scrollTop, 120)
+
+  replacement.innerHTML = '<div data-editor-block-id="different">other work</div>'
+  outer.scrollTop = 0
+  replacement.scrollTop = 0
+  preserved.restore(replacement)
+  assert.equal(outer.scrollTop, 0)
+  assert.equal(replacement.scrollTop, 0)
+})
+
 test("window scroll restores through the same gate", async () => {
   const { surface } = harness()
   const calls = []
