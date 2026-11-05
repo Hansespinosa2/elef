@@ -71,7 +71,7 @@ export async function mountContinuousAuthoring(editor: EditorHandle, options: { 
     else editor.focus()
   })
   const open = () => palette.open()
-  hint.addEventListener("click", open)
+  hint.addEventListener("click", () => palette.open(hint))
   const keydown = (event: KeyboardEvent) => {
     if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "k" &&
       !document.querySelector("dialog[open]")) {

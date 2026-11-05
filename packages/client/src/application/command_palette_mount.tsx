@@ -17,12 +17,23 @@ export function mountCommandPalette(container: HTMLElement, commands: readonly L
   function close() { if (open) { open = false; render(); onClose() } }
   render()
   return {
-    open() {
+    open(trigger?: HTMLElement) {
       if (open) return
+      const previouslyFocused = container.ownerDocument.activeElement
       generation += 1
+      const openedGeneration = generation
       open = true
       render()
       container.querySelector<HTMLInputElement>('input[role="combobox"]')?.focus()
+      // Some WebKit activations restore focus to the triggering button after
+      // its click handler finishes. Correct that on the next frame, but do
+      // not steal focus if the user has already moved somewhere else.
+      requestAnimationFrame(() => {
+        const active = container.ownerDocument.activeElement
+        if (open && generation === openedGeneration && (active === previouslyFocused || active === trigger)) {
+          container.querySelector<HTMLInputElement>('input[role="combobox"]')?.focus()
+        }
+      })
     },
     close,
     dispose() { open = false; root.unmount() },

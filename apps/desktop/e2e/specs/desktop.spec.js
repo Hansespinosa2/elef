@@ -878,16 +878,35 @@ class DesktopEditorUi {
       const content = editor.view.contentDOM
       window.__continuousInputTrace?.dispose()
       const events = []
+      const add = entry => {
+        events.push(entry)
+        if (events.length > 240) events.shift()
+      }
       const record = event => {
         const entry = { type: event.type, key: event.key, data: event.data, inputType: event.inputType,
           head: editor.selectionHead, length: editor.view.state.doc.length }
-        events.push(entry)
-        if (events.length > 240) events.shift()
+        add(entry)
         queueMicrotask(() => { entry.afterHead = editor.selectionHead; entry.afterLength = editor.view.state.doc.length })
+      }
+      const dispatch = editor.view.dispatchTransactions
+      editor.view.dispatchTransactions = function(transactions, view) {
+        for (const transaction of transactions) {
+          if (!transaction.docChanged) continue
+          const changes = []
+          transaction.changes.iterChanges((from, to, _newFrom, _newTo, inserted) => {
+            changes.push({ from, to, inserted: inserted.toString().slice(0, 80) })
+          })
+          const deletion = changes.some(change => change.to - change.from > change.inserted.length)
+          add({ type: "transaction", changes, input: transaction.isUserEvent("input"),
+            deletion: transaction.isUserEvent("delete"), undo: transaction.isUserEvent("undo"),
+            stack: deletion ? new Error().stack : undefined })
+        }
+        return dispatch.call(this, transactions, view)
       }
       for (const type of ["keydown", "beforeinput", "input"]) content.addEventListener(type, record, true)
       window.__continuousInputTrace = { events, dispose() {
         for (const type of ["keydown", "beforeinput", "input"]) content.removeEventListener(type, record, true)
+        editor.view.dispatchTransactions = dispatch
       } }
     })
   }

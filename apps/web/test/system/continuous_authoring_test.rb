@@ -335,6 +335,45 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_selector "#bug-report-recording-disclosure", visible: true
   end
 
+  test "opening commands retains focus after a WebKit style activation" do
+    document = Document.create!(title: "Focused commands", source: SOURCE)
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-command-hint"
+    # Some native activations focus the trigger again after its click handler.
+    page.execute_script(<<~JAVASCRIPT)
+      const trigger = document.querySelector('.continuous-command-hint');
+      document.querySelector('.source-field').editorController.view.focus();
+      trigger.click();
+      trigger.focus();
+    JAVASCRIPT
+    assert_selector '[data-continuous-commands] [role="combobox"]', focused: true
+    page.driver.browser.action.send_keys("Switch to source", :enter).perform
+    assert_selector 'form[data-editor-mode="source"]'
+  end
+
+  test "input events expose current source while frontmatter is edited" do
+    source = "---\ntheme: light\n---\n# Notes\n\nBody"
+    document = Document.create!(title: "Source synchronization", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document"
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        const snapshots = [];
+        editor.inputTarget.addEventListener('input', () => snapshots.push({
+          proxy: editor.inputTarget.value, source: editor.value, frontmatter: editor.frontmatterRange
+        }));
+        editor.replaceRange('!', editor.value.length);
+        editor.replaceRange('x', 0, 1);
+        return snapshots;
+      })()
+    JAVASCRIPT
+    assert_equal ["#{source}!", "x#{source[1..]}!"], result.map { |snapshot| snapshot.fetch("proxy") }
+    assert_equal result.map { |snapshot| snapshot.fetch("proxy") }, result.map { |snapshot| snapshot.fetch("source") }
+    assert result.first.fetch("frontmatter")
+    assert_nil result.last.fetch("frontmatter")
+  end
+
   test "focused commands preserve snippet placeholder selection" do
     document = Document.create!(title: "Focused snippets", source: "# Notes\n\nBody")
     visit edit_document_path(document)

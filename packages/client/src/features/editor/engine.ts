@@ -750,9 +750,15 @@ export class EditorEngine {
       this.mapPendingMediaRanges(update.changes)
       this.changedSinceFocusOut = true
       this.syncInput()
-      this.refreshFrontmatterRange()
+      // Edits strictly after an existing frontmatter block cannot change its
+      // range. Avoid serializing a long document again on every keystroke.
+      if (!this.frontmatterRange || update.changes.touchesRange(0, this.frontmatterRange.to + 1)) {
+        this.refreshFrontmatterRange()
+      }
       this.syncFrontmatterVisibility()
-      this.dispatchFieldEvent("input")
+      // The proxy was already synchronized above; listeners must observe it
+      // before the event, but synchronizing it a second time is unnecessary.
+      this.inputTarget.dispatchEvent(new Event("input", { bubbles: true }))
     }
     if (update.selectionSet || update.docChanged) this.updateMode()
     if (update.selectionSet || update.docChanged || update.viewportChanged) this.scheduleLineNumberUpdate()
@@ -1035,7 +1041,10 @@ export class EditorEngine {
   }
 
   refreshFrontmatterRange(): void {
-    this.frontmatterRange = frontmatterRangeFor(this.value)
+    const doc = this.view.state.doc
+    this.frontmatterRange = doc.sliceString(0, Math.min(doc.length, 4), "\n") === "---\n"
+      ? frontmatterRangeFor(this.value)
+      : null
     this.syncMetadataToggle()
   }
 

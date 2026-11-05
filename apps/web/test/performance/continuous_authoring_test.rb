@@ -75,16 +75,25 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           (() => {
             if (!PerformanceObserver.supportedEntryTypes.includes('longtask')) return false;
             const editor = document.querySelector('.continuous-document .cm-content');
-            window.continuousPerf = { start: performance.now(), keys: [], stalls: [] };
+            window.continuousPerf = { start: performance.now(), keys: [], stalls: [], keyEvents: [], stallDetails: [] };
             new PerformanceObserver(list => {
-              window.continuousPerf.stalls.push(...list.getEntries()
-                .filter(entry => entry.startTime >= window.continuousPerf.start)
-                .map(entry => entry.duration));
+              for (const entry of list.getEntries()) {
+                if (entry.startTime < window.continuousPerf.start) continue;
+                window.continuousPerf.stalls.push(entry.duration);
+                window.continuousPerf.stallDetails.push({ start: entry.startTime - window.continuousPerf.start,
+                  duration: entry.duration, name: entry.name,
+                  attribution: entry.attribution.map(item => ({ name: item.name, containerType: item.containerType })) });
+              }
             }).observe({ type: 'longtask' });
             editor.addEventListener('keydown', event => {
               if (event.key.length !== 1 || event.ctrlKey || event.metaKey || event.altKey) return;
               const start = performance.now();
-              requestAnimationFrame(() => window.continuousPerf.keys.push(performance.now() - start));
+              const sample = { key: event.key, start: start - window.continuousPerf.start };
+              window.continuousPerf.keyEvents.push(sample);
+              requestAnimationFrame(() => {
+                sample.frame = performance.now() - start;
+                window.continuousPerf.keys.push(sample.frame);
+              });
             });
             return true;
           })()
@@ -101,7 +110,8 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           open_ms: opens.map { |value| value.round(1) }, open_p95_ms: p95(opens).round(1),
           input_ms: measurements.fetch("keys").map { |value| value.round(1) },
           input_p95_ms: p95(measurements.fetch("keys")).round(1),
-          long_tasks_ms: measurements.fetch("stalls").map { |value| value.round(1) }
+          long_tasks_ms: measurements.fetch("stalls").map { |value| value.round(1) },
+          long_task_details: measurements.fetch("stallDetails"), key_events: measurements.fetch("keyEvents")
         }
         if name == "mixed"
           # Exercise a real rendered cell in the long mixed fixture. As with
