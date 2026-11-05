@@ -119,6 +119,10 @@ const frontendResult = await build({
   chunkNames: "chunks/[name]-[hash]",
   minify: true,
   metafile: true,
+  // Bundled stylesheets reference webfont files (the display large-operator
+  // subset in documents.css): emit them beside the bundle and rebase the
+  // CSS urls, the same way the whole-file copies below ship static assets.
+  loader: { ".woff2": "file", ".woff": "file", ".ttf": "file" },
   define: {
     __ELEF_E2E__: JSON.stringify(e2eBuild),
     __ELEF_DESKTOP_PROFILE__: JSON.stringify(profile),
@@ -222,6 +226,9 @@ await copyFile(path.join(repoRoot, "apps/web/app/assets/stylesheets/file_library
 await copyFile(path.join(repoRoot, "apps/web/app/assets/builds/tailwind.css"), path.join(assets, "tailwind.css"))
 await copyFile(path.join(frontendRoot, "node_modules/katex/dist/katex.min.css"), path.join(assets, "katex.min.css"))
 await cp(path.join(frontendRoot, "node_modules/katex/dist/fonts"), path.join(assets, "fonts"), { recursive: true })
+// The display large-operator subset (documents.css `KaTeX_DisplayOps`) rides
+// the esbuild font loaders above: its urls rebase to the emitted files, so
+// no whole-file copy is needed here.
 await copyFile(path.join(repoRoot, "apps/web/vendor/javascript/mermaid.min.js"), path.join(assets, "mermaid.min.js"))
 // The PowerPoint generator ships with the app like the other vendor bundles:
 // PPTX export must work fully offline, so the export transport loads this

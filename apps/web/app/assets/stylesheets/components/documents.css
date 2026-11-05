@@ -8,6 +8,29 @@
 math, mi, mo, mn, mtext {
   font-family: KaTeX_Main, KaTeX_AMS, KaTeX_Caligraphic, KaTeX_Script, KaTeX_Fraktur, KaTeX_SansSerif, KaTeX_Typewriter, KaTeX_Size1, "Times New Roman", serif;
 }
+/* Display large operators (∑ ∏ ∐ ⋀ ⋁ ∩ ∪ ⊙ ⊕ ⊗ ⋓ ⨆ ∬ ∭ ∮) come from a
+   dedicated Size2 subset, not from the stack above. WebKit resolves a
+   displaystyle large operator against the first listed family and never
+   falls back per-glyph there: KaTeX_Main has no large glyphs, so a display
+   ∑ painted nothing while its bounds (served by Main) rendered normally.
+   Chromium falls back per-glyph and was unaffected, which is why this only
+   ever reproduced on the desktop WebKit webview (verified against real
+   WebKit pixels, not inferred). The subset file holds exactly the operator
+   codepoints missing from Main, so every other glyph keeps resolving
+   exactly as before; inline operators are untouched (they take the
+   base-glyph path and render everywhere). Files generated from
+   KaTeX_Size2-Regular via pyftsubset; keep the three formats together. */
+@font-face {
+  font-family: "KaTeX_DisplayOps";
+  src: url("../fonts/KaTeX_DisplayOps-Regular.woff2") format("woff2"),
+    url("../fonts/KaTeX_DisplayOps-Regular.woff") format("woff"),
+    url("../fonts/KaTeX_DisplayOps-Regular.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400;
+}
+math[display="block"] mo {
+  font-family: "KaTeX_DisplayOps", KaTeX_Main, KaTeX_AMS, KaTeX_Caligraphic, KaTeX_Script, KaTeX_Fraktur, KaTeX_SansSerif, KaTeX_Typewriter, KaTeX_Size1, "Times New Roman", serif;
+}
 .document-surface.is-paginated { background: transparent; border: 0; box-shadow: none; display: grid; gap: 24px; padding: 0; }
 .document-surface h1, .document-surface h2, .document-surface h3, .document-surface h4, .document-surface h5, .document-surface h6 { color: var(--document-heading-ink); margin-top: 0; }
 .document-surface h1 { font-size: 48px; line-height: 1.05; margin-bottom: 24px; }
