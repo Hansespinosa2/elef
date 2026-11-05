@@ -873,6 +873,23 @@ class DesktopEditorUi {
         .then(() => done(true), error => done({ error: String(error) }))
     })
     if (result !== true) throw new Error(`Continuous authoring did not mount: ${JSON.stringify(result)}`)
+    await browser.execute(() => {
+      const editor = document.querySelector("#desktop-editor-field").editorController
+      const content = editor.view.contentDOM
+      window.__continuousInputTrace?.dispose()
+      const events = []
+      const record = event => {
+        const entry = { type: event.type, key: event.key, data: event.data, inputType: event.inputType,
+          head: editor.selectionHead, length: editor.view.state.doc.length }
+        events.push(entry)
+        if (events.length > 240) events.shift()
+        queueMicrotask(() => { entry.afterHead = editor.selectionHead; entry.afterLength = editor.view.state.doc.length })
+      }
+      for (const type of ["keydown", "beforeinput", "input"]) content.addEventListener(type, record, true)
+      window.__continuousInputTrace = { events, dispose() {
+        for (const type of ["keydown", "beforeinput", "input"]) content.removeEventListener(type, record, true)
+      } }
+    })
   }
 
   async reopenContinuousWork() {
@@ -883,6 +900,8 @@ class DesktopEditorUi {
 
   async stopContinuousAuthoring() {
     await browser.execute(() => {
+      window.__continuousInputTrace?.dispose()
+      delete window.__continuousInputTrace
       window.__elefPerformanceTestHooks.disableContinuousAuthoring()
       if (window.__continuousVimBefore !== undefined) {
         document.querySelector("#desktop-editor-field")?.editorController?.setVimEnabled(window.__continuousVimBefore)
@@ -949,11 +968,34 @@ CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: poi
   async continuousSourceMode() {
     await $(".continuous-command-hint").click()
     await $('[data-continuous-commands] [role="combobox"]').waitForDisplayed()
-    typeNativeText("Switch to source")
-    sendNativeKey("Enter")
-    await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
-      timeout: 5_000, timeoutMsg: "The command palette did not switch to source"
-    })
+    try {
+      await browser.waitUntil(async () => browser.execute(() => document.activeElement ===
+        document.querySelector('[data-continuous-commands] [role="combobox"]')), {
+        timeout: 5_000, timeoutMsg: "The command palette did not focus its input"
+      })
+      await browser.execute(() => {
+        const input = document.querySelector('[data-continuous-commands] [role="combobox"]')
+        const trace = []
+        for (const type of ["keydown", "input"]) input.addEventListener(type, event => {
+          trace.push({ type, key: event.key, data: event.data, query: input.value })
+        }, true)
+        window.__continuousPaletteTrace = trace
+      })
+      typeNativeText("Switch to source")
+      sendNativeKey("Enter")
+      await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
+        timeout: 5_000, timeoutMsg: "The command palette did not switch to source"
+      })
+    } catch (error) {
+      const state = await browser.execute(() => ({
+        query: document.querySelector('[data-continuous-commands] [role="combobox"]')?.value,
+        active: document.activeElement?.outerHTML?.slice(0, 400),
+        results: [...document.querySelectorAll('[data-continuous-commands] [role="option"]')].map(element => element.textContent),
+        mode: document.querySelector("#desktop-editor-form")?.dataset.editorMode,
+        trace: window.__continuousPaletteTrace,
+      }))
+      throw new Error(`${error.message}; palette state: ${JSON.stringify(state)}`)
+    }
   }
 
   async continuousKeys(text, special = false) {
@@ -1427,9 +1469,18 @@ CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: poi
           mode: editor?.editingMode,
           paletteQuery: palette?.query,
           paletteMatches: palette?.matches?.map(entry => entry.name || entry.snippet?.name),
-          paletteHidden: document.querySelector('[aria-label="Snippet suggestions"]')?.hidden
+          paletteHidden: document.querySelector('[aria-label="Snippet suggestions"]')?.hidden,
+          inputTrace: window.__continuousInputTrace?.events
         }
       }).catch(diagnosticError => ({ diagnosticError: diagnosticError.message }))
+      if (typeof state.source === "string") {
+        const actual = state.source
+        let firstDifference = 0
+        while (firstDifference < Math.min(actual.length, source.length) && actual[firstDifference] === source[firstDifference]) firstDifference++
+        state.source = { length: actual.length, firstDifference,
+          actual: actual.slice(Math.max(0, firstDifference - 32), firstDifference + 96),
+          expected: source.slice(Math.max(0, firstDifference - 32), firstDifference + 96) }
+      }
       throw new Error(`${error.message}; desktop editor state: ${JSON.stringify(state)}`)
     }
   }
