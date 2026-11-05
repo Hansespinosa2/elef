@@ -6,6 +6,7 @@ import type { DecorationSet } from "@codemirror/view"
 import { MERMAID_ERROR_CLASS, renderMermaidSvg } from "./mermaid_runtime.js"
 import { scanMathSource } from "@elef/work-model/math-source"
 import { localMathEdit, type LocalMathEdit } from "./continuous_math_edit.js"
+import { isContinuousPlainTableEdit } from "./continuous_table_edit.js"
 
 export const livePreviewMode = StateEffect.define<boolean>()
 
@@ -262,12 +263,30 @@ function addInlineMarkup(decorations: DecorationPlan, state: EditorState, source
   for (const range of ranges) {
     const segment = source.slice(range.from, range.to)
     const absolute = (offset: number): number => range.from + offset
+    const mathRanges = scanMathSource(segment)
+    // Preserve offsets and line boundaries while making TeX opaque to the
+    // Markdown patterns. This also lets emphasis surround equations whose
+    // subscripts would otherwise be mistaken for its closing delimiter.
+    let markdownSegment = "", lastMathEnd = 0
+    for (const math of mathRanges) {
+      markdownSegment += segment.slice(lastMathEnd, math.start) + segment.slice(math.start, math.end).replace(/[^\r\n]/g, "x")
+      lastMathEnd = math.end
+    }
+    markdownSegment += segment.slice(lastMathEnd)
+    // Inline Markdown may surround an equation, but syntax inside TeX is
+    // owned by the equation. Otherwise e.g. $a_b_c$ hides its underscores
+    // as emphasis precisely while someone is editing it.
+    const conflictsWithMath = (from: number, to: number): boolean => mathRanges.some(math => {
+      const start = absolute(math.start), end = absolute(math.end)
+      return from < end && to > start && !(from <= start && to >= end)
+    })
     const codeRanges: Array<[number, number]> = []
     const codePattern = /(`+)([^`\r\n]+?)\1/g
 
-    for (const match of segment.matchAll(codePattern)) {
+    for (const match of markdownSegment.matchAll(codePattern)) {
       const from = absolute(match.index ?? 0)
       const to = from + (match[0] ?? "").length
+      if (conflictsWithMath(from, to)) continue
       const contentStart = from + (match[1] ?? "").length
       const contentEnd = contentStart + (match[2] ?? "").length
       codeRanges.push([from, to])
@@ -281,39 +300,39 @@ function addInlineMarkup(decorations: DecorationPlan, state: EditorState, source
     // Images are widgets only when their destination is safe. Unknown or
     // malformed media stays as editable Markdown instead of disappearing.
     const imagePattern = /!\[([^\]]*)\]\(([^\s)]+)(?:\s+["']([^"']*)["'])?\)/g
-    for (const match of segment.matchAll(imagePattern)) {
+    for (const match of markdownSegment.matchAll(imagePattern)) {
       const from = absolute(match.index ?? 0)
       const to = from + (match[0] ?? "").length
-      if (!overlapsCode(from, to) && (safeUrl(match[2] ?? "") || /^elef-asset:[0-9a-f]{64}$/.test(match[2] ?? ""))) {
+      if (!overlapsCode(from, to) && !conflictsWithMath(from, to) && (safeUrl(match[2] ?? "") || /^elef-asset:[0-9a-f]{64}$/.test(match[2] ?? ""))) {
         addHidden(decorations, state, from, to, new PreviewWidget("image", "", { alt: match[1] ?? "", src: match[2] ?? "" }), [from, to])
       }
     }
 
     const linkPattern = /\[([^\]]+)\]\(([^\s)]+)(?:\s+["']([^"']*)["'])?\)/g
-    for (const match of segment.matchAll(linkPattern)) {
+    for (const match of markdownSegment.matchAll(linkPattern)) {
       const from = absolute(match.index ?? 0)
       const labelStart = from + 1
       const labelEnd = labelStart + (match[1] ?? "").length
       const destinationEnd = from + match[0].length
-      if (overlapsCode(from, destinationEnd) || !safeUrl(match[2] ?? "") || segment[(match.index ?? 0) - 1] === "!") continue
+      if (overlapsCode(from, destinationEnd) || conflictsWithMath(from, destinationEnd) || !safeUrl(match[2] ?? "") || segment[(match.index ?? 0) - 1] === "!") continue
       addHidden(decorations, state, from, labelStart, null, [from, destinationEnd])
       addHidden(decorations, state, labelEnd, destinationEnd, null, [from, destinationEnd])
       addMark(decorations, state, labelStart, labelEnd, "cm-live-link")
     }
 
     const documentLinkPattern = /\[\[([^\]\r\n]+)\]\]/g
-    for (const match of segment.matchAll(documentLinkPattern)) {
+    for (const match of markdownSegment.matchAll(documentLinkPattern)) {
       const from = absolute(match.index ?? 0)
       const labelStart = from + 2
       const labelEnd = labelStart + (match[1] ?? "").length
       const to = from + (match[0] ?? "").length
-      if (overlapsCode(from, to)) continue
+      if (overlapsCode(from, to) || conflictsWithMath(from, to)) continue
       addHidden(decorations, state, from, labelStart, null, [from, to])
       addHidden(decorations, state, labelEnd, to, null, [from, to])
       addMark(decorations, state, labelStart, labelEnd, "cm-live-document-link")
     }
 
-    for (const match of scanMathSource(segment)) {
+    for (const match of mathRanges) {
       const from = absolute(match.start)
       const to = absolute(match.end)
       if (overlapsCode(from, to)) continue
@@ -322,10 +341,10 @@ function addInlineMarkup(decorations: DecorationPlan, state: EditorState, source
     }
 
     const strongPattern = /(\*\*|__)(?=\S)(.+?)(?<=\S)\1/g
-    for (const match of segment.matchAll(strongPattern)) {
+    for (const match of markdownSegment.matchAll(strongPattern)) {
       const from = absolute(match.index ?? 0)
       const to = from + (match[0] ?? "").length
-      if (overlapsCode(from, to)) continue
+      if (overlapsCode(from, to) || conflictsWithMath(from, to)) continue
       const contentStart = from + (match[1] ?? "").length
       const contentEnd = contentStart + (match[2] ?? "").length
       addHidden(decorations, state, from, contentStart, null, [from, to])
@@ -333,11 +352,11 @@ function addInlineMarkup(decorations: DecorationPlan, state: EditorState, source
       addMark(decorations, state, contentStart, contentEnd, "cm-live-strong")
     }
 
-    const emphasisPattern = /(?<!\*)\*(?!\s)(.+?)(?<!\s)\*(?!\*)|(?<!_)_(?!\s)(.+?)(?<!\s)_(?!_)/g
-    for (const match of segment.matchAll(emphasisPattern)) {
+    const emphasisPattern = /(?<!\*)\*(?![\s*])(.+?)(?<![\s*])\*(?!\*)|(?<!_)_(?![\s_])(.+?)(?<![\s_])_(?!_)/g
+    for (const match of markdownSegment.matchAll(emphasisPattern)) {
       const from = absolute(match.index ?? 0)
       const to = from + (match[0] ?? "").length
-      if (overlapsCode(from, to)) continue
+      if (overlapsCode(from, to) || conflictsWithMath(from, to)) continue
       const text = match[1] || match[2] || ""
       const contentStart = from + 1
       const contentEnd = contentStart + text.length
@@ -354,6 +373,35 @@ function fenceLanguage(info: string): string {
 
 function fencedDiagramSource(fencedSource: string): string {
   return fencedSource.split("\n").slice(1, -1).join("\n")
+}
+
+function listPresentation(state: EditorState, markerStart: number, marker: string): { depth: number; marker: string } {
+  let node = syntaxTree(state).resolveInner(markerStart, 1)
+  let item: typeof node | null = null
+  let depth = 0
+  while (node) {
+    if (!item && node.name === "ListItem") item = node
+    if (node.name === "BulletList" || node.name === "OrderedList") depth++
+    if (!node.parent) break
+    node = node.parent
+  }
+  const list = item?.parent
+  if (list?.name === "OrderedList" && item) {
+    let child = list.firstChild
+    let index = 0
+    let firstMarker: string | null = null
+    while (child) {
+      if (child.name === "ListItem") {
+        const mark = child.getChild("ListMark")
+        firstMarker ??= mark ? state.sliceDoc(mark.from, mark.to).match(/^(\d+)[.)]/)?.[1] ?? null : null
+        if (child.from === item.from) break
+        index++
+      }
+      child = child.nextSibling
+    }
+    if (firstMarker !== null) marker = `${Number(firstMarker) + index}.`
+  }
+  return { depth: Math.max(0, depth - 1), marker: /^\d/.test(marker) ? marker : "•" }
 }
 
 function addMermaidFence(decorations: DecorationPlan, state: EditorState, from: number, to: number, fencedSource: string): void {
@@ -434,15 +482,19 @@ function addBlockMarkup(decorations: DecorationPlan, state: EditorState, source:
     const list = line.match(/^(\s*)([-+*]|\d+[.)])(\s+)/)
     if (list) {
       const markerStart = lineStart + (list[1] ?? "").length
+      const presentation = listPresentation(state, markerStart, list[2] ?? "-")
+      if (markerStart > lineStart) addHidden(decorations, state, lineStart, markerStart, null, [lineStart, lineEnd])
       addHidden(
         decorations,
         state,
         markerStart,
         markerStart + (list[2] ?? "").length + (list[3] ?? "").length,
-        new PreviewWidget("list-marker", (list[2] ?? "").match(/\d/) ? "1." : "•"),
+        new PreviewWidget("list-marker", presentation.marker),
         [lineStart, lineEnd]
       )
-      decorations.push(lineDecoration("cm-live-list-item").range(lineStart))
+      decorations.push(Decoration.line({ class: "cm-live-list-item", attributes: {
+        style: `--cm-list-depth:${presentation.depth}`,
+      } }).range(lineStart))
     }
 
     const quote = line.match(/^(\s*>\s?)/)
@@ -603,6 +655,13 @@ export const livePreviewField = StateField.define<LivePreviewValue>({
     }
     if (transaction.docChanged && enabled === value.enabled && enabled) {
       if (canMapPlainEdit(value, transaction)) return mapPlainEdit(value, transaction)
+      if (!value.error && isContinuousPlainTableEdit(transaction)) {
+        let overlaps = false
+        transaction.changes.iterChangedRanges((from, to) => {
+          if (value.dynamic.some(context => from <= context.to && to >= context.from)) overlaps = true
+        })
+        if (!overlaps) return mapPlainEdit(value, transaction)
+      }
       const math = localMathEdit(transaction)
       if (math && !value.error) {
         const context = value.dynamic.find(item => item.from === math.from && item.to === math.to &&

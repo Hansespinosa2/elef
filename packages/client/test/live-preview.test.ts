@@ -158,6 +158,21 @@ test("live preview hides emphasis delimiters until the caret enters", () => {
   assert.ok(specsAt(active, 16, 17).some((spec) => spec.startsWith("widget:syntax:*")));
 });
 
+test("strong emphasis does not also receive italic styling", () => {
+  const source = "**bold** and __strong__ and *italic*.\n"
+  const decorations = decorationsOf(previewState(source, EditorSelection.cursor(source.length)))
+  assert.ok(decorations.some(item => item.spec === "mark:cm-live-strong" && item.from === 2 && item.to === 6))
+  assert.ok(!decorations.some(item => item.spec === "mark:cm-live-emphasis" && item.from < source.indexOf("*italic*")))
+  assert.ok(decorations.some(item => item.spec === "mark:cm-live-emphasis" && item.from === source.indexOf("italic")))
+})
+
+test("ordered list markers follow the rendered start and sequence", () => {
+  const source = "3. first\n9. second\n"
+  const decorations = decorationsOf(previewState(source, EditorSelection.cursor(source.length)))
+  assert.ok(decorations.some(item => item.spec === "widget:list-marker:3."))
+  assert.ok(decorations.some(item => item.spec === "widget:list-marker:4."))
+})
+
 test("live preview reveals link and code syntax on selection", () => {
   const doc = "See [label](https://example.com) and `code`.\n";
   const inactive = decorationsOf(previewState(doc, EditorSelection.cursor(0)));
@@ -180,6 +195,37 @@ test("live preview renders math as a widget until entered", () => {
   const active = decorationsOf(previewState(doc, EditorSelection.cursor(9)));
   assert.deepEqual(specsAt(active, 7, 12), ["mark:cm-live-active-syntax"]);
 });
+
+test("editing TeX does not apply Markdown formatting inside the equation", () => {
+  const source = "Before $a_b_c + \\text{**bold**}$ and **$x$** and _around $a_b_c$ here_ and *plain*.\n"
+  const start = source.indexOf("$a")
+  const end = source.indexOf("$ and") + 1
+  const active = decorationsOf(previewState(source, EditorSelection.cursor(start + 1)))
+  assert.deepEqual(specsAt(active, start, end), ["mark:cm-live-active-syntax"])
+  assert.ok(!active.some(item => item.from >= start && item.to <= end &&
+    (item.spec.includes("cm-live-emphasis") || item.spec.includes("cm-live-strong") || item.spec.startsWith("widget:syntax:"))))
+  assert.ok(active.some(item => item.spec === "mark:cm-live-strong" && item.from === source.indexOf("$x$")))
+  assert.ok(active.some(item => item.spec === "widget:math:x"))
+  assert.ok(active.some(item => item.spec === "mark:cm-live-emphasis" && item.from === source.indexOf("around") && item.to === source.indexOf(" here_") + 5))
+  assert.ok(active.some(item => item.spec === "mark:cm-live-emphasis" && item.from === source.indexOf("plain")))
+})
+
+test("typing several subscripts inside an equation keeps the incremental preview", () => {
+  const source = "First $\\sum_{i=1}^{N} x_{i}$ and later $z^2$.\n"
+  let cursor = source.indexOf("x_{i}") + 1
+  let state = previewState(source, EditorSelection.cursor(cursor))
+  const later = state.field(livePreviewField).dynamic.find(range => range.from === source.indexOf("$z"))!
+    .inactive.find(range => range.value.spec.widget)?.value
+  for (const character of "_{j}") {
+    const transaction = state.update({ changes: { from: cursor, insert: character }, selection: EditorSelection.cursor(++cursor) })
+    assert.ok(localMathEdit(transaction), `incremental after ${character}`)
+    state = transaction.state
+    assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)))
+  }
+  const other = state.doc.toString().indexOf("$z")
+  assert.equal(state.field(livePreviewField).dynamic.find(range => range.from === other)!
+    .inactive.find(range => range.value.spec.widget)?.value, later)
+})
 
 test("live preview reveals heading and fence markers on their lines", () => {
   const doc = "# Title\n\n```js\ncode();\n```\n";

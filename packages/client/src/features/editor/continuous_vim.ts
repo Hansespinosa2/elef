@@ -63,4 +63,12 @@ export function registerContinuousVimMotions(): void {
     ["-", { forward: false, toFirstChar: true }],
     ["_", { forward: true, toFirstChar: true, repeatOffset: -1 }],
   ] as const) api.mapCommand(key, "motion", "elefSourceLines", args, {})
+  // The plugin's default Enter expands to a non-recursive j^ mapping,
+  // bypassing the overridden j motion and jumping over concealed lines.
+  api.mapCommand("<CR>", "motion", "elefSourceLines", { forward: true, toFirstChar: true }, { context: "normal" })
+  for (const [key, forward] of [["<Down>", true], ["<Up>", false], ["<C-n>", true], ["<C-p>", false]] as const) {
+    for (const context of ["normal", "visual"]) {
+      api.mapCommand(key, "motion", "elefSourceLines", { forward, linewise: true }, { context })
+    }
+  }
 }

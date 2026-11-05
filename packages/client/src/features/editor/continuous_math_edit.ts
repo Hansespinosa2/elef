@@ -33,16 +33,16 @@ export function localMathEdit(transaction: Transaction): LocalMathEdit | null {
     const next = scanMathSource(newLine.text).find(span =>
       newLine.from + span.start === nextFrom && newLine.from + span.end === nextTo && span.open === old.open && span.close === old.close)
     if (!next) return
-    // Inline Markdown is parsed independently of math, so an underscore
-    // pair spanning the edited expression still requires a full rebuild.
-    // A pair wholly in another equation cannot change when this expression
-    // is edited. Check both versions: an edit may create a new pairing.
+    // A possible Markdown span crossing the equation still takes the
+    // conservative path. Subscripts wholly inside this or another equation
+    // are opaque to inline Markdown and do not require a rebuild.
     const unsafe = (line: string, span: { start: number; end: number }) => {
       if (/[*`\[\]]/.test(line)) return true
       for (const pattern of [/__(?=\S)(.+?)(?<=\S)__/g, /(?<!_)_(?!\s)(.+?)(?<!\s)_(?!_)/g]) {
         for (const match of line.matchAll(pattern)) {
           const start = match.index ?? 0
-          if (start < span.end && start + match[0].length > span.start) return true
+          const end = start + match[0].length
+          if (start < span.end && end > span.start && !(start >= span.start && end <= span.end)) return true
         }
       }
       return false

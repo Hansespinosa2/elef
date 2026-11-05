@@ -1,8 +1,11 @@
 import { test } from "node:test"
 import assert from "node:assert/strict"
-import { EditorState } from "@codemirror/state"
+import { EditorSelection, EditorState } from "@codemirror/state"
 import type { DecorationSet } from "@codemirror/view"
-import { createContinuousTables } from "../src/features/editor/continuous_tables.js"
+import { markdown } from "@codemirror/lang-markdown"
+import { createContinuousTables, continuousTableEditSupport } from "../src/features/editor/continuous_tables.js"
+import { livePreviewField } from "@elef/client/editor"
+import { createContinuousFlow } from "../src/features/editor/continuous_flow.js"
 
 function ranges(set: DecorationSet, length: number) {
   const result: unknown[] = []
@@ -74,4 +77,34 @@ test("typing within a closed equation preserves distant table annotations", () =
     assert.deepEqual(ranges(state.field(tables).syntax, state.doc.length), ranges(fresh.syntax, state.doc.length))
   }
   assert.equal(measurements, before)
+})
+
+test("plain cell typing updates only its table and agrees with fresh document projections", () => {
+  const source = "# Notes\n\n| A | B |\n| - | - |\n| one | two |\n\n| Name | Value |\n| - | - |\n| queue worker | 210 ms |\n\nEquation $x^2$.\n"
+  let measurements = 0
+  const tables = createContinuousTables(() => { measurements++; return [0.5, 0.5] })
+  const margins = { paragraph: { before: 0, after: 18 }, table: { before: 0, after: 0 } }
+  const flow = createContinuousFlow(margins)
+  let cursor = source.indexOf("queue worker") + "queue worker".length
+  let state = EditorState.create({ doc: source, selection: EditorSelection.cursor(cursor),
+    extensions: [markdown(), livePreviewField, tables, continuousTableEditSupport(tables), flow] })
+  const widget = state.field(livePreviewField).dynamic.find(item => item.from === source.indexOf("$x"))!
+    .inactive.find(item => item.value.spec.widget)?.value
+  for (const insert of [" ", "fast", " worker"]) {
+    const before = measurements
+    state = state.update({ changes: { from: cursor, insert }, selection: EditorSelection.cursor(cursor + insert.length) }).state
+    cursor += insert.length
+    assert.equal(measurements - before, 1, "only the edited table is measured")
+    const freshTables = createContinuousTables(() => [0.5, 0.5])
+    const freshFlow = createContinuousFlow(margins)
+    const fresh = EditorState.create({ doc: state.doc, selection: state.selection,
+      extensions: [markdown(), livePreviewField, freshTables, continuousTableEditSupport(freshTables), freshFlow] })
+    assert.deepEqual(ranges(state.field(tables).cells, state.doc.length), ranges(fresh.field(freshTables).cells, state.doc.length))
+    assert.deepEqual(ranges(state.field(tables).syntax, state.doc.length), ranges(fresh.field(freshTables).syntax, state.doc.length))
+    assert.deepEqual(ranges(state.field(flow).decorations, state.doc.length), ranges(fresh.field(freshFlow).decorations, state.doc.length))
+    assert.deepEqual(ranges(state.field(livePreviewField).decorations, state.doc.length), ranges(fresh.field(livePreviewField).decorations, state.doc.length))
+    const offset = state.doc.toString().indexOf("$x")
+    assert.equal(state.field(livePreviewField).dynamic.find(item => item.from === offset)!
+      .inactive.find(item => item.value.spec.widget)?.value, widget)
+  }
 })

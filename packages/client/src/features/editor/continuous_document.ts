@@ -1,10 +1,11 @@
 import { Compartment, Prec, StateEffect } from "@codemirror/state"
 import { EditorView } from "@codemirror/view"
-import { continuousTableGeometryChanged, createContinuousTables } from "./continuous_tables.js"
+import { continuousTableGeometryChanged, continuousTableEditSupport, createContinuousTables } from "./continuous_tables.js"
 import { livePreviewField } from "@elef/client/editor"
 import { sanitizePreview } from "@elef/client/sanitize"
 import { continuousFlowGeometryChanged, createContinuousFlow } from "./continuous_flow.js"
 import { registerContinuousVimMotions } from "./continuous_vim.js"
+import { continuousDocumentKeys } from "./continuous_keys.js"
 import { readStyleOverrides } from "@elef/work-model/document-map"
 
 export interface ContinuousDocumentEditor {
@@ -95,7 +96,8 @@ async function mountSurface(editor: ContinuousDocumentEditor, signal?: AbortSign
     return fractions
   }
   form.dataset.editorSurface = "continuous"
-  const extensions = [createContinuousTables(measure), createContinuousFlow(margins),
+  const tables = createContinuousTables(measure)
+  const extensions = [tables, continuousTableEditSupport(tables), createContinuousFlow(margins), continuousDocumentKeys,
     EditorView.contentAttributes.of(view => ({ class: view.state.field(livePreviewField).enabled ? "cm-lineWrapping" : "" })),
     Prec.highest(EditorView.theme({
       "&.continuous-document": { background: "var(--document-page-background)", color: "var(--document-page-ink)" },

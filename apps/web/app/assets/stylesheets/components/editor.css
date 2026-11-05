@@ -411,9 +411,17 @@ li.editor-reveal-marker { list-style: none; }
 .continuous-document .cm-live-emphasis { font-style: italic; }
 .continuous-document .cm-live-code { font-family: var(--oradia-mono); }
 .continuous-document .cm-live-link { color: var(--oradia-green-deep); text-decoration: underline; }
+.continuous-document .cm-line.cm-continuous-display-math:has(> .cm-live-widget-math-display) { line-height: 0; }
+.continuous-document .cm-live-widget-math-display { display: inline-block; line-height: var(--document-body-leading); vertical-align: top; width: 100%; }
+.continuous-document .cm-line.cm-live-list-item { padding-left: calc(1.5em * (1 + var(--cm-list-depth, 0))) !important; text-indent: -1.5em; }
+.continuous-document .cm-live-widget-list-marker { display: inline-block; text-align: center; text-indent: 0; width: 1.5em; }
+.continuous-document .cm-line.cm-live-quote { border-left: 4px solid var(--oradia-green-deep); color: var(--document-blockquote-ink); padding: 0 0 0 20px !important; }
+.continuous-document .cm-line.cm-live-quote:not(.cm-live-quote + .cm-live-quote) { padding-top: 4px !important; }
+.continuous-document .cm-line.cm-live-quote:not(:has(+ .cm-live-quote)) { padding-bottom: 22px !important; }
+.visual-editor-form[data-editor-mode="visual"] .continuous-document .cm-live-widget-quote-marker::after { content: none; }
 .continuous-document .cm-continuous-table-row { border-bottom: 1px solid var(--presentation-line); border-right: 1px solid var(--presentation-line); white-space: nowrap; }
 .continuous-document .cm-continuous-table-header { border-top: 1px solid var(--presentation-line); font-weight: 700; }
-.continuous-document .cm-continuous-table-syntax { font-size: 0; letter-spacing: 0; }
+.continuous-document .cm-continuous-table-syntax { display: inline-block; flex: 0 0 0; overflow: hidden; white-space: pre; width: 0; }
 .continuous-document .cm-continuous-cell {
   border-left: 1px solid var(--presentation-line); box-sizing: border-box;
   display: inline-block; flex-shrink: 0; overflow-wrap: anywhere; padding: 0.35rem 0.5rem;
@@ -431,6 +439,9 @@ li.editor-reveal-marker { list-style: none; }
 .visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .source-pane {
   background: transparent; border: 0; box-shadow: none;
 }
+body:has(form[data-editor-focus="continuous"][data-editor-mode="visual"]:not([data-editor-controls="open"])) .desktop-app-header { display: none; }
+body:has(form[data-editor-focus="continuous"][data-editor-mode="visual"]:not([data-editor-controls="open"])) .app-header:not(.desktop-app-header) .app-header-inner > :not(.bug-report-root),
+body:has(form[data-editor-focus="continuous"][data-editor-mode="visual"]:not([data-editor-controls="open"])) .app-header .bug-report-trigger { display: none; }
 #work-shell:has(form[data-editor-focus="continuous"][data-editor-mode="visual"]:not([data-editor-controls="open"])) > .page-title { display: none; }
 .visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"] .editor-shell-header,
 .visual-editor-form[data-editor-focus="continuous"][data-editor-mode="visual"]:not([data-editor-controls="open"]) .editor-toolbar,

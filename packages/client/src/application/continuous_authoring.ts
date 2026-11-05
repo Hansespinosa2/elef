@@ -58,7 +58,9 @@ export async function mountContinuousAuthoring(editor: EditorHandle, options: { 
     }),
     command("library", "Go to library", "Return to your works", () => document.querySelector<HTMLElement>("#back-to-library")?.click()),
     command("settings", "Open settings", "Change workspace settings", () => document.querySelector<HTMLElement>("#open-settings")?.click()),
+    command("report-bug", "Report a bug", "Describe a problem", () => document.querySelector<HTMLElement>(".bug-report-trigger")?.click()),
   ].filter(entry => {
+    if (entry.id === "report-bug") return Boolean(document.querySelector(".bug-report-trigger"))
     const row = ({ snippet: "trigger:snippet", link: "trigger:link", math: "trigger:math", diagram: "trigger:diagram", media: "media", shortcuts: "keyboard-shortcuts" } as Record<string, string>)[entry.id]
     return !row || Boolean(form.querySelector(`[data-edit-actions-row="${row}"]`))
   })

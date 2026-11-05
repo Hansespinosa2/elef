@@ -68,6 +68,66 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_equal 1, page.evaluate_script("document.querySelector('.continuous-document').querySelectorAll('[contenteditable=true]').length")
   end
 
+  test "Enter splits a paragraph and Backspace joins it in one uninterrupted flow" do
+    source = "# Editing\n\nAlpha beta"
+    document = Document.create!(title: "Editing", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    find(".continuous-document .cm-line", text: "Alpha beta").click
+    page.driver.browser.action.send_keys(:end, :enter, "Next").perform
+    assert_field "Markdown source", with: "#{source}\n\nNext"
+    assert_selector ".continuous-document .cm-line", exact_text: "Next"
+    page.driver.browser.action.send_keys(:home, :backspace).perform
+    assert_field "Markdown source", with: "#{source}Next"
+    assert_equal source.length, page.evaluate_script("document.querySelector('.source-field').editorController.selectionHead")
+  end
+
+  test "Enter continues and exits a visual list" do
+    source = "# Editing\n\n- First"
+    document = Document.create!(title: "Editing", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    find(".continuous-document .cm-line", text: "First").click
+    page.driver.browser.action.send_keys(:end, :enter, "Second", :enter, :enter, "After").perform
+    assert_field "Markdown source", with: "#{source}\n- Second\n\nAfter"
+    assert_selector ".continuous-document .cm-line", exact_text: "After"
+  end
+
+  test "Enter inside fenced code keeps a single source line break" do
+    source = "# Editing\n\n```tex\nalpha\n```"
+    document = Document.create!(title: "Editing", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    find(".continuous-document .cm-line", text: "alpha").click
+    page.driver.browser.action.send_keys(:end, :enter, "beta").perform
+    assert_field "Markdown source", with: source.sub("alpha", "alpha\nbeta")
+  end
+
+  test "Vim normal Enter and vertical aliases navigate the same source lines in both modes" do
+    source = "# Editing\n\nalpha\nbeta\n\ngamma\n"
+    %w[source visual].each do |mode|
+      document = Document.create!(title: "Editing #{mode}", source: source)
+      visit edit_document_path(document)
+      page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+      page.refresh
+      assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+      mode == "visual" ? mount_continuous_surface : click_on("Source")
+      find(".source-field .cm-content").click
+      page.driver.browser.action.send_keys("gg2j0").perform
+      current_line = -> { page.evaluate_script("(() => { const e = document.querySelector('.source-field').editorController; return e.view.state.doc.lineAt(e.selectionHead).text; })()") }
+      assert_equal "alpha", current_line.call, "#{mode}: initial motion"
+      page.driver.browser.action.send_keys(:enter).perform
+      assert_equal "beta", current_line.call, "#{mode}: Enter motion"
+      page.driver.browser.action.send_keys("x").perform
+      assert_field "Markdown source", with: source.sub("beta", "eta"), wait: 5
+      page.driver.browser.action.send_keys("gg2j0", :down).perform
+      assert_equal "eta", current_line.call, "#{mode}: down arrow"
+      page.driver.browser.action.send_keys(:up).perform
+      assert_equal "alpha", current_line.call, "#{mode}: up arrow"
+      page.driver.browser.action.key_down(:control).send_keys("n").key_up(:control).perform
+      assert_equal "eta", current_line.call, "#{mode}: Ctrl-N"
+      page.driver.browser.action.key_down(:control).send_keys("p").key_up(:control).perform
+      assert_equal "alpha", current_line.call, "#{mode}: Ctrl-P"
+    end
+  end
+
   test "Vim change and independent insert sessions have the same undo boundaries in both modes" do
     source = "# History\n\nalpha beta gamma\n"
     document = Document.create!(title: "History", source: source)
@@ -105,6 +165,16 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /\\alpha/
     assert page.evaluate_script("document.querySelector('.continuous-document').contains(document.activeElement)")
     assert_equal 1, page.evaluate_script("document.querySelector('.continuous-document').querySelectorAll('[contenteditable=true]').length")
+  end
+
+  test "entering an equation reveals TeX subscripts without Markdown formatting" do
+    source = "# Math\n\nEquation $a_{b_c}$.\n\nAfter.\n"
+    document = Document.create!(title: "Math", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    find(".continuous-document .cm-live-widget-math math", wait: 10).click
+    assert_selector ".continuous-document .cm-live-active-syntax", text: "$a_{b_c}$"
+    assert_no_selector ".continuous-document .cm-live-emphasis"
+    assert_equal source, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
   end
 
   test "the frozen math notebook keeps paragraph virtualization during sustained typing" do
@@ -223,6 +293,7 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
     mount_focused_authoring
     assert_no_selector ".editor-toolbar", visible: true
+    assert_no_selector ".app-header .app-navigation", visible: true
     assert_selector ".continuous-command-hint", text: /Ctrl\+K|⌘K/
     find(".continuous-document .cm-line", text: "alpha beta gamma").click
     position = page.evaluate_script("document.querySelector('.source-field').editorController.selectionHead")
@@ -297,6 +368,71 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_equal expected.length, actual.length
     probe_style = page.evaluate_script("(() => { const t = document.querySelector('.continuous-table-measure table'); const s = getComputedStyle(t.querySelector('th')); return {width:t.getBoundingClientRect().width,font:s.font,padding:s.padding}; })()")
     expected.zip(actual).each { |reader, editor| assert_in_delta reader, editor, 0.005, "reader #{reader_style.inspect}; probe #{probe_style.inspect}" }
+  end
+
+  test "math-only table cells retain their columns in spaced and compact Markdown" do
+    source = "# Equations\n\n| Label | Formula |\n| --- | --- |\n| $N$ | $x^2$ |\n|$a$|$b$|\n"
+    document = Document.create!(title: "Equation table", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document .cm-continuous-table-row", count: 3
+    assert_selector ".continuous-document .cm-continuous-cell math", count: 4, wait: 5
+    providers = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      import('@elef/client/editor').then(({ continuousPlainTableEdit }) => {
+        const editor = document.querySelector('.source-field').editorController;
+        done(editor.view.state.facet(continuousPlainTableEdit).length);
+      });
+    JAVASCRIPT
+    assert_equal 1, providers, "the shipped editor and continuous surface share the same table-edit facet"
+    rows = page.evaluate_script(<<~JAVASCRIPT)
+      [...document.querySelectorAll('.continuous-document .cm-continuous-table-row')].map(row =>
+        [...row.querySelectorAll(':scope > .cm-continuous-cell')].map(cell => {
+          const rect = cell.getBoundingClientRect();
+          return { left: rect.left, width: rect.width };
+        }))
+    JAVASCRIPT
+    assert_equal [2, 2, 2], rows.map(&:length)
+    rows.drop(1).each do |row|
+      rows.first.zip(row).each do |header, cell|
+        assert_in_delta header["left"], cell["left"], 1
+        assert_in_delta header["width"], cell["width"], 1
+      end
+    end
+    assert_equal source, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+  end
+
+  test "display math, nested lists and quotations preserve reader geometry" do
+    source = "# Layout\n\nA short introduction.\n\n$$x^2 + y^2$$\n\n- First item.\n  - Nested item.\n\n> A quotation.\n\nAfter the quotation.\n"
+    document = Document.create!(title: "Layout", source: source)
+    visit document_path(document)
+    assert_selector ".document-page .katex-display math", wait: 10
+    page.evaluate_async_script("const done = arguments[arguments.length - 1]; document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(done)));")
+    reader = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const title = document.querySelector('.document-page h1').getBoundingClientRect();
+        const nodes = [document.querySelector('.document-page .katex-display'),
+          ...document.querySelectorAll('.document-page li'), document.querySelector('.document-page blockquote'),
+          [...document.querySelectorAll('.document-page p')].find(node => node.textContent.trim() === 'After the quotation.')];
+        return nodes.map(node => { const r = node.getBoundingClientRect(); return { top: r.top - title.top, height: r.height }; });
+      })()
+    JAVASCRIPT
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document .cm-live-widget-math-display math", wait: 10
+    page.evaluate_async_script("const done = arguments[arguments.length - 1]; document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(done)));")
+    editor = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const title = document.querySelector('.continuous-document .cm-live-heading-1').getBoundingClientRect();
+        const nodes = [document.querySelector('.continuous-document .cm-live-widget-math-display'),
+          ...document.querySelectorAll('.continuous-document .cm-live-list-item'), document.querySelector('.continuous-document .cm-live-quote'),
+          [...document.querySelectorAll('.continuous-document .cm-line')].find(node => node.textContent.trim() === 'After the quotation.')];
+        return nodes.map(node => { const r = node.getBoundingClientRect(); return { top: r.top - title.top, height: r.height }; });
+      })()
+    JAVASCRIPT
+    assert_equal reader.length, editor.length
+    reader.zip(editor).each_with_index do |(expected, actual), index|
+      assert_in_delta expected["top"], actual["top"], 1, "element #{index}: reader #{reader.inspect}; editor #{editor.inspect}"
+    end
+    [0, 3, 4].each { |index| assert_in_delta reader[index]["height"], editor[index]["height"], 1 }
   end
 
   test "source switches and saves preserve the same editor state and visual changes" do

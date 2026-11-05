@@ -4,7 +4,7 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
 import { buildEditorStructure } from "@elef/work-model/document-map"
 import { scanMathSource } from "@elef/work-model/math-source"
-import { livePreviewField, livePreviewMode } from "@elef/client/editor"
+import { livePreviewField, livePreviewMode, isContinuousPlainTableEdit } from "@elef/client/editor"
 import { localMathEdit } from "./continuous_math_edit.js"
 
 export const continuousFlowGeometryChanged = StateEffect.define<void>()
@@ -18,7 +18,7 @@ function plainParagraph(text: string): boolean {
 }
 
 function canMapFlow(value: FlowDecorations, transaction: Transaction): boolean {
-  if (localMathEdit(transaction)) return true
+  if (localMathEdit(transaction) || isContinuousPlainTableEdit(transaction)) return true
   let safe = true
   transaction.changes.iterChangedRanges((from, to, newFrom, newTo) => {
     const range = value.plain.find(item => from >= item.from && to <= item.to)
@@ -61,6 +61,7 @@ export function createContinuousFlow(margins: BlockMargins) {
     const plain: PlainRange[] = []
     const blocks = buildEditorStructure(source, { mode: "document" }).editorMap.slides.flatMap(slide => slide.blocks).filter(block => !block.empty_placeholder)
     const math = scanMathSource(source)
+    let mathIndex = 0
     let previousAfter = 0
     let previousEnd: number | null = null
     for (const [index, block] of blocks.entries()) {
@@ -84,12 +85,23 @@ export function createContinuousFlow(margins: BlockMargins) {
       previousAfter = spacing.after
       previousEnd = block.content_range.end
       if (block.kind !== "paragraph") continue
+      while ((math[mathIndex]?.end ?? Infinity) <= block.content_range.start) mathIndex++
+      const span = math[mathIndex]
+      const standaloneDisplay = span?.display && span.start >= block.content_range.start && span.end <= block.content_range.end &&
+        source.slice(block.content_range.start, span.start).trim() === "" && source.slice(span.end, block.content_range.end).trim() === ""
+      if (standaloneDisplay) {
+        const lineStart = source.lastIndexOf("\n", block.content_range.start - 1) + 1
+        decorations.push(Decoration.line({ class: "cm-continuous-display-math" }).range(lineStart))
+      }
       if (plainParagraph(source.slice(block.content_range.start, block.content_range.end))) {
         plain.push({ from: block.content_range.start, to: block.content_range.end })
       }
+      let contentMathIndex = mathIndex
       for (let cursor = block.content_range.start; cursor < block.content_range.end; cursor++) {
         if (source[cursor] !== "\n" || source[cursor - 1] === "\\" || source.slice(cursor - 2, cursor) === "  ") continue
-        if (math.some(span => cursor >= span.start && cursor < span.end)) continue
+        while ((math[contentMathIndex]?.end ?? Infinity) <= cursor) contentMathIndex++
+        const currentMath = math[contentMathIndex]
+        if (currentMath && cursor >= currentMath.start && cursor < currentMath.end) continue
         decorations.push(Decoration.replace({ widget: new SoftBreak(), inclusive: false }).range(cursor, cursor + 1))
       }
     }
