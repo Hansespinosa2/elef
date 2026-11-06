@@ -48,6 +48,7 @@ interface SourceChange extends MediaInsertRange {
 import { snippetStopsField } from "./snippet_stops.js"
 import { editorTabKeymap } from "./tab_keymap.js"
 import { formatLineNumber } from "./line_numbers.js"
+import { adaptVimLineEndings } from "./vim_line_endings.js"
 import {
   caretAfterInsert,
   clampSelection,
@@ -61,6 +62,14 @@ import {
 
 const VIM_ESCAPE_MODES = ["normal", "insert", "visual", "operatorPending"]
 let activeEscapeKey = ""
+
+function setDatasetValue(element: HTMLElement, key: string, value: string): void {
+  if (element.dataset[key] !== value) element.dataset[key] = value
+}
+
+function setText(element: Element, value: string): void {
+  if (element.textContent !== value) element.textContent = value
+}
 
 // Shared with the live-preview suite so tests parse with the identical
 // ElefMetadata block grammar the engine ships.
@@ -533,11 +542,25 @@ export class EditorEngine {
   }
 
   get value() {
-    return this.view.state.doc.sliceString(0, this.view.state.doc.length, "\n")
+    const doc = this.view.state.doc
+    // A CodeMirror document is immutable. Several input and save listeners
+    // read it during one transaction, so flatten it only once per version.
+    if (this.cachedValueDoc !== doc) {
+      this.cachedValueDoc = doc
+      this.cachedValueText = doc.sliceString(0, doc.length, "\n")
+    }
+    return this.cachedValueText as string
   }
 
   get sourceValue() {
-    return this.view.state.sliceDoc()
+    const state = this.view.state
+    if (state.lineBreak === "\n") return this.value
+    if (this.cachedSourceDoc !== state.doc || this.cachedSourceSeparator !== state.lineBreak) {
+      this.cachedSourceDoc = state.doc
+      this.cachedSourceSeparator = state.lineBreak
+      this.cachedSourceText = state.sliceDoc()
+    }
+    return this.cachedSourceText as string
   }
 
   get selectionStart() {
@@ -651,6 +674,9 @@ export class EditorEngine {
 
   replaceServerSource(source: string): void {
     if (typeof source !== "string") return
+    // The textarea normalizes line endings, so a byte-identical server echo
+    // can still reach this method. Do not turn mixed endings into edits.
+    if (source === this.sourceValue) return
 
     const current = this.value
     const change = diffSource(current, source, this.lineSeparator)
@@ -978,6 +1004,7 @@ export class EditorEngine {
     this.unbindVimEvents()
     this.vim = this.vimEnabled ? getCM(this.view) : null
     if (!this.vim) return
+    adaptVimLineEndings(this.vim)
     this.vimInsertStartsHistory = true
     this.handleVimModeChange = () => {
       if (this.insertMode) this.vimInsertStartsHistory = !this.vim.curOp?.change
@@ -998,13 +1025,14 @@ export class EditorEngine {
   updateMode(): void {
     if (!this.vimEnabled) {
       if (this.hasModeTarget) {
-        this.modeTarget.textContent = "Standard"
-        this.modeTarget.dataset.mode = "standard"
+        const target = this.modeTarget
+        setText(target, "Standard")
+        setDatasetValue(target, "mode", "standard")
       }
-      if (this.hasCommandTarget) this.commandTarget.textContent = ""
-      this.element.dataset.editorVimEnabled = "false"
-      if (this.form) this.form.dataset.editorVimEnabled = "false"
-      this.element.dataset.editorMode = "standard"
+      if (this.hasCommandTarget) setText(this.commandTarget, "")
+      setDatasetValue(this.element, "editorVimEnabled", "false")
+      if (this.form) setDatasetValue(this.form, "editorVimEnabled", "false")
+      setDatasetValue(this.element, "editorMode", "standard")
       this.applyCursorStyle()
       return
     }
@@ -1012,14 +1040,15 @@ export class EditorEngine {
     const mode = this.vimMode
     const label = mode.startsWith("visual") ? "Visual" : mode === "insert" ? "Insert" : "Normal"
     if (this.hasModeTarget) {
-      this.modeTarget.textContent = label
-      this.modeTarget.dataset.mode = label.toLowerCase()
+      const target = this.modeTarget
+      setText(target, label)
+      setDatasetValue(target, "mode", label.toLowerCase())
     }
-    this.element.dataset.editorVimEnabled = "true"
-    if (this.form) this.form.dataset.editorVimEnabled = "true"
-    this.element.dataset.editorMode = label.toLowerCase()
+    setDatasetValue(this.element, "editorVimEnabled", "true")
+    if (this.form) setDatasetValue(this.form, "editorVimEnabled", "true")
+    setDatasetValue(this.element, "editorMode", label.toLowerCase())
     this.applyCursorStyle()
-    if (this.hasCommandTarget) this.commandTarget.textContent = this.vim?.state?.vim?.status || ""
+    if (this.hasCommandTarget) setText(this.commandTarget, this.vim?.state?.vim?.status || "")
   }
 
   applyMapping(): void {
@@ -1094,9 +1123,11 @@ export class EditorEngine {
     if (!this.hasMetadataToggleTarget) return
 
     const hasMetadata = Boolean(this.frontmatterRange)
-    this.metadataToggleTarget.hidden = this.editingMode !== "source"
-    this.metadataToggleTarget.disabled = !hasMetadata
-    this.metadataToggleTarget.textContent = hasMetadata && !this.frontmatterIsFolded() ? "Hide source metadata" : "Reveal source metadata"
+    const target = this.metadataToggleTarget as HTMLButtonElement
+    const hidden = this.editingMode !== "source"
+    if (target.hidden !== hidden) target.hidden = hidden
+    if (target.disabled === hasMetadata) target.disabled = !hasMetadata
+    setText(target, hasMetadata && !this.frontmatterIsFolded() ? "Hide source metadata" : "Reveal source metadata")
   }
 
   applyLineNumbers(): void {
@@ -1163,8 +1194,9 @@ export class EditorEngine {
   }
 
   applyCursorStyle(): void {
-    this.surfaceTarget.dataset.editorVimEnabled = String(this.vimEnabled)
-    this.surfaceTarget.dataset.modeAwareCursor = String(this.modeAwareCursor)
-    this.surfaceTarget.dataset.editorMode = this.element.dataset.editorMode || "standard"
+    const surface = this.surfaceTarget
+    setDatasetValue(surface, "editorVimEnabled", String(this.vimEnabled))
+    setDatasetValue(surface, "modeAwareCursor", String(this.modeAwareCursor))
+    setDatasetValue(surface, "editorMode", this.element.dataset.editorMode || "standard")
   }
 }

@@ -154,6 +154,26 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     end
   end
 
+  test "Vim undo restores a deleted and put line in source and continuous visual" do
+    ["\n", "\r\n", "\r"].each_with_index do |separator, index|
+      source = "# History\n\nalpha beta gamma\n\nEquation $x^2$.\n".gsub("\n", separator)
+      %w[source visual].each do |mode|
+        document = Document.create!(title: "Line history #{mode} #{index}", source: source)
+        visit edit_document_path(document)
+        page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
+        page.refresh
+        assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+        mode == "visual" ? mount_continuous_surface : click_on("Source")
+        find(".source-field .cm-content").click
+        read_source = -> { page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue") }
+        page.driver.browser.action.send_keys("gg2jddp").perform
+        assert_equal source.sub("alpha beta gamma#{separator}#{separator}", "#{separator}alpha beta gamma#{separator}"), read_source.call, "#{mode}: #{separator.inspect} paste"
+        page.driver.browser.action.send_keys("uuG").perform
+        assert_equal source, read_source.call, "#{mode}: #{separator.inspect} undo"
+      end
+    end
+  end
+
   test "Vim operators, text objects, macros, and search agree in source and continuous visual" do
     source = "# Heading\n\nalpha beta gamma\n\ndelta epsilon zeta\n\nEquation $x^2$.\n"
     cases = {
@@ -438,6 +458,14 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_equal "#{source}!", result.fetch("source")
     assert_equal "# Notes\n\nBody\ncontinued!", result.fetch("proxy")
     assert_equal [result.fetch("proxy")], result.fetch("snapshots")
+    echoed = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        editor.replaceServerSource(editor.sourceValue);
+        return editor.sourceValue;
+      })()
+    JAVASCRIPT
+    assert_equal "#{source}!", echoed
     page.execute_script("document.querySelector('form.visual-editor-form').requestSubmit()")
     assert_text "Document saved."
     assert_equal "#{source}!", document.reload.source
