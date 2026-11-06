@@ -77,7 +77,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
             window.startAuthoringPerf = () => {
               window.stopAuthoringPerf?.();
               const editor = document.querySelector('.continuous-document .cm-content');
-              const perf = { start: performance.now(), keys: [], stalls: [], keyEvents: [], stallDetails: [] };
+              const perf = { start: performance.now(), keys: [], stalls: [], keyEvents: [], stallDetails: [], longFrames: [] };
               const observer = new PerformanceObserver(list => {
                 for (const entry of list.getEntries()) {
                   if (entry.startTime < perf.start) continue;
@@ -87,6 +87,24 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
                 }
               });
               observer.observe({ type: 'longtask' });
+              // Long tasks alone do not identify the work that delayed a
+              // frame. Capture browser-provided script/layout attribution
+              // when available, without changing the latency budgets.
+              const frameObserver = PerformanceObserver.supportedEntryTypes.includes('long-animation-frame')
+                ? new PerformanceObserver(list => {
+                    for (const entry of list.getEntries()) {
+                      if (entry.startTime < perf.start) continue;
+                      perf.longFrames.push({ start: entry.startTime - perf.start, duration: entry.duration,
+                        blocking: entry.blockingDuration, renderStart: entry.renderStart - perf.start,
+                        styleAndLayoutStart: entry.styleAndLayoutStart - perf.start,
+                        scripts: entry.scripts.map(script => ({ start: script.startTime - perf.start,
+                          duration: script.duration, source: script.sourceURL, function: script.sourceFunctionName,
+                          position: script.sourceCharPosition, invoker: script.invoker,
+                          forcedLayout: script.forcedStyleAndLayoutDuration })) });
+                    }
+                  })
+                : null;
+              frameObserver?.observe({ type: 'long-animation-frame' });
               const keydown = event => {
                 if (!editor.contains(event.target) || event.ctrlKey || event.metaKey || event.altKey ||
                     (event.key.length !== 1 && !['Enter', 'Backspace'].includes(event.key))) return;
@@ -98,7 +116,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
               // Listen before editor capture/keymap handlers, so their work
               // is included rather than hidden before the measurement starts.
               document.addEventListener('keydown', keydown, true);
-              window.stopAuthoringPerf = () => { observer.disconnect(); document.removeEventListener('keydown', keydown, true); };
+              window.stopAuthoringPerf = () => { observer.disconnect(); frameObserver?.disconnect(); document.removeEventListener('keydown', keydown, true); };
               return perf;
             };
             window.continuousPerf = window.startAuthoringPerf();
@@ -118,7 +136,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           input_ms: measurements.fetch("keys").map { |value| value.round(1) },
           input_p95_ms: p95(measurements.fetch("keys")).round(1),
           long_tasks_ms: measurements.fetch("stalls").map { |value| value.round(1) },
-          long_task_details: measurements.fetch("stallDetails"), key_events: measurements.fetch("keyEvents")
+          long_task_details: measurements.fetch("stallDetails"), long_frame_details: measurements.fetch("longFrames"), key_events: measurements.fetch("keyEvents")
         }
         if name == "mixed"
           # Exercise a real rendered cell in the long mixed fixture. As with
@@ -151,7 +169,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
             input_ms: table.fetch("keys").map { |value| value.round(1) },
             input_p95_ms: p95(table.fetch("keys")).round(1),
             long_tasks_ms: table.fetch("stalls").map { |value| value.round(1) },
-            long_task_details: table.fetch("stallDetails"), key_events: table.fetch("keyEvents")
+            long_task_details: table.fetch("stallDetails"), long_frame_details: table.fetch("longFrames"), key_events: table.fetch("keyEvents")
           }
         end
         next unless name == "math_heavy"
@@ -182,7 +200,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           input_ms: paragraph_measurements.fetch("keys").map { |value| value.round(1) },
           input_p95_ms: p95(paragraph_measurements.fetch("keys")).round(1),
           long_tasks_ms: paragraph_measurements.fetch("stalls").map { |value| value.round(1) },
-          long_task_details: paragraph_measurements.fetch("stallDetails"), key_events: paragraph_measurements.fetch("keyEvents")
+          long_task_details: paragraph_measurements.fetch("stallDetails"), long_frame_details: paragraph_measurements.fetch("longFrames"), key_events: paragraph_measurements.fetch("keyEvents")
         }
 
         # Type real TeX inside an existing equation in the long document.
@@ -213,7 +231,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           input_ms: equation.fetch("keys").map { |value| value.round(1) },
           input_p95_ms: p95(equation.fetch("keys")).round(1),
           long_tasks_ms: equation.fetch("stalls").map { |value| value.round(1) },
-          long_task_details: equation.fetch("stallDetails"), key_events: equation.fetch("keyEvents")
+          long_task_details: equation.fetch("stallDetails"), long_frame_details: equation.fetch("longFrames"), key_events: equation.fetch("keyEvents")
         }
 
         # Creating an equation starts with an unmatched delimiter, unlike
@@ -233,7 +251,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           input_ms: new_equation.fetch("keys").map { |value| value.round(1) },
           input_p95_ms: p95(new_equation.fetch("keys")).round(1),
           long_tasks_ms: new_equation.fetch("stalls").map { |value| value.round(1) },
-          long_task_details: new_equation.fetch("stallDetails"), key_events: new_equation.fetch("keyEvents")
+          long_task_details: new_equation.fetch("stallDetails"), long_frame_details: new_equation.fetch("longFrames"), key_events: new_equation.fetch("keyEvents")
         }
 
         # Repeat in a standalone paragraph near the middle, with many later
@@ -264,7 +282,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           input_ms: middle_equation.fetch("keys").map { |value| value.round(1) },
           input_p95_ms: p95(middle_equation.fetch("keys")).round(1),
           long_tasks_ms: middle_equation.fetch("stalls").map { |value| value.round(1) },
-          long_task_details: middle_equation.fetch("stallDetails"), key_events: middle_equation.fetch("keyEvents")
+          long_task_details: middle_equation.fetch("stallDetails"), long_frame_details: middle_equation.fetch("longFrames"), key_events: middle_equation.fetch("keyEvents")
         }
       end
     ensure
