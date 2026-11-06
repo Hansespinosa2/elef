@@ -440,6 +440,19 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_nil result.last.fetch("frontmatter")
   end
 
+  test "continuous typing keeps frontmatter folded when gutters are hidden" do
+    source = "---\ntheme: light\ntypography: modern\n---\n# Notes\n\nBody"
+    document = Document.create!(title: "Folded frontmatter", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document"
+    folded = -> { page.evaluate_script("document.querySelector('.source-field').editorController.frontmatterIsFolded()") }
+    assert folded.call, "frontmatter should remain folded when the gutter is removed"
+    find(".continuous-document .cm-line", text: "Body").click
+    page.driver.browser.action.send_keys(:end, " revised").perform
+    assert_field "Markdown source", with: "#{source} revised"
+    assert folded.call, "typing outside frontmatter should retain its fold"
+  end
+
   test "the input proxy normalizes mixed line endings without changing saved source" do
     document = Document.create!(title: "Line endings", source: "# Notes\n")
     visit edit_document_path(document, editor_surface: "continuous")

@@ -5,7 +5,7 @@ import { isolateHistory } from "@codemirror/commands"
 import type { ChangeSet, Extension } from "@codemirror/state"
 import { EditorView, lineNumbers, panels, runScopeHandlers } from "@codemirror/view"
 import type { ViewUpdate } from "@codemirror/view"
-import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
+import { codeFolding, foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
 import { basicSetup } from "codemirror"
 import { markdown } from "@codemirror/lang-markdown"
 import { tags } from "@lezer/highlight"
@@ -185,6 +185,9 @@ export class EditorEngine {
       // Keep gutter plugins independently reconfigurable without removing
       // history or any other part of CodeMirror's shared editor state.
       this.otherGuttersCompartment.of([basicSetup[1]!, basicSetup[4]!]),
+      // foldGutter also installs the folding state. Keep it independently
+      // when continuous authoring removes the gutter from the document view.
+      codeFolding(),
       ...basicSetup.slice(2, 4),
       ...basicSetup.slice(5),
       editorTabKeymap,
