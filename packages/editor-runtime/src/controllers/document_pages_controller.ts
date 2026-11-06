@@ -101,7 +101,15 @@ export default class extends Controller<HTMLElement> {
       if (this.active && !this.focusedEditable()) this.schedulePagination()
     })
     this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this.boundResize)
-    this.mutationObserver = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => this.schedulePagination())
+    this.mutationObserver = typeof MutationObserver === "undefined" ? null : new MutationObserver((records) => {
+      const onlyPythonSliderScrub = records.length > 0 && records.every((record) => {
+        const node = record.target as Element | Node | null
+        const el = node && (node as Element).nodeType === 1 ? (node as Element) : node?.parentElement
+        return Boolean(el?.closest?.(".elef-python-controls"))
+      })
+      if (onlyPythonSliderScrub) return
+      this.schedulePagination()
+    })
 
     window.addEventListener("resize", this.boundResize)
     this.surfaceTarget.addEventListener("focusout", this.boundFocusOut)
@@ -533,6 +541,7 @@ export default class extends Controller<HTMLElement> {
   }
 
   splitBlock(block: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {
+    if (block.matches(".elef-python-block") || block.querySelector(".elef-python-block")) return null
     const art = this.artRoot(block)
     if (art) return this.splitArtBlock(block, art, page)
 

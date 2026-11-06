@@ -3,7 +3,7 @@
 import MarkdownIt from "markdown-it"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
-import { buildEditorStructure, createDocumentLinkResolver, parseDocumentLinkAt } from "@elef/work-model"
+import { buildEditorStructure, createDocumentLinkResolver, parseDocumentLinkAt, parsePythonFenceInfo } from "@elef/work-model"
 import { mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
 import { analyzeArtList, ART_DIAGNOSTICS } from "@elef/work-model/art-source"
 import { slidePositionClasses, slidePositionLayout } from "@elef/work-model/slide-position-layout"
@@ -349,6 +349,31 @@ markdown.renderer.rules.image = (tokens, index, _options, env) => {
 
 markdown.renderer.rules.s_open = () => "<del>"
 markdown.renderer.rules.s_close = () => "</del>"
+
+const defaultFenceRenderer = markdown.renderer.rules.fence
+markdown.renderer.rules.fence = (tokens, index, options, env, self) => {
+  const token = tokens[index]
+  const parsedPython = token ? parsePythonFenceInfo(token.info ?? "") : { executable: false, showCode: false }
+  if (token && parsedPython.executable) {
+    const code = token.content
+    const escapedSource = markdown.utils.escapeHtml(code)
+    const showCodeClass = parsedPython.showCode ? " elef-python-show-code" : ""
+    let codeHtml = ""
+    if (parsedPython.showCode) {
+      let highlighted = escapedSource
+      if (hljs.getLanguage("python")) {
+        try {
+          highlighted = hljs.highlight(code, { language: "python", ignoreIllegals: true }).value
+        } catch (_error) {
+          highlighted = escapedSource
+        }
+      }
+      codeHtml = `<pre class="elef-python-code"><code class="highlight python">${highlighted}</code></pre>`
+    }
+    return `<div class="elef-python-block${showCodeClass}">${codeHtml}<pre class="elef-python-source">${escapedSource}</pre><div class="elef-python-output"></div></div>\n`
+  }
+  return defaultFenceRenderer ? defaultFenceRenderer(tokens, index, options, env, self) : ""
+}
 
 export function collectMediaReferences(source = ""): string[] {
   if (typeof source !== "string") throw typedError("invalid_input", "Markdown source must be text.")

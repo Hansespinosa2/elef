@@ -1,3 +1,5 @@
+import { renderPythonBlocks } from "./python_runtime.js"
+
 export const MERMAID_CONTAINER_SELECTOR = "pre.mermaid"
 export const MERMAID_ERROR_CLASS = "mermaid-error"
 
@@ -175,8 +177,11 @@ export function mermaidConfig(element: Element | Document | null | undefined) {
 }
 
 export async function renderMermaidDiagrams(root: Document | Element): Promise<boolean> {
+  const pythonPromise = renderPythonBlocks(root)
   const containers = mermaidContainers(root)
-  if (!containers.length) return false
+  if (!containers.length) {
+    return await pythonPromise
+  }
 
   // `mermaid.run` empties a container it cannot parse, so keep the escaped
   // source around to put back in place of a diagram that never arrives.
@@ -190,6 +195,7 @@ export async function renderMermaidDiagrams(root: Document | Element): Promise<b
     container.innerHTML = sources.get(container) ?? ""
     container.classList.add(MERMAID_ERROR_CLASS)
   })
+  await pythonPromise
   return true
 }
 
