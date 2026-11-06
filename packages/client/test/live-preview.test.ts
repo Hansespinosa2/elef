@@ -371,6 +371,20 @@ test("invisible directives collapse until entered", () => {
   assert.deepEqual(specsAt(entered, 26, 30), ["replace:empty"]);
 });
 
+test("directive concealment preserves the following character for every line ending", () => {
+  const source = ":::align{center}\nText\n"
+  for (const separator of ["\n", "\r\n", "\r"]) {
+    const state = EditorState.create({
+      doc: source.replace(/\n/g, separator),
+      selection: EditorSelection.cursor(source.length),
+      extensions: [EditorState.lineSeparator.of(separator), markdown({ extensions: elefMetadata }), livePreviewField],
+    })
+    assert.equal(state.field(livePreviewField).error, null, separator)
+    const hidden = decorationsOf(state).filter(item => item.spec === "replace:empty" && item.from === 0)
+    assert.deepEqual(hidden, [{ from: 0, to: source.indexOf("Text"), spec: "replace:empty" }], separator)
+  }
+})
+
 test("unknown directives stay visible so broken syntax is never hidden", () => {
   const doc = ":::frobnicate\n\nText\n";
   const inactive = decorationsOf(previewState(doc, EditorSelection.cursor(doc.length)));

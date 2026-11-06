@@ -544,9 +544,10 @@ function addSyntaxTreeHints(decorations: DecorationPlan, state: EditorState): vo
         // collapse entirely (including their line break); entering the line
         // reveals the source in place.
         let to = node.to
-        const breakAfter = state.sliceDoc(to, to + 2)
-        if (breakAfter.startsWith("\r\n")) to += 2
-        else if (breakAfter.startsWith("\n")) to += 1
+        // CodeMirror positions count one per line break even when the
+        // serialized separator is CRLF. Inspect the document's line break,
+        // not its serialized width, so the next character stays visible.
+        if (to < state.doc.length && state.doc.sliceString(to, to + 1) === "\n") to += 1
         decorations.conditional(state, node.from, to,
           [markDecoration("cm-live-active-syntax").range(node.from, node.to)],
           [Decoration.replace({}).range(node.from, to)])

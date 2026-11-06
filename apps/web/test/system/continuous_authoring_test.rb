@@ -480,6 +480,15 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_equal "# External\r\n\r\nChanged", replacement
   end
 
+  test "CRLF directives do not hide the following document text" do
+    source = "# Notes\r\n\r\n:::align{center}\r\nVisible next\r\n:::\r\n"
+    document = Document.create!(title: "CRLF directives", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    find(".continuous-document .cm-line", text: "Notes").click
+    assert_selector ".continuous-document .cm-line", exact_text: "Visible next"
+    assert_equal source, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+  end
+
   test "focused commands preserve snippet placeholder selection" do
     document = Document.create!(title: "Focused snippets", source: "# Notes\n\nBody")
     visit edit_document_path(document)
