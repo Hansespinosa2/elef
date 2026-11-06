@@ -311,11 +311,35 @@ class WebEditorUi {
       editor.setVimEnabled(true)
       const { mountContinuousAuthoring } = await import("@elef/client/continuous-editor")
       window.__continuousAuthoring = await mountContinuousAuthoring(editor)
+      const events = []
+      const add = entry => { events.push(entry); if (events.length > 100) events.shift() }
+      const content = editor.view.contentDOM
+      const keydown = event => add({ type: "keydown", key: event.key, head: editor.selectionHead })
+      const dispatch = editor.view.dispatchTransactions
+      editor.view.dispatchTransactions = function(transactions, view) {
+        for (const transaction of transactions) {
+          if (!transaction.docChanged) continue
+          const changes = []
+          transaction.changes.iterChanges((from, to, _newFrom, _newTo, inserted) => {
+            changes.push({ from, to, inserted: inserted.toString().slice(0, 80) })
+          })
+          add({ type: "transaction", changes, input: transaction.isUserEvent("input"),
+            undo: transaction.isUserEvent("undo"), head: transaction.state.selection.main.head })
+        }
+        return dispatch.call(this, transactions, view)
+      }
+      content.addEventListener("keydown", keydown, true)
+      window.__continuousInputTrace = { events, dispose() {
+        content.removeEventListener("keydown", keydown, true)
+        editor.view.dispatchTransactions = dispatch
+      } }
     })
   }
 
   async stopContinuousAuthoring() {
     await this.page.evaluate(() => {
+      window.__continuousInputTrace?.dispose()
+      delete window.__continuousInputTrace
       window.__continuousAuthoring?.dispose()
       window.__continuousAuthoring = null
       const form = document.querySelector(".visual-editor-form")
@@ -550,8 +574,24 @@ class WebEditorUi {
   }
 
   async waitForSource(source) {
-    await expect.poll(async () => normalizeLineEndings(await this.readSource()))
-      .toBe(normalizeLineEndings(source))
+    try {
+      await expect.poll(async () => normalizeLineEndings(await this.readSource()))
+        .toBe(normalizeLineEndings(source))
+    } catch (error) {
+      const state = await this.page.evaluate(() => {
+        const editor = document.querySelector(".source-field")?.editorController
+        return { source: editor?.sourceValue, head: editor?.selectionHead, vimMode: editor?.vimMode,
+          inputTrace: window.__continuousInputTrace?.events }
+      })
+      const actual = normalizeLineEndings(state.source || "")
+      const expected = normalizeLineEndings(source)
+      let firstDifference = 0
+      while (firstDifference < Math.min(actual.length, expected.length) && actual[firstDifference] === expected[firstDifference]) firstDifference++
+      state.source = { length: actual.length, firstDifference,
+        actual: actual.slice(Math.max(0, firstDifference - 32), firstDifference + 96),
+        expected: expected.slice(Math.max(0, firstDifference - 32), firstDifference + 96) }
+      throw new Error(`The web editor did not reach the expected source; state: ${JSON.stringify(state)}`, { cause: error })
+    }
   }
 
   async undo() {
