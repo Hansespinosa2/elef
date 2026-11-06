@@ -1,5 +1,5 @@
 /// <reference path="./vendor.d.ts" />
-import { createDocumentState } from "./document_state.js"
+import { createDocumentState, diffDocumentText } from "./document_state.js"
 import { Compartment, EditorState, Transaction } from "@codemirror/state"
 import { isolateHistory } from "@codemirror/commands"
 import type { ChangeSet, Extension } from "@codemirror/state"
@@ -681,8 +681,10 @@ export class EditorEngine {
     // can still reach this method. Do not turn mixed endings into edits.
     if (source === this.sourceValue) return
 
-    const current = this.value
-    const change = diffSource(current, source, this.lineSeparator)
+    const state = this.view.state
+    const change = detectLineSeparator(source) === state.lineBreak
+      ? diffDocumentText(state.doc, state.toText(source))
+      : diffSource(this.value, source, this.lineSeparator)
     if (!change) return
 
     const frontmatterWasFolded = this.frontmatterIsFolded()

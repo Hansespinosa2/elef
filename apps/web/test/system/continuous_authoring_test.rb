@@ -502,6 +502,22 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_equal source, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
   end
 
+  test "canonical server changes retain untouched mixed line endings" do
+    source = "# Notes\r\n\r\nBody\rcontinued"
+    document = Document.create!(title: "Mixed canonical source", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document"
+    changed = source.sub("Body", "Updated body")
+    actual = page.evaluate_script(<<~JAVASCRIPT, changed)
+      ((source) => {
+        const editor = document.querySelector('.source-field').editorController;
+        editor.replaceServerSource(source);
+        return editor.sourceValue;
+      })(arguments[0])
+    JAVASCRIPT
+    assert_equal changed, actual
+  end
+
   test "focused commands preserve snippet placeholder selection" do
     document = Document.create!(title: "Focused snippets", source: "# Notes\n\nBody")
     visit edit_document_path(document)
