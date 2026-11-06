@@ -73,6 +73,8 @@ apps/web/app/views/desktop_host.html is a static desktop host shell consumed by 
 
 Both hosts mount the same `packages/client` bundle for library, settings, and editor UI: Rails through a Stimulus controller with the HTTP host adapter, desktop through `packages/editor-runtime/src/lib/file_library_application.ts` with the Tauri host adapter. Host differences (routes vs in-app views, native dialogs, server templates) ride the documented mount seams; the client carries no host knowledge (boundary R9).
 
+Primary navigation is mounted by the client-owned `mountAppNavigation` component in both shells. Hosts supply Library/Settings destinations; the desktop intercepts these links through its existing save-aware view navigation. Shared navigation markup and geometry are not duplicated in host templates.
+
 ## Packages
 
 Each package exists for exactly one reason; anything else is a module inside its owner.

@@ -8,6 +8,10 @@
 
 /* ── bug reports ── */
 .bug-report-root { align-items: center; display: flex; flex: 0 1 auto; gap: 0.65rem; max-width: 34rem; }
+/* Keep the complete recording disclosure visible without letting a narrow
+   paragraph determine the height of primary application navigation. */
+.app-header-inner > .bug-report-root { display: contents; }
+.app-header-inner .bug-report-disclosure { background: transparent; border: 0; flex-basis: 100%; max-width: none; order: 10; padding: 0; }
 .bug-report-trigger { background: var(--oradia-green-deep); border: 1px solid var(--oradia-green-deep); border-radius: 999px; color: #f5faf5; cursor: pointer; font: inherit; font-size: 0.8rem; font-weight: 800; padding: 0.48rem 0.8rem; }
 .bug-report-trigger:hover, .bug-report-trigger:focus-visible { background: var(--oradia-green); border-color: var(--oradia-green); color: var(--oradia-slate-950); }
 .bug-report-disclosure { background: var(--oradia-slate-800); border-left: 3px solid var(--oradia-green); border-radius: 0.35rem; color: var(--oradia-ink); flex: 1 1 auto; font-size: 0.72rem; line-height: 1.4; margin: 0; max-width: 25rem; padding: 0.45rem 0.55rem; }

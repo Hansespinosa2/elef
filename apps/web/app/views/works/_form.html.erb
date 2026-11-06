@@ -1,5 +1,6 @@
 <% persisted = work.persisted? %>
 <% type_label = work_type_label(work) %>
+<% workspace = work.workspace || Workspace.default %>
 <% content_for :head do %>
   <%# Pagination waits for fonts (a pre-fonts pass is thrown away), and the
       math fonts are otherwise discovered late during render: preload them so
@@ -9,13 +10,15 @@
   <%= preload_link_tag "katex/fonts/KaTeX_Main-Regular.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" %>
   <%= preload_link_tag "katex/fonts/KaTeX_Size1-Regular.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" %>
 <% end %>
-<% editor_projection = shared_editor_projection(
-  work,
-  source: work.source.to_s.gsub(/\r\n?/, "\n"),
-  title: work.title.presence || work.default_title
-) %>
 <% visual_mode = params[:editor_mode] != "source" %>
+<% continuous_candidate = work.document? && visual_mode && params[:editor_surface] == "continuous" %>
+<% editor_projection = if continuous_candidate
+  { html: "", editor_map: {}, warnings: [] }
+else
+  shared_editor_projection(work, source: work.source.to_s.gsub(/\r\n?/, "\n"), title: work.title.presence || work.default_title)
+end %>
 <% controllers = %w[dirty preview autosave visual-editor media] %>
+<% controllers << "continuous-authoring" if continuous_candidate %>
 <% controllers << "presentation-host" if work.presentation? %>
 <% controllers << "slide-overview" if work.presentation? %>
 <% actions = ["submit->dirty#allowSubmit", "input->dirty#markDirty"] %>
@@ -27,6 +30,13 @@
 <% form_data = { action: actions.join(" "), editor_mode: editor_mode, dirty_unsaved_message_value: "You have unsaved #{type_label.downcase} changes. Leave without saving?", "bug-report-ignore": true } %>
 <% form_data[:preview_url_value] = persisted ? work_preview_path(work) : work_preview_collection_path(work) %>
 <% form_data[:visual_editor_kind_value] = work.kind %>
+<% form_data[:continuous_default_theme] = workspace.default_theme %>
+<% form_data[:continuous_default_typography] = workspace.default_typography %>
+<% if continuous_candidate %>
+  <% form_data[:editor_surface] = "continuous-pending" %>
+  <% form_data[:continuous_theme] = work.theme %>
+  <% form_data[:continuous_typography] = work.typography %>
+<% end %>
 <% form_data[:media_work_kind_value] = work.kind %>
 <% form_data[:media_upload_url_value] = persisted ? (work.document? ? upload_asset_document_path(work) : upload_asset_presentation_path(work)) : "" %>
 <% form_data[:media_enabled_value] = persisted %>
@@ -56,7 +66,6 @@
   <% end %>
   <%= hidden_field_tag :editor_mode, editor_mode %>
 
-  <% workspace = work.workspace || Workspace.default %>
   <% editor_host_config = {
     kind: work.document? ? "document" : "presentation",
     persisted: persisted,

@@ -1,3 +1,4 @@
+import { continuousAuthoringWorkflow, continuousLongDocumentWorkflow } from "../../../../apps/web/test/e2e/scenarios/continuous-authoring.js"
 import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../../apps/web/test/e2e/scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
@@ -303,6 +304,89 @@ class WebEditorUi {
     await expect(this.page.locator(".editor-title-input")).toHaveValue(title)
   }
 
+  async startContinuousAuthoring() {
+    await this.page.locator(".source-field").evaluate(async field => {
+      const editor = field.editorController
+      window.__continuousVimBefore = editor.vimEnabled
+      editor.setVimEnabled(true)
+      const { mountContinuousAuthoring } = await import("@elef/client/continuous-editor")
+      window.__continuousAuthoring = await mountContinuousAuthoring(editor)
+      const events = []
+      const add = entry => { events.push(entry); if (events.length > 100) events.shift() }
+      const content = editor.view.contentDOM
+      const keydown = event => add({ type: "keydown", key: event.key, head: editor.selectionHead })
+      const dispatch = editor.view.dispatchTransactions
+      editor.view.dispatchTransactions = function(transactions, view) {
+        for (const transaction of transactions) {
+          if (!transaction.docChanged) continue
+          const changes = []
+          transaction.changes.iterChanges((from, to, _newFrom, _newTo, inserted) => {
+            changes.push({ from, to, inserted: inserted.toString().slice(0, 80) })
+          })
+          add({ type: "transaction", changes, input: transaction.isUserEvent("input"),
+            undo: transaction.isUserEvent("undo"), head: transaction.state.selection.main.head })
+        }
+        return dispatch.call(this, transactions, view)
+      }
+      content.addEventListener("keydown", keydown, true)
+      window.__continuousInputTrace = { events, dispose() {
+        content.removeEventListener("keydown", keydown, true)
+        editor.view.dispatchTransactions = dispatch
+      } }
+    })
+  }
+
+  async stopContinuousAuthoring() {
+    await this.page.evaluate(() => {
+      window.__continuousInputTrace?.dispose()
+      delete window.__continuousInputTrace
+      window.__continuousAuthoring?.dispose()
+      window.__continuousAuthoring = null
+      const form = document.querySelector(".visual-editor-form")
+      const controller = form && window.Stimulus?.getControllerForElementAndIdentifier(form, "continuous-authoring")
+      controller?.handle?.dispose()
+      if (controller) controller.handle = null
+      if (window.__continuousVimBefore !== undefined) {
+        document.querySelector(".source-field")?.editorController?.setVimEnabled(window.__continuousVimBefore)
+        delete window.__continuousVimBefore
+      }
+    })
+  }
+
+  async reopenContinuousWork() {
+    await this.page.goto(`/documents/${this.activeWorkId}/edit?editor_surface=continuous`)
+    await expect(this.page.locator(".continuous-document")).toBeVisible()
+  }
+
+  async clickContinuousText(text, cell = false) {
+    await this.page.locator(cell ? ".continuous-document .cm-continuous-cell" : ".continuous-document .cm-line")
+      .filter({ hasText: text }).last().click()
+  }
+
+  async continuousSourceMode() {
+    await this.page.locator(".continuous-command-hint").click()
+    await this.page.locator('[data-continuous-commands] [role="combobox"]').fill("Switch to source")
+    await this.page.keyboard.press("Enter")
+    await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
+  }
+
+  async continuousKeys(text, special = false) {
+    if (special) await this.page.keyboard.press(text)
+    else await this.page.keyboard.type(text)
+  }
+
+  async assertContinuousText(text, cell = false) {
+    await expect(this.page.locator(cell ? ".continuous-document .cm-continuous-cell" : ".continuous-document .cm-line")
+      .filter({ hasText: text }).last()).toBeVisible()
+  }
+
+  async assertContinuousMath(text, lineText) {
+    const root = lineText
+      ? this.page.locator(".continuous-document .cm-line").filter({ hasText: lineText })
+      : this.page.locator(".continuous-document")
+    await expect(root.locator("math mi").filter({ hasText: text })).toBeVisible()
+  }
+
   async replaceSource(source) {
     const editor = this.page.locator(".source-field .cm-content")
     await editor.click()
@@ -490,8 +574,24 @@ class WebEditorUi {
   }
 
   async waitForSource(source) {
-    await expect.poll(async () => normalizeLineEndings(await this.readSource()))
-      .toBe(normalizeLineEndings(source))
+    try {
+      await expect.poll(async () => normalizeLineEndings(await this.readSource()))
+        .toBe(normalizeLineEndings(source))
+    } catch (error) {
+      const state = await this.page.evaluate(() => {
+        const editor = document.querySelector(".source-field")?.editorController
+        return { source: editor?.sourceValue, head: editor?.selectionHead, vimMode: editor?.vimMode,
+          inputTrace: window.__continuousInputTrace?.events }
+      })
+      const actual = normalizeLineEndings(state.source || "")
+      const expected = normalizeLineEndings(source)
+      let firstDifference = 0
+      while (firstDifference < Math.min(actual.length, expected.length) && actual[firstDifference] === expected[firstDifference]) firstDifference++
+      state.source = { length: actual.length, firstDifference,
+        actual: actual.slice(Math.max(0, firstDifference - 32), firstDifference + 96),
+        expected: expected.slice(Math.max(0, firstDifference - 32), firstDifference + 96) }
+      throw new Error(`The web editor did not reach the expected source; state: ${JSON.stringify(state)}`, { cause: error })
+    }
   }
 
   async undo() {
@@ -1294,4 +1394,13 @@ test("the rich release fixture renders, presents, saves, and reopens in the web 
 
 test("slide position stacks and lanes align in the web preview", async ({ page }) => {
   await slidePositionGrammarWorkflow(new WebEditorUi(page))
+})
+
+test("continuous authoring keeps Vim, math, tables, and saved source coherent", async ({ page }) => {
+  await continuousAuthoringWorkflow(new WebEditorUi(page))
+})
+
+test("continuous authoring navigates, edits, and saves the long math fixture", async ({ page }) => {
+  const source = await readFile(path.resolve(process.cwd(), "../../../apps/web/test/fixtures/performance/elef-visual-100-math.md"), "utf8")
+  await continuousLongDocumentWorkflow(new WebEditorUi(page), source)
 })

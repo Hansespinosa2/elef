@@ -8,6 +8,7 @@ import { loadPackageSource } from "./package_source.mjs"
 // stays in the dist smoke lane for that entry (see docs/development.md).
 const projectionEditabilitySource = await loadPackageSource("packages/editor-runtime/src/lib/projection_editability.ts")
 const stageMarksSource = await loadPackageSource("packages/editor-runtime/src/lib/stage_marks.ts")
+const scrollPreservationSource = await loadPackageSource("packages/editor-runtime/src/lib/scroll_preservation.ts")
 const editorViewSource = (await loadPackageSource("packages/editor-runtime/src/lib/editor_view.ts"))
   .replace('import { sanitizePreview as installSanitizedPreview } from "@elef/client/sanitize"', "const installSanitizedPreview = (html) => html")
   .replace('import { markProjectionBlocksReadOnly } from "./projection_editability.js"', () => projectionEditabilitySource)
@@ -17,6 +18,7 @@ const source = (await loadPackageSource("packages/editor-runtime/src/controllers
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { installPreviewHtml } from "../lib/editor_view.js"', () => editorViewSource)
   .replace('import { buildPreviewRequestBody } from "../lib/preview_request_body.js"', () => previewRequestBodySource)
+  .replace('import { preserveSurfaceScroll } from "../lib/scroll_preservation.js"', () => scrollPreservationSource)
   .replace(
     'import { attachCanvasScaling } from "@elef/client"',
     `import { attachCanvasScaling } from "${import.meta.resolve("@elef/client")}"`
@@ -26,6 +28,28 @@ const source = (await loadPackageSource("packages/editor-runtime/src/controllers
   // collide in the flattened module scope.
   .replace('import { markStage } from "../lib/stage_marks.js"', "")
 const preview = await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)
+
+test("continuous authoring defers full-document preview work until leaving the writing surface", () => {
+  const controller = new preview.default()
+  const request = new AbortController()
+  Object.assign(controller, {
+    element: { dataset: { editorSurface: "continuous", editorMode: "visual" } },
+    requestController: request,
+    requestId: 0,
+    projectionFresh: true,
+    markProjectionStale() { assert.fail("typing scanned the legacy projection") },
+    refresh() { assert.fail("typing started a full-document render") },
+  })
+  controller.schedule()
+  assert.equal(request.signal.aborted, true)
+  assert.equal(controller.timer, null)
+  assert.equal(controller.requestController, null)
+  assert.equal(controller.deferredForContinuous, true)
+  assert.equal(controller.projectionFresh, false)
+  assert.equal(controller.element.dataset.previewProjectionStale, "true")
+  controller.element.dataset.editorMode = "source"
+  assert.equal(controller.continuousEditing(), false)
+})
 
 test("preview timeout also bounds reading the JSON response body", async () => {
   const originalFetch = globalThis.fetch

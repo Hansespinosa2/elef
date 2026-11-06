@@ -22,6 +22,10 @@
     "@types/react-dom": "19.3.0"
   },
   "exports": {
+    "./continuous-editor": {
+      "types": "./src/application/continuous_authoring.ts",
+      "default": "./dist/continuous-editor.js"
+    },
     ".": {
       "types": "./src/index.ts",
       "default": "./dist/elef-client.js"

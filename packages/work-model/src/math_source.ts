@@ -38,6 +38,14 @@ export function mathSourceAt(source: string, start = 0): MathSource | null {
   return { start, end: end + close.length, interior, open, close, display }
 }
 
+function startsDisplayBlock(source: string, math: MathSource): boolean {
+  if (!math.display) return false
+  const start = source.lastIndexOf("\n", math.start - 1) + 1
+  const end = source.indexOf("\n", math.start)
+  return source.slice(start, math.start).trim() === "" &&
+    source.slice(math.start, end < 0 ? source.length : end).trim() === math.open
+}
+
 export function scanMathSource(source: string): MathSource[] {
   const matches: MathSource[] = []
   let index = 0
@@ -88,7 +96,12 @@ export function scanMathSource(source: string): MathSource[] {
       continue
     }
     const math = mathSourceAt(source, index)
-    if (math) { matches.push(math); index = math.end; continue }
+    // Inline rules run within a Markdown paragraph in the renderer. An
+    // unfinished pair must not consume a later paragraph's equation. A
+    // standalone display opener is the block rule and may span blank lines.
+    if (math && (!/\n[ \t\r]*\n/.test(source.slice(math.start, math.end)) || startsDisplayBlock(source, math))) {
+      matches.push(math); index = math.end; continue
+    }
     index += source[index] === "\\" ? 2 : 1
   }
   return matches
