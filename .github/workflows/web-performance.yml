@@ -75,6 +75,7 @@ jobs:
           name: continuous-authoring-cpu-profile
           path: |
             ${{ github.workspace }}/new-equation.cpuprofile
+            ${{ github.workspace }}/new-equation.json
             packages/client/dist/editor.js
             packages/client/dist/continuous-editor.js
             packages/editor-runtime/dist/index.js

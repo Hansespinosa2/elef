@@ -126,6 +126,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
         assert supported, "#{name}: browser must expose long-task measurements"
         if name == "math_heavy"
           page.driver.browser.execute_cdp("Profiler.enable")
+          @profile_browser_start = page.evaluate_script("performance.now()")
           page.driver.browser.execute_cdp("Profiler.start")
         end
         page.driver.browser.action.send_keys(BURST).perform
@@ -279,10 +280,36 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           const done = arguments[arguments.length - 1];
           requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { window.stopAuthoringPerf(); done(window.middleEquationPerf); }, 100)));
         JAVASCRIPT
+        # Diagnostic only: repeat complete unpaced equation creation in
+        # separate paragraphs while retaining the same long-document editor.
+        diagnostic_source = current_source[0...middle] + NEW_EQUATION_BURST + current_source[middle..]
+        diagnostic_runs = []
+        search_from = 0
+        15.times do |iteration|
+          position = diagnostic_source.index(marker, search_from)
+          raise "missing diagnostic paragraph #{iteration}" unless position
+          position += marker.length
+          page.evaluate_script(<<~JAVASCRIPT, position)
+            ((position) => {
+              const editor = document.querySelector('.source-field').editorController;
+              editor.view.dispatch({ selection: { anchor: position }, scrollIntoView: true });
+              editor.view.focus();
+            })(arguments[0])
+          JAVASCRIPT
+          page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
+          page.evaluate_script("window.extraEquationPerf = window.startAuthoringPerf()")
+          page.driver.browser.action.send_keys(NEW_EQUATION_BURST).perform
+          diagnostic_runs << page.evaluate_async_script(<<~JAVASCRIPT)
+            const done = arguments[arguments.length - 1];
+            requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { window.stopAuthoringPerf(); done(window.extraEquationPerf); }, 50)));
+          JAVASCRIPT
+          diagnostic_source = diagnostic_source[0...position] + NEW_EQUATION_BURST + diagnostic_source[position..]
+          search_from = position + NEW_EQUATION_BURST.length
+        end
+        assert_equal diagnostic_source, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
         profile = page.driver.browser.execute_cdp("Profiler.stop").fetch("profile")
         File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE"), JSON.generate(profile))
-        assert_equal current_source[0...middle] + NEW_EQUATION_BURST + current_source[middle..],
-          page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+        File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE").sub(".cpuprofile", ".json"), JSON.generate({ profile_start: @profile_browser_start, runs: diagnostic_runs }))
         assert_equal NEW_EQUATION_BURST.length, middle_equation.fetch("keys").length, "every middle equation character is measured"
         report[:middle_equation] = {
           input_ms: middle_equation.fetch("keys").map { |value| value.round(1) },
