@@ -44,6 +44,30 @@ test("incremental plain prose and structural edits agree with a fresh flow proje
   }
 })
 
+test("aligned document blocks retain reader alignment through edits and paragraph splits", () => {
+  const margins = { paragraph: { before: 0, after: 18 } }
+  const flow = createContinuousFlow(margins)
+  const source = ":::align{right}\n\nRight paragraph.\n\n:::align{center}\n\nCenter paragraph.\n"
+  let state = EditorState.create({ doc: source, extensions: [markdown(), flow] })
+  const snapshot = (set: DecorationSet, length: number) => {
+    const found: unknown[] = []
+    set.between(0, length, (from, to, decoration) => {
+      found.push([from, to, decoration.spec.class, decoration.spec.widget?.constructor.name, decoration.spec.widget?.height])
+    })
+    return found
+  }
+  const initial = snapshot(state.field(flow).decorations, state.doc.length)
+  assert.ok(initial.some((item: any) => item[2] === "cm-continuous-align-right"))
+  assert.ok(initial.some((item: any) => item[2] === "cm-continuous-align-center"))
+  for (const [marker, offset, insert] of [["Right paragraph.", 0, "New "], ["Center paragraph.", 17, "!"], ["Right paragraph.", 16, "\n\n"]] as const) {
+    const from = state.doc.toString().indexOf(marker) + offset
+    state = state.update({ changes: { from, insert } }).state
+    const freshFlow = createContinuousFlow(margins)
+    const fresh = EditorState.create({ doc: state.doc, extensions: [markdown(), freshFlow] })
+    assert.deepEqual(snapshot(state.field(flow).decorations, state.doc.length), snapshot(fresh.field(freshFlow).decorations, state.doc.length))
+  }
+})
+
 test("local equation edits keep the same reader flow as a fresh parse", () => {
   const margins = { paragraph: { before: 0, after: 18 }, h1: { before: 0, after: 24 } }
   const flow = createContinuousFlow(margins)

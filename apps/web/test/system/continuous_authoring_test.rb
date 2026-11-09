@@ -174,6 +174,56 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     end
   end
 
+  test "multiline native input keeps undo across autosave in both editor modes" do
+    ["\r\n", "\r"].each_with_index do |separator, index|
+      %w[source visual].each do |mode|
+        source = "# Original #{mode} #{index}\n\nFirst paragraph.".gsub("\n", separator)
+        edited = "# Changed #{mode} #{index}\n\nRevised paragraph.\n\nSecond paragraph."
+        document = Document.create!(title: "Multiline input #{mode} #{index}", source: source)
+        visit edit_document_path(document)
+        assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+        mode == "visual" ? mount_continuous_surface : click_on("Source")
+        find(".source-field .cm-content").click
+        page.driver.browser.action.key_down(:control).send_keys("a").key_up(:control).perform
+        page.driver.browser.execute_cdp("Input.insertText", text: edited)
+        read_source = -> { page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue") }
+        assert_equal edited.gsub("\n", separator), read_source.call, "#{mode}: inserted line endings"
+        assert_selector '[data-autosave-target="status"]', exact_text: "Saved", visible: :all, wait: 10
+        page.driver.browser.action.key_down(:control).send_keys("z").key_up(:control).perform
+        assert_field "Markdown source", with: source.gsub(/\r\n|\r/, "\n"), wait: 5
+        assert_equal source, read_source.call, "#{mode}: undo restores the original bytes"
+        page.driver.browser.action.key_down(:control).key_down(:shift).send_keys("z").key_up(:shift).key_up(:control).perform
+        assert_field "Markdown source", with: edited, wait: 5
+        assert_equal edited.gsub("\n", separator), read_source.call, "#{mode}: redo restores the edited bytes"
+      end
+    end
+  end
+
+  test "multiline paste distributes lines across cursors in CRLF documents" do
+    source = "first\r\nsecond"
+    %w[source visual].each do |mode|
+      document = Document.create!(title: "Multicursor paste #{mode}", source: source)
+      visit edit_document_path(document)
+      assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])"
+      mode == "visual" ? mount_continuous_surface : click_on("Source")
+      pasted = page.evaluate_async_script(<<~'JAVASCRIPT')
+        const done = arguments[arguments.length - 1];
+        import('@codemirror/state').then(({ EditorSelection }) => {
+          const editor = document.querySelector('.source-field').editorController;
+          editor.view.dispatch({ selection: EditorSelection.create([EditorSelection.cursor(0), EditorSelection.cursor(6)]) });
+          editor.view.focus();
+          const clipboard = new DataTransfer();
+          clipboard.setData('text/plain', 'alpha\nbeta');
+          editor.view.contentDOM.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: clipboard }));
+          done(editor.sourceValue);
+        }).catch(error => done(String(error)));
+      JAVASCRIPT
+      assert_equal "alphafirst\r\nbetasecond", pasted, mode
+      page.driver.browser.action.key_down(:control).send_keys("z").key_up(:control).perform
+      assert_equal source, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue"), "#{mode}: undo"
+    end
+  end
+
   test "Vim operators, text objects, macros, and search agree in source and continuous visual" do
     source = "# Heading\n\nalpha beta gamma\n\ndelta epsilon zeta\n\nEquation $x^2$.\n"
     cases = {
@@ -500,6 +550,34 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     find(".continuous-document .cm-line", text: "Notes").click
     assert_selector ".continuous-document .cm-line", exact_text: "Visible next"
     assert_equal source, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
+  end
+
+  test "horizontal document alignment matches the reader while editing" do
+    source = "# Alignment\n\n:::align{right}\n\nRight paragraph.\n\n:::align{center}\n\nCentered paragraph.\n\nOrdinary paragraph."
+    document = Document.create!(title: "Aligned document", source: source)
+    visit document_path(document)
+    assert_selector ".document-block.position-right", text: "Right paragraph."
+    assert_selector ".document-block.position-center", text: "Centered paragraph."
+    reader = page.evaluate_script(<<~JAVASCRIPT)
+      ['Right paragraph.', 'Centered paragraph.', 'Ordinary paragraph.'].map(text => {
+        const block = [...document.querySelectorAll('.document-block')].find(element => element.textContent.trim() === text);
+        return getComputedStyle(block).textAlign;
+      })
+    JAVASCRIPT
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document"
+    alignment = ->(text) { page.evaluate_script(<<~JAVASCRIPT, text) }
+      ((text) => {
+        const line = [...document.querySelectorAll('.continuous-document .cm-line')].find(element => element.textContent.trim() === text);
+        return line && getComputedStyle(line).textAlign;
+      })(arguments[0])
+    JAVASCRIPT
+    assert_equal reader.first(2), ["Right paragraph.", "Centered paragraph."].map { |text| alignment.call(text) }
+    assert_includes [reader.last, "start"], alignment.call("Ordinary paragraph.")
+    find(".continuous-document .cm-line", exact_text: "Right paragraph.").click
+    page.driver.browser.action.send_keys(:end, " updated").perform
+    assert_field "Markdown source", with: source.sub("Right paragraph.", "Right paragraph. updated")
+    assert_equal reader.first, alignment.call("Right paragraph. updated")
   end
 
   test "canonical server changes retain untouched mixed line endings" do

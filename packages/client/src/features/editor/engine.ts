@@ -48,6 +48,7 @@ interface SourceChange extends MediaInsertRange {
 import { snippetStopsField } from "./snippet_stops.js"
 import { editorTabKeymap } from "./tab_keymap.js"
 import { formatLineNumber } from "./line_numbers.js"
+import { nativeInputLineEndings } from "./native_input_line_endings.js"
 import { adaptVimLineEndings } from "./vim_line_endings.js"
 import {
   caretAfterInsert,
@@ -194,6 +195,7 @@ export class EditorEngine {
       markdown({ extensions: elefMetadata }),
       livePreviewField,
       snippetStopsField,
+      nativeInputLineEndings,
       EditorState.transactionFilter.of(transaction => {
         if (!this.vimEnabled || !this.insertMode || !transaction.docChanged ||
           !(transaction.isUserEvent("input") || transaction.isUserEvent("delete"))) return transaction

@@ -411,6 +411,9 @@ li.editor-reveal-marker { list-style: none; }
 .continuous-document .cm-live-emphasis { font-style: italic; }
 .continuous-document .cm-live-code { font-family: var(--oradia-mono); }
 .continuous-document .cm-live-link { color: var(--oradia-green-deep); text-decoration: underline; }
+.continuous-document .cm-line.cm-continuous-align-left { text-align: left; }
+.continuous-document .cm-line.cm-continuous-align-center { text-align: center; }
+.continuous-document .cm-line.cm-continuous-align-right { text-align: right; }
 .continuous-document .cm-line.cm-continuous-display-math:has(> .cm-live-widget-math-display) { line-height: 0; }
 .continuous-document .cm-live-widget-math-display { display: inline-block; line-height: var(--document-body-leading); vertical-align: top; width: 100%; }
 .continuous-document .cm-line.cm-live-list-item { padding-left: calc(1.5em * (1 + var(--cm-list-depth, 0))) !important; text-indent: -1.5em; }

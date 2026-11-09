@@ -102,6 +102,19 @@ export function createContinuousFlow(margins: BlockMargins) {
     let previousAfter = 0
     let previousEnd: number | null = null
     for (const [index, block] of blocks.entries()) {
+      const horizontal = block.position?.horizontal
+      if (horizontal === "left" || horizontal === "center" || horizontal === "right") {
+        // Alignment belongs to the following reader block. Apply it to each
+        // editable source line of that block without introducing a separate
+        // editing surface or changing its underlying Markdown.
+        let lineStart = source.lastIndexOf("\n", block.content_range.start - 1) + 1
+        while (lineStart < block.content_range.end) {
+          decorations.push(Decoration.line({ class: `cm-continuous-align-${horizontal}` }).range(lineStart))
+          const newline = source.indexOf("\n", lineStart)
+          if (newline < 0) break
+          lineStart = newline + 1
+        }
+      }
       const heading = block.kind === "heading" ? /^\s*(#{1,6})/.exec(block.markdown)?.[1]?.length : undefined
       const key = heading ? `h${heading}` : block.kind
       const spacing = margins[key] ?? margins["paragraph"] ?? { before: 0, after: 0 }
