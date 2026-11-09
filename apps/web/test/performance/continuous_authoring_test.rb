@@ -127,6 +127,8 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
         if name == "math_heavy"
           page.driver.browser.execute_cdp("Profiler.enable")
           @profile_browser_start = page.evaluate_script("performance.now()")
+          page.driver.browser.execute_cdp("HeapProfiler.startSampling", samplingInterval: 32768,
+            includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true)
           page.driver.browser.execute_cdp("Profiler.start")
         end
         page.driver.browser.action.send_keys(BURST).perform
@@ -284,6 +286,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
         # separate paragraphs while retaining the same long-document editor.
         diagnostic_source = current_source[0...middle] + NEW_EQUATION_BURST + current_source[middle..]
         diagnostic_runs = []
+        heap_usage = [page.driver.browser.execute_cdp("Runtime.getHeapUsage")]
         search_from = 0
         15.times do |iteration|
           position = diagnostic_source.index(marker, search_from)
@@ -304,12 +307,15 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
             requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { window.stopAuthoringPerf(); done(window.extraEquationPerf); }, 50)));
           JAVASCRIPT
           diagnostic_source = diagnostic_source[0...position] + NEW_EQUATION_BURST + diagnostic_source[position..]
+          heap_usage << page.driver.browser.execute_cdp("Runtime.getHeapUsage")
           search_from = position + NEW_EQUATION_BURST.length
         end
         assert_equal diagnostic_source, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
         profile = page.driver.browser.execute_cdp("Profiler.stop").fetch("profile")
+        allocations = page.driver.browser.execute_cdp("HeapProfiler.stopSampling").fetch("profile")
         File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE"), JSON.generate(profile))
-        File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE").sub(".cpuprofile", ".json"), JSON.generate({ profile_start: @profile_browser_start, runs: diagnostic_runs }))
+        File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE").sub(".cpuprofile", ".heapprofile"), JSON.generate(allocations))
+        File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE").sub(".cpuprofile", ".json"), JSON.generate({ profile_start: @profile_browser_start, runs: diagnostic_runs, heap_usage: heap_usage }))
         assert_equal NEW_EQUATION_BURST.length, middle_equation.fetch("keys").length, "every middle equation character is measured"
         report[:middle_equation] = {
           input_ms: middle_equation.fetch("keys").map { |value| value.round(1) },
