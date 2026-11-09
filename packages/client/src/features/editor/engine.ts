@@ -1,10 +1,11 @@
 /// <reference path="./vendor.d.ts" />
-import { createDocumentState } from "./document_state.js"
-import { Compartment, EditorState } from "@codemirror/state"
+import { createDocumentState, diffDocumentText } from "./document_state.js"
+import { Compartment, EditorState, Transaction } from "@codemirror/state"
+import { isolateHistory } from "@codemirror/commands"
 import type { ChangeSet, Extension } from "@codemirror/state"
 import { EditorView, lineNumbers, panels, runScopeHandlers } from "@codemirror/view"
 import type { ViewUpdate } from "@codemirror/view"
-import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
+import { codeFolding, foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
 import { basicSetup } from "codemirror"
 import { markdown } from "@codemirror/lang-markdown"
 import { tags } from "@lezer/highlight"
@@ -47,6 +48,8 @@ interface SourceChange extends MediaInsertRange {
 import { snippetStopsField } from "./snippet_stops.js"
 import { editorTabKeymap } from "./tab_keymap.js"
 import { formatLineNumber } from "./line_numbers.js"
+import { nativeInputLineEndings } from "./native_input_line_endings.js"
+import { adaptVimLineEndings } from "./vim_line_endings.js"
 import {
   caretAfterInsert,
   clampSelection,
@@ -60,6 +63,14 @@ import {
 
 const VIM_ESCAPE_MODES = ["normal", "insert", "visual", "operatorPending"]
 let activeEscapeKey = ""
+
+function setDatasetValue(element: HTMLElement, key: string, value: string): void {
+  if (element.dataset[key] !== value) element.dataset[key] = value
+}
+
+function setText(element: Element, value: string): void {
+  if (element.textContent !== value) element.textContent = value
+}
 
 // Shared with the live-preview suite so tests parse with the identical
 // ElefMetadata block grammar the engine ships.
@@ -150,6 +161,8 @@ export class EditorEngine {
     this.element.appendChild(this.visualPanels)
     this.vimCompartment = new Compartment()
     this.lineNumbersCompartment = new Compartment()
+    this.otherGuttersCompartment = new Compartment()
+    this.continuousGuttersHidden = false
     this.updateVisualSurfaceGeometry = () => this.syncVisualSurfaceGeometry()
     this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this.updateVisualSurfaceGeometry)
     window.addEventListener("resize", this.updateVisualSurfaceGeometry)
@@ -157,8 +170,12 @@ export class EditorEngine {
     this.resizeObserver?.observe(this.element)
     if (this.toolbar) this.resizeObserver?.observe(this.toolbar)
     this.syncVisualSurfaceGeometry()
-    this.inputTarget.addEventListener("input", this.handleExternalInput = () => this.handleExternalInputEvent())
-    this.inputTarget.addEventListener("change", this.handleExternalChange = () => this.handleExternalInputEvent())
+    this.inputTarget.addEventListener("input", this.handleExternalInput = (event: Event) => {
+      if (event !== this.internalFieldEvent) this.handleExternalInputEvent()
+    })
+    this.inputTarget.addEventListener("change", this.handleExternalChange = (event: Event) => {
+      if (event !== this.internalFieldEvent) this.handleExternalInputEvent()
+    })
     this.inputTarget.addEventListener("click", this.handleProxyClick = () => this.focus())
     this.surfaceTarget.addEventListener("click", this.handleSurfaceClick = (event: MouseEvent) => this.focusFromSurface(event))
 
@@ -166,11 +183,31 @@ export class EditorEngine {
       this.panelCompartment.of(panels()),
       this.vimCompartment.of(this.vimEnabled ? vim() : []),
       this.lineNumbersCompartment.of(this.createLineNumbersExtension()),
-      ...basicSetup.slice(1),
+      // Keep gutter plugins independently reconfigurable without removing
+      // history or any other part of CodeMirror's shared editor state.
+      this.otherGuttersCompartment.of([basicSetup[1]!, basicSetup[4]!]),
+      // foldGutter also installs the folding state. Keep it independently
+      // when continuous authoring removes the gutter from the document view.
+      codeFolding(),
+      ...basicSetup.slice(2, 4),
+      ...basicSetup.slice(5),
       editorTabKeymap,
       markdown({ extensions: elefMetadata }),
       livePreviewField,
       snippetStopsField,
+      nativeInputLineEndings,
+      EditorState.transactionFilter.of(transaction => {
+        if (!this.vimEnabled || !this.insertMode || !transaction.docChanged ||
+          !(transaction.isUserEvent("input") || transaction.isUserEvent("delete"))) return transaction
+        // Vim owns insert-session boundaries. In particular, `cw`'s
+        // deletion and the subsequent typed replacement form one undo.
+        // CodeMirror's ordinary typing groups split at the intervening
+        // selection update, so explicitly join this insert session.
+        const annotations = [Transaction.userEvent.of(this.vimInsertStartsHistory ? "input.type.compose.start" : "input.type.compose")]
+        if (this.vimInsertStartsHistory) annotations.push(isolateHistory.of("before"))
+        this.vimInsertStartsHistory = false
+        return [{ annotations }, transaction]
+      }),
       theme,
       EditorView.updateListener.of((update: ViewUpdate) => this.handleUpdate(update))
     ]
@@ -212,6 +249,8 @@ export class EditorEngine {
     })
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event: KeyboardEvent) => this.forwardProxyKeydown(event))
     this.form = this.element.closest("form")
+    this.handleEditorSurfaceChange = () => this.syncGutterVisibility()
+    this.element.addEventListener("elef:editor-surface-change", this.handleEditorSurfaceChange)
     this.observeProjectionNavigation()
     this.form?.addEventListener("submit", this.handleSubmit = () => {
       this.projectionController()?.flushPendingProjectionEdits?.()
@@ -256,6 +295,7 @@ export class EditorEngine {
     this.surfaceTarget.removeEventListener("click", this.handleSurfaceClick)
     this.view?.dom.removeEventListener("focusin", this.handleFocusIn)
     this.view?.dom.removeEventListener("focusout", this.handleFocusOut)
+    this.element.removeEventListener("elef:editor-surface-change", this.handleEditorSurfaceChange)
     this.view?.dom.removeEventListener("keydown", this.handleVimKeydown)
     this.view?.dom.removeEventListener("keydown", this.handleEscapeTabFocus)
     this.unbindVimEvents()
@@ -388,6 +428,7 @@ export class EditorEngine {
     this.view?.dispatch({ effects: livePreviewMode.of(this.editingMode === "visual") })
     this.element.dataset.editorEditingMode = this.editingMode
     this.form?.setAttribute("data-editor-mode", this.editingMode)
+    this.syncGutterVisibility()
     const modeInput = this.form?.querySelector('[name="editor_mode"]')
     if (modeInput) modeInput.value = this.editingMode
     if (this.hasEditingModeTarget) this.editingModeTarget.textContent = this.editingMode === "visual" ? "Visual" : "Source"
@@ -418,7 +459,8 @@ export class EditorEngine {
           }
           this.view.focus()
         } else if (restoreCaret) {
-          this.projectionController()?.restoreCaret?.(sourceOffset, preferredBlockId)
+          if (this.form?.dataset?.editorSurface === "continuous") this.view.focus()
+          else this.projectionController()?.restoreCaret?.(sourceOffset, preferredBlockId)
         }
       })
     }
@@ -505,11 +547,25 @@ export class EditorEngine {
   }
 
   get value() {
-    return this.view.state.doc.sliceString(0, this.view.state.doc.length, "\n")
+    const doc = this.view.state.doc
+    // A CodeMirror document is immutable. Several input and save listeners
+    // read it during one transaction, so flatten it only once per version.
+    if (this.cachedValueDoc !== doc) {
+      this.cachedValueDoc = doc
+      this.cachedValueText = doc.sliceString(0, doc.length, "\n")
+    }
+    return this.cachedValueText as string
   }
 
   get sourceValue() {
-    return this.view.state.sliceDoc()
+    const state = this.view.state
+    if (state.lineBreak === "\n") return this.value
+    if (this.cachedSourceDoc !== state.doc || this.cachedSourceSeparator !== state.lineBreak) {
+      this.cachedSourceDoc = state.doc
+      this.cachedSourceSeparator = state.lineBreak
+      this.cachedSourceText = state.sliceDoc()
+    }
+    return this.cachedSourceText as string
   }
 
   get selectionStart() {
@@ -623,9 +679,14 @@ export class EditorEngine {
 
   replaceServerSource(source: string): void {
     if (typeof source !== "string") return
+    // The textarea normalizes line endings, so a byte-identical server echo
+    // can still reach this method. Do not turn mixed endings into edits.
+    if (source === this.sourceValue) return
 
-    const current = this.value
-    const change = diffSource(current, source, this.lineSeparator)
+    const state = this.view.state
+    const change = detectLineSeparator(source) === state.lineBreak
+      ? diffDocumentText(state.doc, state.toText(source))
+      : diffSource(this.value, source, this.lineSeparator)
     if (!change) return
 
     const frontmatterWasFolded = this.frontmatterIsFolded()
@@ -736,9 +797,15 @@ export class EditorEngine {
       this.mapPendingMediaRanges(update.changes)
       this.changedSinceFocusOut = true
       this.syncInput()
-      this.refreshFrontmatterRange()
+      // Edits strictly after an existing frontmatter block cannot change its
+      // range. Avoid serializing a long document again on every keystroke.
+      if (!this.frontmatterRange || update.changes.touchesRange(0, this.frontmatterRange.to + 1)) {
+        this.refreshFrontmatterRange()
+      }
       this.syncFrontmatterVisibility()
-      this.dispatchFieldEvent("input")
+      // The proxy was already synchronized above; listeners must observe it
+      // before the event, but synchronizing it a second time is unnecessary.
+      this.emitFieldEvent("input")
     }
     if (update.selectionSet || update.docChanged) this.updateMode()
     if (update.selectionSet || update.docChanged || update.viewportChanged) this.scheduleLineNumberUpdate()
@@ -803,8 +870,13 @@ export class EditorEngine {
   }
 
   handleExternalInputEvent(): void {
-    const source = this.normalizeLineEndings(this.inputTarget.value)
-    if (this.syncingInput || source === this.value) return
+    if (this.syncingInput) return
+    // Textarea values use LF even when a CodeMirror line contains a literal
+    // CR. Treat equivalent normalized content as an echo of our own input,
+    // not as an external replacement that rewrites the document's endings.
+    const source = this.inputTarget.value
+    const current = this.value
+    if (source === current || (current.includes("\r") && source === this.normalizeLineEndings(current))) return
 
     const selection = {
       anchor: this.inputTarget.selectionStart ?? source.length,
@@ -822,6 +894,7 @@ export class EditorEngine {
     this.frontmatterAutoRevealed = false
     const document = createDocumentState(EditorState, source, this.documentExtensions)
     this.lineSeparator = document.lineSeparator
+    this.continuousGuttersHidden = false
     this.view.setState(document.state)
     this.pendingMediaRanges.clear()
     this.inputTarget.value = source
@@ -845,7 +918,11 @@ export class EditorEngine {
   syncInput(): void {
     const value = this.value
     this.syncingInput = true
-    if (this.normalizeLineEndings(this.inputTarget.value) !== this.normalizeLineEndings(value)) this.inputTarget.value = value
+    // A textarea exposes normalized LF line breaks, as does the editor's
+    // value getter. Mixed source endings can still contain a literal CR in
+    // a CodeMirror line, so normalize only that uncommon case.
+    const comparable = value.includes("\r") ? this.normalizeLineEndings(value) : value
+    if (this.inputTarget.value !== comparable) this.inputTarget.value = value
     this.inputTarget.setSelectionRange(this.selectionStart, this.selectionEnd)
     this.syncingInput = false
   }
@@ -870,11 +947,23 @@ export class EditorEngine {
 
   dispatchFieldEvent(type: string): void {
     this.syncInput()
-    this.inputTarget.dispatchEvent(new Event(type, { bubbles: true }))
+    this.emitFieldEvent(type)
+  }
+
+  emitFieldEvent(type: string): void {
+    const event = new Event(type, { bubbles: true })
+    const previous = this.internalFieldEvent
+    this.internalFieldEvent = event
+    try { this.inputTarget.dispatchEvent(event) }
+    finally { this.internalFieldEvent = previous }
   }
 
   focusFromSurface(event: MouseEvent): void {
     if (event.target instanceof Element && event.target.closest("button, input, select, summary, .snippet-palette")) return
+    // CodeMirror owns pointer placement within its own DOM. Refocusing it
+    // on the later click can restore the previous selection before WebKit
+    // has synchronized the new native caret.
+    if (event.target instanceof Node && this.view.dom.contains(event.target)) return
     this.focus()
   }
 
@@ -922,7 +1011,12 @@ export class EditorEngine {
     this.unbindVimEvents()
     this.vim = this.vimEnabled ? getCM(this.view) : null
     if (!this.vim) return
-    this.handleVimModeChange = () => this.updateMode()
+    adaptVimLineEndings(this.vim)
+    this.vimInsertStartsHistory = true
+    this.handleVimModeChange = () => {
+      if (this.insertMode) this.vimInsertStartsHistory = !this.vim.curOp?.change
+      this.updateMode()
+    }
     this.handleVimCommandDone = () => this.updateMode()
     this.vim.on("vim-mode-change", this.handleVimModeChange)
     this.vim.on("vim-command-done", this.handleVimCommandDone)
@@ -938,13 +1032,14 @@ export class EditorEngine {
   updateMode(): void {
     if (!this.vimEnabled) {
       if (this.hasModeTarget) {
-        this.modeTarget.textContent = "Standard"
-        this.modeTarget.dataset.mode = "standard"
+        const target = this.modeTarget
+        setText(target, "Standard")
+        setDatasetValue(target, "mode", "standard")
       }
-      if (this.hasCommandTarget) this.commandTarget.textContent = ""
-      this.element.dataset.editorVimEnabled = "false"
-      if (this.form) this.form.dataset.editorVimEnabled = "false"
-      this.element.dataset.editorMode = "standard"
+      if (this.hasCommandTarget) setText(this.commandTarget, "")
+      setDatasetValue(this.element, "editorVimEnabled", "false")
+      if (this.form) setDatasetValue(this.form, "editorVimEnabled", "false")
+      setDatasetValue(this.element, "editorMode", "standard")
       this.applyCursorStyle()
       return
     }
@@ -952,14 +1047,15 @@ export class EditorEngine {
     const mode = this.vimMode
     const label = mode.startsWith("visual") ? "Visual" : mode === "insert" ? "Insert" : "Normal"
     if (this.hasModeTarget) {
-      this.modeTarget.textContent = label
-      this.modeTarget.dataset.mode = label.toLowerCase()
+      const target = this.modeTarget
+      setText(target, label)
+      setDatasetValue(target, "mode", label.toLowerCase())
     }
-    this.element.dataset.editorVimEnabled = "true"
-    if (this.form) this.form.dataset.editorVimEnabled = "true"
-    this.element.dataset.editorMode = label.toLowerCase()
+    setDatasetValue(this.element, "editorVimEnabled", "true")
+    if (this.form) setDatasetValue(this.form, "editorVimEnabled", "true")
+    setDatasetValue(this.element, "editorMode", label.toLowerCase())
     this.applyCursorStyle()
-    if (this.hasCommandTarget) this.commandTarget.textContent = this.vim?.state?.vim?.status || ""
+    if (this.hasCommandTarget) setText(this.commandTarget, this.vim?.state?.vim?.status || "")
   }
 
   applyMapping(): void {
@@ -1013,7 +1109,10 @@ export class EditorEngine {
   }
 
   refreshFrontmatterRange(): void {
-    this.frontmatterRange = frontmatterRangeFor(this.value)
+    const doc = this.view.state.doc
+    this.frontmatterRange = doc.sliceString(0, Math.min(doc.length, 4), "\n") === "---\n"
+      ? frontmatterRangeFor(this.value)
+      : null
     this.syncMetadataToggle()
   }
 
@@ -1031,9 +1130,11 @@ export class EditorEngine {
     if (!this.hasMetadataToggleTarget) return
 
     const hasMetadata = Boolean(this.frontmatterRange)
-    this.metadataToggleTarget.hidden = this.editingMode !== "source"
-    this.metadataToggleTarget.disabled = !hasMetadata
-    this.metadataToggleTarget.textContent = hasMetadata && !this.frontmatterIsFolded() ? "Hide source metadata" : "Reveal source metadata"
+    const target = this.metadataToggleTarget as HTMLButtonElement
+    const hidden = this.editingMode !== "source"
+    if (target.hidden !== hidden) target.hidden = hidden
+    if (target.disabled === hasMetadata) target.disabled = !hasMetadata
+    setText(target, hasMetadata && !this.frontmatterIsFolded() ? "Hide source metadata" : "Reveal source metadata")
   }
 
   applyLineNumbers(): void {
@@ -1043,6 +1144,18 @@ export class EditorEngine {
     this.scheduleLineNumberUpdate()
   }
 
+  syncGutterVisibility(): void {
+    if (!this.view || this.destroyed) return
+    const hidden = this.form?.dataset?.editorSurface === "continuous" && this.editingMode === "visual"
+    if (hidden === Boolean(this.continuousGuttersHidden)) return
+    this.continuousGuttersHidden = hidden
+    this.view.dispatch({ effects: [
+      this.lineNumbersCompartment.reconfigure(hidden ? [] : this.createLineNumbersExtension()),
+      this.otherGuttersCompartment.reconfigure(hidden ? [] : [basicSetup[1]!, basicSetup[4]!]),
+    ] })
+    this.applyLineNumbers()
+  }
+
   createLineNumbersExtension(): Extension {
     return lineNumbers({
       formatNumber: (number, state) => formatLineNumber(number, state, this.lineNumberMode)
@@ -1050,11 +1163,15 @@ export class EditorEngine {
   }
 
   scheduleLineNumberUpdate(): void {
-    if (this.destroyed || this.lineNumberMode === "off" || this.lineNumberFrame) return
+    const hiddenByContinuousView = () => this.form?.dataset?.editorSurface === "continuous" && this.editingMode === "visual"
+    // The document surface has no visible gutters. Measuring every hidden
+    // line-number element after each edit forces a full-page layout in long
+    // documents; source mode continues to update its visible gutter.
+    if (this.destroyed || this.lineNumberMode === "off" || this.lineNumberFrame || hiddenByContinuousView()) return
 
     this.lineNumberFrame = requestAnimationFrame(() => {
       this.lineNumberFrame = null
-      if (this.destroyed || this.lineNumberMode === "off") return
+      if (this.destroyed || this.lineNumberMode === "off" || hiddenByContinuousView()) return
 
       const gutter = this.view.dom.querySelector(".cm-lineNumbers")
       if (!gutter) return
@@ -1066,20 +1183,27 @@ export class EditorEngine {
       // still come from the shared formatLineNumber helper, so the
       // compartment's initial render and this refresh cannot disagree.
       const contentLeft = this.view.contentDOM.getBoundingClientRect().left + 1
+      const updates: Array<{ element: HTMLElement; text: string }> = []
       gutter.querySelectorAll(".cm-gutterElement").forEach((element) => {
         if (!(element instanceof HTMLElement) || element.style.visibility === "hidden") return
         const rect = element.getBoundingClientRect()
         const position = this.view.posAtCoords({ x: contentLeft, y: rect.top + rect.height / 2 })
         if (position === null) return
         const line = this.view.state.doc.lineAt(position).number
-        element.textContent = formatLineNumber(line, this.view.state, this.lineNumberMode)
+        const text = formatLineNumber(line, this.view.state, this.lineNumberMode)
+        if (element.textContent !== text) updates.push({ element, text })
       })
+      // Read all geometry before changing any gutter text. Alternating
+      // writes and bounding-box reads forces a full document layout for
+      // every visible line in a large presentation.
+      for (const { element, text } of updates) element.textContent = text
     })
   }
 
   applyCursorStyle(): void {
-    this.surfaceTarget.dataset.editorVimEnabled = String(this.vimEnabled)
-    this.surfaceTarget.dataset.modeAwareCursor = String(this.modeAwareCursor)
-    this.surfaceTarget.dataset.editorMode = this.element.dataset.editorMode || "standard"
+    const surface = this.surfaceTarget
+    setDatasetValue(surface, "editorVimEnabled", String(this.vimEnabled))
+    setDatasetValue(surface, "modeAwareCursor", String(this.modeAwareCursor))
+    setDatasetValue(surface, "editorMode", this.element.dataset.editorMode || "standard")
   }
 }

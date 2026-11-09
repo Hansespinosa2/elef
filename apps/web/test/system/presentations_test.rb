@@ -101,7 +101,11 @@ class PresentationsTest < ApplicationSystemTestCase
         "select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']",
         visible: :all
       ).find(:xpath, "./ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' slide-block-shell ')][1]")
-      shell.find(".slide-block").click
+      block = shell.find(".slide-block")
+      # WebDriver's nearest-edge scroll can leave the title underneath the
+      # sticky application header; center the actual target before clicking.
+      page.execute_script("arguments[0].scrollIntoView({block: 'center', inline: 'nearest'})", block)
+      block.click
       find("select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']").select(value)
     rescue Selenium::WebDriver::Error::StaleElementReferenceError
       attempts += 1

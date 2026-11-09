@@ -18,6 +18,56 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  continuous-authoring:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          working-directory: apps/web
+          bundler-cache: true
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Build shared assets
+        run: |
+          npm ci
+          npm run build:packages
+          cd apps/web
+          bin/rails tailwindcss:build
+      - name: Install reference fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-liberation fontconfig
+          sudo cp apps/web/test/fixtures/performance/reference-fonts.conf /etc/fonts/conf.d/99-elef-perf-reference.conf
+          sudo fc-cache -f >/dev/null
+          fc-match "sans-serif" | grep -q "Liberation Sans"
+          fc-match "serif" | grep -q "Liberation Serif"
+      - name: Check continuous document budgets
+        working-directory: apps/web
+        env:
+          RAILS_ENV: test
+          ELEF_USE_SQLITE: "1"
+          PARALLEL_WORKERS: "1"
+          ELEF_PERF_MODE: continuous
+          ELEF_CONTINUOUS_PERF_REPORT: ${{ github.workspace }}/continuous-authoring-performance.json
+        run: |
+          bin/rails db:test:prepare
+          bin/rails test test/performance/continuous_authoring_test.rb
+      - name: Preserve continuous performance report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: continuous-authoring-performance
+          path: ${{ github.workspace }}/continuous-authoring-performance.json
+          if-no-files-found: warn
+
   web-performance:
     runs-on: ubuntu-latest
     timeout-minutes: 45

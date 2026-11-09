@@ -37,6 +37,7 @@ interface Harness {
   work: SaveWork;
   disk: { source: string };
   setEditor: (source: string) => void;
+  getEditor: () => string;
   saves: Array<{ source: string; base: string }>;
   snapshots: Array<{ id: string; reason: string }>;
   mergeCalls: string[];
@@ -45,13 +46,15 @@ interface Harness {
   errors: unknown[];
   snapshotGate: ReturnType<typeof deferred>;
   mergeGate: ReturnType<typeof deferred>;
+  applyGate: ReturnType<typeof deferred>;
+  delayApplication: () => void;
   staleSnapshot: ExternalSnapshot;
 }
 
 const BEFORE = "# Before E2E\n\nSeed paragraph.\n";
 const AFTER = "# Before E2E\n\nSeed paragraph.\n\nEdited.\n";
 
-function setup(): Harness {
+function setup(saveDelay = 3_600_000): Harness {
   let editor = BEFORE;
   const disk = { source: BEFORE };
   const work: SaveWork = {
@@ -68,11 +71,15 @@ function setup(): Harness {
   const errors: unknown[] = [];
   const snapshotGate = deferred();
   const mergeGate = deferred();
+  const applyGate = deferred();
+  let applyDelayed = false;
   const flow = createSaveFlow({
-    saveDelay: 3_600_000,
+    saveDelay,
     getSource: () => editor,
-    setSource: (source: string): boolean => {
+    setSource: async (source, meta): Promise<boolean> => {
       setSourceCalls.push(source);
+      if (applyDelayed) await applyGate.promise;
+      if (editor !== meta.expectedSource) return false;
       editor = source;
       return true;
     },
@@ -123,6 +130,7 @@ function setup(): Harness {
     setEditor: (source: string) => {
       editor = source;
     },
+    getEditor: () => editor,
     saves,
     snapshots,
     mergeCalls,
@@ -131,6 +139,8 @@ function setup(): Harness {
     errors,
     snapshotGate,
     mergeGate,
+    applyGate,
+    delayApplication: () => { applyDelayed = true; },
     staleSnapshot: { source: BEFORE, content_hash: sha(BEFORE) },
   };
 }
@@ -162,6 +172,84 @@ test("a save that lands mid-merge supersedes the stale merge instead of conflict
     assert.deepEqual(h.setSourceCalls, []);
     assert.equal(h.disk.source, AFTER);
     assert.equal(h.saves.length, 1);
+  } finally {
+    h.flow.deactivate();
+  }
+});
+
+test("typing while an external merge runs preserves the newer buffer", async () => {
+  const h = setup();
+  try {
+    h.flow.activate(h.work);
+    h.setEditor(AFTER);
+    h.flow.noteChange();
+    const resolved = h.flow.resolveExternalChange("work-1", h.staleSnapshot);
+    h.snapshotGate.resolve();
+    await waitFor(() => h.mergeCalls.length === 1, "the merge should be running");
+    const newer = `${AFTER}Still typing.`;
+    h.setEditor(newer);
+    h.flow.noteChange();
+    h.mergeGate.resolve();
+    assert.equal(await resolved, "current");
+    assert.equal(h.getEditor(), newer);
+    assert.deepEqual(h.setSourceCalls, []);
+    assert.equal(await h.flow.flush(), true);
+    assert.equal(h.disk.source, newer);
+    assert.equal(h.flow.conflict, null);
+  } finally {
+    h.flow.deactivate();
+  }
+});
+
+test("typing while the editor adapter waits rejects a stale merge result", async () => {
+  const h = setup(20);
+  try {
+    h.flow.activate(h.work);
+    h.setEditor(AFTER);
+    h.flow.noteChange();
+    h.delayApplication();
+    const resolved = h.flow.resolveExternalChange("work-1", h.staleSnapshot);
+    h.snapshotGate.resolve();
+    await waitFor(() => h.mergeCalls.length === 1, "the merge should be running");
+    h.mergeGate.resolve();
+    await waitFor(() => h.setSourceCalls.length === 1, "the editor adapter should be waiting");
+    const newer = `${AFTER}Still typing.`;
+    h.setEditor(newer);
+    h.flow.noteChange();
+    // Let the original autosave timer fire while the adapter is still busy.
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    h.applyGate.resolve();
+    assert.equal(await resolved, "current");
+    assert.equal(h.getEditor(), newer);
+    await waitFor(() => h.disk.source === newer, "autosave should resume after the adapter finishes");
+    assert.equal(h.disk.source, newer);
+    assert.equal(h.flow.conflict, null);
+  } finally {
+    h.flow.deactivate();
+  }
+});
+
+test("typing during a real external merge preserves both sides for conflict resolution", async () => {
+  const h = setup();
+  try {
+    h.flow.activate(h.work);
+    h.setEditor(AFTER);
+    h.flow.noteChange();
+    const external = `${BEFORE}External edit.`;
+    h.disk.source = external;
+    const resolved = h.flow.resolveExternalChange("work-1", { source: external, content_hash: sha(external) });
+    h.snapshotGate.resolve();
+    await waitFor(() => h.mergeCalls.length === 1, "the merge should be running");
+    const newer = `${AFTER}Still typing.`;
+    h.setEditor(newer);
+    h.flow.noteChange();
+    h.mergeGate.resolve();
+    assert.equal(await resolved, "conflict");
+    assert.equal(h.getEditor(), newer);
+    assert.equal(h.disk.source, external);
+    assert.equal(h.flow.conflict?.localSource, newer);
+    assert.equal(h.flow.conflict?.diskSource, external);
+    assert.deepEqual(h.setSourceCalls, []);
   } finally {
     h.flow.deactivate();
   }

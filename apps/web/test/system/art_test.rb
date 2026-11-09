@@ -552,6 +552,16 @@ class ArtTest < ApplicationSystemTestCase
     assert_body_grouped_art_control_geometry(rails_geometry)
 
     first(".presentation-surface.presentation-editor-projection [data-elef-art-root]").hover
+    # Controls fade in over 120ms. Wait for the real transition to finish
+    # before checking the exact computed opacity and interaction state.
+    assert_selector ".presentation-surface.presentation-editor-projection [data-elef-art-root]", wait: 5 do |root|
+      root.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const controls = this.closest('.slide-block-shell')?.querySelector(':scope > .presentation-editor-block-controls');
+          return controls && getComputedStyle(controls).opacity === '1' && getComputedStyle(controls).pointerEvents === 'auto';
+        })()
+      JAVASCRIPT
+    end
     body_hover = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const root = document.querySelector(".presentation-surface.presentation-editor-projection [data-elef-art-root]");
@@ -565,6 +575,14 @@ class ArtTest < ApplicationSystemTestCase
     middle_index = javascript_geometry[0].fetch("blockIndex")
     bottom_index = javascript_geometry[1].fetch("blockIndex")
     all(".presentation-surface.presentation-editor-projection [data-elef-art-root]")[1].hover
+    assert_selector "select[data-presentation-editor-align][data-block-index='#{bottom_index}']", visible: :all, wait: 5 do |select|
+      select.evaluate_script(<<~JAVASCRIPT)
+        (() => {
+          const controls = this.closest('.presentation-editor-block-controls');
+          return controls && getComputedStyle(controls).opacity === '1' && getComputedStyle(controls).pointerEvents === 'auto';
+        })()
+      JAVASCRIPT
+    end
     bottom_hover = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const select = document.querySelector("select[data-presentation-editor-align][data-block-index='#{bottom_index}']");

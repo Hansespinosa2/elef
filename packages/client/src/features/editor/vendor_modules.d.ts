@@ -6,6 +6,7 @@ declare module "codemirror" {
 
 declare module "@codemirror/lang-markdown" {
   import type { LanguageSupport } from "@codemirror/language";
+  import type { StateCommand } from "@codemirror/state";
 
   export interface MarkdownConfig {
     extensions?: unknown;
@@ -13,6 +14,7 @@ declare module "@codemirror/lang-markdown" {
   }
 
   export function markdown(config?: MarkdownConfig): LanguageSupport;
+  export const insertNewlineContinueMarkup: StateCommand;
 }
 
 declare module "@replit/codemirror-vim" {

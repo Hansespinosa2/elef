@@ -1,3 +1,4 @@
+import { continuousAuthoringWorkflow, continuousLongDocumentWorkflow } from "../../../../apps/web/test/e2e/scenarios/continuous-authoring.js"
 import assert from "node:assert/strict"
 import { $, $$, browser } from "@wdio/globals"
 import { Key } from "webdriverio"
@@ -203,6 +204,7 @@ function typeNativeText(value, { activate = true } = {}) {
     return
   }
   if (process.platform === "darwin") {
+    if (activate) focusDesktopWindow()
     const escaped = value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')
     execFileSync("osascript", ["-e", `tell application "System Events" to keystroke "${escaped}"`], { timeout: 10_000 })
     return
@@ -862,6 +864,175 @@ class DesktopEditorUi {
     }
   }
 
+  async startContinuousAuthoring() {
+    const result = await browser.executeAsync(done => {
+      const editor = document.querySelector("#desktop-editor-field").editorController
+      window.__continuousVimBefore = editor.vimEnabled
+      editor.setVimEnabled(true)
+      window.__elefPerformanceTestHooks.enableContinuousAuthoring()
+        .then(() => done(true), error => done({ error: String(error) }))
+    })
+    if (result !== true) throw new Error(`Continuous authoring did not mount: ${JSON.stringify(result)}`)
+    await browser.execute(() => {
+      const editor = document.querySelector("#desktop-editor-field").editorController
+      const content = editor.view.contentDOM
+      window.__continuousInputTrace?.dispose()
+      const events = []
+      const add = entry => {
+        events.push(entry)
+        if (events.length > 240) events.shift()
+      }
+      const record = event => {
+        const entry = { type: event.type, key: event.key, data: event.data, inputType: event.inputType,
+          head: editor.selectionHead, length: editor.view.state.doc.length }
+        add(entry)
+        queueMicrotask(() => { entry.afterHead = editor.selectionHead; entry.afterLength = editor.view.state.doc.length })
+      }
+      const dispatch = editor.view.dispatchTransactions
+      editor.view.dispatchTransactions = function(transactions, view) {
+        for (const transaction of transactions) {
+          if (!transaction.docChanged) continue
+          const changes = []
+          transaction.changes.iterChanges((from, to, _newFrom, _newTo, inserted) => {
+            changes.push({ from, to, inserted: inserted.toString().slice(0, 80) })
+          })
+          const deletion = changes.some(change => change.to - change.from > change.inserted.length)
+          add({ type: "transaction", changes, input: transaction.isUserEvent("input"),
+            deletion: transaction.isUserEvent("delete"), undo: transaction.isUserEvent("undo"),
+            stack: deletion ? new Error().stack : undefined })
+        }
+        return dispatch.call(this, transactions, view)
+      }
+      for (const type of ["keydown", "beforeinput", "input"]) content.addEventListener(type, record, true)
+      window.__continuousInputTrace = { events, dispose() {
+        for (const type of ["keydown", "beforeinput", "input"]) content.removeEventListener(type, record, true)
+        editor.view.dispatchTransactions = dispatch
+      } }
+    })
+  }
+
+  async reopenContinuousWork() {
+    await browser.execute(() => window.__elefPerformanceTestHooks.enableContinuousForNextDocument())
+    await this.openWork("E2E document")
+    await $(".continuous-document").waitForDisplayed()
+  }
+
+  async stopContinuousAuthoring() {
+    await browser.execute(() => {
+      window.__continuousInputTrace?.dispose()
+      delete window.__continuousInputTrace
+      window.__elefPerformanceTestHooks.disableContinuousAuthoring()
+      if (window.__continuousVimBefore !== undefined) {
+        document.querySelector("#desktop-editor-field")?.editorController?.setVimEnabled(window.__continuousVimBefore)
+        delete window.__continuousVimBefore
+      }
+    })
+  }
+
+  async continuousTextElement(text, cell = false) {
+    const selector = cell ? ".continuous-document .cm-continuous-cell" : ".continuous-document .cm-line"
+    const elements = await $$(selector)
+    for (const element of elements) if ((await element.getText()).includes(text)) return element
+    throw new Error(`Continuous authoring text was not visible: ${text}`)
+  }
+
+  async clickContinuousText(text, cell = false) {
+    // The embedded driver's element-click endpoint calls el.click(), which
+    // does not perform a pointer hit test or place a caret. Use an actual OS
+    // click on rendered text, and keep the caret assertion below.
+    const selector = cell ? ".continuous-document .cm-continuous-cell" : ".continuous-document .cm-line"
+    await this.continuousTextElement(text, cell)
+    const target = await browser.execute((query, value) => {
+      const element = [...document.querySelectorAll(query)].find(candidate => candidate.textContent.includes(value))
+      if (!element) return false
+      element.scrollIntoView({ block: "center", inline: "nearest" })
+      return true
+    }, selector, text)
+    if (!target) throw new Error(`Continuous authoring text was not found: ${text}`)
+    await browser.executeAsync(done => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))
+    const point = await browser.execute((query, value) => {
+      const element = [...document.querySelectorAll(query)].find(candidate => candidate.textContent.includes(value))
+      if (!element) return null
+      const range = document.createRange()
+      range.selectNodeContents(element)
+      const box = [...range.getClientRects()].find(rect => rect.width > 0 && rect.height > 0)
+      if (!box) return null
+      const x = box.left + box.width / 2
+      const y = box.top + box.height / 2
+      const hit = document.elementFromPoint(x, y)
+      return { x, y, width: innerWidth, height: innerHeight, scale: devicePixelRatio,
+        hit: Boolean(hit && element.contains(hit)) }
+    }, selector, text)
+    if (!point?.hit) throw new Error(`Continuous authoring text is not clickable: ${JSON.stringify(point)}`)
+    const windowRect = await browser.getWindowRect()
+    const x = windowRect.x + (windowRect.width - point.width) / 2 + point.x
+    const y = windowRect.y + windowRect.height - point.height + point.y
+    focusDesktopWindow()
+    if (process.platform === "linux") {
+      execFileSync("xdotool", ["mousemove", "--sync", String(Math.round(x * point.scale)), String(Math.round(y * point.scale)), "click", "1"], { timeout: 5_000 })
+    } else if (process.platform === "darwin") {
+      execFileSync("swift", ["-e", `import CoreGraphics
+let point = CGPoint(x: ${x}, y: ${y})
+CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)
+CGEvent(mouseEventSource: nil, mouseType: .leftMouseUp, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap)`], { timeout: 15_000 })
+    } else {
+      throw new Error(`Native pointer input is unsupported on ${process.platform}`)
+    }
+    await browser.waitUntil(async () => browser.execute(value => {
+      const editor = document.querySelector("#desktop-editor-field")?.editorController
+      return editor?.view.state.doc.lineAt(editor.selectionHead).text.includes(value) === true
+    }, text), { timeout: 5_000, timeoutMsg: `Click did not place the native caret on ${text}` })
+  }
+
+  async continuousSourceMode() {
+    await $(".continuous-command-hint").click()
+    await $('[data-continuous-commands] [role="combobox"]').waitForDisplayed()
+    try {
+      await browser.waitUntil(async () => browser.execute(() => document.activeElement ===
+        document.querySelector('[data-continuous-commands] [role="combobox"]')), {
+        timeout: 5_000, timeoutMsg: "The command palette did not focus its input"
+      })
+      await browser.execute(() => {
+        const input = document.querySelector('[data-continuous-commands] [role="combobox"]')
+        const trace = []
+        for (const type of ["keydown", "input"]) input.addEventListener(type, event => {
+          trace.push({ type, key: event.key, data: event.data, query: input.value })
+        }, true)
+        window.__continuousPaletteTrace = trace
+      })
+      typeNativeText("Switch to source")
+      sendNativeKey("Enter")
+      await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
+        timeout: 5_000, timeoutMsg: "The command palette did not switch to source"
+      })
+    } catch (error) {
+      const state = await browser.execute(() => ({
+        query: document.querySelector('[data-continuous-commands] [role="combobox"]')?.value,
+        active: document.activeElement?.outerHTML?.slice(0, 400),
+        results: [...document.querySelectorAll('[data-continuous-commands] [role="option"]')].map(element => element.textContent),
+        mode: document.querySelector("#desktop-editor-form")?.dataset.editorMode,
+        trace: window.__continuousPaletteTrace,
+      }))
+      throw new Error(`${error.message}; palette state: ${JSON.stringify(state)}`)
+    }
+  }
+
+  async continuousKeys(text, special = false) {
+    if (special) sendNativeKey(text)
+    else typeNativeText(text)
+  }
+
+  async assertContinuousText(text, cell = false) {
+    await (await this.continuousTextElement(text, cell)).waitForDisplayed()
+  }
+
+  async assertContinuousMath(text, lineText) {
+    await browser.waitUntil(async () => browser.execute((value, line) =>
+      [...document.querySelectorAll(".continuous-document math mi")].some(node => node.textContent === value &&
+        (!line || node.closest(".cm-line")?.textContent.includes(line))), text, lineText ?? null),
+    { timeout: 5000, timeoutMsg: `Continuous authoring did not render ${text}` })
+  }
+
   async restoreSource(source) {
     const restoredSource = await browser.execute(nextSource => {
       const controller = document.querySelector("#desktop-editor-field")?.editorController
@@ -1318,9 +1489,18 @@ class DesktopEditorUi {
           mode: editor?.editingMode,
           paletteQuery: palette?.query,
           paletteMatches: palette?.matches?.map(entry => entry.name || entry.snippet?.name),
-          paletteHidden: document.querySelector('[aria-label="Snippet suggestions"]')?.hidden
+          paletteHidden: document.querySelector('[aria-label="Snippet suggestions"]')?.hidden,
+          inputTrace: window.__continuousInputTrace?.events
         }
       }).catch(diagnosticError => ({ diagnosticError: diagnosticError.message }))
+      if (typeof state.source === "string") {
+        const actual = state.source
+        let firstDifference = 0
+        while (firstDifference < Math.min(actual.length, source.length) && actual[firstDifference] === source[firstDifference]) firstDifference++
+        state.source = { length: actual.length, firstDifference,
+          actual: actual.slice(Math.max(0, firstDifference - 32), firstDifference + 96),
+          expected: source.slice(Math.max(0, firstDifference - 32), firstDifference + 96) }
+      }
       throw new Error(`${error.message}; desktop editor state: ${JSON.stringify(state)}`)
     }
   }
@@ -2548,6 +2728,16 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("keeps slide position stacks and lanes aligned in the desktop preview", async () => {
     await slidePositionGrammarWorkflow(new DesktopEditorUi())
+  })
+
+  it("keeps continuous Vim, math, tables, and saved source coherent", async () => {
+    await continuousAuthoringWorkflow(new DesktopEditorUi())
+  })
+
+  it("navigates, edits, and saves the continuous long math fixture", async function () {
+    this.timeout(120_000)
+    const source = await readFile(path.resolve(process.cwd(), "../../web/test/fixtures/performance/elef-visual-100-math.md"), "utf8")
+    await continuousLongDocumentWorkflow(new DesktopEditorUi(), source)
   })
 
   it("updates Vim relative line numbers from CodeMirror cursor positions", async () => {

@@ -49,3 +49,11 @@ test("unclosed code fences consume the remaining source, unmatched inline backti
   assert.deepEqual(scanMathSource("```\n$x$"), []);
   assert.deepEqual(scanMathSource("`plain $x$").map((math) => math.interior), ["x"]);
 });
+
+test("unclosed inline math does not consume equations in later paragraphs", () => {
+  for (const source of ["Writing $$\n\nLater $$x$$", "Writing $\\$\n\nLater $x$"]) {
+    assert.deepEqual(scanMathSource(source).map(math => math.interior), ["x"])
+  }
+  assert.equal(scanMathSource("$$\na + b\n\nc + d\n$$")[0]?.interior, "\na + b\n\nc + d\n")
+  assert.equal(scanMathSource("\\[\na + b\n\nc + d\n\\]")[0]?.interior, "\na + b\n\nc + d\n")
+});

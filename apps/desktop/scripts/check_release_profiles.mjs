@@ -50,6 +50,8 @@ const stableClientInputs = metafileInputs(verification.package_metafiles.client.
 const devClientInputs = metafileInputs(verification.package_metafiles.client.dev, "packages/client")
 const stableEditorInputs = metafileInputs(verification.package_metafiles["editor-runtime"].stable, "packages/editor-runtime")
 const devEditorInputs = metafileInputs(verification.package_metafiles["editor-runtime"].dev, "packages/editor-runtime")
+assert.ok(!stableInputs.has("packages/client/dist/continuous-editor.js"), "Stable must exclude the continuous authoring candidate")
+assert.ok(devInputs.has("packages/client/dist/continuous-editor.js"), "Dev must retain its lazy continuous authoring gate")
 const stableWorkModelInputs = metafileInputs(verification.package_metafiles["work-model"].stable, "packages/work-model")
 const composedRendererInputs = metafileInputs("packages/editor-runtime/dist/composed_renderer.metafile.json", "packages/editor-runtime")
 
