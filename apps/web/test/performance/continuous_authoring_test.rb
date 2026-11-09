@@ -315,7 +315,7 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
         # Heap profiles can contain very deep call trees; Selenium's normal
         # JSON parser uses Ruby's default limit of 100 levels.
         json_parse = JSON.method(:parse)
-        JSON.define_singleton_method(:parse) { |source, options = {}| json_parse.call(source, options.merge(max_nesting: false)) }
+        JSON.define_singleton_method(:parse) { |source, **options| json_parse.call(source, **options.merge(max_nesting: false)) }
         begin
           allocations = page.driver.browser.execute_cdp("HeapProfiler.stopSampling").fetch("profile")
         ensure
