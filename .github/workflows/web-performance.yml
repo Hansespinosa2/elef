@@ -57,6 +57,7 @@ jobs:
           PARALLEL_WORKERS: "1"
           ELEF_PERF_MODE: continuous
           ELEF_CONTINUOUS_PERF_REPORT: ${{ github.workspace }}/continuous-authoring-performance.json
+          ELEF_CONTINUOUS_CPU_PROFILE: ${{ github.workspace }}/new-equation.cpuprofile
         run: |
           bin/rails db:test:prepare
           bin/rails test test/performance/continuous_authoring_test.rb
@@ -66,6 +67,18 @@ jobs:
         with:
           name: continuous-authoring-performance
           path: ${{ github.workspace }}/continuous-authoring-performance.json
+          if-no-files-found: warn
+      - name: Preserve equation input profile
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: continuous-authoring-cpu-profile
+          path: |
+            ${{ github.workspace }}/new-equation.cpuprofile
+            packages/client/dist/editor.js
+            packages/client/dist/continuous-editor.js
+            packages/editor-runtime/dist/index.js
+            apps/web/vendor/javascript/@codemirror--view.js
           if-no-files-found: warn
 
   web-performance:
