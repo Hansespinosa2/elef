@@ -256,7 +256,10 @@ function inlineRangesOutsideFences(source: string): Array<{ from: number; to: nu
     offset = lineEnd + 1
   })
 
-  if (rangeStart < source.length) ranges.push({ from: rangeStart, to: source.length })
+  // An unclosed fence consumes the rest of the document. Reusing the
+  // previous rangeStart here would scan both the earlier prose a second
+  // time and the literal code as inline Markdown and math.
+  if (!fence && rangeStart < source.length) ranges.push({ from: rangeStart, to: source.length })
   return ranges
 }
 
@@ -613,6 +616,14 @@ function canMapPlainEdit(value: LivePreviewValue, transaction: Transaction): boo
     const newLine = transaction.newDoc.lineAt(newFrom)
     if (to > oldLine.to || newTo > newLine.to ||
       from <= value.maxDynamicEnd && value.dynamic.some(context => from <= context.to && to >= context.from)) { safe = false; return }
+    // Turning a separator into prose (or back) can merge the following line
+    // into a Markdown paragraph, changing whether a directive is recognized.
+    // Trailing blank lines have no following block and keep the fast path.
+    if (Boolean(oldLine.text.trim()) !== Boolean(newLine.text.trim())) {
+      for (const [doc, line] of [[transaction.startState.doc, oldLine], [transaction.newDoc, newLine]] as const) {
+        if (line.number < doc.lines && doc.line(line.number + 1).text.trim()) { safe = false; return }
+      }
+    }
     for (const line of [oldLine.text, newLine.text]) {
       if (!/^[\p{L}\p{N} ,.!?]*$/u.test(line) || /^\s*\d+[.)]\s/.test(line)) { safe = false; return }
     }
@@ -670,7 +681,11 @@ function mapPlainEdit(value: LivePreviewValue, transaction: Transaction, math?: 
 function updateInlineMathLine(value: LivePreviewValue, transaction: Transaction, line: InlineMathLineEdit): LivePreviewValue | null {
   if (value.dynamic.some(context => context.from < line.from && context.to > line.from ||
       context.from < line.oldTo && context.to > line.oldTo)) return null
-  const mapped = mapPlainEdit(value, transaction)
+  // Contexts wholly inside this line are rebuilt below. Mapping them first
+  // can reduce a deleted Markdown marker to an invalid empty mark and
+  // throw before the replacement projection is installed.
+  const outside = value.dynamic.filter(context => context.to <= line.from || context.from >= line.oldTo)
+  const mapped = mapPlainEdit({ ...value, dynamic: outside }, transaction)
   const plan = new DecorationPlan()
   const state = transaction.state
   addInlineMarkup(plan, state, state.doc.toString(), [{ from: line.from, to: line.to }])

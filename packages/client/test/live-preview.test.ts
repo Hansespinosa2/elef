@@ -321,6 +321,21 @@ test("incremental equation edits reject fenced code and cross-line math", () => 
   }
 })
 
+test("an unfinished code fence keeps its contents literal and does not duplicate earlier math", () => {
+  const source = 'Before $x$.\n\n```js\nconst price = "$5$";\n'
+  const fence = source.indexOf("```js")
+  const decorations = decorationsOf(previewState(source, EditorSelection.cursor(source.length)))
+  assert.equal(decorations.filter(item => item.spec === "widget:math:x").length, 1)
+  assert.ok(!decorations.some(item => item.from > fence && item.spec.startsWith("widget:math:")))
+
+  const incomplete = 'Before $x$$.\n\n```js\nconst price = "$5$";\n'
+  const position = incomplete.indexOf("$$")
+  const initial = previewState(incomplete, EditorSelection.cursor(position))
+  const updated = initial.update({ changes: { from: position, to: position + 1, insert: "1" },
+    selection: EditorSelection.cursor(position + 1) }).state
+  assert.deepEqual(decorationsOf(updated), decorationsOf(previewState(updated.doc.toString(), updated.selection.main)))
+})
+
 test("auto-paired math in the middle preserves equations before and after it", () => {
   const source = "Before $x^2$.\n\nWrite here $$\n\nAfter $y^2$.\n\n$$z^2$$\n"
   let cursor = source.indexOf("$$") + 1
@@ -335,6 +350,26 @@ test("auto-paired math in the middle preserves equations before and after it", (
   state = state.update({ selection: EditorSelection.cursor(0) }).state
   assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)))
   assert.ok(decorationsOf(state).some(item => item.spec === "widget:math:\\sqrt{a_{i} + b^{2}}"))
+})
+
+test("deleting Markdown syntax beside math reparses the line without an invalid decoration", () => {
+  const source = "Equation $x$. _word_\n\nAfter."
+  const position = source.indexOf("_word_")
+  const initial = previewState(source, EditorSelection.cursor(position))
+  const transaction = initial.update({ changes: { from: position, to: position + 1 },
+    selection: EditorSelection.cursor(position) })
+  assert.ok(localInlineMathLineEdit(transaction))
+  assert.deepEqual(decorationsOf(transaction.state), decorationsOf(previewState(transaction.state.doc.toString(), transaction.state.selection.main)))
+})
+
+test("typing on a blank line before a directive updates its Markdown context", () => {
+  const source = "Before.\n\n:::align{right}\n\nAfter."
+  const position = source.indexOf("\n\n:::") + 1
+  let state = previewState(source, EditorSelection.cursor(position))
+  for (const changes of [{ from: position, insert: "1" }, { from: position, to: position + 1, insert: "" }]) {
+    state = state.update({ changes, selection: EditorSelection.cursor(position) }).state
+    assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)))
+  }
 })
 
 test("live preview reveals heading and fence markers on their lines", () => {

@@ -4,6 +4,7 @@ import { Decoration, EditorView, WidgetType } from "@codemirror/view"
 import type { DecorationSet } from "@codemirror/view"
 import { buildEditorStructure } from "@elef/work-model/document-map"
 import { scanMathSource } from "@elef/work-model/math-source"
+import { tableSourceProjection } from "@elef/work-model/table-source"
 import { livePreviewField, livePreviewMode, isContinuousPlainTableEdit, localMathEdit, localInlineMathLineEdit, localParagraphEndEdit } from "@elef/client/editor"
 
 export const continuousFlowGeometryChanged = StateEffect.define<void>()
@@ -102,6 +103,13 @@ export function createContinuousFlow(margins: BlockMargins) {
     let previousAfter = 0
     let previousEnd: number | null = null
     for (const [index, block] of blocks.entries()) {
+      // The structural map conservatively classifies some valid Markdown
+      // tables as paragraphs (for example a one-dash delimiter). Ask the
+      // shared table parser before treating their row breaks as soft prose.
+      const paragraphTables = block.kind === "paragraph" && block.markdown.includes("|") && block.markdown.includes("\n")
+        ? tableSourceProjection(block.markdown).filter(table => !math.some(span =>
+          span.start < block.content_range.start + table.from && span.end > block.content_range.start + table.from))
+        : []
       const horizontal = block.position?.horizontal
       if (horizontal === "left" || horizontal === "center" || horizontal === "right") {
         // Alignment belongs to the following reader block. Apply it to each
@@ -116,7 +124,8 @@ export function createContinuousFlow(margins: BlockMargins) {
         }
       }
       const heading = block.kind === "heading" ? /^\s*(#{1,6})/.exec(block.markdown)?.[1]?.length : undefined
-      const key = heading ? `h${heading}` : block.kind
+      const wholeTable = paragraphTables.some(table => table.from === 0 && table.to === block.markdown.length)
+      const key = heading ? `h${heading}` : wholeTable ? "table" : block.kind
       const spacing = margins[key] ?? margins["paragraph"] ?? { before: 0, after: 0 }
       const gap = index === 0 ? 0 : Math.max(previousAfter, spacing.before)
       const separator = previousEnd === null ? "" : source.slice(previousEnd, block.source_range.start)
@@ -149,6 +158,7 @@ export function createContinuousFlow(margins: BlockMargins) {
       let contentMathIndex = mathIndex
       for (let cursor = block.content_range.start; cursor < block.content_range.end; cursor++) {
         if (source[cursor] !== "\n" || source[cursor - 1] === "\\" || source.slice(cursor - 2, cursor) === "  ") continue
+        if (paragraphTables.some(table => cursor >= block.content_range.start + table.from && cursor < block.content_range.start + table.to)) continue
         while ((math[contentMathIndex]?.end ?? Infinity) <= cursor) contentMathIndex++
         const currentMath = math[contentMathIndex]
         if (currentMath && cursor >= currentMath.start && cursor < currentMath.end) continue
@@ -177,8 +187,19 @@ export function createContinuousFlow(margins: BlockMargins) {
         if (mapped) return { enabled, ...mapped }
       }
       if (!canMapFlow(value, transaction)) return { enabled, ...build(transaction.newDoc.toString()) }
-      return { enabled, decorations: value.decorations.map(transaction.changes),
-        plain: value.plain.map(range => ({ from: transaction.changes.mapPos(range.from, -1), to: transaction.changes.mapPos(range.to, 1) })) }
+      let plain = value.plain.map(range => ({ from: transaction.changes.mapPos(range.from, -1), to: transaction.changes.mapPos(range.to, 1) }))
+      // A local inline-math edit can turn plain prose into math, or remove
+      // its last delimiter. Keep this acceleration index equivalent to a
+      // fresh flow projection in both directions.
+      const line = localMathEdit(transaction) ? null : localInlineMathLineEdit(transaction)
+      if (line) {
+        plain = plain.filter(range => range.from !== line.from || range.to !== line.to)
+        if (plainParagraph(transaction.newDoc.sliceString(line.from, line.to))) {
+          plain.push({ from: line.from, to: line.to })
+          plain.sort((a, b) => a.from - b.from)
+        }
+      }
+      return { enabled, decorations: value.decorations.map(transaction.changes), plain }
     },
     provide: field => EditorView.decorations.from(field, value => value.decorations),
   })

@@ -109,7 +109,15 @@ function localTableChange(value: TableDecorations, transaction: Transaction): Ta
 
 function shiftedRanges(set: DecorationSet, length: number, offset: number): Array<Range<Decoration>> {
   const ranges: Array<Range<Decoration>> = []
-  set.between(0, length, (from, to, value) => { ranges.push(value.range(from + offset, to + offset)) })
+  set.between(0, length, (from, to, value) => {
+    const widget = value.spec.widget
+    // A table is rebuilt from a source slice, but an empty cell's click
+    // handler needs an absolute document position, just like its range.
+    const shifted = widget instanceof EmptyCell
+      ? Decoration.widget({ ...value.spec, widget: new EmptyCell(widget.position + offset, widget.width) })
+      : value
+    ranges.push(shifted.range(from + offset, to + offset))
+  })
   return ranges
 }
 

@@ -24,6 +24,19 @@ test("flow joins soft source lines without joining the next paragraph or fenced 
   assert.equal(moved.field(flow), state.field(flow), "caret movement rebuilt the source projection")
 })
 
+test("table rows with short delimiter cells keep separate editable lines", () => {
+  const source = "# Table\n\n| A | B |\n| - | - |\n| | alpha |\n"
+  const flow = createContinuousFlow({ paragraph: { before: 0, after: 18 }, table: { before: 0, after: 0 } })
+  const state = EditorState.create({ doc: source, extensions: [flow] })
+  const tableStart = source.indexOf("| A")
+  const tableEnd = source.indexOf("\n", source.indexOf("alpha"))
+  const replacements: Array<[number, number]> = []
+  state.field(flow).decorations.between(tableStart, tableEnd, (from, to) => {
+    if (from >= tableStart && from < tableEnd && from !== to) replacements.push([from, to])
+  })
+  assert.ok(replacements.every(([from, to]) => !source.slice(from, to).includes("\n")))
+})
+
 test("incremental plain prose and structural edits agree with a fresh flow projection", () => {
   const margins = { paragraph: { before: 0, after: 18 }, h1: { before: 0, after: 24 }, list: { before: 12, after: 12 } }
   const flow = createContinuousFlow(margins)
@@ -83,6 +96,23 @@ test("local equation edits keep the same reader flow as a fresh parse", () => {
       return found
     }
     assert.deepEqual(snapshot(state.field(flow).decorations), snapshot(fresh.field(freshFlow).decorations))
+  }
+})
+
+test("creating and removing inline math updates the plain-paragraph index", () => {
+  const margins = { paragraph: { before: 0, after: 18 } }
+  const flow = createContinuousFlow(margins)
+  let state = EditorState.create({ doc: "Before.\n\nWrite here.\n\nAfter.\n", extensions: [markdown(), flow] })
+  const position = state.doc.toString().indexOf("here") + "here".length
+  for (const changes of [
+    { from: position, insert: "$" },
+    { from: position + 1, insert: "x$" },
+    { from: position, to: position + 3, insert: "" },
+  ]) {
+    state = state.update({ changes }).state
+    const freshFlow = createContinuousFlow(margins)
+    const fresh = EditorState.create({ doc: state.doc, extensions: [markdown(), freshFlow] })
+    assert.deepEqual(state.field(flow).plain, fresh.field(freshFlow).plain)
   }
 })
 

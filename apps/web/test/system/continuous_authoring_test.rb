@@ -69,6 +69,19 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_equal 1, page.evaluate_script("document.querySelector('.continuous-document').querySelectorAll('[contenteditable=true]').length")
   end
 
+  test "an empty table cell stays clickable after editing a later cell" do
+    source = "# Tables\n\n| A | B |\n| - | - |\n| | alpha |\n"
+    document = Document.create!(title: "Tables", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    find(".continuous-document .cm-continuous-cell", text: "alpha").click
+    page.driver.browser.action.send_keys(:end, :left, :left, "x").perform
+    assert_field "Markdown source", with: source.sub("alpha", "alphax")
+    row = find(".continuous-document .cm-continuous-table-row", text: "alphax")
+    row.all(".cm-continuous-cell").first.click
+    page.driver.browser.action.send_keys("filled").perform
+    assert_field "Markdown source", with: source.sub("| | alpha |", "| filled| alphax |")
+  end
+
   test "Enter splits a paragraph and Backspace joins it in one uninterrupted flow" do
     source = "# Editing\n\nAlpha beta"
     document = Document.create!(title: "Editing", source: source)
@@ -99,6 +112,26 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     find(".continuous-document .cm-line", text: "alpha").click
     page.driver.browser.action.send_keys(:end, :enter, "beta").perform
     assert_field "Markdown source", with: source.sub("alpha", "alpha\nbeta")
+  end
+
+  test "unfinished code stays literal and deleting syntax beside math remains editable" do
+    source = "# Editing\n\nEquation $x$. _word_\n\n```js\nconst price = \"$5$\";\n"
+    document = Document.create!(title: "Editing", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document .cm-live-widget-math[aria-label='x']", count: 1
+    assert_no_selector ".continuous-document .cm-live-widget-math[aria-label='5']"
+    assert_selector ".continuous-document .cm-live-code-line", text: 'const price = "$5$";'
+
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const position = editor.view.state.doc.toString().indexOf('_word_');
+      editor.view.dispatch({ selection: { anchor: position }, scrollIntoView: true });
+      editor.view.focus();
+    JAVASCRIPT
+    page.driver.browser.action.send_keys(:delete).perform
+    assert_field "Markdown source", with: source.sub("_word_", "word_")
+    page.driver.browser.action.key_down(:control).send_keys("z").key_up(:control).perform
+    assert_field "Markdown source", with: source
   end
 
   test "Vim normal Enter and vertical aliases navigate the same source lines in both modes" do

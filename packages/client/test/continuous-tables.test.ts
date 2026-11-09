@@ -47,6 +47,21 @@ test("edits before an empty table cell rebuild its click anchor", () => {
   assert.ok(measurements > before)
 })
 
+test("editing a later cell keeps an earlier empty cell's absolute click position", () => {
+  const source = "# Notes\n\n| A | B |\n| - | - |\n| | alpha |\n"
+  const tables = createContinuousTables(() => [0.5, 0.5])
+  let state = EditorState.create({ doc: source, extensions: [tables] })
+  const position = source.indexOf("alpha") + "alpha".length
+  state = state.update({ changes: { from: position, insert: "x" } }).state
+  const anchors: Array<{ from: number; position: number }> = []
+  state.field(tables).syntax.between(0, state.doc.length, (from, _to, decoration) => {
+    const widget = decoration.spec.widget as { position?: number } | undefined
+    if (widget?.position !== undefined) anchors.push({ from, position: widget.position })
+  })
+  assert.equal(anchors.length, 1)
+  assert.equal(anchors[0]?.position, anchors[0]?.from)
+})
+
 test("prose next to an equation maps tables without reparsing the document", () => {
   const source = "| A | B |\n| - | - |\n| one | two |\n\nText with $x^2$.\n"
   let measurements = 0
