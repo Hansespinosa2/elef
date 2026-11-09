@@ -312,9 +312,17 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
         end
         assert_equal diagnostic_source, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
         profile = page.driver.browser.execute_cdp("Profiler.stop").fetch("profile")
-        allocations = page.driver.browser.execute_cdp("HeapProfiler.stopSampling").fetch("profile")
+        # Heap profiles can contain very deep call trees; Selenium's normal
+        # JSON parser uses Ruby's default limit of 100 levels.
+        json_parse = JSON.method(:parse)
+        JSON.define_singleton_method(:parse) { |source, options = {}| json_parse.call(source, options.merge(max_nesting: false)) }
+        begin
+          allocations = page.driver.browser.execute_cdp("HeapProfiler.stopSampling").fetch("profile")
+        ensure
+          JSON.define_singleton_method(:parse, json_parse)
+        end
         File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE"), JSON.generate(profile))
-        File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE").sub(".cpuprofile", ".heapprofile"), JSON.generate(allocations))
+        File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE").sub(".cpuprofile", ".heapprofile"), JSON.generate(allocations, max_nesting: false))
         File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE").sub(".cpuprofile", ".json"), JSON.generate({ profile_start: @profile_browser_start, runs: diagnostic_runs, heap_usage: heap_usage }))
         assert_equal NEW_EQUATION_BURST.length, middle_equation.fetch("keys").length, "every middle equation character is measured"
         report[:middle_equation] = {
