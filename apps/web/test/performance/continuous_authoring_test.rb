@@ -124,6 +124,10 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           })()
         JAVASCRIPT
         assert supported, "#{name}: browser must expose long-task measurements"
+        if name == "math_heavy"
+          page.driver.browser.execute_cdp("Profiler.enable")
+          page.driver.browser.execute_cdp("Profiler.start")
+        end
         page.driver.browser.action.send_keys(BURST).perform
         measurements = page.evaluate_async_script(<<~JAVASCRIPT)
           const done = arguments[arguments.length - 1];
@@ -238,16 +242,12 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
         # editing a closed expression. Measure the whole uninterrupted path.
         page.driver.browser.action.key_down(:control).send_keys(:end).key_up(:control).perform
         page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
-        page.driver.browser.execute_cdp("Profiler.enable")
-        page.driver.browser.execute_cdp("Profiler.start")
         page.evaluate_script("window.newEquationPerf = window.startAuthoringPerf()")
         page.driver.browser.action.send_keys(NEW_EQUATION_BURST).perform
         new_equation = page.evaluate_async_script(<<~JAVASCRIPT)
           const done = arguments[arguments.length - 1];
           requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { window.stopAuthoringPerf(); done(window.newEquationPerf); }, 100)));
         JAVASCRIPT
-        profile = page.driver.browser.execute_cdp("Profiler.stop").fetch("profile")
-        File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE"), JSON.generate(profile))
         after_equation = before_equation[0...insertion] + EQUATION_BURST + before_equation[insertion..]
         assert_equal after_equation + NEW_EQUATION_BURST, page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
         assert_equal NEW_EQUATION_BURST.length, new_equation.fetch("keys").length, "every new equation character is measured"
@@ -279,6 +279,8 @@ class ContinuousAuthoringPerformanceTest < ApplicationSystemTestCase
           const done = arguments[arguments.length - 1];
           requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(() => { window.stopAuthoringPerf(); done(window.middleEquationPerf); }, 100)));
         JAVASCRIPT
+        profile = page.driver.browser.execute_cdp("Profiler.stop").fetch("profile")
+        File.write(ENV.fetch("ELEF_CONTINUOUS_CPU_PROFILE"), JSON.generate(profile))
         assert_equal current_source[0...middle] + NEW_EQUATION_BURST + current_source[middle..],
           page.evaluate_script("document.querySelector('.source-field').editorController.sourceValue")
         assert_equal NEW_EQUATION_BURST.length, middle_equation.fetch("keys").length, "every middle equation character is measured"
