@@ -311,6 +311,11 @@ export function createSaveFlow({
       onError(error)
       return "invalid"
     }
+    const sourceFileChanged = typeof snapshot.source_file === "string" && snapshot.source_file !== activeWork.source_file
+    if (snapshot.content_hash === activeWork.content_hash && !sourceFileChanged) return "current"
+    if (activeConflict?.diskHash === snapshot.content_hash && activeConflict.diskSourceFile === snapshot.source_file) {
+      return "conflict"
+    }
     if (snapshot.source === getSource()) {
       return checkExternalChange(id, snapshot)
     }
@@ -319,7 +324,7 @@ export function createSaveFlow({
     // through snapshots and the merge consult below, and any outcome other
     // than a clean merge takes the conflict path (P02-07).
     const wasClean = !dirty && getSnapshot() === activeWork.savedSnapshot && !activeConflict
-    const localSource = getSource()
+    let localSource = getSource()
     if (wasClean && !isSuspiciousExternalChange(localSource, snapshot.source)) {
       return checkExternalChange(id, snapshot)
     }
@@ -347,35 +352,48 @@ export function createSaveFlow({
       await takeSnapshot(id, "external-change")
     } catch (error) {
       onError(error)
+      if (activeWork !== mergeWork) return "inactive"
       if (mergeSuperseded()) return "superseded"
       if (wasClean) return conflictUnverifiable()
       return checkExternalChange(id, snapshot)
     }
+    if (activeWork !== mergeWork) return "inactive"
     let outcome: MergeOutcome | null | undefined
     try {
-      outcome = await mergeExternalChange(id, localSource)
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        if (activeWork !== mergeWork) return "inactive"
+        if (!wasClean) {
+          materializeEdits()
+          localSource = getSource()
+        }
+        outcome = await mergeExternalChange(id, localSource)
+        if (activeWork !== mergeWork || wasClean || mergeSuperseded() || !outcome || outcome.kind !== "merged") break
+        materializeEdits()
+        if (getSource() === localSource) break
+      }
     } catch (error) {
       onError(error)
+      if (activeWork !== mergeWork) return "inactive"
       if (mergeSuperseded()) return "superseded"
       if (wasClean) return conflictUnverifiable()
       return checkExternalChange(id, snapshot)
     }
+    if (activeWork !== mergeWork) return "inactive"
     if (mergeSuperseded()) return "superseded"
     if (!outcome || outcome.kind !== "merged" || typeof outcome.source !== "string") {
       if (wasClean) return conflictUnverifiable()
       return checkExternalChange(id, snapshot)
     }
     if (wasClean) return checkExternalChange(id, snapshot)
-    const work = activeWork
-    if (!(await applySource(outcome.source, work, { preserveMetadata: true })) || activeWork !== work) {
+    if (!(await applySource(outcome.source, mergeWork, { preserveMetadata: true, expectedSource: localSource })) || activeWork !== mergeWork) {
       if (activeWork?.id === id) return checkExternalChange(id, snapshot)
       return "inactive"
     }
     acceptDiskVersion(id, snapshot.content_hash)
     revision += 1
-    work.content_hash = snapshot.content_hash
-    work.source = snapshot.source
-    work.source_file = snapshot.source_file || work.source_file
+    mergeWork.content_hash = snapshot.content_hash
+    mergeWork.source = snapshot.source
+    mergeWork.source_file = snapshot.source_file || mergeWork.source_file
     activeConflict = null
     dirty = true
     setStatus("Saving merged changes…")
@@ -504,12 +522,12 @@ export function createSaveFlow({
     if (dirty && !activeConflict) schedule(0)
   }
 
-  async function applySource(source: string, work: SaveWork, options: { preserveMetadata?: boolean } = {}): Promise<boolean> {
+  async function applySource(source: string, work: SaveWork, options: { preserveMetadata?: boolean; expectedSource?: string } = {}): Promise<boolean> {
     if (sourceMutation) return false
     const token = {}
     sourceMutation = token
     try {
-      const applied = await setSource(source, { id: work.id, expectedSource: getSource(), ...options })
+      const applied = await setSource(source, { id: work.id, expectedSource: options.expectedSource ?? getSource(), ...options })
       return applied !== false && activeWork === work
     } catch (error) {
       onError(error)

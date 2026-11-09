@@ -838,8 +838,8 @@ export class EditorEngine {
   }
 
   setExternalValue(value: string): void {
-    this.inputTarget.value = value
-    this.handleExternalInputEvent()
+    this.replaceServerSource(value)
+    this.syncInput()
   }
 
   syncInput(): void {
