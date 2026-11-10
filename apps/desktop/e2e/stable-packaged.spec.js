@@ -66,9 +66,9 @@ if (!verifyUpgraded) {
           try { process.kill(pid, 0); return false }
           catch (error) { if (error.code === "ESRCH") return true; throw error }
         }, 15_000, "Install on Quit must exit normally without relaunching")
-        // The process actually exited. There is no remaining native WebDriver
-        // session to delete during runner teardown.
-        browser.sessionId = undefined
+        // The process and its embedded driver exited. WDIO retains a separate
+        // session id, so avoid sending DELETE to the stopped driver at teardown.
+        browser.overwriteCommand("deleteSession", async () => {})
       } finally {
         await fetch("http://127.0.0.1:8888/release-artifact")
         const reset = await fetch("http://127.0.0.1:8888/mode?value=none")
