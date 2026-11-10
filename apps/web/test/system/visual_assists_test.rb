@@ -131,6 +131,38 @@ class VisualAssistsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /\\mathbf\{x\} /, wait: 5
   end
 
+  test "math script tab shortcuts work in source and visual editors" do
+    %w[visual source].each do |mode|
+      document = Document.create!(title: "Scripts #{mode}", source: "# Notes\n\nBody")
+      visit edit_document_path(document)
+      wait_for_fresh_projection
+      if mode == "source"
+        click_on "Source"
+        editor = find(".cm-content")
+        page.execute_script("const e = document.querySelector('.source-field').editorController; e.setSelectionRange(e.value.length); e.focus()")
+      else
+        editor = find(".document-editor-block", text: "Body")
+        editor.click
+        editor.send_keys(:end)
+      end
+      editor.send_keys(" $x__", :tab, "ij", :tab, "^^", :tab, "2", :tab)
+      assert_field "Markdown source", with: /x_\{ij\}\^\{2\}/, wait: 5
+    end
+  end
+
+  test "math script tab shortcuts leave prose and code literal" do
+    document = Document.create!(title: "Literal scripts", source: "# Notes\n\nBody")
+    visit edit_document_path(document)
+    click_on "Source"
+    editor = find(".cm-content")
+    page.execute_script("const e = document.querySelector('.source-field').editorController; e.setSelectionRange(e.value.length); e.focus()")
+    editor.send_keys(" __", :tab, " `^^", :tab)
+    assert_includes engine_source, "__"
+    assert_includes engine_source, "^^"
+    assert_not_includes engine_source, "_{}"
+    assert_not_includes engine_source, "^{}"
+  end
+
   test "Edit-actions menu inserts a snippet trigger in visual mode" do
     document = Document.create!(title: "Visual menu", source: "# Notes\n\nBody")
     visit edit_document_path(document)
