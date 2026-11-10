@@ -13,6 +13,7 @@ import { tableGridForBlock, tableRelativeForVisible, tableSourceOffset, tableVis
 import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
 import { markStage } from "../../session/stage_marks.js"
 import { projectionRangeEdit, projectionWrapSelection } from "../../session/projection_range.js"
+import { markdownWrapMarkers } from "../../session/markdown_wrap.js"
 import { paintProjectionSelections } from "../../session/projection_selections.js"
 
 export interface DocumentEditorRange {
@@ -434,9 +435,11 @@ export class DocumentEditor {
     if (wrapped) {
       event.preventDefault?.()
       const { from, to, anchor, head, marker } = wrapped
-      this.pendingCaretRestore = { sourceOffset: head + 1, anchorSourceOffset: anchor + 1, preferredBlockId: null }
-      editor.replaceRangeWithSelection(marker + editor.value.slice(from, to) + marker, from, to,
-        { from: anchor - from + 1, to: head - from + 1 })
+      const selected = editor.value.slice(from, to)
+      const { open, close } = markdownWrapMarkers(selected, marker)
+      this.pendingCaretRestore = { sourceOffset: head + open.length, anchorSourceOffset: anchor + open.length, preferredBlockId: null }
+      editor.replaceRangeWithSelection(open + selected + close, from, to,
+        { from: anchor - from + open.length, to: head - from + open.length })
       ;(document.activeElement as HTMLElement | null)?.blur()
       return
     }

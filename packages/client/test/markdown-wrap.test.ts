@@ -24,3 +24,10 @@ test("backticks wrap selected text while a caret and other input stay ordinary",
   state = state.update({ selection: EditorSelection.cursor(0) }).state
   assert.equal(wrapMarkdownSelection(state, "*"), null)
 })
+
+test("backtick selections get a longer padded code delimiter", () => {
+  let state = EditorState.create({ doc: "`inner`", selection: { anchor: 0, head: 7 } })
+  state = wrapMarkdownSelection(state, "`")!.state
+  assert.equal(state.doc.toString(), "`` `inner` ``")
+  assert.equal(state.sliceDoc(state.selection.main.from, state.selection.main.to), "`inner`")
+})

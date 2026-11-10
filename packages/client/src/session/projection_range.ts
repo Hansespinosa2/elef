@@ -24,7 +24,7 @@ export function projectionWrapSelection(
   root: Element,
   selection: Selection | null,
   sourceOffset: (block: HTMLElement, node: Node, offset: number) => number | null,
-): { from: number; to: number; anchor: number; head: number; marker: string } | null {
+): { from: number; to: number; anchor: number; head: number; marker: "*" | "`" } | null {
   if (event.cancelable === false || event.isComposing || !event.preventDefault || event.inputType !== "insertText"
       || (event.data !== "*" && event.data !== "`") || !selection || selection.isCollapsed
       || !selection.anchorNode || !selection.focusNode) return null
