@@ -307,6 +307,9 @@ export default class extends Controller<HTMLElement> {
         oldView.querySelectorAll("a, button, input, select, textarea, [tabindex], [contenteditable]").forEach(node => {
           node.setAttribute("tabindex", "-1")
           node.removeAttribute("contenteditable")
+          node.removeAttribute("href")
+          node.removeAttribute("role")
+          if (node.matches("button, input, select, textarea")) node.setAttribute("disabled", "")
         })
         oldView.setAttribute("data-preview-scroll-snapshot", "")
         Object.assign(oldView.style, { position: "absolute", top: "0", left: "0", width: "100%", pointerEvents: "none" })

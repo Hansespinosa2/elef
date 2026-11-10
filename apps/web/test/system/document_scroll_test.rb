@@ -135,7 +135,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
         const snapshot = document.querySelector('[data-preview-scroll-snapshot]');
         return surface?.hasAttribute('inert') && surface.getAttribute('aria-hidden') === 'true' &&
           snapshot && !snapshot.closest('[inert], [aria-hidden="true"]') &&
-          [...snapshot.querySelectorAll('a, button, input, select, textarea, [tabindex]')].every(node => node.tabIndex === -1);
+          [...snapshot.querySelectorAll('a, button, input, select, textarea, [tabindex]')].every(node => node.tabIndex === -1 && !node.hasAttribute('href'));
       })()
     JAVASCRIPT
     assert_in_delta before, page.evaluate_script("document.querySelector('[data-preview-target=container]').scrollTop"), 5
@@ -155,6 +155,25 @@ class DocumentScrollTest < ApplicationSystemTestCase
     assert_no_selector "[data-preview-scroll-snapshot]", visible: :all, wait: 15
     assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
     assert_in_delta moved, page.evaluate_script("document.querySelector('[data-preview-target=container]').scrollTop"), 5
+  end
+
+  def test_switching_to_visual_mode_during_delayed_pagination_releases_snapshot
+    document = Document.create!(title: "Delayed mode switch", source: SOURCE)
+    visit edit_document_path(document)
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
+    click_on "Source"
+    page.execute_script(<<~JAVASCRIPT)
+      const root = document.querySelector('.document-editor-projection');
+      const controller = window.Stimulus.getControllerForElementAndIdentifier(root, 'document-pages');
+      window.__pagesPrototype = Object.getPrototypeOf(controller);
+      window.__pagesPrototype.resourcesReady = () => false;
+      const editor = document.querySelector('.source-field').editorController;
+      editor.replaceRange('!', editor.sourceValue.length, editor.sourceValue.length);
+    JAVASCRIPT
+    assert_selector "[data-preview-scroll-snapshot]", visible: :all, wait: 10
+    click_on "Visual"
+    assert_no_selector "[data-preview-scroll-snapshot]", visible: :all
+    assert page.evaluate_script("!document.querySelector('.document-editor-projection .document-surface').hasAttribute('inert')")
   end
 
   def test_blur_released_pagination_preserves_scroll
