@@ -128,7 +128,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
       const editor = document.querySelector('.source-field').editorController;
       editor.replaceRange('!', editor.sourceValue.length, editor.sourceValue.length);
     JAVASCRIPT
-    assert_selector ".document-surface[data-document-pages-settled='false']", wait: 10
+    assert_selector ".document-surface[data-document-pages-settled='false']", visible: :all, wait: 10
     assert_in_delta before, page.evaluate_script("document.querySelector('[data-preview-target=container]').scrollTop"), 5
     moved = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -143,6 +143,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
       const root = document.querySelector('.document-editor-projection');
       window.Stimulus.getControllerForElementAndIdentifier(root, 'document-pages').maybeFirstPass();
     JAVASCRIPT
+    assert_no_selector "[data-preview-scroll-snapshot]", visible: :all, wait: 15
     assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
     assert_in_delta moved, page.evaluate_script("document.querySelector('[data-preview-target=container]').scrollTop"), 5
   end

@@ -288,7 +288,10 @@ export default class extends Controller<HTMLElement> {
     const pending = this.pendingPreviewScroll
     const scrollLeft = pending?.restore ? pending.left : this.containerTarget.scrollLeft
     const scrollTop = pending?.restore ? pending.top : this.containerTarget.scrollTop
-    const scrollHeight = this.containerTarget.scrollHeight
+    const oldRoot = this.containerTarget.querySelector(".document-editor-projection") as HTMLElement | null
+    const visibleRoot = oldRoot?.querySelector(":scope > [data-preview-scroll-snapshot]") ?? oldRoot
+    const oldView = visibleRoot?.cloneNode(true) as HTMLElement | undefined
+    const oldHeight = oldRoot?.getBoundingClientRect().height ?? 0
     this.cancelPendingPreviewScroll?.()
     recordPreviewTrace("preview-install-start")
     this.clearSlideScaling()
@@ -298,7 +301,17 @@ export default class extends Controller<HTMLElement> {
     const surface = this.containerTarget.querySelector(".document-editor-projection [data-document-pages-target='surface']")
     if (surface && this.element.dataset.editorMode === "source") {
       const root = surface.closest(".document-editor-projection") as HTMLElement | null
-      if (root) root.style.minHeight = `${scrollHeight}px`
+      if (root && oldView) {
+        oldView.removeAttribute("data-controller")
+        oldView.querySelectorAll("[data-controller]").forEach(node => node.removeAttribute("data-controller"))
+        oldView.setAttribute("aria-hidden", "true")
+        oldView.setAttribute("inert", "")
+        oldView.setAttribute("data-preview-scroll-snapshot", "")
+        Object.assign(oldView.style, { position: "absolute", top: "0", left: "0", width: "100%", pointerEvents: "none" })
+        Object.assign(root.style, { minHeight: `${oldHeight}px`, position: "relative" })
+        ;(surface as HTMLElement).style.visibility = "hidden"
+        root.append(oldView)
+      }
       const pending = { left: scrollLeft, top: scrollTop, restore: true }
       this.pendingPreviewScroll = pending
       const cancel = () => {
@@ -307,8 +320,13 @@ export default class extends Controller<HTMLElement> {
         this.containerTarget.removeEventListener("touchstart", userMoved)
         this.containerTarget.removeEventListener("pointerdown", userMoved)
         this.containerTarget.removeEventListener("keydown", userMoved)
-        this.element.removeEventListener("elef:editor-mode-change", userMoved)
-        if (root) root.style.minHeight = ""
+        this.element.removeEventListener("elef:editor-mode-change", cancel)
+        oldView?.remove()
+        ;(surface as HTMLElement).style.visibility = ""
+        if (root) {
+          root.style.minHeight = ""
+          root.style.position = ""
+        }
         if (this.pendingPreviewScroll === pending) this.pendingPreviewScroll = null
         if (this.cancelPendingPreviewScroll === cancel) this.cancelPendingPreviewScroll = null
       }
@@ -327,7 +345,7 @@ export default class extends Controller<HTMLElement> {
       this.containerTarget.addEventListener("touchstart", userMoved, { passive: true })
       this.containerTarget.addEventListener("pointerdown", userMoved, { passive: true })
       this.containerTarget.addEventListener("keydown", userMoved)
-      this.element.addEventListener("elef:editor-mode-change", userMoved)
+      this.element.addEventListener("elef:editor-mode-change", cancel)
     }
     this.containerTarget.scrollLeft = scrollLeft
     this.containerTarget.scrollTop = scrollTop
