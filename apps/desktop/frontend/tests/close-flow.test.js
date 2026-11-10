@@ -206,3 +206,59 @@ test("an unsafe save with an armed update defers it and stays open without promp
     assert.deepEqual(state(), { armed: null, installs: 0 }, `${outcome} must defer the armed update`)
   }
 })
+
+test("repeated quits cannot close a clean window while its armed update is installing", async () => {
+  for (const dirtyAtStart of [false, true]) {
+    let finishInstall
+    const installation = new Promise(resolve => { finishInstall = resolve })
+    let started
+    const installing = new Promise(resolve => { started = resolve })
+    let dirty = dirtyAtStart
+    let closes = 0
+    let prevented = 0
+    const { runtime, state } = armedUpdateRuntime({ install: () => {
+      started()
+      return installation
+    } })
+    const request = createCloseFlow({
+      isDirty: () => dirty,
+      flushForClose: async () => { dirty = false; return "saved" },
+      close: () => { closes += 1 },
+      updateRuntime: runtime
+    })
+    const event = () => ({ preventDefault: () => { prevented += 1 } })
+    const first = request(event())
+    await installing
+    assert.deepEqual(state(), { armed: null, installs: 1 })
+    const repeated = request(event())
+    // Tauri destroys the window when a close handler leaves the event unprevented.
+    assert.equal(prevented, 2, "every quit must stay prevented during installation")
+    finishInstall(true)
+    await Promise.all([first, repeated])
+    assert.equal(closes, 0)
+    assert.equal(state().installs, 1)
+  }
+})
+
+test("a failed in-flight update blocks repeated quits, then permits an ordinary quit", async () => {
+  let failInstall
+  const installation = new Promise((_resolve, reject) => { failInstall = reject })
+  const failure = new Error("signature verification failed")
+  const errors = []
+  const { runtime } = armedUpdateRuntime({ install: () => installation })
+  const request = createCloseFlow({
+    isDirty: () => false,
+    flushForClose: () => assert.fail("clean quit must not flush"),
+    close: () => assert.fail("failed installation must not close"),
+    onError: error => errors.push(error),
+    updateRuntime: runtime
+  })
+  let prevented = 0
+  const first = request({ preventDefault: () => { prevented += 1 } })
+  const repeated = request({ preventDefault: () => { prevented += 1 } })
+  failInstall(failure)
+  await Promise.all([first, repeated])
+  assert.equal(prevented, 2)
+  assert.deepEqual(errors, [failure])
+  request({ preventDefault: () => assert.fail("the next ordinary quit must proceed") })
+})

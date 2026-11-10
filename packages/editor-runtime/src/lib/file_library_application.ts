@@ -1505,7 +1505,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   void getCurrentWindow().onCloseRequested(createCloseFlow({
     isDirty: () => hasUnsavedChanges(),
     flushForClose,
-    close: () => getCurrentWindow().close(),
+    // The close flow has already approved this close. Destroy directly so it
+    // cannot re-enter the in-flight save/install guard via another request.
+    close: () => getCurrentWindow().destroy(),
     confirmDiscard: () => fileLibrary.confirmDiscardUnsavedChanges(),
     onError: showError,
     updateRuntime

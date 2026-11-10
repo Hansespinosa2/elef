@@ -441,7 +441,14 @@ assert.ok(fixtureBuilder.includes("Skipped updater install fixtures on Linux"), 
 assert.ok(readText("apps/desktop/e2e/install-macos-dmg-fixture.js").includes("verify_arch") && readText("apps/desktop/e2e/install-macos-dmg-fixture.js").includes("arm64"), "the packaged Stable DMG must be an Apple Silicon build")
 assert.ok(readText("apps/desktop/e2e/updater-fixture-server.mjs").includes("stable-package"), "the updater fixture server must serve the Stable N archive")
 const stablePackagedSpec = readText("apps/desktop/e2e/stable-packaged.spec.js")
-for (const pin of ["mode?value=stable-package", 'invoke("install_update"', '"0.2.0"', "previousInstallationsRemoved", ".elef-update-", "export_diagnostics_fixture"]) {
+// Exercise the owning UI/quit flow, rather than bypassing it with a direct
+// installer invocation. Retain the native call/version assertion as well as
+// bundle replacement and post-launch cleanup evidence.
+for (const pin of ["mode?value=stable-package", 'command === "install_update"',
+  '$("#check-for-updates").click()', '$("#install-update").click()',
+  "getCurrentWindow().close()", "/artifact-status", "/release-artifact",
+  "window.__elefInstallRequests), [\"0.2.0\"]", "window.__elefRestartRequested",
+  '"0.2.0"', "previousInstallationsRemoved", ".elef-update-", "export_diagnostics_fixture"]) {
   assert.ok(stablePackagedSpec.includes(pin), `the Stable packaged spec must pin ${pin}`)
 }
 

@@ -16,7 +16,7 @@ const verifyUpgraded = process.env.ELEF_E2E_VERIFY_STABLE_UPGRADED === "1"
 
 if (!verifyUpgraded) {
   describe("stable packaged signed update", () => {
-    it("installs signed version N into the Stable test installation", async function () {
+    it("installs signed version N through Install on quit despite a repeated quit", async function () {
       this.timeout(180_000)
       assert.equal(process.platform, "darwin", "Stable packaged updates run on macOS only")
       await $("#library-view").waitForDisplayed()
@@ -25,19 +25,56 @@ if (!verifyUpgraded) {
       const response = await fetch("http://127.0.0.1:8888/mode?value=stable-package")
       if (!response.ok) throw new Error("The Stable packaged update fixture is missing")
       try {
-        await browser.execute(() => {
+        assert.ok((await fetch("http://127.0.0.1:8888/hold-artifact")).ok)
+        await browser.execute(async () => {
           window.focus()
-          window.__elefStableUpdateInstallation = window.__TAURI__.core.invoke("install_update", {
-            version: "0.2.0", onProgress: new window.__TAURI__.core.Channel()
-          }).then(installed => ({ installed })).catch(error => ({ rejection: error.message || String(error) }))
+          window.__elefCloseRequests = 0
+          await window.__TAURI__.event.listen("tauri://close-requested", () => {
+            window.__elefCloseRequests += 1
+          })
+          // Keep WebDriver attached for assertions. Only process restart is
+          // intercepted: the dialog, arming, close events, native confirmation,
+          // signature verification and installed bundle replacement are real.
+          // The runner launches the replacement in a separate session below.
+          const invoke = window.__TAURI_INTERNALS__.invoke.bind(window.__TAURI_INTERNALS__)
+          window.__elefRestartRequested = false
+          window.__elefInstallRequests = []
+          window.__TAURI_INTERNALS__.invoke = (command, args, options) => {
+            if (command === "install_update") window.__elefInstallRequests.push(args.version)
+            if (command === "plugin:process|restart") {
+              window.__elefRestartRequested = true
+              return Promise.resolve()
+            }
+            return invoke(command, args, options)
+          }
         })
+        await $("#check-for-updates").click()
+        await $("#update-dialog").waitForDisplayed()
+        await $("#install-update").click()
+        await $("#update-dialog").waitForDisplayed({ reverse: true })
+        await browser.execute(() => { void window.__TAURI__.window.getCurrentWindow().close() })
         answerMacNativeDialog("OK")
-        const installed = await browser.execute(async () => await window.__elefStableUpdateInstallation)
-        if (installed.installed !== true) throw new Error(`The signed Stable package did not install: ${JSON.stringify(installed)}`)
+        await browser.waitUntil(async () => {
+          const status = await fetch("http://127.0.0.1:8888/artifact-status")
+          return (await status.json()).held
+        }, { timeout: 30_000, timeoutMsg: "The quit flow did not start downloading the update" })
+        assert.equal(createHash("sha256").update(await readFile(binaryPath)).digest("hex"), original)
+        await browser.execute(() => window.__TAURI__.window.getCurrentWindow().close())
+        await browser.waitUntil(() => browser.execute(() => window.__elefCloseRequests >= 2), {
+          timeoutMsg: "The repeated native close request was not delivered"
+        })
+        assert.ok(await $("#library-view").isDisplayed(), "repeated quit must keep the installing window alive")
+        assert.ok((await fetch("http://127.0.0.1:8888/release-artifact")).ok)
+        await browser.waitUntil(() => browser.execute(() => window.__elefRestartRequested), {
+          timeout: 120_000, timeoutMsg: "The quit flow did not finish installing and request a restart"
+        })
+        assert.deepEqual(await browser.execute(() => window.__elefInstallRequests), ["0.2.0"],
+          "the UI must install the offered version exactly once")
         const replaced = createHash("sha256").update(await readFile(binaryPath)).digest("hex")
         if (replaced === original) throw new Error("The signed Stable update did not replace the installed application")
         if (!(await $("#back-to-library").isExisting())) throw new Error("The application stopped responding after Stable installation")
       } finally {
+        await fetch("http://127.0.0.1:8888/release-artifact")
         const reset = await fetch("http://127.0.0.1:8888/mode?value=none")
         if (!reset.ok) throw new Error("The Stable updater fixture did not reset")
       }

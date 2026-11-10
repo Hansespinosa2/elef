@@ -1,4 +1,5 @@
-// Native close/Quit flow: dirty windows flush silently before closing. A clean
+// Native close/Quit flow: dirty windows flush silently before closing. `close`
+// completes an approved close without emitting another close request. A clean
 // flush closes; a conflict stays open because the conflict dialog already
 // warns; only a failed flush asks the native discard confirmation.
 //
@@ -27,6 +28,13 @@ export function createCloseFlow({ isDirty, flushForClose, close, confirmDiscard 
     return installed ? "installed" : "deferred"
   }
   return event => {
+    // Taking the armed update clears it before the asynchronous native install.
+    // Keep *all* subsequent close requests blocked until that operation ends,
+    // even when saving has made the editor clean and no armed handle remains.
+    if (pending) {
+      event.preventDefault()
+      return pending
+    }
     let dirty
     try {
       dirty = isDirty()
@@ -38,7 +46,6 @@ export function createCloseFlow({ isDirty, flushForClose, close, confirmDiscard 
     const armed = updateRuntime?.peekArmedUpdate() ?? null
     if (!dirty && !armed) return
     event.preventDefault()
-    if (pending) return pending
     pending = (async () => {
       try {
         if (!dirty) {
