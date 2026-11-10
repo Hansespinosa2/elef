@@ -304,12 +304,16 @@ export default class extends Controller<HTMLElement> {
       if (root && oldView) {
         oldView.removeAttribute("data-controller")
         oldView.querySelectorAll("[data-controller]").forEach(node => node.removeAttribute("data-controller"))
-        oldView.setAttribute("aria-hidden", "true")
-        oldView.setAttribute("inert", "")
+        oldView.querySelectorAll("a, button, input, select, textarea, [tabindex], [contenteditable]").forEach(node => {
+          node.setAttribute("tabindex", "-1")
+          node.removeAttribute("contenteditable")
+        })
         oldView.setAttribute("data-preview-scroll-snapshot", "")
         Object.assign(oldView.style, { position: "absolute", top: "0", left: "0", width: "100%", pointerEvents: "none" })
         Object.assign(root.style, { minHeight: `${oldHeight}px`, position: "relative" })
         ;(surface as HTMLElement).style.opacity = "0"
+        surface.setAttribute("inert", "")
+        surface.setAttribute("aria-hidden", "true")
         root.append(oldView)
       }
       const pending = { left: scrollLeft, top: scrollTop, restore: true }
@@ -323,6 +327,8 @@ export default class extends Controller<HTMLElement> {
         this.element.removeEventListener("elef:editor-mode-change", cancel)
         oldView?.remove()
         ;(surface as HTMLElement).style.opacity = ""
+        surface.removeAttribute("inert")
+        surface.removeAttribute("aria-hidden")
         if (root) {
           root.style.minHeight = ""
           root.style.position = ""
