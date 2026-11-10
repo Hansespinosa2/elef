@@ -3232,15 +3232,15 @@ describe("native updater verification", () => {
         await browser.execute(() => {
           window.focus()
           window.__elefUpdateInstallation = window.__TAURI__.core.invoke("install_update", {
-            version: "0.2.0", onProgress: new window.__TAURI__.core.Channel()
+            version: "0.2.0", prepareOnly: true, onProgress: new window.__TAURI__.core.Channel()
           }).then(installed => ({ installed })).catch(error => ({ rejection: error.message || String(error) }))
         })
       }
       const answer = async accept => {
         if (process.platform === "darwin") {
-          answerMacNativeDialog(accept ? "OK" : "Cancel")
+          answerMacNativeDialog(accept ? "Install on Quit" : "Later")
         } else if (process.platform === "linux") {
-          const dialogId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--name", "^Install Elef update on quit$"], {
+          const dialogId = execFileSync("xdotool", ["search", "--sync", "--onlyvisible", "--name", "^Elef Update$"], {
             encoding: "utf8", timeout: 15_000
           }).trim().split(/\s+/).at(-1)
           execFileSync("xdotool", ["windowactivate", "--sync", dialogId], { timeout: 5_000 })
@@ -3248,6 +3248,15 @@ describe("native updater verification", () => {
         } else throw new Error("Unsupported native updater confirmation platform")
       }
       try {
+        const unapproved = await browser.execute(async () => {
+          try {
+            await window.__TAURI__.core.invoke("install_update", {
+              version: "0.2.0", prepareOnly: false, onProgress: new window.__TAURI__.core.Channel()
+            })
+            return "unexpected activation"
+          } catch (error) { return error.code }
+        })
+        assert.equal(unapproved, "not_found", "activation must require a native-approved preparation")
         await begin()
         await answer(false)
         const cancelled = await browser.execute(async () => await window.__elefUpdateInstallation)
@@ -3257,6 +3266,14 @@ describe("native updater verification", () => {
         await answer(true)
         const installed = await browser.execute(async () => await window.__elefUpdateInstallation)
         if (installed.installed !== true) throw new Error(`The signed package did not install: ${JSON.stringify(installed)}`)
+        if (await hash(binaryPath) !== original.binary) throw new Error("Preparation must not replace the live app")
+        // Activation uses the native-held verified copy, even with no offer
+        // available; it must neither download again nor ask for consent again.
+        await fetch("http://127.0.0.1:8888/mode?value=none")
+        const activated = await browser.execute(() => window.__TAURI__.core.invoke("install_update", {
+          version: "0.2.0", prepareOnly: false, onProgress: new window.__TAURI__.core.Channel()
+        }))
+        if (activated !== true) throw new Error("The prepared update did not activate")
         if (await hash(binaryPath) === original.binary) throw new Error("The signed update did not replace the installed application")
         if (await hash(sourcePath) !== original.source) throw new Error("Installation changed the user's work bytes")
         if (!(await $("#back-to-library").isExisting())) throw new Error("The application stopped responding after installation")
