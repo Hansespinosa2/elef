@@ -1,0 +1,22 @@
+✔ dirty native close or Quit waits for its save before closing (1.395256ms)
+✔ conflicts keep the window open without a native confirmation (0.17894ms)
+✔ failed saves confirm natively before discarding (0.146931ms)
+✔ failed saves without a confirmation stay open (0.10242ms)
+✔ flush and confirmation errors keep the window open and report (0.603865ms)
+✔ a clean close proceeds without flushing or confirming (0.093673ms)
+✔ a failed visual-buffer flush prevents closing instead of losing pending input (0.138596ms)
+✔ a clean quit with an armed update installs and relaunches instead of closing (0.21102ms)
+✔ a saved flush with an armed update installs and relaunches instead of closing (0.280608ms)
+✔ a cancelled safe-quit install disarms and the requested quit proceeds (0.338666ms)
+✔ a failed safe-quit install reports, disarms, and stays open (0.202915ms)
+✔ an unsafe save with an armed update defers it and stays open without prompting (0.199648ms)
+✔ repeated quits cannot close a clean window while its armed update is installing (0.207674ms)
+✔ a failed in-flight update blocks repeated quits, then permits an ordinary quit (0.171296ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 46.62673

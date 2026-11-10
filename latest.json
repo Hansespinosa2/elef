@@ -1,0 +1,15 @@
+{
+  "version": "0.1.9",
+  "notes": "Updater downloads are signed and verified by Elef before installation.\n\n[Install and test this build](https://github.com/Hansespinosa2/elef/blob/desktop-v0.1.9/docs/development.md#testing-built-desktop-artifacts)",
+  "pub_date": "2026-11-05T15:18:37.220Z",
+  "platforms": {
+    "darwin-aarch64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTZKcEYzS3JNeldKRGdIOUlVWmZESXllTnd2TDdOMWVtRzdOb1pac0xqYTlZWkR5NUJDQmpaaGlqaUVNa1owMm9iWE1URVVEK3ZyTXpWcG9jU2pYQ0huR0RsVnJ0UlE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzODkxOTEwCWZpbGU6RWxlZi5hcHAudGFyLmd6CXZlcnNpb246MC4xLjkKR3JkSDNmeXdVVEd5Z3FpNDAwV0FKaGUvUVhFWCswalVwbEtuUUJHa2xpcVlmUVdyYk50VGxKSVFjZlN3NGNXUEVPbDBuN3dNTWxmeUVicmxWRTFTRHc9PQo=",
+      "url": "https://api.github.com/repos/Hansespinosa2/elef/releases/assets/713832834"
+    },
+    "darwin-aarch64-app": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUeTZKcEYzS3JNeldKRGdIOUlVWmZESXllTnd2TDdOMWVtRzdOb1pac0xqYTlZWkR5NUJDQmpaaGlqaUVNa1owMm9iWE1URVVEK3ZyTXpWcG9jU2pYQ0huR0RsVnJ0UlE0PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkzODkxOTEwCWZpbGU6RWxlZi5hcHAudGFyLmd6CXZlcnNpb246MC4xLjkKR3JkSDNmeXdVVEd5Z3FpNDAwV0FKaGUvUVhFWCswalVwbEtuUUJHa2xpcVlmUVdyYk50VGxKSVFjZlN3NGNXUEVPbDBuN3dNTWxmeUVicmxWRTFTRHc9PQo=",
+      "url": "https://api.github.com/repos/Hansespinosa2/elef/releases/assets/713832834"
+    }
+  }
+}

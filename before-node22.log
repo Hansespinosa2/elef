@@ -1,0 +1,58 @@
+✔ dirty native close or Quit waits for its save before closing (0.742471ms)
+✔ conflicts keep the window open without a native confirmation (0.181916ms)
+✔ failed saves confirm natively before discarding (0.142804ms)
+✔ failed saves without a confirmation stay open (0.097109ms)
+✔ flush and confirmation errors keep the window open and report (0.634522ms)
+✔ a clean close proceeds without flushing or confirming (0.087151ms)
+✔ a failed visual-buffer flush prevents closing instead of losing pending input (0.138556ms)
+✔ a clean quit with an armed update installs and relaunches instead of closing (0.225306ms)
+✔ a saved flush with an armed update installs and relaunches instead of closing (0.29221ms)
+✔ a cancelled safe-quit install disarms and the requested quit proceeds (0.319871ms)
+✔ a failed safe-quit install reports, disarms, and stays open (0.203086ms)
+✔ an unsafe save with an armed update defers it and stays open without prompting (0.208335ms)
+✖ repeated quits cannot close a clean window while its armed update is installing (0.57969ms)
+✖ a failed in-flight update blocks repeated quits, then permits an ordinary quit (0.242909ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 12
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 48.229365
+
+✖ failing tests:
+
+test at ../../../../../tmp/elef-update-investigation/regression.test.mjs:210:1
+✖ repeated quits cannot close a clean window while its armed update is installing (0.57969ms)
+  AssertionError [ERR_ASSERTION]: every quit must stay prevented during installation
+  
+  1 !== 2
+  
+      at TestContext.<anonymous> (file:///tmp/elef-update-investigation/regression.test.mjs:235:12)
+      at async Test.run (node:internal/test_runner/test:1054:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../../../../../tmp/elef-update-investigation/regression.test.mjs:243:1
+✖ a failed in-flight update blocks repeated quits, then permits an ordinary quit (0.242909ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 2
+  
+      at TestContext.<anonymous> (file:///tmp/elef-update-investigation/regression.test.mjs:261:10)
+      at async Test.run (node:internal/test_runner/test:1054:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:744:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

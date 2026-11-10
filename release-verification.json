@@ -1,0 +1,11 @@
+{
+  "version": "0.1.9",
+  "manifestSha256": "37a7502bcf5ff9558026105972d01075512fcf458f7670b2f66e3c2dd9827ee2",
+  "archiveSha256": "d4997935f77121837ec61e5b43ed606e4d2ea44d4e977fc5e8e42d1b9be90c99",
+  "embeddedV018KeyId": "f2e89a45dcaacccd",
+  "artifactSignature": "verified against the key embedded in the published v0.1.8 binary",
+  "trustedVersionComment": "timestamp:1793891910\tfile:Elef.app.tar.gz\tversion:0.1.9",
+  "updaterUrlResponse": "identical to the published archive",
+  "v018CloseFlowEqualsInitialCheckout": true,
+  "closeFlowSha256": "6c05db46eb7fd092e0453bcc1d61c7735de567681aaf5844e9595771c1c3367c"
+}
