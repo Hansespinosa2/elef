@@ -1,0 +1,14 @@
+
+Run options: --seed 12956
+
+# Running:
+
+Warning: The code in the `before_fork` block will not execute in the current Puma configuration. The `before_fork` block only executes in Puma's cluster mode. To fix this, either remove the `before_fork` call or increase Puma's worker count above zero. 
+Capybara starting Puma...
+* Version 8.0.2, codename: Into the Arena
+* Min threads: 0, max threads: 4
+* Listening on http://127.0.0.1:44253
+.
+
+Finished in 3.662586s, 0.2730 runs/s, 4.9146 assertions/s.
+1 runs, 18 assertions, 0 failures, 0 errors, 0 skips

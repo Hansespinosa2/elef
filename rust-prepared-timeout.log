@@ -1,0 +1,18 @@
+   Compiling elef-desktop v0.1.0 (/home/andres/GitHub/elef-worktrees/fix-desktop-v-0-1-9/apps/desktop/src-tauri)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.77s
+     Running unittests src/lib.rs (target/debug/deps/elef_desktop_lib-6b254841377cad5f)
+
+running 4 tests
+test updates::tests::update_install_requires_the_checked_release_version_to_match_exactly ... ok
+test updates::tests::update_install_lease_rejects_concurrent_work_and_releases_after_drop ... ok
+test updates::tests::update_version_validation_accepts_safe_versions_and_rejects_invalid_input ... ok
+test updates::tests::activation_requires_the_exact_prepared_version_and_consumes_it_once ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/elef_desktop-bc6dbc89be5f6da0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

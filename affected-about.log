@@ -1,0 +1,40 @@
+     1.1s  npm run build:packages
+     0.5s  ./node_modules/.bin/tsc -p packages/contracts/tsconfig.test.json
+     0.1s  node --test tests/host-conformance/conformance-fake.test.js
+     0.1s  node --test tests/spec/editor-markup-vocabulary.test.js
+     1.9s  npm run test:javascript
+     0.4s  npm test --prefix packages/work-model
+     0.3s  npm test --prefix packages/renderer
+     2.3s  ./node_modules/.bin/tsc --noEmit -p packages/client/tsconfig.test.json
+     0.8s  ./node_modules/.bin/tsc --noEmit -p packages/work-model/tsconfig.json
+     0.8s  ./node_modules/.bin/tsc --noEmit -p packages/renderer/tsconfig.json
+     2.4s  ./node_modules/.bin/tsc --noEmit -p packages/editor-runtime/tsconfig.json
+     3.5s  npm test --prefix packages/client
+     0.4s  npm test --prefix apps/desktop/frontend
+     0.3s  npm run test:unit --prefix apps/desktop/e2e
+     0.5s  npm run test:arch-package
+     0.1s  python3 apps/web/script/check_frontend_ownership.py
+     1.1s  python3 tooling/check_boundaries.py
+     0.2s  python3 tooling/check_boundaries.py --self-test
+     0.0s  python3 tooling/check_spec.py
+     0.0s  python3 tooling/ci_affected.py --self-test
+     0.0s  python3 tooling/ci_report.py --self-test
+     2.5s  cargo test --manifest-path Cargo.toml -p local-store --locked
+     0.6s  apps/web/bin/rails tailwindcss:build
+     0.0s  git diff --exit-code -- apps/web/app/assets/builds/tailwind.css
+     0.7s  apps/web/bin/rails db:test:prepare
+     2.8s  apps/web/bin/rails test apps/web/test/lib/source/renderer_test.rb apps/web/test/lib/source/javascript_renderer_test.rb apps/web/test/lib/source/document_test.rb apps/web/test/lib/source/block_renderer_test.rb apps/web/test/lib/authoring_registry_test.rb apps/web/test/models/presentation_test.rb apps/web/test/models/document_links_test.rb apps/web/test/models/work_test.rb apps/web/test/services/presentations/pptx_export_test.rb apps/web/test/controllers/host_api_controller_test.rb
+     1.8s  rails adapter conformance (tier-booted test server)
+     0.3s  npm run build --prefix apps/desktop/frontend
+     0.3s  npm run build --prefix apps/desktop/frontend -- --profile=dev
+     0.3s  ELEF_E2E_BUILD=1 ELEF_DESKTOP_PROFILE=stable npm run build --prefix apps/desktop/frontend
+     0.1s  python3 apps/desktop/scripts/check_architecture.py
+     0.1s  npm run check:desktop-profiles
+     0.1s  npm run check:release-fixtures
+     0.1s  npm run check:release-ci
+     0.1s  cargo fmt --manifest-path Cargo.toml --all -- --check
+     2.7s  cargo clippy --manifest-path Cargo.toml --workspace --all-targets -- -D warnings
+     1.8s  cargo check --manifest-path Cargo.toml -p elef-desktop --features desktop-dev
+     7.3s  cargo test --manifest-path Cargo.toml --workspace --locked
+    38.5s  total (ceiling 420s)
+bin/check affected: PASS (38.5s)
