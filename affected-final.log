@@ -1,0 +1,10 @@
+bin/check affected: step failed (1): apps/web/bin/rails db:test:prepare
+bin/rails aborted!
+ActiveRecord::EnvironmentMismatchError: You are attempting to modify a database that was last run in `test` environment. (ActiveRecord::EnvironmentMismatchError)
+You are running in `development` environment. If you are sure you want to continue, first set the environment using:
+
+        bin/rails db:environment:set RAILS_ENV=development
+
+
+Tasks: TOP => db:test:load_schema => db:test:purge => db:check_protected_environments
+(See full trace by running task with --trace)

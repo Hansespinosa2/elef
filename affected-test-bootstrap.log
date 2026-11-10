@@ -1,0 +1,6 @@
+bin/check affected: step failed (1): python3 apps/web/script/check_frontend_ownership.py
+Traceback (most recent call last):
+  File "/home/andres/GitHub/elef-worktrees/fix-desktop-v-0-1-9/apps/web/script/check_frontend_ownership.py", line 745, in <module>
+    assert len(desktop_main.splitlines()) < 80, "the desktop frontend entry point must remain a thin native bootstrap"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: the desktop frontend entry point must remain a thin native bootstrap

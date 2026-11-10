@@ -1,0 +1,14 @@
+bin/check affected: step failed (1): apps/web/bin/rails tailwindcss:build
+/home/andres/.local/share/gem/ruby/3.4.0/ruby/4.0.0/gems/bundler-4.0.6/lib/bundler/definition.rb:702:in 'Bundler::Definition#materialize': Could not find rack-test-2.3.0, json-3.1.0, uri-1.1.2, io-console-0.9.5, net-imap-0.6.8, prettyprint-0.2.1, date-3.6.0 in locally installed gems (Bundler::GemNotFound)
+	from /home/andres/.local/share/gem/ruby/3.4.0/ruby/4.0.0/gems/bundler-4.0.6/lib/bundler/definition.rb:240:in 'Bundler::Definition#specs'
+	from /home/andres/.local/share/gem/ruby/3.4.0/ruby/4.0.0/gems/bundler-4.0.6/lib/bundler/definition.rb:312:in 'Bundler::Definition#specs_for'
+	from /home/andres/.local/share/gem/ruby/3.4.0/ruby/4.0.0/gems/bundler-4.0.6/lib/bundler/runtime.rb:18:in 'Bundler::Runtime#setup'
+	from /home/andres/.local/share/gem/ruby/3.4.0/ruby/4.0.0/gems/bundler-4.0.6/lib/bundler.rb:165:in 'Bundler.setup'
+	from /home/andres/.local/share/gem/ruby/3.4.0/ruby/4.0.0/gems/bundler-4.0.6/lib/bundler/setup.rb:32:in 'block in <top (required)>'
+	from /home/andres/.local/share/gem/ruby/3.4.0/ruby/4.0.0/gems/bundler-4.0.6/lib/bundler/ui/shell.rb:177:in 'Bundler::UI::Shell#with_level'
+	from /home/andres/.local/share/gem/ruby/3.4.0/ruby/4.0.0/gems/bundler-4.0.6/lib/bundler/ui/shell.rb:122:in 'Bundler::UI::Shell#silence'
+	from /home/andres/.local/share/gem/ruby/3.4.0/ruby/4.0.0/gems/bundler-4.0.6/lib/bundler/setup.rb:32:in '<top (required)>'
+	from /home/andres/GitHub/elef-worktrees/fix-desktop-v-0-1-9/apps/web/config/boot.rb:3:in 'Kernel#require'
+	from /home/andres/GitHub/elef-worktrees/fix-desktop-v-0-1-9/apps/web/config/boot.rb:3:in '<top (required)>'
+	from bin/rails:3:in 'Kernel#require_relative'
+	from bin/rails:3:in '<main>'
