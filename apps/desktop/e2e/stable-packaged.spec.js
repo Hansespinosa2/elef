@@ -32,21 +32,9 @@ if (!verifyUpgraded) {
           await window.__TAURI__.event.listen("tauri://close-requested", () => {
             window.__elefCloseRequests += 1
           })
-          // Keep WebDriver attached for assertions. Only process restart is
-          // intercepted: the dialog, arming, close events, native confirmation,
-          // signature verification and installed bundle replacement are real.
-          // The runner launches the replacement in a separate session below.
-          const invoke = window.__TAURI_INTERNALS__.invoke.bind(window.__TAURI_INTERNALS__)
-          window.__elefRestartRequested = false
-          window.__elefInstallRequests = []
-          window.__TAURI_INTERNALS__.invoke = (command, args, options) => {
-            if (command === "install_update") window.__elefInstallRequests.push(args.version)
-            if (command === "plugin:process|restart") {
-              window.__elefRestartRequested = true
-              return Promise.resolve()
-            }
-            return invoke(command, args, options)
-          }
+          // The E2E bootstrap injects only a restart observer; all install IPC
+          // stays real. The runner starts the replacement in a second session.
+          if (!window.__elefUpdateTestHooks) throw new Error("Missing packaged update test hooks")
         })
         await $("#check-for-updates").click()
         await $("#update-dialog").waitForDisplayed()
@@ -65,10 +53,10 @@ if (!verifyUpgraded) {
         })
         assert.ok(await $("#library-view").isDisplayed(), "repeated quit must keep the installing window alive")
         assert.ok((await fetch("http://127.0.0.1:8888/release-artifact")).ok)
-        await browser.waitUntil(() => browser.execute(() => window.__elefRestartRequested), {
+        await browser.waitUntil(() => browser.execute(() => window.__elefUpdateTestHooks.relaunchRequested), {
           timeout: 120_000, timeoutMsg: "The quit flow did not finish installing and request a restart"
         })
-        assert.deepEqual(await browser.execute(() => window.__elefInstallRequests), ["0.2.0"],
+        assert.deepEqual(await browser.execute(() => window.__elefUpdateTestHooks.installRequests), ["0.2.0"],
           "the UI must install the offered version exactly once")
         const replaced = createHash("sha256").update(await readFile(binaryPath)).digest("hex")
         if (replaced === original) throw new Error("The signed Stable update did not replace the installed application")

@@ -13,6 +13,19 @@ import { checkForDesktopUpdate, createDesktopUpdaterSeam, installDesktopUpdate }
 // quit after the quiet-save flush succeeds.
 export function createDesktopUpdateRuntime({ invoke, check = pluginCheck, relaunch = pluginRelaunch } = {}) {
   if (typeof invoke !== "function") throw new TypeError("The macOS update runtime needs the Tauri invoke bridge.")
+  // Keep packaged E2E WebDriver attached until replacement assertions finish;
+  // its runner launches the installed app in a second session. Production
+  // builds erase this dependency injection. Tauri's IPC bridge stays intact.
+  if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
+    const hooks = { installRequests: [], relaunchRequested: false }
+    globalThis.__elefUpdateTestHooks = hooks
+    const nativeInvoke = invoke
+    invoke = (command, args) => {
+      if (command === "install_update") hooks.installRequests.push(args.version)
+      return nativeInvoke(command, args)
+    }
+    relaunch = async () => { hooks.relaunchRequested = true }
+  }
   const checkForPluginUpdate = () => check({ timeout: 10_000 })
   let armed = null
   const disposeArmed = () => {

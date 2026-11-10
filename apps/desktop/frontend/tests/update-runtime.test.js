@@ -84,3 +84,24 @@ test("the macOS update runtime owns the safe-quit arming state", async () => {
 test("the macOS update runtime needs the Tauri invoke bridge", () => {
   assert.throws(() => createMacosUpdateRuntime({}), /invoke bridge/)
 })
+
+test("packaged E2E observation forwards installation and holds only relaunch", async () => {
+  globalThis.__ELEF_E2E__ = true
+  const calls = []
+  try {
+    const runtime = createMacosUpdateRuntime({
+      invoke: async (command, args) => { calls.push([command, args.version]); return true },
+      check: async () => ({ version: "0.2.0", close: async () => {} }),
+      relaunch: () => assert.fail("packaged E2E must keep its WebDriver session")
+    })
+    const update = await runtime.checkForUpdate()
+    assert.equal(await runtime.installPendingUpdate(update, {}), true)
+    assert.deepEqual(calls, [["install_update", "0.2.0"]])
+    assert.deepEqual(globalThis.__elefUpdateTestHooks, {
+      installRequests: ["0.2.0"], relaunchRequested: true
+    })
+  } finally {
+    delete globalThis.__ELEF_E2E__
+    delete globalThis.__elefUpdateTestHooks
+  }
+})

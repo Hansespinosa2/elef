@@ -444,13 +444,17 @@ const stablePackagedSpec = readText("apps/desktop/e2e/stable-packaged.spec.js")
 // Exercise the owning UI/quit flow, rather than bypassing it with a direct
 // installer invocation. Retain the native call/version assertion as well as
 // bundle replacement and post-launch cleanup evidence.
-for (const pin of ["mode?value=stable-package", 'command === "install_update"',
+for (const pin of ["mode?value=stable-package",
   '$("#check-for-updates").click()', '$("#install-update").click()',
   "getCurrentWindow().close()", "/artifact-status", "/release-artifact",
-  "window.__elefInstallRequests), [\"0.2.0\"]", "window.__elefRestartRequested",
+  "window.__elefUpdateTestHooks.installRequests), [\"0.2.0\"]", "window.__elefUpdateTestHooks.relaunchRequested",
   '"0.2.0"', "previousInstallationsRemoved", ".elef-update-", "export_diagnostics_fixture"]) {
   assert.ok(stablePackagedSpec.includes(pin), `the Stable packaged spec must pin ${pin}`)
 }
+assert.ok(macosRuntime.includes('command === "install_update"') && macosRuntime.includes("return nativeInvoke(command, args)"),
+  "packaged update test observation must forward the native install command")
+assert.ok(!readText("apps/desktop/frontend/dist/assets/app.js").includes("__elefUpdateTestHooks"),
+  "production bundles must omit packaged update test hooks")
 
 // Smoke contracts: the Stable binary never carries desktop-dev, and the
 // identity probes build both identities with distinct binaries and bus names.
