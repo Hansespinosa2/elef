@@ -56,7 +56,7 @@ const MathShortcutPaletteController = await loadController("math_shortcut_palett
   overrides: {
     "../lib/editor_controller_lookup.js": "const editorFor = element => element.currentEditor\n",
     "../lib/visual_assist.js": visualAssistSource,
-    "./application.js": "const application = { getControllerForElementAndIdentifier: () => null }\n",
+    "./application.js": "const application = { getControllerForElementAndIdentifier: (element) => element.currentShorthand || null }\n",
     "./math_shorthand_controller.js": [
       "const editorInsideMath = () => true",
       "const editorInsideCode = () => false",
@@ -1077,6 +1077,100 @@ test("visual metadata routing binds on document capture and ignores idle keys", 
 })
 
 // --- Visual-mode math shortcut palette ---
+
+test("math script triggers create a stop and Tab exits it in both modes", (t) => {
+  for (const mode of ["source", "visual"]) for (const trigger of ["__", "^^"]) {
+    const mounted = mountAssistPalette({ controllerClass: MathShortcutPaletteController, mode, value: `$x${trigger}$`, caret: 4 })
+    const globals = stubAssistGlobals(t)
+    globals.setDocument(mounted.document)
+    mounted.field.currentShorthand = { commitVisualEdit(editor, from, to, insert, caret) { editor.replaceRange(insert, from, to); editor.setSelectionRange(caret) } }
+    const event = shorthandKey("Tab")
+    mounted.controller.keydown(event)
+    assert.equal(event.defaultPrevented, true)
+    assert.equal(mounted.engine.value, `$x${trigger[0]}{}$`)
+    assert.equal(mounted.engine.selectionStart, 4)
+    mounted.engine.replaceRange("ij", 4, 4)
+    mounted.controller.adjustStops()
+    mounted.controller.keydown(shorthandKey("Tab"))
+    assert.equal(mounted.engine.selectionStart, 7)
+    assert.equal(mounted.engine.value, `$x${trigger[0]}{ij}$`)
+  }
+})
+
+test("math script shortcuts nest within an active stop", (t) => {
+  const mounted = mountAssistPalette({ controllerClass: MathShortcutPaletteController, mode: "source", value: "$x__$", caret: 4 })
+  mounted.field.currentShorthand = { commitVisualEdit(editor, from, to, insert, caret) { editor.replaceRange(insert, from, to); editor.setSelectionRange(caret) } }
+  mounted.controller.keydown(shorthandKey("Tab"))
+  mounted.engine.replaceRange("y^^", 4, 4)
+  mounted.controller.adjustStops()
+  mounted.controller.keydown(shorthandKey("Tab"))
+  assert.equal(mounted.engine.value, "$x_{y^{}}$")
+  mounted.engine.replaceRange("2", 7, 7)
+  mounted.controller.adjustStops()
+  mounted.controller.keydown(shorthandKey("Tab"))
+  assert.equal(mounted.engine.selectionStart, 9)
+  mounted.controller.keydown(shorthandKey("Tab"))
+  assert.equal(mounted.engine.selectionStart, 10)
+  assert.equal(mounted.engine.value, "$x_{y^{2}}$")
+})
+
+test("three nested script stops retain each closing brace", () => {
+  const mounted = mountAssistPalette({ controllerClass: MathShortcutPaletteController, mode: "source", value: "$x__$", caret: 4 })
+  mounted.field.currentShorthand = { commitVisualEdit(editor, from, to, insert, caret) { editor.replaceRange(insert, from, to); editor.setSelectionRange(caret) } }
+  mounted.controller.keydown(shorthandKey("Tab"))
+  for (const trigger of ["^^", "__"]) {
+    const caret = mounted.engine.selectionStart
+    mounted.engine.replaceRange(trigger, caret, caret)
+    mounted.controller.adjustStops()
+    mounted.controller.keydown(shorthandKey("Tab"))
+  }
+  const caret = mounted.engine.selectionStart
+  mounted.engine.replaceRange("z", caret, caret)
+  mounted.controller.adjustStops()
+  for (const expected of [10, 11, 12]) {
+    mounted.controller.keydown(shorthandKey("Tab"))
+    assert.equal(mounted.engine.selectionStart, expected)
+  }
+  assert.equal(mounted.engine.value, "$x_{^{_{z}}}$")
+})
+
+test("adjacent empty math shortcut stops move independently", () => {
+  const mounted = mountAssistPalette({ controllerClass: MathShortcutPaletteController, mode: "source", value: "$$", caret: 1 })
+  const first = { start: 1, end: 1 }
+  const second = { start: 1, end: 1 }
+  mounted.controller.stops = [first, second]
+  mounted.controller.activeStop = first
+  mounted.engine.replaceRange("x", 1, 1)
+  mounted.controller.adjustStops()
+  assert.deepEqual(second, { start: 2, end: 2 })
+})
+
+test("script expansion shifts later snippet stops", () => {
+  const mounted = mountAssistPalette({ controllerClass: MathShortcutPaletteController, mode: "source", value: "$\\frac{__}{}$", caret: 9 })
+  mounted.field.currentShorthand = { commitVisualEdit(editor, from, to, insert, caret) { editor.replaceRange(insert, from, to); editor.setSelectionRange(caret) } }
+  const parent = { start: 7, end: 9 }
+  const sibling = { start: 11, end: 11 }
+  mounted.controller.stops = [parent, sibling]
+  mounted.controller.activeStop = parent
+  mounted.controller.keydown(shorthandKey("Tab"))
+  assert.deepEqual(sibling, { start: 12, end: 12 })
+})
+
+test("visual script stops do not intercept Tab in another control", (t) => {
+  const mounted = mountAssistPalette({ controllerClass: MathShortcutPaletteController })
+  const globals = stubAssistGlobals(t)
+  globals.setDocument(mounted.document)
+  mounted.field.currentEditor = mounted.engine
+  mounted.controller.connect()
+  t.after(() => mounted.controller.disconnect())
+  mounted.controller.stops = [{ start: 1, end: 1 }]
+  const other = mounted.document.createElement("button")
+  mounted.form.append(other)
+  const event = shorthandKey("Tab", { target: other })
+  mounted.controller.visualKeydown(event)
+  assert.equal(event.defaultPrevented, false)
+  assert.equal(mounted.controller.stops.length, 1)
+})
 
 const MATH_SHORTCUTS = JSON.parse(await readFile(new URL("../../app/javascript/data/default_authoring_registry.json", import.meta.url), "utf8"))
 const ALPHA_SHORTCUT = (Array.isArray(MATH_SHORTCUTS) ? MATH_SHORTCUTS : MATH_SHORTCUTS.entries).find((entry) => entry.id === "default-alpha")
