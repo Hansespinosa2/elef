@@ -12,7 +12,7 @@ import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/pr
 import { tableGridForBlock, tableRelativeForVisible, tableSourceOffset, tableVisibleForSource } from "../../session/table_motion.js"
 import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
 import { markStage } from "../../session/stage_marks.js"
-import { projectionRangeEdit } from "../../session/projection_range.js"
+import { projectionRangeEdit, projectionWrapSelection } from "../../session/projection_range.js"
 import { paintProjectionSelections } from "../../session/projection_selections.js"
 
 export interface DocumentEditorRange {
@@ -83,6 +83,7 @@ export interface DocumentEditorSeam {
   focus(): void
   commitSource(source: string): unknown
   replaceRange(replacement: string, from: number, to: number): void
+  replaceRangeWithSelection(replacement: string, from: number, to: number, selection: { from: number; to: number }): void
   replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
   setSelectionRange(anchor: number, head?: number): void
   handleVimKey(event: DocumentProjectionKeyEvent): boolean
@@ -98,6 +99,7 @@ export interface DocumentProjectionEvent {
 
 export interface DocumentProjectionBeforeinputEvent {
   readonly cancelable?: boolean
+  readonly isComposing?: boolean
   preventDefault?(): void
   readonly target: EventTarget | null | undefined
   readonly inputType: string
@@ -202,7 +204,7 @@ export class DocumentEditor {
   hasPresentationProjection: boolean | undefined
   pendingProjectionFrame: number | undefined
   pendingProjectionEdits: Map<string, DocumentProjectionEdit> | undefined
-  pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null } | null | undefined
+  pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null; anchorSourceOffset?: number } | null | undefined
   suppressProjectionInput = false
   // A pending caret is scoped to the transaction that armed it: sourceLength
   // records the post-edit document length, so a later restore can tell a
@@ -415,7 +417,7 @@ export class DocumentEditor {
     if (!region) return
     const selection = window.getSelection()
     if (!selection?.anchorNode || !selection.focusNode) return
-    const ranged = projectionRangeEdit(event, this.projectionTarget, selection, (endpoint, node, offset) => {
+    const sourceOffset = (endpoint: HTMLElement, node: Node, offset: number): number | null => {
       if (this.pendingProjectionEdits?.size) this.flushPendingProjectionEdits()
       const endpointRegion = this.regionForBlock(endpoint.dataset.editorBlockId)
       if (!endpointRegion) return null
@@ -427,7 +429,18 @@ export class DocumentEditor {
         ?? alignVisibleOffset(slice, visibleBlockText(content), visible)
         ?? this.deps.sourceOffsetForVisibleOffset(slice, visible)
       return endpointRegion.content_range.start + relative
-    })
+    }
+    const wrapped = projectionWrapSelection(event, this.projectionTarget, selection, sourceOffset)
+    if (wrapped) {
+      event.preventDefault?.()
+      const { from, to, anchor, head, marker } = wrapped
+      this.pendingCaretRestore = { sourceOffset: head + 1, anchorSourceOffset: anchor + 1, preferredBlockId: null }
+      editor.replaceRangeWithSelection(marker + editor.value.slice(from, to) + marker, from, to,
+        { from: anchor - from + 1, to: head - from + 1 })
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      return
+    }
+    const ranged = projectionRangeEdit(event, this.projectionTarget, selection, sourceOffset)
     if (ranged) {
       event.preventDefault?.()
       this.pendingCaretRestore = { sourceOffset: ranged.from + ranged.insert.length, preferredBlockId: null }
@@ -1066,6 +1079,7 @@ export class DocumentEditor {
     this.pendingCaretRestore = null
     requestAnimationFrame(() => {
       this.restoreCaret(pending.sourceOffset, pending.preferredBlockId)
+      if (pending.anchorSourceOffset !== undefined) this.restoreSelection(pending.anchorSourceOffset, pending.sourceOffset, pending.preferredBlockId)
       this.restoreSelections()
     })
   }

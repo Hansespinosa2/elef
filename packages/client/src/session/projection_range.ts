@@ -6,6 +6,7 @@ export interface ProjectionRangeInput {
   readonly inputType: string
   readonly data?: string | null | undefined
   readonly cancelable?: boolean | undefined
+  readonly isComposing?: boolean | undefined
   preventDefault?(): void
   readonly dataTransfer?: {
     getData(type: string): string
@@ -16,6 +17,28 @@ export interface ProjectionRangeEdit {
   from: number
   to: number
   insert: string
+}
+
+export function projectionWrapSelection(
+  event: ProjectionRangeInput,
+  root: Element,
+  selection: Selection | null,
+  sourceOffset: (block: HTMLElement, node: Node, offset: number) => number | null,
+): { from: number; to: number; anchor: number; head: number; marker: string } | null {
+  if (event.cancelable === false || event.isComposing || !event.preventDefault || event.inputType !== "insertText"
+      || (event.data !== "*" && event.data !== "`") || !selection || selection.isCollapsed
+      || !selection.anchorNode || !selection.focusNode) return null
+  const blockFor = (node: Node): HTMLElement | null => {
+    const element = node.nodeType === 1 ? node as Element : node.parentElement
+    return element?.closest<HTMLElement>("[data-editor-block-id][contenteditable='true']") ?? null
+  }
+  const first = blockFor(selection.anchorNode)
+  const last = blockFor(selection.focusNode)
+  if (!first || !last || !root.contains(first) || !root.contains(last)) return null
+  const anchor = sourceOffset(first, selection.anchorNode, selection.anchorOffset)
+  const head = sourceOffset(last, selection.focusNode, selection.focusOffset)
+  if (anchor === null || head === null || anchor === head) return null
+  return { from: Math.min(anchor, head), to: Math.max(anchor, head), anchor, head, marker: event.data }
 }
 
 export function projectionRangeEdit(

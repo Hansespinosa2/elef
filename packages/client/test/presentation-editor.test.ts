@@ -113,6 +113,12 @@ function fakeEditor() {
     replaceRange(text: string, from: number, to: number) {
       state.value = state.value.slice(0, from) + text + state.value.slice(to);
     },
+    replaceRangeWithSelection(text: string, from: number, to: number, selection: { from: number; to: number }) {
+      state.value = state.value.slice(0, from) + text + state.value.slice(to);
+      state.selectionStart = Math.min(from + selection.from, from + selection.to);
+      state.selectionEnd = Math.max(from + selection.from, from + selection.to);
+      state.selectionHead = from + selection.to;
+    },
     replaceRanges(changes: { from: number; to: number; insert: string }[]) {
       [...changes]
         .sort((left, right) => right.from - left.from)

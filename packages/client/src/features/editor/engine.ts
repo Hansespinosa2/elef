@@ -46,6 +46,7 @@ interface SourceChange extends MediaInsertRange {
 }
 import { snippetStopsField } from "./snippet_stops.js"
 import { editorTabKeymap } from "./tab_keymap.js"
+import { markdownSelectionWrapping } from "./markdown_wrap.js"
 import { formatLineNumber } from "./line_numbers.js"
 import {
   caretAfterInsert,
@@ -167,6 +168,7 @@ export class EditorEngine {
       this.vimCompartment.of(this.vimEnabled ? vim() : []),
       this.lineNumbersCompartment.of(this.createLineNumbersExtension()),
       ...basicSetup.slice(1),
+      markdownSelectionWrapping,
       editorTabKeymap,
       markdown({ extensions: elefMetadata }),
       livePreviewField,

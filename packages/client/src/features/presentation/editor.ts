@@ -33,7 +33,7 @@ import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/pr
 import { tableGridForBlock, tableRelativeForVisible, tableSourceOffset, tableVisibleForSource } from "../../session/table_motion.js"
 import { tableVisibleOffset } from "../../session/table_motion.js"
 import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
-import { projectionRangeEdit } from "../../session/projection_range.js"
+import { projectionRangeEdit, projectionWrapSelection } from "../../session/projection_range.js"
 import { paintProjectionSelections } from "../../session/projection_selections.js"
 
 export interface EditorSourceRange {
@@ -104,6 +104,7 @@ export interface PresentationEditorSeam {
   inputTarget?: unknown
   commitSource?(source: string): unknown
   replaceRange(replacement: string, from: number, to: number): void
+  replaceRangeWithSelection(replacement: string, from: number, to: number, selection: { from: number; to: number }): void
   replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
   setSelectionRange(anchor: number, head?: number): void
   handleVimKey(event: ProjectionKeyEvent): boolean
@@ -131,6 +132,7 @@ export interface ProjectionKeyEvent {
 
 export interface ProjectionBeforeinputEvent {
   readonly cancelable?: boolean
+  readonly isComposing?: boolean
   preventDefault?(): void
   readonly target: EventTarget | null | undefined
   readonly inputType: string
@@ -254,7 +256,7 @@ export class PresentationEditor {
   // constructs alike). Reset on flush and reinstall (below).
   lastRevealSyncBlockId: string | null | undefined
   lastRevealSyncSpan: Element | null | undefined
-  pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null; relativeOffset?: number } | null | undefined
+  pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null; relativeOffset?: number; anchorSourceOffset?: number } | null | undefined
   caretSyncEstablished = false
   suppressProjectionInput = false
 
@@ -436,7 +438,7 @@ export class PresentationEditor {
     if (!region) return
     const selection = this.getSelection()
     if (!selection?.anchorNode || !selection.focusNode) return
-    const ranged = projectionRangeEdit(event, canvas, selection, (endpoint, node, offset) => {
+    const sourceOffset = (endpoint: HTMLElement, node: Node, offset: number): number | null => {
       if (this.pendingProjectionEdits?.size) this.flushPendingProjectionEdits()
       const endpointRegion = this.regionForBlock(endpoint.dataset.editorBlockId)
       if (!endpointRegion) return null
@@ -447,7 +449,18 @@ export class PresentationEditor {
         ?? alignVisibleOffset(slice, visibleBlockText(endpoint), visible)
         ?? this.deps.sourceOffsetForVisibleOffset(slice, visible)
       return endpointRegion.content_range.start + relative
-    })
+    }
+    const wrapped = projectionWrapSelection(event, canvas, selection, sourceOffset)
+    if (wrapped) {
+      event.preventDefault?.()
+      const { from, to, anchor, head, marker } = wrapped
+      this.pendingCaretRestore = { sourceOffset: head + 1, anchorSourceOffset: anchor + 1, preferredBlockId: null }
+      editor.replaceRangeWithSelection(marker + editor.value.slice(from, to) + marker, from, to,
+        { from: anchor - from + 1, to: head - from + 1 })
+      ;(this.activeElement() as HTMLElement | null)?.blur()
+      return
+    }
+    const ranged = projectionRangeEdit(event, canvas, selection, sourceOffset)
     if (ranged) {
       event.preventDefault?.()
       this.pendingCaretRestore = { sourceOffset: ranged.from + ranged.insert.length, preferredBlockId: null }
@@ -1525,6 +1538,7 @@ export class PresentationEditor {
     }
     this.scheduleFrame(() => {
       this.restoreCaret(sourceOffset, preferredBlockId)
+      if (pending.anchorSourceOffset !== undefined) this.restoreSelection(pending.anchorSourceOffset, sourceOffset, preferredBlockId)
       this.restoreSelections()
     })
   }
