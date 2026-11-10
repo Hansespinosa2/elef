@@ -213,6 +213,9 @@ const devAcl = readJson("apps/desktop/src-tauri/capabilities/main-dev.json")
 const stableE2eAcl = readJson("apps/desktop/src-tauri/capabilities/e2e-stable.json")
 assert.ok(!stableAcl.permissions.includes("allow-document-graph"), "the Stable capability must not grant the graph command")
 assert.ok(devAcl.permissions.includes("allow-document-graph"), "the Dev capability must grant the graph command")
+for (const [name, acl] of [["Stable", stableAcl], ["Dev", devAcl]]) {
+  assert.ok(acl.permissions.includes("core:app:allow-version"), `${name} About must read the native version without test-only grants`)
+}
 assert.deepEqual(
   [...devAcl.permissions].sort(),
   [...stableAcl.permissions, "allow-document-graph"].sort(),

@@ -1414,18 +1414,18 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     if (action === "export-diagnostics") return exportDiagnosticsArchive()
     if (action === "about") {
       // The version line fills in at open time so the dialog never shows a
-      // stale build number; hosts without a version source hide the line
-      // instead of leaving a blank row.
+      // stale build number. Keep failures visible instead of silently hiding
+      // the version when a host cannot supply it.
       if (elements.aboutVersion) {
-        let label = ""
+        let label = "Version unavailable"
         try {
           const version = typeof getAppVersion === "function" ? await getAppVersion() : null
           if (typeof version === "string" && version.length > 0) label = `Version ${version}`
         } catch {
-          label = ""
+          label = "Version unavailable"
         }
         elements.aboutVersion.textContent = label
-        elements.aboutVersion.hidden = label.length === 0
+        elements.aboutVersion.hidden = false
       }
       return elements.aboutDialog.showModal()
     }
