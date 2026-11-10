@@ -81,6 +81,7 @@ export default class extends Controller<HTMLElement> {
 
   disconnect() {
     this.active = false
+    this.cancelPendingPreviewScroll?.()
     clearTimeout(this.timer)
     this.timer = null
     this.abortActiveRequest()
@@ -282,13 +283,52 @@ export default class extends Controller<HTMLElement> {
       return
     }
 
-    const scrollLeft = this.containerTarget.scrollLeft
-    const scrollTop = this.containerTarget.scrollTop
+    // A prior install may still be waiting for its first pagination. Its
+    // intended offset can exceed the temporary unpaginated scroll range.
+    const pending = this.pendingPreviewScroll
+    const scrollLeft = pending?.restore ? pending.left : this.containerTarget.scrollLeft
+    const scrollTop = pending?.restore ? pending.top : this.containerTarget.scrollTop
+    const scrollHeight = this.containerTarget.scrollHeight
+    this.cancelPendingPreviewScroll?.()
     recordPreviewTrace("preview-install-start")
     this.clearSlideScaling()
     installPreviewHtml(this.containerTarget, payload.html)
     this.syncSlideScaling()
     recordPreviewTrace("preview-install-ready")
+    const surface = this.containerTarget.querySelector(".document-editor-projection [data-document-pages-target='surface']")
+    if (surface && this.element.dataset.editorMode === "source") {
+      const root = surface.closest(".document-editor-projection") as HTMLElement | null
+      if (root) root.style.minHeight = `${scrollHeight}px`
+      const pending = { left: scrollLeft, top: scrollTop, restore: true }
+      this.pendingPreviewScroll = pending
+      const cancel = () => {
+        this.containerTarget.removeEventListener("elef:document-pages-settled", settled)
+        this.containerTarget.removeEventListener("wheel", userMoved)
+        this.containerTarget.removeEventListener("touchstart", userMoved)
+        this.containerTarget.removeEventListener("pointerdown", userMoved)
+        this.containerTarget.removeEventListener("keydown", userMoved)
+        this.element.removeEventListener("elef:editor-mode-change", userMoved)
+        if (root) root.style.minHeight = ""
+        if (this.pendingPreviewScroll === pending) this.pendingPreviewScroll = null
+        if (this.cancelPendingPreviewScroll === cancel) this.cancelPendingPreviewScroll = null
+      }
+      const userMoved = () => { pending.restore = false }
+      const settled = (event: Event) => {
+        if (event.target !== surface) return
+        cancel()
+        if (pending.restore) {
+          this.containerTarget.scrollLeft = pending.left
+          this.containerTarget.scrollTop = pending.top
+        }
+      }
+      this.cancelPendingPreviewScroll = cancel
+      this.containerTarget.addEventListener("elef:document-pages-settled", settled)
+      this.containerTarget.addEventListener("wheel", userMoved, { passive: true })
+      this.containerTarget.addEventListener("touchstart", userMoved, { passive: true })
+      this.containerTarget.addEventListener("pointerdown", userMoved, { passive: true })
+      this.containerTarget.addEventListener("keydown", userMoved)
+      this.element.addEventListener("elef:editor-mode-change", userMoved)
+    }
     this.containerTarget.scrollLeft = scrollLeft
     this.containerTarget.scrollTop = scrollTop
     this.projectionFresh = true

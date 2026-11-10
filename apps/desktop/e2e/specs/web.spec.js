@@ -1,3 +1,4 @@
+import { sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
 import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../../apps/web/test/e2e/scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
@@ -705,6 +706,18 @@ class WebEditorUi {
     )).toBe(true)
   }
 
+  async waitForScrollPreview(text) {
+    await expect(this.page.locator(".document-surface[data-document-pages-settled='true']")).toContainText(text, { timeout: 30000 })
+  }
+
+  async scrollPreviewToBottom() {
+    return this.page.locator('[data-preview-target="container"]').evaluate(pane => { pane.scrollTop = pane.scrollHeight; return pane.scrollTop })
+  }
+
+  async previewScrollTop() {
+    return this.page.locator('[data-preview-target="container"]').evaluate(pane => pane.scrollTop)
+  }
+
   async waitForPreview(text) {
     await expect.poll(() => renderedTextWithoutEditorControls(
       this.page.locator(".editor-projection.preview-pane")
@@ -1099,6 +1112,10 @@ test("shared editing flow works in the web app", async ({ page }) => {
   await expect(page.locator(".source-field .cm-content")).toContainText("Saved by shared scenario")
   await expect.poll(() => page.locator(".source-field").evaluate(field => field.editorController.sourceValue)).toContain(PIXEL_PNG_MARKDOWN)
   expect(await page.locator(".source-field .cm-content").innerText()).toContain(SAVED_SOURCE.split("\n")[0])
+})
+
+test("source preview stays scrolled after saving a long document", async ({ page }) => {
+  await sourcePreviewScrollWorkflow(new WebEditorUi(page))
 })
 
 test("shared presentation navigation works in the web app", async ({ page }) => {

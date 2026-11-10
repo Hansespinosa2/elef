@@ -78,6 +78,75 @@ class DocumentScrollTest < ApplicationSystemTestCase
     page.evaluate_script("window.__paginateCount || 0")
   end
 
+  def test_source_edit_preserves_preview_scroll_after_save
+    document = Document.create!(title: "Source preview scroll", source: SOURCE)
+    visit edit_document_path(document)
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 15
+    click_on "Source"
+    assert_selector ".document-page-frame", minimum: 2
+    before = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const pane = document.querySelector('[data-preview-target="container"]');
+        pane.scrollTop = pane.scrollHeight;
+        return pane.scrollTop;
+      })()
+    JAVASCRIPT
+    assert_operator before, :>, 200
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.replaceRange('!', editor.sourceValue.length, editor.sourceValue.length);
+    JAVASCRIPT
+    assert_selector ".document-editor-projection", text: "!", wait: 15
+    deadline = Process.clock_gettime(Process::CLOCK_MONOTONIC) + 15
+    until document.reload.source.end_with?("!") || Process.clock_gettime(Process::CLOCK_MONOTONIC) >= deadline
+      sleep 0.05
+    end
+    assert document.reload.source.end_with?("!"), "source edit was not saved"
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 15
+    assert_in_delta before, page.evaluate_script("document.querySelector('[data-preview-target=container]').scrollTop"), 120
+  end
+
+  def test_delayed_pagination_preserves_position_and_respects_navigation
+    document = Document.create!(title: "Delayed preview", source: SOURCE)
+    visit edit_document_path(document)
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
+    click_on "Source"
+    before = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const root = document.querySelector('.document-editor-projection');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(root, 'document-pages');
+        window.__pagesPrototype = Object.getPrototypeOf(controller);
+        window.__resourcesReady = window.__pagesPrototype.resourcesReady;
+        window.__pagesPrototype.resourcesReady = () => false;
+        const pane = document.querySelector('[data-preview-target="container"]');
+        pane.scrollTop = pane.scrollHeight;
+        return pane.scrollTop;
+      })()
+    JAVASCRIPT
+    assert_operator before, :>, 200
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.replaceRange('!', editor.sourceValue.length, editor.sourceValue.length);
+    JAVASCRIPT
+    assert_selector ".document-surface[data-document-pages-settled='false']", wait: 10
+    assert_in_delta before, page.evaluate_script("document.querySelector('[data-preview-target=container]').scrollTop"), 5
+    moved = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const pane = document.querySelector('[data-preview-target="container"]');
+        pane.dispatchEvent(new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true }));
+        pane.scrollTop = 100;
+        return pane.scrollTop;
+      })()
+    JAVASCRIPT
+    page.execute_script(<<~JAVASCRIPT)
+      window.__pagesPrototype.resourcesReady = window.__resourcesReady;
+      const root = document.querySelector('.document-editor-projection');
+      window.Stimulus.getControllerForElementAndIdentifier(root, 'document-pages').maybeFirstPass();
+    JAVASCRIPT
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
+    assert_in_delta moved, page.evaluate_script("document.querySelector('[data-preview-target=container]').scrollTop"), 5
+  end
+
   def test_blur_released_pagination_preserves_scroll
     document = Document.create!(title: "Scroll preservation", source: SOURCE)
     visit edit_document_path(document)
