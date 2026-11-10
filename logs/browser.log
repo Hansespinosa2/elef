@@ -1,0 +1,14 @@
+Please switch from -n/--name to -i/--include
+
+Run options: -n "/markdown_delimiters|visual_selection_stays_selected|visual_wrapping_preserves/" --seed 48270
+
+# Running:
+
+Capybara starting Puma...
+* Version 8.0.2, codename: Into the Arena
+* Min threads: 0, max threads: 4
+* Listening on http://127.0.0.1:35979
+...
+
+Finished in 3.722547s, 0.8059 runs/s, 2.9550 assertions/s.
+3 runs, 11 assertions, 0 failures, 0 errors, 0 skips
