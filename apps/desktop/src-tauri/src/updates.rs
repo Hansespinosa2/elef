@@ -331,7 +331,7 @@ async fn install_update_inner(
         .map_err(|_| update_install_error())?;
     // Re-read the configured release endpoint. IPC cannot supply a URL, key,
     // destination, signature or arbitrary package bytes.
-    let update = updater
+    let mut update = updater
         .check()
         .await
         .map_err(|_| update_install_error())?
@@ -345,6 +345,9 @@ async fn install_update_inner(
             false,
         ));
     }
+    // The plugin's check timeout is not inherited by its download handle.
+    // A stalled background download must not hold a later quit indefinitely.
+    update.timeout = Some(std::time::Duration::from_secs(120));
     let _ = on_progress.send(serde_json::json!({"event": "Started"}));
     let progress = on_progress.clone();
     let bytes = update.download(move |chunk_length, content_length| {
