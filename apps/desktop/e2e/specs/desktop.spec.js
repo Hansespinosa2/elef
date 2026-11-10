@@ -1,3 +1,4 @@
+import { sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
 import assert from "node:assert/strict"
 import { $, $$, browser } from "@wdio/globals"
 import { Key } from "webdriverio"
@@ -1527,6 +1528,21 @@ class DesktopEditorUi {
     }
   }
 
+  async waitForScrollPreview(text) {
+    await browser.waitUntil(() => browser.execute(expected => {
+      const surface = document.querySelector("#desktop-preview .document-surface[data-document-pages-settled='true']")
+      return Boolean(surface?.textContent.includes(expected))
+    }, text), { timeout: 30000, timeoutMsg: "The paginated preview did not settle with the edited source" })
+  }
+
+  async scrollPreviewToBottom() {
+    return browser.execute(() => { const pane = document.querySelector("#desktop-preview"); pane.scrollTop = pane.scrollHeight; return pane.scrollTop })
+  }
+
+  async previewScrollTop() {
+    return browser.execute(() => document.querySelector("#desktop-preview").scrollTop)
+  }
+
   async waitForPreview(text) {
     try {
       await browser.waitUntil(async () => (await $("#desktop-preview").getText()).includes(text), {
@@ -2460,6 +2476,10 @@ describe("desktop binary workflows and native boundaries", () => {
     if (await form.getAttribute("data-editor-mode") !== "visual") {
       throw new Error("The editor did not switch into visual mode")
     }
+  })
+
+  it("keeps a long source preview scrolled after saving", async () => {
+    await sourcePreviewScrollWorkflow(new DesktopEditorUi())
   })
 
   it("opens the next work after leaving a focused visual editor", async () => {

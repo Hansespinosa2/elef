@@ -81,6 +81,7 @@ export default class extends Controller<HTMLElement> {
 
   disconnect() {
     this.active = false
+    this.cancelPendingPreviewScroll?.()
     clearTimeout(this.timer)
     this.timer = null
     this.abortActiveRequest()
@@ -282,13 +283,79 @@ export default class extends Controller<HTMLElement> {
       return
     }
 
-    const scrollLeft = this.containerTarget.scrollLeft
-    const scrollTop = this.containerTarget.scrollTop
+    // A prior install may still be waiting for its first pagination. Its
+    // intended offset can exceed the temporary unpaginated scroll range.
+    const pending = this.pendingPreviewScroll
+    const scrollLeft = pending?.restore ? pending.left : this.containerTarget.scrollLeft
+    const scrollTop = pending?.restore ? pending.top : this.containerTarget.scrollTop
+    const oldRoot = this.containerTarget.querySelector(".document-editor-projection") as HTMLElement | null
+    const visibleRoot = oldRoot?.querySelector(":scope > [data-preview-scroll-snapshot]") ?? oldRoot
+    const oldView = visibleRoot?.cloneNode(true) as HTMLElement | undefined
+    const oldHeight = oldRoot?.getBoundingClientRect().height ?? 0
+    this.cancelPendingPreviewScroll?.()
     recordPreviewTrace("preview-install-start")
     this.clearSlideScaling()
     installPreviewHtml(this.containerTarget, payload.html)
     this.syncSlideScaling()
     recordPreviewTrace("preview-install-ready")
+    const surface = this.containerTarget.querySelector(".document-editor-projection [data-document-pages-target='surface']")
+    if (surface && this.element.dataset.editorMode === "source") {
+      const root = surface.closest(".document-editor-projection") as HTMLElement | null
+      if (root && oldView) {
+        oldView.removeAttribute("data-controller")
+        oldView.querySelectorAll("[data-controller]").forEach(node => node.removeAttribute("data-controller"))
+        oldView.querySelectorAll("a, button, input, select, textarea, [tabindex], [contenteditable]").forEach(node => {
+          node.setAttribute("tabindex", "-1")
+          node.removeAttribute("contenteditable")
+          node.removeAttribute("href")
+          node.removeAttribute("role")
+          if (node.matches("button, input, select, textarea")) node.setAttribute("disabled", "")
+        })
+        oldView.setAttribute("data-preview-scroll-snapshot", "")
+        Object.assign(oldView.style, { position: "absolute", top: "0", left: "0", width: "100%", pointerEvents: "none" })
+        Object.assign(root.style, { minHeight: `${oldHeight}px`, position: "relative" })
+        ;(surface as HTMLElement).style.opacity = "0"
+        surface.setAttribute("inert", "")
+        surface.setAttribute("aria-hidden", "true")
+        root.append(oldView)
+      }
+      const pending = { left: scrollLeft, top: scrollTop, restore: true }
+      this.pendingPreviewScroll = pending
+      const cancel = () => {
+        this.containerTarget.removeEventListener("elef:document-pages-settled", settled)
+        this.containerTarget.removeEventListener("wheel", userMoved)
+        this.containerTarget.removeEventListener("touchstart", userMoved)
+        this.containerTarget.removeEventListener("pointerdown", userMoved)
+        this.containerTarget.removeEventListener("keydown", userMoved)
+        this.element.removeEventListener("elef:editor-mode-change", cancel)
+        oldView?.remove()
+        ;(surface as HTMLElement).style.opacity = ""
+        surface.removeAttribute("inert")
+        surface.removeAttribute("aria-hidden")
+        if (root) {
+          root.style.minHeight = ""
+          root.style.position = ""
+        }
+        if (this.pendingPreviewScroll === pending) this.pendingPreviewScroll = null
+        if (this.cancelPendingPreviewScroll === cancel) this.cancelPendingPreviewScroll = null
+      }
+      const userMoved = () => { pending.restore = false }
+      const settled = (event: Event) => {
+        if (event.target !== surface) return
+        cancel()
+        if (pending.restore) {
+          this.containerTarget.scrollLeft = pending.left
+          this.containerTarget.scrollTop = pending.top
+        }
+      }
+      this.cancelPendingPreviewScroll = cancel
+      this.containerTarget.addEventListener("elef:document-pages-settled", settled)
+      this.containerTarget.addEventListener("wheel", userMoved, { passive: true })
+      this.containerTarget.addEventListener("touchstart", userMoved, { passive: true })
+      this.containerTarget.addEventListener("pointerdown", userMoved, { passive: true })
+      this.containerTarget.addEventListener("keydown", userMoved)
+      this.element.addEventListener("elef:editor-mode-change", cancel)
+    }
     this.containerTarget.scrollLeft = scrollLeft
     this.containerTarget.scrollTop = scrollTop
     this.projectionFresh = true
