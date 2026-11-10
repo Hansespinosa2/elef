@@ -1,31 +1,12 @@
 import { Channel } from "@tauri-apps/api/core"
-import { relaunch as pluginRelaunch } from "@tauri-apps/plugin-process"
 import { check as pluginCheck } from "@tauri-apps/plugin-updater"
 import { checkForDesktopUpdate, createDesktopUpdaterSeam, installDesktopUpdate } from "./update-flow.js"
 
-// macOS-only update runtime: the single updater-capable runtime. The build
-// selects it only for Stable macOS and the macOS E2E bundle; every other
-// build resolves #desktop/update-runtime to the disabled runtime, so Linux
-// bundles carry no updater code path at all. The plugin check plus the
-// native confirmed install command are the whole flow (no staged split).
-// The runtime also owns the safe-quit arming state: the update dialog arms
-// a checked update here, and the close flow installs it on a safe ordinary
-// quit after the quiet-save flush succeeds.
-export function createDesktopUpdateRuntime({ invoke, check = pluginCheck, relaunch = pluginRelaunch } = {}) {
+// macOS owns preparation and activation. Consent, download, signature checking
+// and installation into a private copy happen before quit. Quit activates only
+// that native-held copy, without another prompt, network request or restart.
+export function createDesktopUpdateRuntime({ invoke, check = pluginCheck } = {}) {
   if (typeof invoke !== "function") throw new TypeError("The macOS update runtime needs the Tauri invoke bridge.")
-  // Keep packaged E2E WebDriver attached until replacement assertions finish;
-  // its runner launches the installed app in a second session. Production
-  // builds erase this dependency injection. Tauri's IPC bridge stays intact.
-  if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
-    const hooks = { installRequests: [], relaunchRequested: false }
-    globalThis.__elefUpdateTestHooks = hooks
-    const nativeInvoke = invoke
-    invoke = (command, args) => {
-      if (command === "install_update") hooks.installRequests.push(args.version)
-      return nativeInvoke(command, args)
-    }
-    relaunch = async () => { hooks.relaunchRequested = true }
-  }
   const checkForPluginUpdate = () => check({ timeout: 10_000 })
   let armed = null
   const disposeArmed = () => {
@@ -37,13 +18,33 @@ export function createDesktopUpdateRuntime({ invoke, check = pluginCheck, relaun
     enabled: true,
     checkForUpdate: () => checkForDesktopUpdate(
       checkForPluginUpdate,
-      (version, onProgress) => invoke("install_update", { version, onProgress: new Channel(onProgress) })
+      (version, onProgress) => invoke("install_update", { version, prepareOnly: false, onProgress: new Channel(onProgress) })
     ),
-    installPendingUpdate: (update, options) => installDesktopUpdate(update, { ...options, relaunch }),
+    installPendingUpdate: (update, options) => installDesktopUpdate(update, options),
     updaterSeam: createDesktopUpdaterSeam({ check: checkForPluginUpdate }),
-    armPendingUpdate(update) {
-      disposeArmed()
-      armed = update
+    async armPendingUpdate(update, { onProgress = () => {} } = {}) {
+      if (armed) {
+        await update.dispose().catch(() => {})
+        return false
+      }
+      const preparation = invoke("install_update", {
+        version: update.version, prepareOnly: true, onProgress: new Channel(onProgress)
+      })
+      // Arm immediately so every quit path waits for an in-flight download.
+      // Activation still requires the native preparation to succeed first.
+      const pending = {
+        ...update,
+        install: async progress => await preparation ? update.install(progress) : false
+      }
+      armed = pending
+      try {
+        const prepared = await preparation
+        if (!prepared && armed === pending) disposeArmed()
+        return prepared
+      } catch (error) {
+        if (armed === pending) disposeArmed()
+        throw error
+      }
     },
     peekArmedUpdate() {
       return armed

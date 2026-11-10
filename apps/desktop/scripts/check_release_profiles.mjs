@@ -301,8 +301,8 @@ const updatesSource = readText("apps/desktop/src-tauri/src/updates.rs")
 const updaterCfg = '#[cfg(any(\n    target_os = "macos",\n    all(feature = "desktop-dev", feature = "webdriver")\n))]'
 assert.ok(updatesSource.includes(`${updaterCfg}\nuse tauri_plugin_updater::UpdaterExt;`), "updates.rs must gate the updater plugin import on the updater matrix")
 assert.ok(updatesSource.includes(`${updaterCfg}\n#[tauri::command]\npub(crate) async fn install_update(`), "updates.rs must gate install_update on the updater matrix")
-assert.ok(updatesSource.includes("Install Elef update on quit"), "the native install confirmation must name the safe-quit flow")
-assert.ok(updatesSource.includes("Your work is saved. Elef will restart after installation."), "the native install confirmation must promise the saved restart")
+assert.ok(updatesSource.includes("install it when you quit?"), "the native consent must name deferred activation")
+assert.ok(updatesSource.includes("You can keep working while it downloads."), "the native consent must explain background preparation")
 assert.ok(nativeSource.includes(".plugin(tauri_plugin_process::init())\n        .plugin(updater.build());"), "lib.rs must register the updater plugins only on updater builds")
 assert.ok(nativeSource.includes('"check-for-updates" => {'), "lib.rs must keep the Stable macOS update-check menu action")
 const cargoManifest = readText("apps/desktop/src-tauri/Cargo.toml")
@@ -448,16 +448,15 @@ const stablePackagedSpec = readText("apps/desktop/e2e/stable-packaged.spec.js")
 // installer invocation. Retain the native call/version assertion as well as
 // bundle replacement and post-launch cleanup evidence.
 for (const pin of ["mode?value=stable-package",
-  '$("#check-for-updates").click()', '$("#install-update").click()',
+  '$("#check-for-updates").click()', 'answerMacNativeDialog("Install on Quit")',
   "getCurrentWindow().close()", "/artifact-status", "/release-artifact",
-  "window.__elefUpdateTestHooks.installRequests), [\"0.2.0\"]", "window.__elefUpdateTestHooks.relaunchRequested",
+  "requestMacQuit()", "process.kill(pid, 0)",
   '"0.2.0"', "previousInstallationsRemoved", ".elef-update-", "export_diagnostics_fixture"]) {
   assert.ok(stablePackagedSpec.includes(pin), `the Stable packaged spec must pin ${pin}`)
 }
-assert.ok(macosRuntime.includes('command === "install_update"') && macosRuntime.includes("return nativeInvoke(command, args)"),
-  "packaged update test observation must forward the native install command")
-assert.ok(!readText("apps/desktop/frontend/dist/assets/app.js").includes("__elefUpdateTestHooks"),
-  "production bundles must omit packaged update test hooks")
+assert.ok(!macosRuntime.includes("__elefUpdateTestHooks"), "packaged updates must exercise real close, without a restart interception")
+assert.ok(updatesSource.includes("take_prepared_update") && updatesSource.includes("confirm_native_action_with_buttons"),
+  "activation must consume a native-held update prepared after native consent")
 
 // Smoke contracts: the Stable binary never carries desktop-dev, and the
 // identity probes build both identities with distinct binaries and bus names.
@@ -515,19 +514,21 @@ assert.ok(stableSpec.includes("notRegistered = new RegExp"), "Linux Stable updat
 assert.ok(stableSpec.includes("permissionDenied = new RegExp"), "Linux Stable updater checks must recognize Tauri permission denials")
 assert.ok(stableSpec.includes("allow-${permission}"), "Linux Stable updater permission denials must name the exact required capability")
 assert.ok(!stableSpec.includes("stage_update"), "the single-install flow must not name the dropped staged split")
-// Safe-quit wording: the dialog arms for quit (no immediate install), the
-// close flow installs on a saved flush and defers otherwise, with no new
-// prompts on the save path.
-const desktopHost = readText("apps/web/app/views/desktop_host.html")
-assert.ok(desktopHost.includes(">Install on quit</button>"), "the update dialog must arm for quit instead of installing immediately")
+// Consent happens once, before background preparation. Quit consumes only
+// the approved native copy; it never prompts, downloads again or relaunches.
+assert.ok(updatesSource.includes('"Install on Quit".into()') && updatesSource.includes('"Later".into()'),
+  "the native offer must provide explicit Install on Quit and Later choices")
 const sharedApplication = readText("packages/editor-runtime/src/lib/file_library_application.ts")
-assert.ok(sharedApplication.includes("is ready to install on quit."), "the update dialog must name the safe-quit flow")
-assert.ok(sharedApplication.includes("armUpdateForQuit"), "the update dialog must arm the checked update for quit")
-assert.ok(sharedApplication.includes("will install version"), "arming must tell the user the install waits for quit")
+assert.ok(sharedApplication.includes("armUpdateForQuit"), "manual update checks must request consent and prepare for quit")
+assert.ok(sharedApplication.includes("will install version"), "preparation must tell the user installation waits for quit")
 assert.ok(sharedApplication.includes("if (updateEnabled) startupUpdateCheck.schedule(10_000)"), "the idle update check must run only where updates are enabled")
+assert.ok(sharedApplication.includes("if (!showNoUpdate)") && sharedApplication.includes("Update available"),
+  "background checks must only announce availability")
 const closeFlow = readText("apps/desktop/frontend/src/close-flow.js")
 assert.ok(closeFlow.includes("takeArmedUpdate"), "the close flow must consume the armed update on a safe quit")
-assert.ok(closeFlow.includes("clearArmedUpdate"), "the close flow must defer the armed update on an unsafe save")
+assert.ok(!closeFlow.includes("clearArmedUpdate"), "unsafe saves must retain approved updates for a later safe quit")
+assert.ok(closeFlow.includes("setClosing(true)") && closeFlow.includes("setClosing(false)"),
+  "quit must prevent edits until save and activation finish, then restore input if it stays open")
 
 // Deferred features stay flag-kept: desktop defaults off, register rows
 // present, and no lineage controller on either desktop profile.

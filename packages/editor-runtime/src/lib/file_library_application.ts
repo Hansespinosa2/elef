@@ -208,10 +208,6 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     restoreDraft: document.querySelector("#restore-local-draft") as HTMLButtonElement,
     importConflictDialog: document.querySelector("#import-conflict-dialog") as HTMLDialogElement,
     importConflictMessage: document.querySelector("#import-conflict-message") as HTMLElement,
-    updateDialog: document.querySelector("#update-dialog") as HTMLDialogElement,
-    updateVersion: document.querySelector("#update-version") as HTMLElement,
-    updateNotes: document.querySelector("#update-notes") as HTMLElement,
-    updateProgress: document.querySelector("#update-progress") as HTMLElement,
     presentationExit: document.querySelector("#exit-presentation") as HTMLButtonElement,
     presentationStart: document.querySelector("#start-presentation") as HTMLButtonElement
   }
@@ -231,7 +227,6 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   const documentGraphCache = desktopFeatures.documentGraph
     ? documentGraphRuntime.createCache(async () => documentGraphRuntime.build(await fileLibrary.readDocumentGraph()))
     : null
-  let pendingUpdate: any = null
   let libraryStatusLoaded = false
   let processingOpenedFiles = false
   let openFilesRequested = false
@@ -1147,36 +1142,49 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   async function checkForUpdates(showNoUpdate = true): Promise<boolean> {
     if (!updateEnabled) return false
     if (showNoUpdate) startupUpdateCheck.cancel()
+    if (updateRuntime?.peekArmedUpdate()) {
+      setStatus("The update will install when you quit.")
+      return true
+    }
+    let preparing = false
     try {
       const update = await checkForUpdate()
       if (!update) {
         if (showNoUpdate) setStatus("Elef is up to date")
         return false
       }
-      await pendingUpdate?.dispose().catch(() => {})
-      pendingUpdate = update
-      elements.updateVersion.textContent = "Version " + update.version + " is ready to install on quit."
-      elements.updateNotes.textContent = update.notes
-      elements.updateProgress.textContent = "The update signature will be verified before installation."
-      elements.updateDialog.showModal()
+      if (!showNoUpdate) {
+        setStatus(`Elef ${update.version} is available. Choose Check for updates to install on quit.`)
+        shellElement<HTMLElement>("#check-for-updates").textContent = "Update available"
+        await update.dispose().catch(() => {})
+        return true
+      }
+      preparing = true
+      await armUpdateForQuit(update)
       return true
-    } catch (_error) {
-      if (showNoUpdate) showError({ message: "Could not check for updates. Try again while online." })
+    } catch (error) {
+      if (showNoUpdate) showError(preparing ? error : { message: "Could not check for updates. Try again while online." })
       return false
     }
   }
 
-  // Safe-quit arming: the update installs only during a safe ordinary quit,
-  // after the quiet-save flush succeeds. Arming transfers the checked update
-  // into the update runtime (which owns the pending state); the dialog close
-  // handler then has nothing to dispose.
-  async function armUpdateForQuit(): Promise<void> {
-    if (!pendingUpdate || !updateRuntime) return
-    const update = pendingUpdate
-    pendingUpdate = null
-    updateRuntime.armPendingUpdate(update)
-    elements.updateDialog.close()
-    setStatus(`Elef will install version ${update.version} when you quit.`)
+  // The native offer is the only consent prompt. Download in the background;
+  // the armed handle makes a quit during preparation wait safely for it.
+  async function armUpdateForQuit(update: any): Promise<void> {
+    if (!updateRuntime) return
+    let received = 0
+    const prepared = await updateRuntime.armPendingUpdate(update, {
+      onProgress: (event: any) => {
+        if (event.event === "Progress") {
+          received += event.data.chunkLength
+          const total = event.data.contentLength
+          const progress = total ? ` ${Math.min(100, Math.round(received * 100 / total))}%` : ""
+          setStatus(`Downloading Elef ${update.version}…${progress}`)
+        }
+      }
+    })
+    shellElement<HTMLElement>("#check-for-updates").textContent = prepared ? "Update ready" : "Check for updates"
+    setStatus(prepared ? `Elef will install version ${update.version} when you quit.` : "Update postponed")
   }
 
   async function printCurrentWork(): Promise<void> {
@@ -1384,6 +1392,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   async function handleMenuAction(action: string): Promise<any> {
+    if (document.body.inert && action !== "quit") return
     if (action === "quit") return getCurrentWindow().close()
     if (action === "choose-library") return chooseLibrary()
     if (action === "refresh-library") return refreshLibrary()
@@ -1474,15 +1483,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   // removes the check button where updates are disabled, so its listener is
   // attached conditionally. The dialog itself stays in the DOM everywhere.
   if (updateEnabled) shellElement<HTMLElement>("#check-for-updates").addEventListener("click", () => void checkForUpdates(true))
-  shellElement<HTMLElement>("#install-update").addEventListener("click", () => void armUpdateForQuit())
   elements.presentationExit.addEventListener("click", () => void exitPresentation())
   elements.presentationStart.addEventListener("click", () => void startPresentation())
-  shellElement<HTMLElement>("#update-later").addEventListener("click", () => elements.updateDialog.close())
-  elements.updateDialog.addEventListener("close", () => {
-    const update = pendingUpdate
-    pendingUpdate = null
-    void update?.dispose().catch(() => {})
-  })
   shellElement<HTMLElement>("#import-conflict-replace").addEventListener("click", () => void resolveImportConflict("replace"))
   shellElement<HTMLElement>("#import-conflict-keep-both").addEventListener("click", () => void resolveImportConflict("keep_both"))
   shellElement<HTMLElement>("#import-conflict-cancel").addEventListener("click", () => void resolveImportConflict("cancel"))
@@ -1510,7 +1512,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     close: () => getCurrentWindow().destroy(),
     confirmDiscard: () => fileLibrary.confirmDiscardUnsavedChanges(),
     onError: showError,
-    updateRuntime
+    updateRuntime,
+    setClosing: (closing: boolean) => { document.body.inert = closing }
   }))
 
   window.addEventListener("keydown", event => {

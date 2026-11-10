@@ -19,6 +19,11 @@ pub(crate) struct DesktopState {
         all(feature = "desktop-dev", feature = "webdriver")
     ))]
     pub(crate) update_installing: std::sync::atomic::AtomicBool,
+    #[cfg(any(
+        target_os = "macos",
+        all(feature = "desktop-dev", feature = "webdriver")
+    ))]
+    pub(crate) prepared_update: std::sync::Mutex<Option<crate::updates::PreparedUpdate>>,
     pub(crate) app_ready: std::sync::atomic::AtomicBool,
 }
 

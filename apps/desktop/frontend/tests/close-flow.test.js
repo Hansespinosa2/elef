@@ -126,7 +126,7 @@ function armedUpdateRuntime({ install = async () => true } = {}) {
   }
 }
 
-test("a clean quit with an armed update installs and relaunches instead of closing", async () => {
+test("a clean quit activates its armed update and closes normally", async () => {
   let closes = 0
   let prevented = 0
   const { runtime, state } = armedUpdateRuntime()
@@ -138,11 +138,11 @@ test("a clean quit with an armed update installs and relaunches instead of closi
   })
   await request({ preventDefault: () => { prevented += 1 } })
   assert.equal(prevented, 1)
-  assert.equal(closes, 0)
+  assert.equal(closes, 1)
   assert.deepEqual(state(), { armed: null, installs: 1 })
 })
 
-test("a saved flush with an armed update installs and relaunches instead of closing", async () => {
+test("a saved flush activates its armed update and closes normally", async () => {
   let closes = 0
   const { runtime, state } = armedUpdateRuntime()
   const request = createCloseFlow({
@@ -152,7 +152,7 @@ test("a saved flush with an armed update installs and relaunches instead of clos
     updateRuntime: runtime
   })
   await request({ preventDefault() {} })
-  assert.equal(closes, 0)
+  assert.equal(closes, 1)
   assert.deepEqual(state(), { armed: null, installs: 1 })
 })
 
@@ -188,7 +188,7 @@ test("a failed safe-quit install reports, disarms, and stays open", async () => 
   assert.deepEqual(state(), { armed: null, installs: 1 })
 })
 
-test("an unsafe save with an armed update defers it and stays open without prompting", async () => {
+test("an unsafe save retains its approved update and stays open without prompting", async () => {
   for (const outcome of ["failed", "conflict"]) {
     let closes = 0
     let confirms = 0
@@ -203,7 +203,7 @@ test("an unsafe save with an armed update defers it and stays open without promp
     await request({ preventDefault() {} })
     assert.equal(closes, 0, `${outcome} must stay open`)
     assert.equal(confirms, 0, `${outcome} must not prompt`)
-    assert.deepEqual(state(), { armed: null, installs: 0 }, `${outcome} must defer the armed update`)
+    assert.deepEqual(state(), { armed: "0.2.0", installs: 0 }, `${outcome} must retain the approved update`)
   }
 })
 
@@ -216,6 +216,7 @@ test("repeated quits cannot close a clean window while its armed update is insta
     let dirty = dirtyAtStart
     let closes = 0
     let prevented = 0
+    const closing = []
     const { runtime, state } = armedUpdateRuntime({ install: () => {
       started()
       return installation
@@ -224,19 +225,22 @@ test("repeated quits cannot close a clean window while its armed update is insta
       isDirty: () => dirty,
       flushForClose: async () => { dirty = false; return "saved" },
       close: () => { closes += 1 },
+      setClosing: value => closing.push(value),
       updateRuntime: runtime
     })
     const event = () => ({ preventDefault: () => { prevented += 1 } })
     const first = request(event())
     await installing
+    assert.deepEqual(closing, [true], "input must stay blocked after saving while preparation finishes")
     assert.deepEqual(state(), { armed: null, installs: 1 })
     const repeated = request(event())
     // Tauri destroys the window when a close handler leaves the event unprevented.
     assert.equal(prevented, 2, "every quit must stay prevented during installation")
     finishInstall(true)
     await Promise.all([first, repeated])
-    assert.equal(closes, 0)
+    assert.equal(closes, 1)
     assert.equal(state().installs, 1)
+    assert.deepEqual(closing, [true, false])
   }
 })
 
