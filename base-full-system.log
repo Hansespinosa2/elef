@@ -1,0 +1,27 @@
+≈ tailwindcss v4.3.3
+
+Done in 48ms
+
+Run options: --seed 36432
+
+# Running:
+
+Warning: The code in the `before_fork` block will not execute in the current Puma configuration. The `before_fork` block only executes in Puma's cluster mode. To fix this, either remove the `before_fork` call or increase Puma's worker count above zero. 
+Capybara starting Puma...
+* Version 8.0.2, codename: Into the Arena
+* Min threads: 0, max threads: 4
+* Listening on http://127.0.0.1:41655
+...........................................................................................................................................................[Screenshot Image]: /tmp/elef-update-investigation/base-worktree/apps/web/tmp/screenshots/failures_test_blur_released_pagination_preserves_scroll.png 
+F
+
+Failure:
+DocumentScrollTest#test_blur_released_pagination_preserves_scroll [test/system/document_scroll_test.rb:106]:
+expected a deep scroll position, got {"chain" => [0, 85], "windowY" => 85}.
+Expected 170 to be > 200.
+
+bin/rails test test/system/document_scroll_test.rb:81
+
+..........................................................................................................................................
+
+Finished in 324.292252s, 0.9066 runs/s, 19.2172 assertions/s.
+294 runs, 6232 assertions, 1 failures, 0 errors, 0 skips
