@@ -129,6 +129,12 @@ class DocumentScrollTest < ApplicationSystemTestCase
       editor.replaceRange('!', editor.sourceValue.length, editor.sourceValue.length);
     JAVASCRIPT
     assert_selector ".document-surface[data-document-pages-settled='false']", visible: :all, wait: 10
+    assert page.evaluate_script(<<~JAVASCRIPT), "live preview must remain available to assistive technology"
+      (() => {
+        const surface = document.querySelector('.document-surface[data-document-pages-settled="false"]');
+        return surface && getComputedStyle(surface).visibility === 'visible' && !surface.closest('[inert], [aria-hidden="true"]');
+      })()
+    JAVASCRIPT
     assert_in_delta before, page.evaluate_script("document.querySelector('[data-preview-target=container]').scrollTop"), 5
     moved = page.evaluate_script(<<~JAVASCRIPT)
       (() => {

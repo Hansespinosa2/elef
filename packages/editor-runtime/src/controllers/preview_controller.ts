@@ -309,7 +309,7 @@ export default class extends Controller<HTMLElement> {
         oldView.setAttribute("data-preview-scroll-snapshot", "")
         Object.assign(oldView.style, { position: "absolute", top: "0", left: "0", width: "100%", pointerEvents: "none" })
         Object.assign(root.style, { minHeight: `${oldHeight}px`, position: "relative" })
-        ;(surface as HTMLElement).style.visibility = "hidden"
+        ;(surface as HTMLElement).style.opacity = "0"
         root.append(oldView)
       }
       const pending = { left: scrollLeft, top: scrollTop, restore: true }
@@ -322,7 +322,7 @@ export default class extends Controller<HTMLElement> {
         this.containerTarget.removeEventListener("keydown", userMoved)
         this.element.removeEventListener("elef:editor-mode-change", cancel)
         oldView?.remove()
-        ;(surface as HTMLElement).style.visibility = ""
+        ;(surface as HTMLElement).style.opacity = ""
         if (root) {
           root.style.minHeight = ""
           root.style.position = ""
