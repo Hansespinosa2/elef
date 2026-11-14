@@ -69,6 +69,10 @@
     "./editor-test-internals": {
       "types": "./src/features/editor/test_internals.ts",
       "default": "./dist/editor-test-internals.js"
+    },
+    "./python-worker": {
+      "types": "./src/features/editor/python_worker.ts",
+      "default": "./dist/python-worker.js"
     }
   },
   "files": [

@@ -305,3 +305,17 @@ test("ART-SRC-INVALID-PARITY: invalid Art is consumed with only its stable Art d
   assert.doesNotMatch(preview.html, /:::art\{flow\}/)
   assert.doesNotMatch(preview.html, /data-elef-art-root/)
 })
+
+test("executable python fences render output-first and show-code containers while static python fences stay highlighted code", () => {
+  const staticHtml = renderMarkdownBlock("```python\nx = 1 < 2\n```")
+  assert.match(staticHtml, /<pre><code class="highlight python">/)
+  assert.doesNotMatch(staticHtml, /elef-python-block/)
+
+  const runHtml = renderMarkdownBlock("```python run\nimport matplotlib.pyplot as plt\nplt.plot([1, 2])\n```")
+  assert.match(runHtml, /^<div class="elef-python-block"><pre class="elef-python-source">import matplotlib\.pyplot as plt\nplt\.plot\(\[1, 2\]\)\n<\/pre><div class="elef-python-output"><\/div><\/div>\n$/)
+  assert.doesNotMatch(runHtml, /elef-python-code/)
+
+  const showCodeHtml = renderMarkdownBlock("```python run show-code\nx = 1 + 2\nprint(x)\n```")
+  assert.match(showCodeHtml, /^<div class="elef-python-block elef-python-show-code"><pre class="elef-python-code"><code class="highlight python">/)
+  assert.match(showCodeHtml, /<pre class="elef-python-source">x = 1 \+ 2\nprint\(x\)\n<\/pre><div class="elef-python-output"><\/div><\/div>\n$/)
+})
