@@ -73,4 +73,9 @@ test("wrapping preserves heading and list structure and leaves fenced code intac
   state = EditorState.create({ doc: setext, selection: { anchor: 0, head: setext.length } })
   state = wrapMarkdownSelection(state, "*")!.state
   assert.equal(state.doc.toString(), setext)
+  for (const opaque of ["<div>\ncontent\n</div>", "$$\nx+y\n$$", "::: notes\ncontent\n:::"]) {
+    state = EditorState.create({ doc: opaque, selection: { anchor: 0, head: opaque.length } })
+    state = wrapMarkdownSelection(state, "*")!.state
+    assert.equal(state.doc.toString(), opaque)
+  }
 })
