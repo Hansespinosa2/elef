@@ -26,7 +26,9 @@ export function wrapMarkdownText(text: string, marker: "*" | "`"): { text: strin
     const remainder = part.slice(prefix.length)
     const leading = prefix + (marker === "*" ? (remainder.match(/^\s*/)?.[0] ?? "") : "")
     const rest = part.slice(leading.length)
-    const trailing = marker === "*" ? (rest.match(/\s*$/)?.[0] ?? "") : ""
+    const closingHeading = /#{1,6}[ \t]+$/.test(prefix) ? (rest.match(/[ \t]+#+[ \t]*$/)?.[0] ?? "") : ""
+    const withoutClosing = rest.slice(0, rest.length - closingHeading.length)
+    const trailing = (marker === "*" ? (withoutClosing.match(/\s*$/)?.[0] ?? "") : "") + closingHeading
     const content = rest.slice(0, rest.length - trailing.length)
     if (!content) { result += part; continue }
     const { open, close } = markdownWrapMarkers(content, marker)
