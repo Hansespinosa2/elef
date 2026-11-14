@@ -18,7 +18,7 @@ export function wrapMarkdownText(text: string, marker: "*" | "`"): { text: strin
   let last = -1
   // Opaque blocks and structural delimiters cannot be wrapped safely as
   // inline content. Leave the selection untouched when they are included.
-  if (/^[ \t]*(?:`{3,}|~{3,}|\||\$\$|:::|<!--|<\/?[A-Za-z][\w-]*(?:[\s/>])|(?:-{3,}|={3,}|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})[ \t]*$|:?-{3,}:?[ \t]*\|)/m.test(text)) return { text, from: 0, to: text.length }
+  if (/^[ \t]*(?:`{3,}|~{3,}|\||\$\$|:::|<!--|<\/?[A-Za-z][\w-]*(?:[\s/>])|(?:-+|=+|(?:\*[ \t]*){3,}|(?:_[ \t]*){3,})[ \t]*$|:?-{3,}:?[ \t]*\|)/m.test(text)) return { text, from: 0, to: text.length }
   for (const part of text.split(/(\n)/)) {
     if (!part || part === "\n") { result += part; continue }
     // Leave block markers outside the inline formatting.
