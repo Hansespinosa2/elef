@@ -53,10 +53,10 @@ test("paragraphs receive separate inline delimiters", () => {
 })
 
 test("wrapping preserves heading and list structure and leaves fenced code intact", () => {
-  const source = "one\n\n# heading\n- item"
+  const source = "one\n\n# heading\n- item\n- # nested"
   let state = EditorState.create({ doc: source, selection: { anchor: 0, head: source.length } })
   state = wrapMarkdownSelection(state, "*")!.state
-  assert.equal(state.doc.toString(), "*one*\n\n# *heading*\n- *item*")
+  assert.equal(state.doc.toString(), "*one*\n\n# *heading*\n- *item*\n- # *nested*")
   const fenced = "before\n\n```js\nconst x = 1\n```"
   state = EditorState.create({ doc: fenced, selection: { anchor: 0, head: fenced.length } })
   state = wrapMarkdownSelection(state, "*")!.state

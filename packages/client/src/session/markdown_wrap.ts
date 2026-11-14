@@ -22,7 +22,7 @@ export function wrapMarkdownText(text: string, marker: "*" | "`"): { text: strin
   for (const part of text.split(/(\n)/)) {
     if (!part || part === "\n") { result += part; continue }
     // Leave block markers outside the inline formatting.
-    const prefix = part.match(/^(?:[ \t]*>\s*)*(?:[ \t]*(?:#{1,6}[ \t]+|(?:[-+*]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?))?/)?.[0] ?? ""
+    const prefix = part.match(/^(?:(?:[ \t]*>[ \t]*)|(?:[ \t]*(?:[-+*]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?))*[ \t]*(?:#{1,6}[ \t]+)?/)?.[0] ?? ""
     const remainder = part.slice(prefix.length)
     const leading = prefix + (marker === "*" ? (remainder.match(/^\s*/)?.[0] ?? "") : "")
     const rest = part.slice(leading.length)
