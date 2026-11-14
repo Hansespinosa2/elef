@@ -1,6 +1,29 @@
 require "application_system_test_case"
 
 class DocumentsTest < ApplicationSystemTestCase
+  test "visual wrapping across a paragraph and heading preserves both blocks" do
+    document = Document.create!(title: "Wrap across blocks", source: "first\n\n# second")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+    blocks = all(".document-editor-block[contenteditable='true']")
+    first = blocks.find { |block| block.text.include?("first") }
+    second = blocks.find { |block| block.text.include?("second") }
+    assert first && second
+    page.execute_script(<<~JAVASCRIPT, first, second)
+      const [first, second] = arguments;
+      const start = document.createTreeWalker(first, NodeFilter.SHOW_TEXT);
+      const end = document.createTreeWalker(second, NodeFilter.SHOW_TEXT);
+      start.nextNode(); end.nextNode();
+      first.focus();
+      window.getSelection().setBaseAndExtent(start.currentNode, 0, end.currentNode, end.currentNode.textContent.length);
+    JAVASCRIPT
+    first.send_keys("*")
+    assert_field "Markdown source", with: "*first*\n\n# *second*", wait: 5
+    wait_for_fresh_projection
+    find(".document-editor-block[contenteditable='true']", text: "first").send_keys("*")
+    assert_field "Markdown source", with: "**first**\n\n# **second**", wait: 5
+  end
+
   test "markdown delimiters wrap selections in source and visual editors" do
     document = Document.create!(title: "Wrap selections", source: "Alpha beta gamma")
     visit edit_document_path(document, editor_mode: "source")
