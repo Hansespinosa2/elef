@@ -43,7 +43,11 @@ export default class extends Controller<HTMLElement> {
     this.positionPalette = this.positionPalette.bind(this)
     this.visualKeydown = (event: Event) => {
       if (this.editorController?.editingMode !== "visual") return
-      if (this.paletteTarget.hidden && !this.stops.length) return
+      if (this.paletteTarget.hidden) {
+        const target = event.target as Element | null
+        const block = target?.closest?.("[data-editor-block-id][contenteditable='true']")
+        if (!block || !this.element.closest("form")?.contains(block)) return
+      }
       this.keydown(event as KeyboardEvent)
     }
     this.visualScroll = () => {
@@ -167,6 +171,26 @@ export default class extends Controller<HTMLElement> {
       const currentQuery = this.queryAtCaret()
       if (!currentQuery || currentQuery.prefix !== this.query.prefix || currentQuery.text !== this.query.text || currentQuery.start !== this.query.start) {
         this.close()
+        return
+      }
+    }
+
+    if (event.key === "Tab" && !event.shiftKey && !event.ctrlKey && !event.altKey && !event.metaKey && !event.isComposing && this.paletteTarget.hidden && editor.selectionStart === editor.selectionEnd) {
+      const caret = editor.selectionStart
+      const trigger = editor.value.slice(caret - 2, caret)
+      const shorthand = application.getControllerForElementAndIdentifier(this.element, "math-shorthand")
+      if ((trigger === "__" || trigger === "^^") && editorInsideMath(editor, caret) && shorthand) {
+        event.preventDefault()
+        const parent = this.activeStop
+        const parents = new Set()
+        for (let stop = parent; stop; stop = stop.parentStop) parents.add(stop)
+        this.stops.forEach((stop: any) => {
+          if (parents.has(stop)) stop.end += 1
+          else if (stop.start >= caret) { stop.start += 1; stop.end += 1 }
+        })
+        shorthand.commitVisualEdit(editor, caret - 2, caret, `${trigger[0]}{}`, caret)
+        this.stops.unshift({ number: 1, start: caret, end: caret, parentStop: parent })
+        this.selectStop(this.stops[0])
         return
       }
     }
@@ -489,6 +513,15 @@ export default class extends Controller<HTMLElement> {
     if (!current) return
     this.activeStop = null
     const next = this.stops[0]
+    if (next && current.parentStop === next) {
+      const editor = this.editorController
+      const exit = editor.value[current.end] === "}" ? current.end + 1 : current.end
+      this.activeStop = next
+      editor.setSelectionRange(exit, exit)
+      if (editor.editingMode === "visual") placeVisualCaret(this.element, exit)
+      this.updateStopDecorations()
+      return
+    }
     if (next) return this.selectStop(next)
 
     const editor = this.editorController
@@ -526,8 +559,10 @@ export default class extends Controller<HTMLElement> {
     if (delta === 0) return
     active.end = editor.selectionStart
     const activeIndex = this.stops.indexOf(active)
+    const parents = new Set()
+    for (let parent = active.parentStop; parent; parent = parent.parentStop) parents.add(parent)
     this.stops.slice(activeIndex + 1).forEach((stop: any) => {
-      stop.start += delta
+      if (!parents.has(stop)) stop.start += delta
       stop.end += delta
     })
     this.updateStopDecorations()
