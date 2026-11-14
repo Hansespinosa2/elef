@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
 import { EditorState } from "@codemirror/state";
 import { history, undo } from "@codemirror/commands";
-import { projectionRangeEdit } from "../src/session/projection_range.js";
+import { projectionRangeEdit, projectionWrapSelection } from "../src/session/projection_range.js";
 
 function fixture(reversed = false, sameBlock = false) {
   const { document } = parseHTML(`<main><div data-editor-block-id="a" contenteditable="true">First</div><div data-editor-block-id="${sameBlock ? "a" : "b"}" contenteditable="true">Last</div></main>`);
@@ -50,4 +50,13 @@ test("noncancelable compositions and selections outside the projection never com
   const { root, selection, offset } = fixture();
   assert.equal(projectionRangeEdit({ inputType: "insertCompositionText", data: "字", cancelable: false, preventDefault() {} }, root, selection, offset), null);
   assert.equal(projectionRangeEdit({ inputType: "deleteContentForward", preventDefault() {} }, root.ownerDocument.createElement("aside"), selection, offset), null);
+});
+
+test("visual selections map both directions for Markdown wrapping", () => {
+  for (const reversed of [false, true]) {
+    const { root, selection, offset } = fixture(reversed);
+    const edit = projectionWrapSelection({ inputType: "insertText", data: "*", preventDefault() {} }, root, selection, offset);
+    assert.deepEqual(edit, { from: 3, to: 9, anchor: reversed ? 9 : 3, head: reversed ? 3 : 9, marker: "*" });
+    assert.equal(projectionWrapSelection({ inputType: "insertCompositionText", data: "*", preventDefault() {} }, root, selection, offset), null);
+  }
 });

@@ -1,6 +1,103 @@
 require "application_system_test_case"
 
 class DocumentsTest < ApplicationSystemTestCase
+  test "visual wrapping across a paragraph and heading preserves both blocks" do
+    document = Document.create!(title: "Wrap across blocks", source: "first\n\n# second")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+    blocks = all(".document-editor-block[contenteditable='true']")
+    first = blocks.find { |block| block.text.include?("first") }
+    second = blocks.find { |block| block.text.include?("second") }
+    assert first && second
+    page.execute_script(<<~JAVASCRIPT, first, second)
+      const [first, second] = arguments;
+      const start = document.createTreeWalker(first, NodeFilter.SHOW_TEXT);
+      const end = document.createTreeWalker(second, NodeFilter.SHOW_TEXT);
+      start.nextNode(); end.nextNode();
+      first.focus();
+      window.getSelection().setBaseAndExtent(start.currentNode, 0, end.currentNode, end.currentNode.textContent.length);
+    JAVASCRIPT
+    first.send_keys("*")
+    assert_field "Markdown source", with: "*first*\n\n# *second*", wait: 5
+    wait_for_fresh_projection
+    find(".document-editor-block[contenteditable='true']", text: "first").send_keys("*")
+    assert_field "Markdown source", with: "**first**\n\n# **second**", wait: 5
+  end
+
+  test "markdown delimiters wrap selections in source and visual editors" do
+    document = Document.create!(title: "Wrap selections", source: "Alpha beta gamma")
+    visit edit_document_path(document, editor_mode: "source")
+    assert_selector ".cm-content"
+    type_source_text("Alpha beta gamma", "beta", "*")
+    assert_field "Markdown source", with: "Alpha *beta* gamma"
+    find(".cm-content").send_keys("*")
+    assert_field "Markdown source", with: "Alpha **beta** gamma"
+
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+    block = find(".document-editor-block[contenteditable='true']", text: "Alpha")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus();
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode, start = node.textContent.indexOf("gamma");
+        if (start >= 0) {
+          window.getSelection().setBaseAndExtent(node, start, node, start + 5);
+          break;
+        }
+      }
+    JAVASCRIPT
+    block.send_keys("`")
+    assert_field "Markdown source", with: /`gamma`/, wait: 5
+  end
+
+  test "visual selection stays selected when a second asterisk makes bold" do
+    document = Document.create!(title: "Visual emphasis", source: "Alpha beta gamma")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+    block = find(".document-editor-block[contenteditable='true']", text: "Alpha")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus();
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode, start = node.textContent.indexOf("beta");
+        if (start >= 0) {
+          window.getSelection().setBaseAndExtent(node, start, node, start + 4);
+          break;
+        }
+      }
+    JAVASCRIPT
+    block.send_keys("*")
+    assert_field "Markdown source", with: "Alpha *beta* gamma", wait: 5
+    wait_for_fresh_projection
+    assert_equal "beta", page.evaluate_script("window.getSelection().toString()")
+    find(".document-editor-block[contenteditable='true']", text: "Alpha").send_keys("*")
+    assert_field "Markdown source", with: "Alpha **beta** gamma", wait: 5
+  end
+
+  test "visual wrapping preserves a selection that fills the block" do
+    document = Document.create!(title: "Whole block emphasis", source: "beta")
+    visit edit_document_path(document)
+    wait_for_fresh_projection
+    block = find(".document-editor-block[contenteditable='true']", text: "beta")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus();
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+    JAVASCRIPT
+    block.send_keys("*")
+    assert_field "Markdown source", with: "*beta*", wait: 5
+    wait_for_fresh_projection
+    assert_equal "beta", page.evaluate_script("window.getSelection().toString()")
+    find(".document-editor-block[contenteditable='true']", text: "beta").send_keys("*")
+    assert_field "Markdown source", with: "**beta**", wait: 5
+  end
+
   def wait_for_fresh_projection
     selector = "form.visual-editor-form:not([data-preview-projection-stale='true'])"
     return if has_selector?(selector, wait: 2)
