@@ -16,8 +16,8 @@
      1.1s  python3 tooling/check_boundaries.py
      0.2s  python3 tooling/check_boundaries.py --self-test
      0.0s  python3 tooling/check_spec.py
-     0.1s  python3 tooling/ci_affected.py --self-test
+     0.0s  python3 tooling/ci_affected.py --self-test
      0.0s  python3 tooling/ci_report.py --self-test
      2.4s  cargo test --manifest-path Cargo.toml -p local-store --locked
-    18.1s  total (ceiling 180s)
-bin/check quick: PASS (18.1s)
+    18.0s  total (ceiling 180s)
+bin/check quick: PASS (18.0s)
