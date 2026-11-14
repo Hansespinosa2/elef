@@ -93,3 +93,80 @@ test("frontmatter reveal respects mode, visibility, and resting state", () => {
   absent.engine.revealFrontmatterOnEntry(stateAt(5));
   assert.deepEqual(absent.calls, []);
 });
+
+test("setExternalValue applies minimal diffs, preserves folded frontmatter, and maps the caret instead of jumping to the end", () => {
+  const frontmatter = "---\ntitle: Demo\n---\n";
+  const initial = `${frontmatter}# Heading\n\nMiddle paragraph.\n\nFooter.\n`;
+  const cursorInMiddle = initial.indexOf("Middle") + 3;
+  let state = EditorState.create({
+    doc: initial,
+    selection: EditorSelection.cursor(cursorInMiddle),
+    extensions: [foldState],
+  }).update({
+    effects: foldEffect.of({ from: 0, to: frontmatter.length - 1 }),
+  }).state;
+  let inputValue = initial;
+  let inputSelection = { start: cursorInMiddle, end: cursorInMiddle };
+  const inputTarget = {
+    get value() {
+      return inputValue;
+    },
+    set value(next: string) {
+      inputValue = next;
+      // DOM textareas reset selectionStart/End to value.length when .value is assigned.
+      inputSelection = { start: next.length, end: next.length };
+    },
+    get selectionStart() {
+      return inputSelection.start;
+    },
+    get selectionEnd() {
+      return inputSelection.end;
+    },
+    setSelectionRange(start: number, end: number) {
+      inputSelection = { start, end };
+    },
+  };
+  const engine = new EditorEngine({
+    querySelector: (selector: string) =>
+      selector.includes("input") ? inputTarget : null,
+  } as unknown as HTMLElement);
+  Object.assign(engine, {
+    lineSeparator: "\n",
+    frontmatterRange: { from: 0, to: frontmatter.length - 1, end: frontmatter.length },
+    view: {
+      get state() {
+        return state;
+      },
+      dispatch(spec: TransactionSpec) {
+        state = state.update(spec).state;
+      },
+    },
+  });
+
+  // No-op external value must keep the current caret on both CodeMirror and the proxy input.
+  engine.setExternalValue(initial);
+  assert.equal(engine.selectionStart, cursorInMiddle);
+  assert.deepEqual(inputSelection, { start: cursorInMiddle, end: cursorInMiddle });
+
+  // Prepending text before the caret shifts the caret by the inserted length instead of jumping to doc.length.
+  const updated = `${frontmatter}# Updated Heading\n\nMiddle paragraph.\n\nFooter.\n`;
+  const delta = updated.length - initial.length;
+  engine.setExternalValue(updated);
+  assert.equal(engine.value, updated);
+  assert.equal(engine.selectionStart, cursorInMiddle + delta);
+  assert.deepEqual(inputSelection, {
+    start: cursorInMiddle + delta,
+    end: cursorInMiddle + delta,
+  });
+  const foldedRanges: Array<[number, number]> = [];
+  foldedRanges.push(
+    ...(() => {
+      const out: Array<[number, number]> = [];
+      state.field(foldState).between(0, state.doc.length, (from, to) => {
+        out.push([from, to]);
+      });
+      return out;
+    })()
+  );
+  assert.deepEqual(foldedRanges, [[0, frontmatter.length - 1]]);
+});
