@@ -1,16 +1,17 @@
 import { EditorSelection, EditorState, Prec } from "@codemirror/state"
 import { EditorView } from "@codemirror/view"
-import { markdownWrapMarkers } from "../../session/markdown_wrap.js"
+import { wrapMarkdownText } from "../../session/markdown_wrap.js"
 
 // Only selected text is wrapped. Ordinary Markdown typing (including list
 // markers and code fences) is left to CodeMirror's normal input handling.
 export function wrapMarkdownSelection(state: EditorState, marker: string) {
   if (state.readOnly || (marker !== "*" && marker !== "`") || state.selection.ranges.some(range => range.empty)) return null
   return state.update(state.changeByRange(range => {
-    const { open, close } = markdownWrapMarkers(state.sliceDoc(range.from, range.to), marker)
+    const wrapped = wrapMarkdownText(state.sliceDoc(range.from, range.to), marker)
+    const forward = range.anchor <= range.head
     return {
-      changes: [{ from: range.from, insert: open }, { from: range.to, insert: close }],
-      range: EditorSelection.range(range.anchor + open.length, range.head + open.length)
+      changes: { from: range.from, to: range.to, insert: wrapped.text },
+      range: EditorSelection.range(range.from + (forward ? wrapped.from : wrapped.to), range.from + (forward ? wrapped.to : wrapped.from))
     }
   }), { userEvent: "input.type", scrollIntoView: true })
 }

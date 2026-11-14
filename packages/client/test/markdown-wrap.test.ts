@@ -31,3 +31,34 @@ test("backtick selections get a longer padded code delimiter", () => {
   assert.equal(state.doc.toString(), "`` `inner` ``")
   assert.equal(state.sliceDoc(state.selection.main.from, state.selection.main.to), "`inner`")
 })
+
+test("emphasis leaves surrounding spaces outside the markers", () => {
+  let state = EditorState.create({ doc: "  hello  ", selection: { anchor: 0, head: 9 } })
+  state = wrapMarkdownSelection(state, "*")!.state
+  assert.equal(state.doc.toString(), "  *hello*  ")
+  state = wrapMarkdownSelection(state, "*")!.state
+  assert.equal(state.doc.toString(), "  **hello**  ")
+})
+
+test("paragraphs receive separate inline delimiters", () => {
+  for (const marker of ["*", "`"]) {
+    let state = EditorState.create({ doc: "one\n\ntwo", selection: { anchor: 0, head: 8 } })
+    state = wrapMarkdownSelection(state, marker)!.state
+    assert.equal(state.doc.toString(), `${marker}one${marker}\n\n${marker}two${marker}`)
+    if (marker === "*") {
+      state = wrapMarkdownSelection(state, marker)!.state
+      assert.equal(state.doc.toString(), "**one**\n\n**two**")
+    }
+  }
+})
+
+test("wrapping preserves heading and list structure and leaves fenced code intact", () => {
+  const source = "one\n\n# heading\n- item"
+  let state = EditorState.create({ doc: source, selection: { anchor: 0, head: source.length } })
+  state = wrapMarkdownSelection(state, "*")!.state
+  assert.equal(state.doc.toString(), "*one*\n\n# *heading*\n- *item*")
+  const fenced = "before\n\n```js\nconst x = 1\n```"
+  state = EditorState.create({ doc: fenced, selection: { anchor: 0, head: fenced.length } })
+  state = wrapMarkdownSelection(state, "*")!.state
+  assert.equal(state.doc.toString(), fenced)
+})
