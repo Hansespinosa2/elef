@@ -65,6 +65,10 @@ test("wrapping preserves heading and list structure and leaves fenced code intac
   state = EditorState.create({ doc: table, selection: { anchor: 0, head: table.length } })
   state = wrapMarkdownSelection(state, "*")!.state
   assert.equal(state.doc.toString(), table)
+  const tableWithoutEdges = "Name | Value\n--- | ---\na | b"
+  state = EditorState.create({ doc: tableWithoutEdges, selection: { anchor: 0, head: tableWithoutEdges.length } })
+  state = wrapMarkdownSelection(state, "*")!.state
+  assert.equal(state.doc.toString(), tableWithoutEdges)
   const setext = "Heading\n---"
   state = EditorState.create({ doc: setext, selection: { anchor: 0, head: setext.length } })
   state = wrapMarkdownSelection(state, "*")!.state
