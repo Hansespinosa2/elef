@@ -5,6 +5,8 @@ import {
   buildEditorMap,
   buildEditorStructure,
   initialFrontMatter,
+  isExecutablePythonFence,
+  parsePythonFenceInfo,
   POSITION_VOCABULARY,
   readStyle
 } from "../src/index.js"
@@ -213,4 +215,40 @@ test("display math fences do not swallow presentation slide delimiters", () => {
   ].join("\n")
   const { slides } = buildEditorStructure(source, { mode: "presentation" })
   assert.equal(slides.length, 2)
+})
+
+test("parsePythonFenceInfo classifies static and executable python fences", () => {
+  assert.deepEqual(parsePythonFenceInfo("python"), { executable: false, showCode: false })
+  assert.deepEqual(parsePythonFenceInfo("python run"), { executable: true, showCode: false })
+  assert.deepEqual(parsePythonFenceInfo("  PY   RUN  "), { executable: true, showCode: false })
+  assert.deepEqual(parsePythonFenceInfo("python run show-code"), { executable: true, showCode: true })
+  assert.deepEqual(parsePythonFenceInfo("python run unknown"), { executable: false, showCode: false })
+  assert.deepEqual(parsePythonFenceInfo("javascript run"), { executable: false, showCode: false })
+
+  assert.equal(isExecutablePythonFence("```python\nprint(1)\n```"), false)
+  assert.equal(isExecutablePythonFence("```python run\nprint(1)\n```"), true)
+  assert.equal(isExecutablePythonFence("~~~python run show-code\nprint(1)\n~~~"), true)
+})
+
+test("executable python fences are marked non-editable in visual projection while static python fences stay editable", () => {
+  const source = [
+    "```python",
+    "x = 1",
+    "```",
+    "",
+    "```python run",
+    "x = 2",
+    "```",
+    "",
+    "```python run show-code",
+    "x = 3",
+    "```",
+    ""
+  ].join("\n")
+  const { editorMap } = buildEditorStructure(source, { mode: "document" })
+  const regions = (editorMap.slides[0]?.editable_regions ?? []).filter(region => !region.empty_placeholder)
+  assert.equal(regions.length, 3)
+  assert.equal(regions[0]?.editable, true)
+  assert.equal(regions[1]?.editable, false)
+  assert.equal(regions[2]?.editable, false)
 })

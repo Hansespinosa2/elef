@@ -230,6 +230,7 @@ await cp(path.join(frontendRoot, "node_modules/katex/dist/fonts"), path.join(ass
 // the esbuild font loaders above: its urls rebase to the emitted files, so
 // no whole-file copy is needed here.
 await copyFile(path.join(repoRoot, "apps/web/vendor/javascript/mermaid.min.js"), path.join(assets, "mermaid.min.js"))
+await copyFile(path.join(repoRoot, "packages/client/dist/python-worker.js"), path.join(assets, "python-worker.js"))
 // The PowerPoint generator ships with the app like the other vendor bundles:
 // PPTX export must work fully offline, so the export transport loads this
 // file instead of a CDN copy.
