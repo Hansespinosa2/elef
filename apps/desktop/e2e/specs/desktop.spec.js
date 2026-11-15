@@ -1092,7 +1092,9 @@ class DesktopEditorUi {
     await browser.execute(() => document.querySelector(".editor-splitter").scrollIntoView({ block: "center" }))
     const point = await browser.execute(() => {
       const rect = document.querySelector(".editor-splitter").getBoundingClientRect()
-      return { x: Math.round(rect.left + rect.width / 2), y: Math.round((Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2) }
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round((Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2),
+        screenX: Math.round(screenX + (outerWidth - innerWidth) / 2 + rect.left + rect.width / 2),
+        screenY: Math.round(screenY + outerHeight - innerHeight + (Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2) }
     })
     const hit = await browser.execute(({ x, y }) => {
       const target = document.elementFromPoint(x, y)
@@ -1104,9 +1106,22 @@ class DesktopEditorUi {
       }
       return { tag: target?.tagName, className: target?.className }
     }, point)
-    await browser.action("pointer", { parameters: { pointerType: "mouse" } })
-      .move({ origin: "viewport", x: point.x, y: point.y }).down({ button: 0 }).pause(100)
-      .move({ origin: "viewport", x: point.x + 150, y: point.y, duration: 500 }).up({ button: 0 }).perform()
+    focusDesktopWindow()
+    if (process.platform === "linux") {
+      execFileSync("xdotool", ["mousemove", String(point.screenX), String(point.screenY), "mousedown", "1", "mousemove", "--sync", String(point.screenX + 150), String(point.screenY), "mouseup", "1"], { timeout: 10_000 })
+    } else if (process.platform === "darwin") {
+      const script = `import CoreGraphics
+import Foundation
+let start = CGPoint(x: ${point.screenX}, y: ${point.screenY})
+func post(_ type: CGEventType, _ point: CGPoint) { CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap) }
+post(.mouseMoved, start)
+usleep(100000)
+post(.leftMouseDown, start)
+usleep(100000)
+for i in 1...20 { post(.leftMouseDragged, CGPoint(x: start.x + CGFloat(i * 150 / 20), y: start.y)); usleep(20000) }
+post(.leftMouseUp, CGPoint(x: start.x + 150, y: start.y))`
+      execFileSync("swift", ["-e", script], { timeout: 30_000 })
+    } else throw new Error(`Native drag is unsupported on ${process.platform}`)
     const events = await browser.execute(() => window.__splitterEvents)
     await browser.waitUntil(async () => Number(await splitter.getAttribute("aria-valuenow")) > 20, {
       timeout: 5_000, timeoutMsg: `Dragging the desktop splitter did not resize the panes: ${JSON.stringify({ point, hit, events })}`
