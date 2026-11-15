@@ -1094,7 +1094,9 @@ class DesktopEditorUi {
       const rect = document.querySelector(".editor-splitter").getBoundingClientRect()
       return { x: Math.round(rect.left + rect.width / 2), y: Math.round((Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2),
         screenX: Math.round(screenX + (outerWidth - innerWidth) / 2 + rect.left + rect.width / 2),
-        screenY: Math.round(screenY + outerHeight - innerHeight + (Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2) }
+        screenY: Math.round(screenY + outerHeight - innerHeight + (Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2),
+        macScreenX: Math.round(screenX + rect.left + rect.width / 2),
+        macScreenY: Math.round(screenY + (Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2) }
     })
     const hit = await browser.execute(({ x, y }) => {
       const target = document.elementFromPoint(x, y)
@@ -1112,7 +1114,7 @@ class DesktopEditorUi {
     } else if (process.platform === "darwin") {
       const script = `import CoreGraphics
 import Foundation
-let start = CGPoint(x: ${point.screenX}, y: ${point.screenY})
+let start = CGPoint(x: ${point.macScreenX}, y: ${point.macScreenY})
 func post(_ type: CGEventType, _ point: CGPoint) { CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap) }
 post(.mouseMoved, start)
 usleep(100000)
@@ -2699,6 +2701,7 @@ describe("desktop binary workflows and native boundaries", () => {
     const originalSize = await browser.getWindowSize()
     try {
       await browser.setWindowSize(1280, 840)
+      if (process.platform === "darwin") await browser.setWindowPosition(0, 0)
       await sourcePreviewResizeWorkflow(new DesktopEditorUi())
     } finally {
       await browser.setWindowSize(originalSize.width, originalSize.height)
