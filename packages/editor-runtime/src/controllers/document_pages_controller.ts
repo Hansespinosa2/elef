@@ -994,7 +994,13 @@ export default class extends Controller<HTMLElement> {
   textMap(element: Element): TextMap {
     const nodes: TextMapEntry[] = []
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
-      acceptNode: (node) => node.parentElement?.closest(HIDDEN_TEXT_SELECTOR) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+      // The source preview marks the entire editor block contenteditable=false.
+      // That outer read-only shell must not hide the block's text from the
+      // paginator; only non-editable descendants of the text target are atomic.
+      acceptNode: (node) => {
+        const hidden = node.parentElement?.closest(HIDDEN_TEXT_SELECTOR)
+        return hidden && hidden !== element && element.contains(hidden) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+      }
     })
     let node: Node | null
     let text = ""

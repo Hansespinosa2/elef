@@ -2725,6 +2725,29 @@ class DocumentsTest < ApplicationSystemTestCase
     end
   end
 
+  test "flows paragraph text in the read-only source preview" do
+    paragraph = ("Natural page flow continues this paragraph across pages. " * 18).strip
+    document = Document.create!(title: "Source preview flow", source: "Opening paragraph.\n\n#{paragraph}")
+    visit edit_document_path(document)
+    find('[data-editor-target="sourceButton"]').click
+    assert_selector '.editor-projection.preview-pane .document-surface[data-document-pages-settled="true"]', wait: 10
+    pages = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.editor-projection.preview-pane .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.editor-projection.preview-pane .document-surface .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        controller.paginate();
+        return [...surface.querySelectorAll('.document-page-content')].map(content => [...content.querySelectorAll('p')].map(p => p.textContent));
+      })()
+    JAVASCRIPT
+    fragments = pages.flatten.select { |text| text.start_with?("Natural page flow") || paragraph.include?(text) && text != "Opening paragraph." }
+    assert_operator fragments.length, :>, 1
+    assert pages.first.any? { |text| text.start_with?("Natural page flow") }
+    assert_equal paragraph, fragments.join
+  end
+
   test "reassembles a continued list item before editing or repagination" do
     long_item = ("Long item text stays together in the Markdown source. " * 65).strip
     source = "- First item\n- #{long_item}\n- Last item"
