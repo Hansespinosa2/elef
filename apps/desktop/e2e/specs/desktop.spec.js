@@ -1071,8 +1071,18 @@ class DesktopEditorUi {
   async assertSourcePreviewResize() {
     const splitter = await $("[role='separator'][aria-label='Resize source and preview']")
     await splitter.waitForDisplayed()
-    await browser.execute(() => document.querySelector(".editor-splitter").focus())
-    await browser.keys(Key.Home)
+    await browser.execute(() => { window.focus(); document.querySelector(".editor-splitter").focus() })
+    if (process.platform === "darwin") focusDesktopWindow()
+    const initialSplit = Number(await splitter.getAttribute("aria-valuenow"))
+    await browser.keys(Key.ArrowLeft)
+    await browser.waitUntil(async () => Number(await splitter.getAttribute("aria-valuenow")) === Math.max(20, initialSplit - 2), {
+      timeout: 5_000, timeoutMsg: "The desktop splitter did not respond to ArrowLeft"
+    })
+    // macOS WebDriver forwards private-use Home/End values as event.key;
+    // use canonical events there, as in sendPresentationKey above.
+    if (process.platform === "darwin") {
+      await browser.execute(() => document.querySelector(".editor-splitter").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })))
+    } else await browser.keys(Key.Home)
     await browser.waitUntil(async () => await splitter.getAttribute("aria-valuenow") === "20", {
       timeout: 5_000, timeoutMsg: "The desktop splitter did not respond to Home"
     })
@@ -1099,7 +1109,9 @@ class DesktopEditorUi {
       return frameRect.width > 0 && Math.abs(frameRect.width - contentRect.width) < 2 && Math.abs(frameRect.height - contentRect.height) < 2
     }), { timeout: 5_000, timeoutMsg: "The desktop preview frame did not fit after resizing" })
     await browser.execute(() => document.querySelector(".editor-splitter").focus())
-    await browser.keys(Key.End)
+    if (process.platform === "darwin") {
+      await browser.execute(() => document.querySelector(".editor-splitter").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })))
+    } else await browser.keys(Key.End)
     await browser.waitUntil(async () => await splitter.getAttribute("aria-valuenow") === "80", {
       timeout: 5_000, timeoutMsg: "The desktop splitter did not respond to End"
     })
