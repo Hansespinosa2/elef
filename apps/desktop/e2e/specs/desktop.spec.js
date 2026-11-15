@@ -1078,11 +1078,9 @@ class DesktopEditorUi {
     await browser.waitUntil(async () => Number(await splitter.getAttribute("aria-valuenow")) === Math.max(20, initialSplit - 2), {
       timeout: 5_000, timeoutMsg: "The desktop splitter did not respond to ArrowLeft"
     })
-    // macOS WebDriver forwards private-use Home/End values as event.key;
-    // use canonical events there, as in sendPresentationKey above.
-    if (process.platform === "darwin") {
-      await browser.execute(() => document.querySelector(".editor-splitter").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })))
-    } else await browser.keys(Key.Home)
+    // WebKit WebDriver forwards private-use Home/End values as event.key;
+    // use canonical events, as in sendPresentationKey above.
+    await browser.execute(() => document.querySelector(".editor-splitter").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })))
     await browser.waitUntil(async () => await splitter.getAttribute("aria-valuenow") === "20", {
       timeout: 5_000, timeoutMsg: "The desktop splitter did not respond to Home"
     })
@@ -1096,11 +1094,22 @@ class DesktopEditorUi {
       const rect = document.querySelector(".editor-splitter").getBoundingClientRect()
       return { x: Math.round(rect.left + rect.width / 2), y: Math.round((Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2) }
     })
+    const hit = await browser.execute(({ x, y }) => {
+      const target = document.elementFromPoint(x, y)
+      window.__splitterEvents = []
+      for (const name of ["pointerdown", "pointermove", "pointerup", "gotpointercapture", "lostpointercapture"]) {
+        document.addEventListener(name, event => {
+          if (window.__splitterEvents.length < 30) window.__splitterEvents.push({ type: event.type, target: event.target.className, x: event.clientX, y: event.clientY })
+        }, { capture: true })
+      }
+      return { tag: target?.tagName, className: target?.className }
+    }, point)
     await browser.action("pointer", { parameters: { pointerType: "mouse" } })
       .move({ origin: "viewport", x: point.x, y: point.y }).down({ button: 0 }).pause(100)
       .move({ origin: "viewport", x: point.x + 150, y: point.y, duration: 500 }).up({ button: 0 }).perform()
+    const events = await browser.execute(() => window.__splitterEvents)
     await browser.waitUntil(async () => Number(await splitter.getAttribute("aria-valuenow")) > 20, {
-      timeout: 5_000, timeoutMsg: "Dragging the desktop splitter did not resize the panes"
+      timeout: 5_000, timeoutMsg: `Dragging the desktop splitter did not resize the panes: ${JSON.stringify({ point, hit, events })}`
     })
     const after = await dimensions()
     if (after.source <= before.source + 50 || after.preview >= before.preview - 50) {
@@ -1116,9 +1125,7 @@ class DesktopEditorUi {
       return frameRect.width > 0 && Math.abs(frameRect.width - contentRect.width) < 2 && Math.abs(frameRect.height - contentRect.height) < 2
     }), { timeout: 5_000, timeoutMsg: "The desktop preview frame did not fit after resizing" })
     await browser.execute(() => document.querySelector(".editor-splitter").focus())
-    if (process.platform === "darwin") {
-      await browser.execute(() => document.querySelector(".editor-splitter").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })))
-    } else await browser.keys(Key.End)
+    await browser.execute(() => document.querySelector(".editor-splitter").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })))
     await browser.waitUntil(async () => await splitter.getAttribute("aria-valuenow") === "80", {
       timeout: 5_000, timeoutMsg: "The desktop splitter did not respond to End"
     })
