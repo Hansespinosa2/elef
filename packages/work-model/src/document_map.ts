@@ -439,9 +439,15 @@ function editorBlocks(
   const directives: MapDirective[] = []
   const regions: MapRegion[] = []
   let current: SourceLine[] = []
+  let currentBlockStartCount = 0
   let pendingPosition: PendingPosition | null = null
   let fence: FenceState | null = null
   let mathFence: string | null = null
+
+  const pushCurrentLine = (line: SourceLine, lineIndex: number): void => {
+    if (boundaryMap.blockStarts.has(lineIndex)) currentBlockStartCount += 1
+    current.push(line)
+  }
 
   const flush = (): void => {
     if (!current.length) return
@@ -479,44 +485,46 @@ function editorBlocks(
         }
       }
     }
-    const region = editableRegion(markdown, blockStart, id, slideIndex, blockIndex, kind, slide, mode)
+    const region = editableRegion(markdown, blockStart, id, slideIndex, blockIndex, kind, slide, mode, currentBlockStartCount > 1)
     block.editable_region_id = region.id
     blocks.push(block)
     regions.push(region)
     current = []
+    currentBlockStartCount = 0
     pendingPosition = null
   }
 
   lines.forEach((line, lineIndex) => {
-    if (boundaryMap.blockStarts.has(lineIndex) && current.length) flush()
+    const artBinding = artBindings.byLine[lineIndex]
+    if (artBinding && lineIndex === artBinding.target_lines.start && current.length) flush()
     const incomingFence = fenceMarker(line.text)
     if (fence) {
-      current.push(line)
+      pushCurrentLine(line, lineIndex)
       fence = toggleFence(fence, incomingFence)
+      if (!fence && artBinding && lineIndex + 1 === artBinding.target_lines.end) flush()
       return
     }
     if (incomingFence) {
-      current.push(line)
+      pushCurrentLine(line, lineIndex)
       fence = incomingFence
       return
     }
     if (mathFence) {
-      current.push(line)
+      pushCurrentLine(line, lineIndex)
       if (displayMathFenceCloser(line.text, mathFence)) {
         mathFence = null
-        if (boundaryMap.blockEnds.has(lineIndex + 1)) flush()
+        if (artBinding && lineIndex + 1 === artBinding.target_lines.end) flush()
       }
       return
     }
     const openingMathFence = displayMathFenceOpener(line.text)
     if (openingMathFence) {
-      current.push(line)
+      pushCurrentLine(line, lineIndex)
       mathFence = openingMathFence
       return
     }
     if (boundaryMap.blankLines.has(lineIndex)) {
-      const artBinding = artBindings.byLine[lineIndex]
-      if (artBinding && lineIndex + 1 < artBinding.target_lines.end) current.push(line)
+      if (artBinding && lineIndex + 1 < artBinding.target_lines.end) pushCurrentLine(line, lineIndex)
       else flush()
       return
     }
@@ -540,8 +548,8 @@ function editorBlocks(
       }
       return
     }
-    current.push(line)
-    if (boundaryMap.blockEnds.has(lineIndex + 1)) flush()
+    pushCurrentLine(line, lineIndex)
+    if (artBinding && lineIndex + 1 === artBinding.target_lines.end) flush()
   })
   flush()
   if (mode === "document") directives.forEach(directive => { directive.scope = "document" })
@@ -594,10 +602,11 @@ function editableRegion(
   blockIndex: number,
   kind: string,
   slide: SlideMetadata,
-  mode: string
+  mode: string,
+  multiConstruct = false
 ): MapRegion {
   const id = `slide-${slideIndex + 1}-region-${blockIndex + 1}`
-  const editable = clientCanRoundTrip(markdown, kind)
+  const editable = !multiConstruct && clientCanRoundTrip(markdown, kind)
   const heading = /^(\s{0,3})(#+)(\s+)(.+?)(\s*#*\s*)$/s.exec(markdown)
   if (heading) {
     const contentStart = blockStart + (heading[1] ?? "").length + (heading[2] ?? "").length + (heading[3] ?? "").length
@@ -1176,15 +1185,16 @@ function markdownBlocks(markdown: string, artResolution: ArtBindings, sourceBoun
   let fence: FenceState | null = null
   let mathFence: string | null = null
   for (const [index, line] of markdown.split("\n").entries()) {
-    if (boundaryMap.blockStarts.has(index) && current.length) flush()
+    const artBinding = artBindings.byLine[index]
+    if (artBinding && index === artBinding.target_lines.start && current.length) flush()
     const incoming = fenceMarker(line)
     if (fence) fence = toggleFence(fence, incoming)
     else if (incoming) fence = incoming
     if (!fence && mathFence) {
-      current.push(line)
+      pushLine(line, index)
       if (displayMathFenceCloser(line, mathFence)) {
         mathFence = null
-        if (boundaryMap.blockEnds.has(index + 1)) flush()
+        if (artBinding && index + 1 === artBinding.target_lines.end) flush()
       }
       continue
     }
@@ -1201,13 +1211,12 @@ function markdownBlocks(markdown: string, artResolution: ArtBindings, sourceBoun
       flush()
       blocks.push({ markdown: line.trim(), startLine: index, endLine: index + 1 })
     } else if ((line === "" || boundaryMap.blankLines.has(index)) && !fence && !mathFence) {
-      const artBinding = artBindings.byLine[index]
       if (artBinding && index + 1 < artBinding.target_lines.end) pushLine(line, index)
       else flush()
     } else {
       pushLine(line, index)
     }
-    if (boundaryMap.blockEnds.has(index + 1)) flush()
+    if (!fence && !mathFence && artBinding && index + 1 === artBinding.target_lines.end) flush()
   }
   flush()
   return blocks

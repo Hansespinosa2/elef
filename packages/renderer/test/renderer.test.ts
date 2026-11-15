@@ -305,3 +305,24 @@ test("ART-SRC-INVALID-PARITY: invalid Art is consumed with only its stable Art d
   assert.doesNotMatch(preview.html, /:::art\{flow\}/)
   assert.doesNotMatch(preview.html, /data-elef-art-root/)
 })
+
+test("consecutive non-blank lines render in a single aligned and stepped block", () => {
+  const source = [
+    "# Slide",
+    "",
+    ":::align{center}",
+    ":::step{1}",
+    "## Fitzgerald",
+    "American novelist",
+    "- The Great Gatsby",
+    "- Tender Is the Night"
+  ].join("\n")
+  const preview = renderPreviewCore({ kind: "presentation", source, title: "Grouped" })
+
+  assert.equal((preview.html.match(/class="slide-block[^"]*"/g) || []).length, 2)
+  assert.match(
+    preview.html,
+    /<div class="slide-block position-center position-top" data-elef-reveal-event="0"><h2>Fitzgerald<\/h2>\s*<p>American novelist<\/p>\s*<ul>\s*<li>The Great Gatsby<\/li>\s*<li>Tender Is the Night<\/li>\s*<\/ul>\s*<\/div>/
+  )
+})
+

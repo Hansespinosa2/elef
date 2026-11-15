@@ -214,3 +214,40 @@ test("display math fences do not swallow presentation slide delimiters", () => {
   const { slides } = buildEditorStructure(source, { mode: "presentation" })
   assert.equal(slides.length, 2)
 })
+
+test("consecutive non-blank lines group into a single block for alignment and stepping", () => {
+  const source = [
+    "# Grouped Slide",
+    "",
+    ":::align{middle center}",
+    ":::step{1}",
+    "## Fitzgerald",
+    "American novelist",
+    "- The Great Gatsby",
+    "- Tender Is the Night",
+    "",
+    "Separate paragraph"
+  ].join("\n")
+  const structure = buildEditorStructure(source, { mode: "presentation" })
+  const slide = structure.slides[0]
+  const mapSlide = structure.editorMap.slides[0]
+  assert.ok(slide)
+  assert.ok(mapSlide)
+
+  assert.equal(slide.blocks.length, 3)
+  assert.equal(slide.blocks[1]?.markdown, "## Fitzgerald\nAmerican novelist\n- The Great Gatsby\n- Tender Is the Night")
+  assert.deepEqual(slide.blocks[1]?.position, { horizontal: "center", vertical: "middle", vertical_explicit: true })
+  assert.equal(slide.blocks[1]?.reveal_event, 0)
+  assert.equal(slide.blocks[2]?.markdown, "Separate paragraph")
+  assert.equal(slide.blocks[2]?.position, null)
+  assert.equal(slide.blocks[2]?.reveal_event, undefined)
+
+  assert.equal(mapSlide.blocks.length, 3)
+  assert.equal(mapSlide.blocks[1]?.markdown, "## Fitzgerald\nAmerican novelist\n- The Great Gatsby\n- Tender Is the Night")
+  assert.deepEqual(mapSlide.blocks[1]?.position, { horizontal: "center", vertical: "middle", vertical_explicit: true })
+  assert.equal(mapSlide.blocks[1]?.reveal_event, 0)
+  // Multi-construct grouped blocks are non-editable in visual mode to prevent lossy inline round-tripping.
+  assert.equal(mapSlide.editable_regions[1]?.editable, false)
+  assert.equal(mapSlide.editable_regions[2]?.editable, true)
+})
+

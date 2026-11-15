@@ -42,14 +42,15 @@ test("ART-BOUNDARY-THEMATIC: adjacent thematic break stays outside the Art list"
   const { document } = parseHTML(preview.html)
   const slide = structure.editorMap.slides[0]
 
-  assert.deepEqual(slide.blocks.map(block => block.markdown), ["- Alpha\n- Beta", "***", "After"])
+  assert.deepEqual(slide.blocks.map(block => block.markdown), ["- Alpha\n- Beta", "***\nAfter"])
   assert.ok(slide.blocks[0].art)
   assert.equal(slide.blocks.slice(1).filter(block => block.art).length, 0)
   assert.equal(document.querySelectorAll("[data-elef-art-root] .elef-art-list > li").length, 2)
   assert.ok(document.querySelector("hr"))
   const renderedBlocks = [...document.querySelectorAll(".document-editor-block-shell")]
-  assert.equal(renderedBlocks.length, 3)
-  assert.equal(renderedBlocks[2].querySelector("p")?.textContent, "After")
+  assert.equal(renderedBlocks.length, 2)
+  assert.ok(renderedBlocks[1].querySelector("hr"))
+  assert.equal(renderedBlocks[1].querySelector("p")?.textContent, "After")
 })
 
 test("ART-BOUNDARY-LEGACY-MARGIN: a footnote after paragraph text remains metadata", () => {
