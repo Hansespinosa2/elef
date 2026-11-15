@@ -1091,7 +1091,14 @@ class DesktopEditorUi {
       preview: document.querySelector(".preview-pane").getBoundingClientRect().width
     }))
     const before = await dimensions()
-    await splitter.dragAndDrop({ x: 150, y: 0 })
+    await browser.execute(() => document.querySelector(".editor-splitter").scrollIntoView({ block: "center" }))
+    const point = await browser.execute(() => {
+      const rect = document.querySelector(".editor-splitter").getBoundingClientRect()
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round((Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2) }
+    })
+    await browser.action("pointer", { parameters: { pointerType: "mouse" } })
+      .move({ origin: "viewport", x: point.x, y: point.y }).down({ button: 0 }).pause(100)
+      .move({ origin: "viewport", x: point.x + 150, y: point.y, duration: 500 }).up({ button: 0 }).perform()
     await browser.waitUntil(async () => Number(await splitter.getAttribute("aria-valuenow")) > 20, {
       timeout: 5_000, timeoutMsg: "Dragging the desktop splitter did not resize the panes"
     })
