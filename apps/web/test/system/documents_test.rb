@@ -2803,6 +2803,43 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: source.sub(long_item, "#{long_item} updated"), wait: 5
   end
 
+  test "flows an oversized nested ordered list without changing its source" do
+    nested = (1..60).map { |n| "  #{n}. Nested item #{n} with explanatory text" }.join("\n")
+    source = "Opening paragraph.\n\n- Parent item\n#{nested}\n- Outer tail"
+    document = Document.create!(title: "Nested list flow", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const lists = [...surface.querySelectorAll('ol')];
+        const items = lists.flatMap(list => [...list.children].map(item => item.textContent.trim()));
+        const last = lists.at(-1).lastElementChild;
+        const block = last.closest('.document-editor-block');
+        const range = document.createRange();
+        range.selectNodeContents(last);
+        range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return { items, starts: lists.map(list => [list.start, list.children.length]), overflow: surface.querySelectorAll('.is-overflowing-content').length };
+      })()
+    JAVASCRIPT
+    assert_equal (1..60).map { |n| "Nested item #{n} with explanatory text" }, state.fetch("items")
+    assert_operator state.fetch("starts").length, :>, 1
+    next_number = 1
+    state.fetch("starts").each do |start, count|
+      assert_equal next_number, start
+      next_number += count
+    end
+    assert_equal 0, state.fetch("overflow")
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: source.sub("Nested item 60 with explanatory text", "Nested item 60 with explanatory text updated"), wait: 5
+  end
+
   test "continues a loose list item without splitting its Markdown structure" do
     long_item = ("Loose list item text flows over the page. " * 90).strip
     source = "- #{long_item}\n\n- Final item"

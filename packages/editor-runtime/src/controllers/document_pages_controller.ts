@@ -549,6 +549,9 @@ export default class extends Controller<HTMLElement> {
     const childTextSplit = this.splitLeadingGroupText(block, page)
     if (childTextSplit) return childTextSplit
 
+    const nestedSplit = this.splitNestedGroupText(block, page)
+    if (nestedSplit) return nestedSplit
+
     // Never split a descendant while cloning its siblings into both halves.
     // Grouped content needs the structural merge handled above.
     if (block.matches("ul, ol, blockquote") || block.querySelector("ul, ol, blockquote")) return null
@@ -570,6 +573,113 @@ export default class extends Controller<HTMLElement> {
       this.textFragment(block, target, textMap, 0, best),
       this.textFragment(block, target, textMap, best, textMap.text.length)
     ]
+  }
+
+  // A group can contain another list or quote that is itself taller than a
+  // page. Range cloning preserves the ancestor chain at the break, while the
+  // continuation markers let both the paginator and editor rejoin it.
+  splitNestedGroupText(block: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {
+    const group = block.matches("ul, ol, blockquote") ? block : block.querySelector("ul, ol, blockquote")
+    if (!group || !this.isolatedTarget(block, group) || !group.querySelector("ul, ol, blockquote")) return null
+    if (group.querySelector("table, pre, [data-elef-art-root], .elef-python-block")) return null
+    const map = this.textMap(group)
+    const insideText = (offset: number): boolean => map.nodes.some(entry =>
+      offset > entry.start && offset < entry.end && Boolean(entry.node.textContent?.trim()))
+    let stop = this.largestFittingNestedItemBoundary(block, group, page)
+    if (!stop) {
+      const words = this.wordBoundaries(map.text).filter(insideText)
+      let best = this.largestFittingBoundary(block, group, map, words, page)
+      if (!best) best = this.largestFittingBoundary(block, group, map, this.characterBoundaries(map.text).filter(insideText), page)
+      if (!best) return null
+      stop = this.pointAtTextOffset(map, best)
+    }
+    let ancestor = stop.node instanceof Element ? stop.node : stop.node.parentElement
+    const chain: Element[] = []
+    while (ancestor && ancestor !== group) {
+      chain.unshift(ancestor)
+      ancestor = ancestor.parentElement
+    }
+    if (ancestor !== group) return null
+    const left = this.rangeFragment(block, group, stop, true)
+    const right = this.rangeFragment(block, group, stop, false)
+    const path = this.nodePath(block, group)
+    let leftParent: Element = this.nodeAtPath(left, path)
+    let rightParent: Element = this.nodeAtPath(right, path)
+    let originalParent: Element = group
+    for (const original of chain) {
+      const leftChild = leftParent.lastElementChild
+      const rightChild = rightParent.firstElementChild
+      if (!leftChild || !rightChild || leftChild.tagName !== original.tagName || rightChild.tagName !== original.tagName) return null
+      if (originalParent instanceof HTMLOListElement && original.tagName === "LI") {
+        this.continueOrderedList(originalParent, original, leftParent, rightParent)
+      }
+      rightChild.setAttribute("data-document-page-continuation", "true")
+      originalParent = original
+      leftParent = leftChild
+      rightParent = rightChild
+    }
+    if (originalParent instanceof HTMLOListElement && stop.node === originalParent) {
+      const nextItem = [...originalParent.childNodes].slice(stop.offset).find(node => node instanceof Element && node.tagName === "LI")
+      if (nextItem instanceof Element) this.continueOrderedList(originalParent, nextItem, leftParent, rightParent)
+    }
+    return [left, right]
+  }
+
+  largestFittingNestedItemBoundary(block: HTMLElement, group: Element, page: DocumentPage): { node: Node; offset: number } | null {
+    const points = [...group.querySelectorAll("li")].flatMap(item => {
+      const parent = item.parentElement
+      if (!parent || !parent.matches("ul, ol")) return []
+      return [{ node: parent as Node, offset: [...parent.childNodes].indexOf(item) + 1 }]
+    })
+    const rangeFor = (point: { node: Node; offset: number }): Range => {
+      const range = document.createRange()
+      range.setStart(group, 0)
+      range.setEnd(point.node, point.offset)
+      return range
+    }
+    points.sort((a, b) => rangeFor(a).compareBoundaryPoints(Range.END_TO_END, rangeFor(b)))
+    let low = 0
+    let high = points.length - 1
+    let best: { node: Node; offset: number } | null = null
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2)
+      const point = points[middle]
+      if (!point) break
+      const probe = this.rangeFragment(block, group, point, true)
+      page.content.append(probe)
+      this.probingDepth += 1
+      const fits = !this.overflows(page)
+      this.probingDepth -= 1
+      page.content.removeChild(probe)
+      if (fits) { best = point; low = middle + 1 } else high = middle - 1
+    }
+    // A boundary after the final item makes no progress.
+    if (best && !this.rangeFragment(block, group, best, false).textContent?.trim()) return null
+    return best
+  }
+
+  rangeFragment(block: HTMLElement, group: Element, point: { node: Node; offset: number }, before: boolean): HTMLElement {
+    const clone = block.cloneNode(true) as HTMLElement
+    const target = this.nodeAtPath(clone, this.nodePath(block, group))
+    const range = document.createRange()
+    if (before) { range.setStart(group, 0); range.setEnd(point.node, point.offset) }
+    else { range.setStart(point.node, point.offset); range.setEnd(group, group.childNodes.length) }
+    target.replaceChildren(range.cloneContents())
+    target.dataset.documentPageFlowContent = "true"
+    return clone
+  }
+
+  continueOrderedList(original: HTMLOListElement, splitItem: Element, left: Element, right: Element): void {
+    const step = original.reversed ? -1 : 1
+    const initial = original.hasAttribute("start") ? original.start : (original.reversed ? original.children.length : 1)
+    let next = initial
+    for (const item of [...original.children]) {
+      if (item === splitItem) break
+      if (item.hasAttribute("value")) next = (item as HTMLLIElement).value
+      next += step
+    }
+    left.setAttribute("start", String(initial))
+    right.setAttribute("start", String(next))
   }
 
   splitLeadingGroupText(block: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {

@@ -487,7 +487,7 @@ export class DocumentEditor {
       return
     }
     markStage("key-visibletext-start")
-    const visibleText = visibleBlockText(block)
+    const visibleText = this.blockFragments(blockId).map((fragment) => visibleBlockText(fragment)).join("")
     markStage("key-visibletext-end")
     const edit = translateProjectionInput({
       inputType: event.inputType,
