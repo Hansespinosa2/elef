@@ -2748,6 +2748,28 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal paragraph, fragments.join
   end
 
+  test "keeps inline math intact while repaginating the read-only source preview" do
+    paragraph = ("Text preceding an inline equation continues over the page. " * 12) + "$x+1$ " + ("Text following the equation keeps flowing. " * 20)
+    document = Document.create!(title: "Source preview math flow", source: "Opening paragraph.\n\n#{paragraph}")
+    visit edit_document_path(document)
+    find('[data-editor-target="sourceButton"]').click
+    assert_selector '.editor-projection.preview-pane .document-surface[data-document-pages-settled="true"] .katex', wait: 10
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.editor-projection.preview-pane .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.editor-projection.preview-pane .document-surface .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        controller.paginate();
+        controller.paginate();
+        return { pages: surface.querySelectorAll('.document-page').length, math: surface.querySelectorAll('.katex').length };
+      })()
+    JAVASCRIPT
+    assert_operator result.fetch("pages"), :>, 1
+    assert_equal 1, result.fetch("math")
+  end
+
   test "reassembles a continued list item before editing or repagination" do
     long_item = ("Long item text stays together in the Markdown source. " * 65).strip
     source = "- First item\n- #{long_item}\n- Last item"

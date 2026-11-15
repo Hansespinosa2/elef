@@ -999,7 +999,7 @@ export default class extends Controller<HTMLElement> {
       // paginator; only non-editable descendants of the text target are atomic.
       acceptNode: (node) => {
         const hidden = node.parentElement?.closest(HIDDEN_TEXT_SELECTOR)
-        return hidden && hidden !== element && element.contains(hidden) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+        return hidden && element.contains(hidden) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
       }
     })
     let node: Node | null
