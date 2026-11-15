@@ -571,10 +571,13 @@ class WebEditorUi {
     await expect(splitter).toHaveAttribute("aria-valuenow", "20")
     const beforeSource = (await source.boundingBox()).width
     const beforePreview = (await preview.boundingBox()).width
+    await splitter.scrollIntoViewIfNeeded()
     const handle = await splitter.boundingBox()
-    await this.page.mouse.move(handle.x + handle.width / 2, handle.y + Math.min(handle.height / 2, 100))
+    const viewport = this.page.viewportSize()
+    const y = (Math.max(0, handle.y) + Math.min(viewport.height, handle.y + handle.height)) / 2
+    await this.page.mouse.move(handle.x + handle.width / 2, y)
     await this.page.mouse.down()
-    await this.page.mouse.move(handle.x + handle.width / 2 + 150, handle.y + Math.min(handle.height / 2, 100), { steps: 5 })
+    await this.page.mouse.move(handle.x + handle.width / 2 + 150, y, { steps: 5 })
     await this.page.mouse.up()
     await expect.poll(async () => Number(await splitter.getAttribute("aria-valuenow"))).toBeGreaterThan(20)
     expect((await source.boundingBox()).width).toBeGreaterThan(beforeSource + 50)
@@ -588,6 +591,7 @@ class WebEditorUi {
       const contentRect = content.getBoundingClientRect()
       return Math.abs(frameRect.width - contentRect.width) < 2 && Math.abs(frameRect.height - contentRect.height) < 2
     })).toBe(true)
+    await splitter.focus()
     await this.page.keyboard.press("End")
     await expect(splitter).toHaveAttribute("aria-valuenow", "80")
   }
@@ -1324,7 +1328,7 @@ test("the source editor has matching styles in Rails and the desktop asset bundl
   const stylesheets = await readHostStylesheets()
   const measured = {}
   for (const [target, css] of Object.entries(stylesheets)) {
-    await page.setContent(`<!doctype html><html data-theme="dark"><head><style>${css}</style><style>${codeMirrorStyles}</style></head><body class="elef-app"><main class="app-shell mx-auto max-w-[1440px] p-[clamp(1rem,4vw,3rem)]"><form class="visual-editor-form" data-editor-mode="source">${editorHtml}</form></main></body></html>`)
+    await page.setContent(`<!doctype html><html data-theme="dark"><head><style>${css}</style><style>${codeMirrorStyles}</style></head><body class="elef-app"><main style="width:100%;box-sizing:border-box" class="app-shell mx-auto max-w-[1440px] p-[clamp(1rem,4vw,3rem)]"><form class="visual-editor-form" data-editor-mode="source">${editorHtml}</form></main></body></html>`)
     measured[target] = await page.evaluate(() => {
       const selectors = [".editor-shell", ".editor-layout", ".source-pane", ".source-field", ".editor-toolbar",
         ".editor-surface", ".cm-editor", ".cm-scroller", ".cm-content", ".editor-projection"]
@@ -1344,7 +1348,7 @@ test("the source editor has matching styles in Rails and the desktop asset bundl
     })
   }
   expect(measured.desktop).toEqual(measured.web)
-  expect(measured.web[".editor-layout"].gridTemplateColumns.split(" ")).toHaveLength(2)
+  expect(measured.web[".editor-layout"].gridTemplateColumns.split(" ")).toHaveLength(3)
   expect(measured.web[".cm-editor"].rectHeight).toBeGreaterThan(300)
 })
 
