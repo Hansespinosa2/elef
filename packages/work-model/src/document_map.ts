@@ -455,7 +455,7 @@ function editorBlocks(
     const markdown = source.slice(blockStart, blockEnd).replace(/(?:\r\n|\r|\n)$/, "")
     const blockIndex = blocks.length
     const id = `slide-${slideIndex + 1}-block-${blockIndex + 1}`
-    const kind = editableBlockKind(markdown)
+    const kind = editableBlockKind(markdown, currentBlockStartCount > 1)
     const range: SourceRange = { start: blockStart, end: blockEnd }
     const contentRange: SourceRange = { start: blockStart, end: blockStart + markdown.length }
     const block: MapBlock = {
@@ -748,7 +748,8 @@ function emptyEditorBlock(slideIndex: number, sequence: number, offset: number):
   }]
 }
 
-function editableBlockKind(markdown: string): string {
+function editableBlockKind(markdown: string, multiConstruct = false): string {
+  if (multiConstruct) return "paragraph"
   if (headingFor(markdown) || /^\s{0,3}#[ \t]*$/.test(markdown)) return "heading"
   if (fencedCodeSource(markdown) || /^ {4}|^\t/.test(markdown)) return "code"
   if (imageBlock(markdown)) return "image"
@@ -874,7 +875,7 @@ function slideMetadata(
   }
   for (const line of reveals.directive_lines) lines[line] = ""
   const parsed = parseBlocks(lines.join("\n"), artResolution, sourceBoundaryMap, reveals, mode)
-  const layout = inferLayout(parsed.blocks)
+  const layout = inferLayout(parsed.blocks, parsed.multiConstructBlocks)
   const title = ["two-column", "three-column"].includes(layout) ? parsed.blocks[0]?.markdown ?? null : null
   const regions = columnRegions(parsed.blocks, layout)
   const placementWarnings = mode === "presentation"
@@ -1008,6 +1009,7 @@ interface RawMarkdownBlock {
   markdown: string
   startLine: number
   endLine: number
+  multiConstruct?: boolean
 }
 
 interface RevealGroups {
@@ -1024,7 +1026,7 @@ function parseBlocks(
   sourceBoundaryMap: ArtBoundaryMap,
   reveals: RevealGroups,
   mode = "presentation"
-): { blocks: ParsedBlock[]; warnings: string[]; reveal_event_count: number } {
+): { blocks: ParsedBlock[]; warnings: string[]; reveal_event_count: number; multiConstructBlocks: Set<ParsedBlock> } {
   const rawBlocks = markdownBlocks(markdown, artResolution, sourceBoundaryMap, mode)
   if (reveals?.directive_lines.length) return parseBlocksWithReveals(rawBlocks, artResolution, reveals)
 
@@ -1034,8 +1036,9 @@ function parseBlocks(
 function parseBlocksPlain(
   rawBlocks: Array<RawMarkdownBlock>,
   artResolution: ArtBindings
-): { blocks: ParsedBlock[]; warnings: string[]; reveal_event_count: number } {
+): { blocks: ParsedBlock[]; warnings: string[]; reveal_event_count: number; multiConstructBlocks: Set<ParsedBlock> } {
   const blocks: ParsedBlock[] = []
+  const multiConstructBlocks = new Set<ParsedBlock>()
   const warnings: string[] = []
   const artBindingsByStartLine = new Map(artResolution.bindings.map((binding) => [binding.target_lines.start, binding]))
   for (let index = 0; index < rawBlocks.length;) {
@@ -1044,7 +1047,7 @@ function parseBlocksPlain(
     const position = positionFromBlock(block)
     if (position) {
       if (rawBlocks[index + 1] !== undefined) {
-        blocks.push(parsedBlock(rawBlocks[index + 1] as RawMarkdownBlock, position, artBindingsByStartLine, null))
+        appendParsedBlock(blocks, multiConstructBlocks, rawBlocks[index + 1] as RawMarkdownBlock, position, artBindingsByStartLine, null)
         index += 2
       } else {
         warnings.push("Dangling directive: alignment has no following Markdown block.")
@@ -1054,19 +1057,20 @@ function parseBlocksPlain(
       warnings.push("Unknown or malformed presentation directive was removed.")
       index += 1
     } else {
-      blocks.push(parsedBlock(record, null, artBindingsByStartLine, null))
+      appendParsedBlock(blocks, multiConstructBlocks, record, null, artBindingsByStartLine, null)
       index += 1
     }
   }
-  return { blocks, warnings, reveal_event_count: 0 }
+  return { blocks, warnings, reveal_event_count: 0, multiConstructBlocks }
 }
 
 function parseBlocksWithReveals(
   rawBlocks: Array<RawMarkdownBlock>,
   artResolution: ArtBindings,
   reveals: RevealGroups
-): { blocks: ParsedBlock[]; warnings: string[]; reveal_event_count: number } {
+): { blocks: ParsedBlock[]; warnings: string[]; reveal_event_count: number; multiConstructBlocks: Set<ParsedBlock> } {
   const blocks: ParsedBlock[] = []
+  const multiConstructBlocks = new Set<ParsedBlock>()
   const warnings: string[] = []
   const artBindingsByStartLine = new Map(artResolution.bindings.map((binding) => [binding.target_lines.start, binding]))
   for (let index = 0; index < rawBlocks.length;) {
@@ -1088,7 +1092,7 @@ function parseBlocksWithReveals(
         index += 1
       }
       if (rawBlocks[index]) {
-        blocks.push(parsedBlock(rawBlocks[index] as RawMarkdownBlock, selectedPosition, artBindingsByStartLine, reveals.event_by_line))
+        appendParsedBlock(blocks, multiConstructBlocks, rawBlocks[index] as RawMarkdownBlock, selectedPosition, artBindingsByStartLine, reveals.event_by_line)
         index += 1
       } else {
         warnings.push("Dangling directive: alignment has no following Markdown block.")
@@ -1102,10 +1106,23 @@ function parseBlocksWithReveals(
       continue
     }
 
-    blocks.push(parsedBlock(record, null, artBindingsByStartLine, reveals.event_by_line))
+    appendParsedBlock(blocks, multiConstructBlocks, record, null, artBindingsByStartLine, reveals.event_by_line)
     index += 1
   }
-  return { blocks, warnings, reveal_event_count: reveals.event_count }
+  return { blocks, warnings, reveal_event_count: reveals.event_count, multiConstructBlocks }
+}
+
+function appendParsedBlock(
+  blocks: ParsedBlock[],
+  multiConstructBlocks: Set<ParsedBlock>,
+  record: RawMarkdownBlock,
+  position: SourcePosition | null,
+  artBindingsByStartLine: Map<number, ArtBindings["bindings"][number]>,
+  eventByLine: Record<number, number> | null
+): void {
+  const block = parsedBlock(record, position, artBindingsByStartLine, eventByLine)
+  blocks.push(block)
+  if (record.multiConstruct) multiConstructBlocks.add(block)
 }
 
 function parsedBlock(
@@ -1225,17 +1242,25 @@ function markdownBlocks(markdown: string, artResolution: ArtBindings, sourceBoun
   const artBindings = indexArtBindings(artResolution.bindings, markdown.split("\n").length)
   const boundaryMap = toBoundarySets(sourceBoundaryMap)
   let current: Array<string> = []
+  let currentBlockStartCount = 0
   let currentStartLine: number | null = null
   let currentEndLine: number | null = null
   const flush = (): void => {
     if (!current.length) return
-    blocks.push({ markdown: current.join("\n"), startLine: currentStartLine as number, endLine: currentEndLine as number })
+    blocks.push({
+      markdown: current.join("\n"),
+      startLine: currentStartLine as number,
+      endLine: currentEndLine as number,
+      multiConstruct: currentBlockStartCount > 1
+    })
     current = []
+    currentBlockStartCount = 0
     currentStartLine = null
     currentEndLine = null
   }
   const pushLine = (line: string, index: number): void => {
     if (!current.length) currentStartLine = index
+    if (boundaryMap.blockStarts.has(index)) currentBlockStartCount += 1
     current.push(line)
     currentEndLine = index + 1
   }
@@ -1306,7 +1331,7 @@ function artDiagnosticMessage(code: string): string {
   return messages[code] || "Art reported an unknown diagnostic."
 }
 
-function inferLayout(blocks: ParsedBlock[]): string {
+function inferLayout(blocks: ParsedBlock[], multiConstructBlocks?: ReadonlySet<ParsedBlock>): string {
   const meaningful = blocks.filter(block => block.markdown.trim())
   if (!meaningful.length) return "body"
   const first = meaningful[0]
@@ -1325,11 +1350,12 @@ function inferLayout(blocks: ParsedBlock[]): string {
   if (contentBlocks?.length === 1) {
     const only = contentBlocks[0]
     if (!only) return "body"
+    const multiConstruct = multiConstructBlocks?.has(only) ?? false
     const content = only.markdown
     if (imageBlock(content)) return "image"
-    if (tableBlock(content)) return "table"
-    if (codeBlock(content)) return "code"
-    if (!/^\s*(?:[-*+] |\d+[.)] |> |!\[|\||`{3,}|~{3,})/.test(content)) return "statement"
+    if (!multiConstruct && tableBlock(content)) return "table"
+    if (!multiConstruct && codeBlock(content)) return "code"
+    if (!multiConstruct && !/^\s*(?:[-*+] |\d+[.)] |> |!\[|\||`{3,}|~{3,})/.test(content)) return "statement"
   }
   return "body"
 }
@@ -1367,11 +1393,14 @@ function tableBlock(markdown: string): boolean {
 
 function codeBlock(markdown: string): boolean {
   const lines = sourceLines(markdown).map(line => line.text)
-  const opening = /^\s*([`~]{3,})/.exec(lines[0] ?? "")
-  const closing = /^\s*([`~]{3,})\s*$/.exec(lines.at(-1) ?? "")
-  const openMark = opening?.[1] ?? ""
-  const closeMark = closing?.[1] ?? ""
-  return openMark.length > 0 && closeMark.length >= openMark.length && openMark[0] === closeMark[0]
+  const opening = fenceMarker(lines[0] ?? "")
+  if (!opening || lines.length < 2) return false
+  let fence: FenceState | null = opening
+  for (let index = 1; index < lines.length; index += 1) {
+    fence = toggleFence(fence, fenceMarker(lines[index] ?? ""))
+    if (!fence) return index === lines.length - 1
+  }
+  return false
 }
 
 function fencedCodeSource(markdown: string): boolean {

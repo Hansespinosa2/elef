@@ -363,6 +363,23 @@ test("grouped blocks starting with headings do not hijack slide title or two-col
   assert.doesNotMatch(cardsPreview.html, /slide-two-column/)
   assert.match(cardsPreview.html, /data-elef-reveal-event="0"><h2>Fitzgerald<\/h2>/)
   assert.match(cardsPreview.html, /data-elef-reveal-event="1"><h2>Hemingway<\/h2>/)
+
+  const singleGroupedCard = renderPreviewCore({
+    kind: "presentation",
+    title: "Single card",
+    source: "# Authors\n\n:::align{center}\n## Fitzgerald\nAmerican novelist\n- The Great Gatsby\n- Tender Is the Night"
+  })
+  assert.match(singleGroupedCard.html, /<section class="slide slide-body"/)
+  assert.doesNotMatch(singleGroupedCard.html, /slide-statement/)
+  assert.match(singleGroupedCard.html, /<div class="slide-block position-center position-top"><h2>Fitzgerald<\/h2>/)
+
+  const paraPlusList = renderPreviewCore({
+    kind: "presentation",
+    title: "Para and list",
+    source: "# Intro\n\nParagraph line\n- Bullet"
+  })
+  assert.match(paraPlusList.html, /<section class="slide slide-body"/)
+  assert.doesNotMatch(paraPlusList.html, /slide-statement/)
 })
 
 test("executable python fences render output-first and show-code containers while static python fences stay highlighted code", () => {

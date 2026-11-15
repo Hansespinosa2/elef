@@ -343,3 +343,16 @@ test("pptx model builder preserves positioned titles and resolves Elef assets li
   assert.ok(mappedSlide);
   assert.ok(mappedSlide.blocks.some((block) => block.html.includes("elefasset://localhost/work/abc")));
 });
+
+test("pptx model builder keeps a single grouped card on body layout with one aligned payload", () => {
+  const grouped = buildPptxModel({
+    source: "# Authors\n\n:::align{center}\n## Fitzgerald\nAmerican novelist\n- The Great Gatsby\n- Tender Is the Night",
+    title: "Grouped",
+  });
+  const slide = grouped.slides[0];
+  assert.ok(slide);
+  assert.equal(slide.layout, "body");
+  assert.equal(slide.blocks.length, 2);
+  assert.deepEqual(slide.blocks[1]?.position, { horizontal: "center", vertical: "top", vertical_explicit: false });
+  assert.match(slide.blocks[1]?.html ?? "", /<h2>Fitzgerald<\/h2>\s*<p>American novelist<\/p>\s*<ul>/);
+});

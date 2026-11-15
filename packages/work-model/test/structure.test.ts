@@ -322,6 +322,51 @@ test("multi-line heading groups do not leak into slide titles or column headings
   assert.equal(mathStructure.editorMap.slides[0]?.editable_regions[0]?.editable, true)
 })
 
+test("single-card grouped slides keep body layout and isolate multi-construct kinds from statement/table/code", () => {
+  const steppedCard = buildEditorStructure(
+    "# Grouped source\n\n:::step\n## Fitzgerald\nAmerican novelist\n- The Great Gatsby\n- Tender Is the Night",
+    { mode: "presentation" }
+  )
+  assert.equal(steppedCard.slides[0]?.layout, "body")
+
+  const alignedCard = buildEditorStructure(
+    "# Authors\n\n:::align{center}\n## Fitzgerald\nAmerican novelist\n- The Great Gatsby",
+    { mode: "presentation" }
+  )
+  assert.equal(alignedCard.slides[0]?.layout, "body")
+  assert.equal(alignedCard.slides[0]?.blocks[1]?.position?.horizontal, "center")
+
+  for (const multiBody of [
+    "# Intro\n\nParagraph line\n- Bullet",
+    "# Quote\n\nLead\n> Inner quote"
+  ]) {
+    const structure = buildEditorStructure(multiBody, { mode: "presentation" })
+    assert.equal(structure.slides[0]?.layout, "body")
+  }
+
+  const mixedTable = buildEditorStructure("# Data\n\n| A | B |\n| --- | --- |\n| 1 | 2 |\n## Note", { mode: "presentation" })
+  assert.equal(mixedTable.slides[0]?.layout, "body")
+  assert.equal(mixedTable.editorMap.slides[0]?.blocks[1]?.kind, "paragraph")
+  assert.equal(mixedTable.editorMap.slides[0]?.editable_regions[1]?.editable, false)
+
+  const twoCodeFences = buildEditorStructure("# Code\n\n```js\na=1\n```\nMiddle\n```py\nb=2\n```", { mode: "presentation" })
+  assert.equal(twoCodeFences.slides[0]?.layout, "body")
+  assert.equal(twoCodeFences.editorMap.slides[0]?.blocks[1]?.kind, "paragraph")
+  assert.equal(twoCodeFences.editorMap.slides[0]?.editable_regions[1]?.editable, false)
+
+  const pureTable = buildEditorStructure("# Table\n\n| A | B |\n| --- | --- |\n| 1 | 2 |", { mode: "presentation" })
+  assert.equal(pureTable.slides[0]?.layout, "table")
+  assert.equal(pureTable.editorMap.slides[0]?.editable_regions[1]?.editable, true)
+
+  const pureCode = buildEditorStructure("# Code\n\n```js\na=1\n```", { mode: "presentation" })
+  assert.equal(pureCode.slides[0]?.layout, "code")
+  assert.equal(pureCode.editorMap.slides[0]?.editable_regions[1]?.editable, true)
+
+  const statementSlide = buildEditorStructure("# Takeaway\n\nSingle concise statement\nwith soft wrap", { mode: "presentation" })
+  assert.equal(statementSlide.slides[0]?.layout, "statement")
+  assert.equal(statementSlide.editorMap.slides[0]?.editable_regions[1]?.editable, true)
+})
+
 test("parsePythonFenceInfo classifies static and executable python fences", () => {
   assert.deepEqual(parsePythonFenceInfo("python"), { executable: false, showCode: false })
   assert.deepEqual(parsePythonFenceInfo("python run"), { executable: true, showCode: false })
