@@ -2840,6 +2840,35 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: source.sub("Nested item 60 with explanatory text", "Nested item 60 with explanatory text updated"), wait: 5
   end
 
+  test "edits a nested list item that itself spans pages" do
+    long_item = ("Nested item content continues across pages. " * 100).strip
+    source = "- Parent\n  1. #{long_item}\n  2. Last nested item\n- Tail"
+    document = Document.create!(title: "Nested item flow", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    count = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const items = [...surface.querySelectorAll('ol > li')].filter(li => li.textContent.includes('Nested item content'));
+        const last = items.at(-1);
+        const block = last.closest('.document-editor-block');
+        const range = document.createRange();
+        range.selectNodeContents(last);
+        range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return items.length;
+      })()
+    JAVASCRIPT
+    assert_operator count, :>, 1
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: source.sub(long_item, "#{long_item} updated"), wait: 5
+  end
+
   test "continues a loose list item without splitting its Markdown structure" do
     long_item = ("Loose list item text flows over the page. " * 90).strip
     source = "- #{long_item}\n\n- Final item"
