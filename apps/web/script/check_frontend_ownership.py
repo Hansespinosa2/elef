@@ -358,6 +358,7 @@ shared_workflows = {
     "displayMathEnterWorkflow",
     "documentLinkCompletionWorkflow",
     "documentPageAspectRatioWorkflow",
+    "documentPageFlowWorkflow",
     "editAndPreviewWorkflow",
     "exportWorkflow",
     "externalEditConflictWorkflow",

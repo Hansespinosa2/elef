@@ -14,6 +14,7 @@ import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from ".
 import { markStage } from "../../session/stage_marks.js"
 import { projectionRangeEdit } from "../../session/projection_range.js"
 import { paintProjectionSelections } from "../../session/projection_selections.js"
+import { appendPageFragment } from "./page_fragments.js"
 
 export interface DocumentEditorRange {
   start: number
@@ -1786,7 +1787,7 @@ export class DocumentEditor {
         ? fragment
         : fragment.querySelector("[data-document-page-flow-content]")
       if (!target || target.tagName !== combinedTarget.tagName) return
-      ;[...target.childNodes].forEach((child) => combinedTarget.append(child.cloneNode(true)))
+      appendPageFragment(combinedTarget, target)
     })
     combinedTarget.removeAttribute("data-document-page-flow-content")
     this.mergeAdjacentInlineElements(combinedTarget)

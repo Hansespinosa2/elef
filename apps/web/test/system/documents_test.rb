@@ -2684,6 +2684,150 @@ class DocumentsTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
+  test "flows ordinary paragraphs and ordered lists into the remaining page space" do
+    paragraph = ("Natural flow carries words across the page boundary. " * 18).strip
+    list = (3..12).map { |n| "#{n}. Ordered item #{n}" }.join("\n")
+    document = Document.create!(title: "Natural flow", source: "Opening paragraph.\n\n#{paragraph}\n\n#{list}")
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const reader = surface.closest('[data-controller~="document-pages"]');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(reader, 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        controller.paginate();
+        const inspect = () => [...surface.querySelectorAll('.document-page-content')].map(content => ({
+          paragraphs: [...content.querySelectorAll('p')].map(p => p.textContent),
+          lists: [...content.querySelectorAll('ol')].map(ol => ({ start: ol.start, items: [...ol.children].map(li => li.textContent.trim()) }))
+        }));
+        const first = inspect();
+        controller.paginate();
+        return { first, second: inspect() };
+      })()
+    JAVASCRIPT
+    assert_equal state.fetch("first"), state.fetch("second"), "repagination must preserve fragments"
+    pages = state.fetch("first")
+    paragraph_fragments = pages.flat_map { |entry| entry.fetch("paragraphs").select { |text| paragraph.include?(text) && text != "Opening paragraph." } }
+    assert_operator paragraph_fragments.length, :>, 1
+    assert_equal paragraph, paragraph_fragments.join
+    assert pages.first.fetch("paragraphs").any? { |text| text.start_with?("Natural flow") }, "paragraph should begin on the page with its predecessor"
+    list_fragments = pages.flat_map { |entry| entry.fetch("lists") }
+    assert_operator list_fragments.length, :>, 1
+    assert_equal (3..12).map { |n| "Ordered item #{n}" }, list_fragments.flat_map { |entry| entry.fetch("items") }
+    listNumber = 3
+    list_fragments.each do |fragment|
+      assert_equal listNumber, fragment.fetch("start")
+      listNumber += fragment.fetch("items").length
+    end
+  end
+
+  test "reassembles a continued list item before editing or repagination" do
+    long_item = ("Long item text stays together in the Markdown source. " * 65).strip
+    source = "- First item\n- #{long_item}\n- Last item"
+    document = Document.create!(title: "Long list item", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const reader = surface.closest('[data-controller~="document-pages"]');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(reader, 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const blocks = [...surface.querySelectorAll('.document-editor-block[data-editor-block-id]')];
+        const listBlocks = blocks.filter(block => block.querySelector('li'));
+        const item = listBlocks.flatMap(block => [...block.querySelectorAll('li')]).filter(li => li.textContent.includes('Long item text')).at(-1);
+        const last = item.closest('.document-editor-block');
+        const range = document.createRange();
+        range.selectNodeContents(item);
+        range.collapse(false);
+        last.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return listBlocks.map(block => [...block.querySelectorAll('li')].map(li => li.textContent));
+      })()
+    JAVASCRIPT
+    assert_operator state.length, :>, 1
+    assert_equal "First item#{long_item}Last item", state.flatten.join
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: source.sub(long_item, "#{long_item} updated"), wait: 5
+  end
+
+  test "continues a loose list item without splitting its Markdown structure" do
+    long_item = ("Loose list item text flows over the page. " * 90).strip
+    source = "- #{long_item}\n\n- Final item"
+    document = Document.create!(title: "Loose item flow", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const blocks = [...surface.querySelectorAll('.document-editor-block[data-editor-block-id]')].filter(block => block.querySelector('li'));
+        const last = blocks.at(-1);
+        const item = last.querySelector('li:last-child');
+        const range = document.createRange();
+        range.selectNodeContents(item);
+        range.collapse(false);
+        last.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return blocks.map(block => [...block.querySelectorAll('li')].map(li => li.querySelector('p')?.textContent ?? li.textContent));
+      })()
+    JAVASCRIPT
+    assert_operator state.length, :>, 1
+    assert_equal "#{long_item}Final item", state.flatten.join
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: "#{source} updated", wait: 5
+  end
+
+  test "retains direct text around mixed quote children during repagination" do
+    document = Document.create!(title: "Mixed quote flow", source: "Initial content")
+    visit document_path(document)
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const quote = document.createElement('blockquote');
+        const paragraph = document.createElement('p');
+        paragraph.textContent = 'Long quoted content '.repeat(150);
+        quote.append('Before ', paragraph, ' After');
+        const expected = quote.textContent;
+        surface.replaceChildren(quote);
+        controller.paginate();
+        controller.paginate();
+        const content = () => [...surface.querySelectorAll('.document-page-content')].map(page => page.textContent).join('');
+        const direct = { expected, actual: content() };
+        const wrapper = document.createElement('div');
+        const list = document.createElement('ul');
+        for (let n = 0; n < 100; n++) {
+          const item = document.createElement('li');
+          item.textContent = `Item ${n}`;
+          list.append(item);
+        }
+        const before = document.createElement('p');
+        before.textContent = 'Before list';
+        const after = document.createElement('p');
+        after.textContent = 'After list';
+        wrapper.append(before, list, after);
+        const wrapperText = wrapper.textContent;
+        surface.replaceChildren(wrapper);
+        controller.paginate();
+        controller.paginate();
+        return [direct, { expected: wrapperText, actual: content() }];
+      })()
+    JAVASCRIPT
+    result.each { |entry| assert_equal entry.fetch("expected"), entry.fetch("actual") }
+  end
+
   test "paginates the visual editor and keeps oversized paragraph edits mapped to one source block" do
     paragraph = ("Flowing text stays at a fixed size and carries onto the next A4 page. " * 190).strip
     source = "# A4 flow\n\n#{paragraph}"
