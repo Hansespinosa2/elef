@@ -1,4 +1,4 @@
-import { sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
+import { measureSourceSelectionAlignment, sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
 import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../../apps/web/test/e2e/scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
@@ -558,6 +558,11 @@ class WebEditorUi {
   async showSourceMode() {
     await this.page.locator('[data-editor-target="sourceButton"]').click()
     await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
+  }
+
+  async assertSourceSelectionAlignment() {
+    const { textLeft, selectionLeft } = await this.page.evaluate(measureSourceSelectionAlignment)
+    expect(Math.abs(textLeft - selectionLeft)).toBeLessThanOrEqual(1)
   }
 
   async assertDocumentPageAspectRatio() {
