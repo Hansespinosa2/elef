@@ -372,6 +372,7 @@ shared_workflows = {
     "slidePositionGrammarWorkflow",
     "snippetInsertWorkflow",
     "sourcePreviewScrollWorkflow",
+    "sourcePreviewResizeWorkflow",
     "vimRelativeLineNumbersWorkflow",
 }
 shared_scenario_root = (ROOT / "apps/web/test/e2e/scenarios").resolve()

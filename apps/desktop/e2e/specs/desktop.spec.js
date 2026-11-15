@@ -1,4 +1,5 @@
 import { sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
+import { sourcePreviewResizeWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-resize.js"
 import assert from "node:assert/strict"
 import { $, $$, browser } from "@wdio/globals"
 import { Key } from "webdriverio"
@@ -1065,6 +1066,39 @@ class DesktopEditorUi {
     } finally {
       await browser.setWindowSize(originalSize.width, originalSize.height)
     }
+  }
+
+  async assertSourcePreviewResize() {
+    const splitter = await $("[role='separator'][aria-label='Resize source and preview']")
+    await splitter.waitForDisplayed()
+    await browser.execute(() => document.querySelector(".editor-splitter").focus())
+    await browser.keys("Home")
+    await browser.waitUntil(async () => await splitter.getAttribute("aria-valuenow") === "20", {
+      timeout: 5_000, timeoutMsg: "The desktop splitter did not respond to Home"
+    })
+    const dimensions = () => browser.execute(() => ({
+      source: document.querySelector(".source-pane").getBoundingClientRect().width,
+      preview: document.querySelector(".preview-pane").getBoundingClientRect().width
+    }))
+    const before = await dimensions()
+    await splitter.dragAndDrop({ x: 150, y: 0 })
+    await browser.waitUntil(async () => Number(await splitter.getAttribute("aria-valuenow")) > 20, {
+      timeout: 5_000, timeoutMsg: "Dragging the desktop splitter did not resize the panes"
+    })
+    const after = await dimensions()
+    if (after.source <= before.source + 50 || after.preview >= before.preview - 50) {
+      throw new Error(`Desktop panes did not resize in opposite directions: ${JSON.stringify({ before, after })}`)
+    }
+    await browser.waitUntil(async () => browser.execute(() => {
+      const preview = document.querySelector(".preview-pane")
+      const frame = preview?.querySelector(".document-page-frame, .slide-frame")
+      return Boolean(frame && frame.getBoundingClientRect().width > 0 && frame.getBoundingClientRect().width <= preview.getBoundingClientRect().width)
+    }), { timeout: 5_000, timeoutMsg: "The desktop preview frame did not fit after resizing" })
+    await browser.execute(() => document.querySelector(".editor-splitter").focus())
+    await browser.keys("End")
+    await browser.waitUntil(async () => await splitter.getAttribute("aria-valuenow") === "80", {
+      timeout: 5_000, timeoutMsg: "The desktop splitter did not respond to End"
+    })
   }
 
   async assertCaretPosition(position) {
@@ -2614,6 +2648,16 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("keeps document pages at A4 proportions when the desktop window is resized", async () => {
     await documentPageAspectRatioWorkflow(new DesktopEditorUi())
+  })
+
+  it("resizes source and preview for documents and presentations", async () => {
+    const originalSize = await browser.getWindowSize()
+    try {
+      await browser.setWindowSize(1280, 840)
+      await sourcePreviewResizeWorkflow(new DesktopEditorUi())
+    } finally {
+      await browser.setWindowSize(originalSize.width, originalSize.height)
+    }
   })
 
   it("accepts trusted keyboard input in CodeMirror and persists it", async () => {

@@ -1,4 +1,5 @@
 import { sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
+import { sourcePreviewResizeWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-resize.js"
 import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../../apps/web/test/e2e/scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
@@ -558,6 +559,31 @@ class WebEditorUi {
   async showSourceMode() {
     await this.page.locator('[data-editor-target="sourceButton"]').click()
     await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
+  }
+
+  async assertSourcePreviewResize() {
+    const splitter = this.page.getByRole("separator", { name: "Resize source and preview" })
+    const source = this.page.locator(".source-pane")
+    const preview = this.page.locator(".preview-pane")
+    await expect(splitter).toBeVisible()
+    await splitter.focus()
+    await this.page.keyboard.press("Home")
+    await expect(splitter).toHaveAttribute("aria-valuenow", "20")
+    const beforeSource = (await source.boundingBox()).width
+    const beforePreview = (await preview.boundingBox()).width
+    const handle = await splitter.boundingBox()
+    await this.page.mouse.move(handle.x + handle.width / 2, handle.y + Math.min(handle.height / 2, 100))
+    await this.page.mouse.down()
+    await this.page.mouse.move(handle.x + handle.width / 2 + 150, handle.y + Math.min(handle.height / 2, 100), { steps: 5 })
+    await this.page.mouse.up()
+    await expect.poll(async () => Number(await splitter.getAttribute("aria-valuenow"))).toBeGreaterThan(20)
+    expect((await source.boundingBox()).width).toBeGreaterThan(beforeSource + 50)
+    expect((await preview.boundingBox()).width).toBeLessThan(beforePreview - 50)
+    const frame = preview.locator(".document-page-frame, .slide-frame").first()
+    await expect(frame).toBeVisible()
+    await expect.poll(async () => (await frame.boundingBox()).width <= (await preview.boundingBox()).width).toBe(true)
+    await this.page.keyboard.press("End")
+    await expect(splitter).toHaveAttribute("aria-valuenow", "80")
   }
 
   async assertDocumentPageAspectRatio() {
@@ -1149,6 +1175,11 @@ test("shared editing flow works in the web app", async ({ page }) => {
 
 test("source preview stays scrolled after saving a long document", async ({ page }) => {
   await sourcePreviewScrollWorkflow(new WebEditorUi(page))
+})
+
+test("source and preview resize for documents and presentations in the web app", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 840 })
+  await sourcePreviewResizeWorkflow(new WebEditorUi(page))
 })
 
 test("shared presentation navigation works in the web app", async ({ page }) => {

@@ -100,7 +100,12 @@ li.editor-reveal-marker { list-style: none; }
 .visual-editor-form[data-editor-mode="source"] .source-field .editor-surface { display: block; }
 .visual-editor-form[data-editor-mode="source"] .source-field.is-source-hidden { display: block; }
 .editor-layout, .source-pane, .preview-pane { min-width: 0; }
-.visual-editor-form[data-editor-mode="source"] .editor-layout { align-items: start; display: grid; gap: clamp(0.75rem, 1.5vw, 1.25rem); grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr); }
+.visual-editor-form[data-editor-mode="source"] .editor-layout { align-items: start; display: grid; grid-template-columns: minmax(0, calc((100% - 1.25rem) * var(--source-split, 0.46))) 1.25rem minmax(0, 1fr); }
+.editor-splitter { display: none; }
+.visual-editor-form[data-editor-mode="source"] .editor-splitter { align-self: stretch; cursor: col-resize; display: flex; justify-content: center; min-height: 24rem; touch-action: none; }
+.editor-splitter::before { background: var(--oradia-slate-700); border-radius: 2px; content: ""; width: 3px; }
+.editor-splitter:hover::before, .editor-splitter:focus-visible::before { background: var(--oradia-green); }
+.editor-splitter:focus-visible { outline: 2px solid var(--oradia-green); outline-offset: -2px; }
 .visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: min(74vh, 58rem); min-height: 24rem; overflow: auto; }
 .visual-editor-form[data-editor-mode="source"] .document-editor-projection,
 .visual-editor-form[data-editor-mode="source"] .document-editor-projection .document-surface { min-width: 0; width: 100%; }
@@ -110,7 +115,8 @@ li.editor-reveal-marker { list-style: none; }
 .visual-editor-form[data-editor-mode="source"] .document-editor-block:focus { background: transparent; outline-color: transparent; }
 .visual-editor-form[data-editor-mode="source"] .document-block-position-control { display: none; }
 @media (max-width: 900px) {
-  .visual-editor-form[data-editor-mode="source"] .editor-layout { grid-template-columns: minmax(0, 1fr); }
+  .visual-editor-form[data-editor-mode="source"] .editor-layout { gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter { display: none; }
   .visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: 60vh; min-height: min(24rem, 60vh); }
 }
 .editor-toolbar { align-items: center; color: var(--oradia-muted); display: flex; flex-wrap: wrap; gap: 0.55rem; min-height: 2rem; position: relative; }
