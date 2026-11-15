@@ -140,68 +140,81 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
 .dialog-copy { color: var(--muted); font-size: 12px; line-height: 1.6; }
 .update-notes { max-height: 180px; overflow: auto; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--canvas); color: var(--ink); font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; }
 .presentation-mode-exit { display: none; }
-.presenting-work .desktop-app-header,
-.presenting-work .statusbar,
-.presenting-work .desktop-app-shell > :not(#work-view) { display: none !important; }
-.presenting-work .desktop-app-shell,
-.presenting-work .work-view,
-.presenting-work #desktop-editor-form,
-.presenting-work #desktop-preview { display: block !important; width: 100vw; height: 100vh; min-height: 0; margin: 0; padding: 0; border: 0; }
-.presenting-work .desktop-app-shell { max-width: none; position: fixed; inset: 0; z-index: 10000; }
-.presenting-work .work-view { position: fixed; inset: 0; z-index: 10000; background: #000; }
-.presenting-work #work-view > :not(#desktop-editor-form) { display: none !important; }
-.presenting-work .editor-shell-header,
-.presenting-work .editor-toolbar,
-.presenting-work .desktop-save-note,
-.presenting-work .restore-draft,
-.presenting-work .slide-overview,
-.presenting-work .media-editor-controls,
-.presenting-work .preview-warnings,
-.presenting-work [data-preview-target="status"],
-.presenting-work [data-preview-target="retry"] { display: none !important; }
-.presenting-work #desktop-editor-form { position: fixed; inset: 0; overflow: hidden; }
-.presenting-work .source-field,
-.presenting-work .editor-surface,
-.presenting-work .editor-input-proxy,
-.presenting-work .snippet-palette { display: none !important; }
-.presenting-work #desktop-preview { overflow: hidden; background: #000; }
-.presenting-work #desktop-preview.editor-projection.preview-pane { position: fixed; inset: 0; max-height: none; min-height: 0; height: 100vh; width: 100vw; overflow: hidden; border: 0; box-shadow: none; }
-.presenting-work .slide-frame { display: none !important; }
-/* Present mode pins the active slide to the fixed 16:9 design canvas and
-   letterboxes it in the viewport: the frame takes the largest centered 16:9
-   box (black bars from #desktop-preview fill the rest) and the slide keeps
-   its 1280x720 design size under the shared --slide-scale transform, so a
-   fullscreen monitor with a different aspect never stretches content. */
-.presenting-work .slide-frame.is-active-presentation-slide { display: block !important; position: fixed; inset: 0; margin: auto; width: min(100vw, calc(100vh * 16 / 9)); height: min(100vh, calc(100vw * 9 / 16)); aspect-ratio: 16 / 9; overflow: hidden; }
-.presenting-work .slide-frame.is-active-presentation-slide > .slide { border: 0; border-radius: 0; }
-.presenting-work .presentation-editor-block-controls,
-.presenting-work .presentation-editor-slide-toolbar { display: none !important; }
-.presenting-work .presentation-mode-exit { display: inline-flex; position: fixed; top: 16px; right: 20px; z-index: 10002; gap: 12px; align-items: center; padding: 9px 13px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: #fff; }
-.presenting-work .presentation-mode-exit kbd { color: #bbb; }
+@media screen {
+  .presenting-work .desktop-app-header,
+  .presenting-work .statusbar,
+  .presenting-work .desktop-app-shell > :not(#work-view) { display: none !important; }
+  .presenting-work .desktop-app-shell,
+  .presenting-work .work-view,
+  .presenting-work #desktop-editor-form,
+  .presenting-work #desktop-preview { display: block !important; width: 100vw; height: 100vh; min-height: 0; margin: 0; padding: 0; border: 0; }
+  .presenting-work .desktop-app-shell { max-width: none; position: fixed; inset: 0; z-index: 10000; }
+  .presenting-work .work-view { position: fixed; inset: 0; z-index: 10000; background: #000; }
+  .presenting-work #work-view > :not(#desktop-editor-form) { display: none !important; }
+  .presenting-work .editor-shell-header,
+  .presenting-work .editor-toolbar,
+  .presenting-work .desktop-save-note,
+  .presenting-work .restore-draft,
+  .presenting-work .slide-overview,
+  .presenting-work .media-editor-controls,
+  .presenting-work .preview-warnings,
+  .presenting-work [data-preview-target="status"],
+  .presenting-work [data-preview-target="retry"] { display: none !important; }
+  .presenting-work #desktop-editor-form { position: fixed; inset: 0; overflow: hidden; }
+  .presenting-work .source-field,
+  .presenting-work .editor-surface,
+  .presenting-work .editor-input-proxy,
+  .presenting-work .snippet-palette { display: none !important; }
+  .presenting-work #desktop-preview { overflow: hidden; background: #000; }
+  .presenting-work #desktop-preview.editor-projection.preview-pane { position: fixed; inset: 0; max-height: none; min-height: 0; height: 100vh; width: 100vw; overflow: hidden; border: 0; box-shadow: none; }
+  .presenting-work .slide-frame { display: none !important; }
+  /* Present mode pins the active slide to the fixed 16:9 design canvas and
+     letterboxes it in the viewport: the frame takes the largest centered 16:9
+     box (black bars from #desktop-preview fill the rest) and the slide keeps
+     its 1280x720 design size under the shared --slide-scale transform, so a
+     fullscreen monitor with a different aspect never stretches content. */
+  .presenting-work .slide-frame.is-active-presentation-slide { display: block !important; position: fixed; inset: 0; margin: auto; width: min(100vw, calc(100vh * 16 / 9)); height: min(100vh, calc(100vw * 9 / 16)); aspect-ratio: 16 / 9; overflow: hidden; }
+  .presenting-work .slide-frame.is-active-presentation-slide > .slide { border: 0; border-radius: 0; }
+  .presenting-work .presentation-editor-block-controls,
+  .presenting-work .presentation-editor-slide-toolbar { display: none !important; }
+  .presenting-work .presentation-mode-exit { display: inline-flex; position: fixed; top: 16px; right: 20px; z-index: 10002; gap: 12px; align-items: center; padding: 9px 13px; border: 1px solid #ffffff55; border-radius: 8px; background: #111c; color: #fff; }
+  .presenting-work .presentation-mode-exit kbd { color: #bbb; }
+}
 
 @page desktop-document { size: A4 portrait; margin: 0; }
 @page desktop-presentation { size: 13.333in 7.5in; margin: 0; }
 @media print {
-  @page { margin: 12mm; }
-  body.printing-work { min-width: 0; color: #000; background: #fff; }
+  @page { size: A4 portrait; margin: 0; }
+  html:has(> body.printing-work),
+  body.printing-work { display: block !important; min-width: 0; min-height: 0 !important; height: auto !important; color: #000; background: #fff; }
   body.printing-work.elef-app { background: #fff !important; color: #000 !important; }
   /* The body margin would overflow the fixed print pages and emit a trailing
      blank page; the web print views zero it the same way. */
+  html:has(> body.printing-work.printing-presentation),
+  html:has(> body.printing-work.printing-document),
   body.printing-work.printing-presentation,
-  body.printing-work.printing-document { margin: 0; padding: 0; }
+  body.printing-work.printing-document { margin: 0 !important; padding: 0 !important; }
   .printing-work .desktop-app-shell,
   .printing-work .work-view,
-  .printing-work #desktop-editor-form { display: block !important; min-height: 0; width: 100%; margin: 0; padding: 0; border: 0; box-shadow: none; }
+  .printing-work #desktop-editor-form { display: block !important; position: static !important; max-width: none !important; min-height: 0 !important; height: auto !important; max-height: none !important; width: 100% !important; margin: 0 !important; padding: 0 !important; gap: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; overflow: visible !important; background: transparent !important; }
   /* Only the Work preview prints: every app-shell and editor-chrome surface
      stays out of the PDF, matching the web print views (which render the
      Work alone behind a hidden toolbar). */
   .printing-work .desktop-app-header,
+  .printing-work .desktop-app-shell > :not(#work-view),
+  .printing-work .work-view > :not(#desktop-editor-form),
+  .printing-work #work-title,
+  .printing-work #work-kind,
+  .printing-work #work-source-name,
+  .printing-work #work-id,
+  .printing-work #export-menu-mount,
   .printing-work #export-menu,
   .printing-work .export-menu,
   .printing-work .export-menu-panel,
   .printing-work #export-pptx-status,
   .printing-work #start-presentation,
   .printing-work #exit-presentation,
+  .printing-work .source-pane,
   .printing-work .editor-shell-header,
   .printing-work .editor-toolbar,
   .printing-work .editor-footer,
@@ -219,8 +232,11 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
   .printing-work .preview-warnings,
   .printing-work [data-preview-target="status"],
   .printing-work [data-preview-target="retry"],
+  .printing-work [data-preview-scroll-snapshot],
   .printing-work #work-notice,
-  .printing-work .work-notice { display: none !important; }
+  .printing-work .work-notice,
+  .printing-work .command-palette,
+  .printing-work dialog { display: none !important; }
   /* Editor affordances inside the projection never print: alignment selects,
      slide toolbars, block controls, and empty-slide actions are interactive
      chrome, not Work content. Media captions stay: the figcaption carries
@@ -231,7 +247,7 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
   .printing-work .presentation-editor-slide-toolbar,
   .printing-work .document-block-position-control,
   .printing-work .empty-slide-add-image { display: none !important; }
-  .printing-work #desktop-preview { display: block !important; position: static; max-height: none; min-height: 0; overflow: visible; background: #fff; color-adjust: exact; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+  .printing-work #desktop-preview { display: block !important; position: static !important; width: 100% !important; max-width: none !important; height: auto !important; max-height: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; overflow: visible !important; background: #fff !important; color-adjust: exact; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   /* Presentations print one fixed 16:9 landscape page per slide, exactly as
      the web presentation print view does (components/documents.css). The
      page lives on the body: naming it on the deep preview node would force a
@@ -255,6 +271,8 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
   .printing-work #desktop-preview,
   .printing-work .presentation-surface,
   .printing-work .slide-frame { margin: 0 !important; padding: 0 !important; gap: 0 !important; border: 0 !important; }
+  .printing-work .editor-shell,
+  .printing-work .editor-layout { display: block !important; position: static !important; width: 100% !important; max-width: none !important; max-height: none !important; border-radius: 0 !important; box-shadow: none !important; overflow: visible !important; background: transparent !important; }
   .printing-work main.app-shell,
   .printing-work .work-view,
   .printing-work #desktop-editor-form,
@@ -266,14 +284,106 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
   .printing-work .slide-frame.is-overflowing > .slide { outline: none; }
   .printing-work .slide.is-overflowing::after { display: none; }
   .printing-work video::-webkit-media-controls { display: none; }
-  /* Documents print as flowing A4 portrait pages carrying the same 16mm page
-     padding as the web document print view. The desktop preview is a single
-     flowing projection (the web print view paginates server-side), so pages
-     break naturally instead of on fixed frames. */
+  /* Documents print one fixed A4 portrait page (210mm x 297mm, 16mm padding)
+     per paginated .document-page-frame, matching the web document print view
+     (.document-print in components/documents.css). Both hosts paginate
+     through the shared document-pages controller; neutralize the live editor
+     projection extras (container-type containment, scaled/absolutely
+     positioned page cards, inline source-mode frame widths, and quiet-frame
+     content-visibility) so each frame occupies one A4 sheet. */
   body.printing-work.printing-document { page: desktop-document; }
-  .printing-work.printing-document #desktop-preview .document-reader,
-  .printing-work.printing-document #desktop-preview [data-document-pages-target="surface"] { overflow: visible; }
-  .printing-work .document-editor-block { break-inside: avoid; }
+  .printing-work.printing-document #desktop-preview .document-editor-projection,
+  .printing-work.printing-document #desktop-preview .document-reader {
+    display: block !important;
+    position: static !important;
+    container-type: normal !important;
+    contain: none !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  .printing-work.printing-document #desktop-preview [data-document-pages-target="surface"] {
+    display: block !important;
+    position: static !important;
+    gap: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    content-visibility: visible !important;
+    contain: none !important;
+    opacity: 1 !important;
+  }
+  .printing-work.printing-document .document-page-frame,
+  .printing-work.printing-document .document-page-frame.is-quiet,
+  .printing-work.printing-document .document-page-frame.is-sealed {
+    display: block !important;
+    position: static !important;
+    aspect-ratio: auto !important;
+    width: 210mm !important;
+    height: 297mm !important;
+    max-width: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    overflow: hidden !important;
+    content-visibility: visible !important;
+    contain: none !important;
+    contain-intrinsic-size: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: page;
+    page-break-after: always;
+  }
+  .printing-work.printing-document .document-page-frame:last-child,
+  .printing-work.printing-document .document-page-frame:last-of-type {
+    break-after: auto;
+    page-break-after: auto;
+  }
+  .printing-work.printing-document .document-page-frame > .document-page {
+    display: flex !important;
+    flex-direction: column !important;
+    position: static !important;
+    transform: none !important;
+    width: 210mm !important;
+    height: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    padding: 16mm !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    overflow: hidden !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    break-after: auto !important;
+    page-break-after: auto !important;
+  }
+  .printing-work.printing-document .document-page-content {
+    overflow: visible !important;
+  }
+  .printing-work .document-source-anchor.is-source-active + * {
+    outline: none !important;
+  }
+  .printing-work.printing-document .document-editor-block-shell {
+    position: static !important;
+  }
+  .printing-work .document-editor-block {
+    background: transparent !important;
+    outline: none !important;
+    break-inside: avoid;
+  }
 }
 
 @media (max-width: 960px) {

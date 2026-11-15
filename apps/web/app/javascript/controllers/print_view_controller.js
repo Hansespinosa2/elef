@@ -1,8 +1,9 @@
 import { Controller } from "@hotwired/stimulus"
-import { attachCanvasScaling } from "@elef/client"
+import { attachCanvasScaling, clearPrintPageSizeStyle, syncPrintPageSizeStyle } from "@elef/client"
 
 export default class extends Controller {
   connect() {
+    syncPrintPageSizeStyle(this.element.classList.contains("presentation-print") ? "presentation" : "document")
     // Slide frames carry no Stimulus hooks since the presentation canvas
     // controller retired; the shared client scaling helper keeps
     // --slide-scale in sync per rendered frame instead.
@@ -20,6 +21,7 @@ export default class extends Controller {
   disconnect() {
     this.canvasDetachers?.splice(0).forEach((detach) => detach())
     this.canvasDetachers = null
+    clearPrintPageSizeStyle()
   }
 
   print() {

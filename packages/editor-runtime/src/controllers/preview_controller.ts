@@ -47,7 +47,7 @@ export default class extends Controller<HTMLElement> {
       if (!event.target.closest?.("[data-editor-block-id]") || !this.containerTarget.contains(event.target)) return
 
       queueMicrotask(() => {
-        if (this.isEditingProjection()) return
+        if (!this.active || this.isEditingProjection()) return
 
         if (this.pendingProjection) this.applyPendingProjection()
         else if (!this.projectionFresh) this.markProjectionStale(false)
@@ -87,6 +87,7 @@ export default class extends Controller<HTMLElement> {
     this.abortActiveRequest()
     this.clearSlideScaling()
     this.queuedRequestId = null
+    this.pendingProjection = null
     this.element.removeEventListener("focusout", this.focusoutHandler)
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
@@ -257,14 +258,20 @@ export default class extends Controller<HTMLElement> {
   }
 
   isEditingProjection() {
-    const activeEditable = document.activeElement?.closest?.("[contenteditable='true']")
+    const active = typeof document === "undefined" ? null : document.activeElement
+    const activeEditable = active?.closest?.("[contenteditable='true']")
     return Boolean(activeEditable && this.containerTarget.contains(activeEditable))
   }
 
   finishEditing() {
-    const activeEditable = document.activeElement?.closest?.("[contenteditable='true']")
+    const active = typeof document === "undefined" ? null : document.activeElement
+    const activeEditable = active?.closest?.("[contenteditable='true']")
     if (!activeEditable || !this.containerTarget.contains(activeEditable)) return false
 
+    const selection = typeof window === "undefined" ? null : window.getSelection?.()
+    if (selection?.focusNode && activeEditable.contains(selection.focusNode)) {
+      selection.removeAllRanges()
+    }
     ;(activeEditable as HTMLElement).blur()
     return true
   }
@@ -275,6 +282,51 @@ export default class extends Controller<HTMLElement> {
     const projection = this.pendingProjection
     this.pendingProjection = null
     this.installProjection(projection.payload, projection.response, projection.source)
+  }
+
+  async flushForPrint(): Promise<boolean> {
+    if (!this.active) return false
+
+    if (this.finishEditing()) {
+      await Promise.resolve()
+      if (!this.active) return false
+    }
+    if (this.pendingProjection) {
+      this.applyPendingProjection()
+      await Promise.resolve()
+      if (!this.active) return false
+    }
+
+    const hadPendingTimer = Boolean(this.timer)
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+
+    const hadInFlightRequest = Boolean(this.requestController)
+    if (this.requestController) {
+      this.abortActiveRequest()
+    }
+
+    if (hadPendingTimer || hadInFlightRequest || !this.projectionFresh || !this.containerTarget.childElementCount) {
+      const result = await this.refresh(++this.requestId)
+      if (!this.active || result !== true) return false
+      if (this.pendingProjection) {
+        this.applyPendingProjection()
+      }
+      await Promise.resolve()
+      if (!this.active) return false
+    }
+
+    if (this.pendingProjection || !this.projectionFresh || this.timer || this.requestController) {
+      return false
+    }
+
+    // Clear any source-mode scroll snapshot (which hides the live surface behind an
+    // absolute overlay with opacity: 0 and inert) before paginating/printing.
+    this.cancelPendingPreviewScroll?.()
+
+    return Boolean(this.containerTarget.childElementCount)
   }
 
   installProjection(payload: any, response: any, source: any) {

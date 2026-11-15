@@ -40,7 +40,7 @@ export function printMarkerClasses(kind: PrintWorkKind): Array<string> {
 // Web print geometry, duplicated here as the single checked source of truth.
 // Values must match `apps/web/app/assets/stylesheets/components/documents.css`:
 // presentations print one fixed 16:9 landscape page per slide with 5rem slide
-// padding; documents print flowing A4 portrait pages with 16mm page padding.
+// padding; documents print fixed A4 portrait pages with 16mm page padding.
 export const PRESENTATION_PRINT_GEOMETRY = {
   widthIn: 13.333,
   heightIn: 7.5,
@@ -52,6 +52,40 @@ export const DOCUMENT_PRINT_GEOMETRY = {
   heightMm: 297,
   paddingMm: 16,
 } as const
+
+export const PRINT_PAGE_SIZE_STYLE_ID = "elef-print-page-size"
+
+// WebKit / WKWebView does not support CSS named pages (`page: <name>`), so
+// it falls back to the unnamed `@page` rule. Keep the unnamed `@page` rule
+// synchronized to the active Work kind with zero page margin so macOS native
+// printing gets the exact same page box (A4 portrait or 16:9 landscape) as
+// Chromium named pages.
+export function printPageSizeCss(kind: PrintWorkKind): string {
+  const size = kind === "document"
+    ? "A4 portrait"
+    : `${PRESENTATION_PRINT_GEOMETRY.widthIn}in ${PRESENTATION_PRINT_GEOMETRY.heightIn}in`
+  return `@media print { @page { size: ${size}; margin: 0; } }`
+}
+
+export function syncPrintPageSizeStyle(
+  kind: PrintWorkKind,
+  doc: Document | undefined = typeof document === "undefined" ? undefined : document,
+): void {
+  if (!doc?.head || typeof doc.createElement !== "function") return
+  let style = doc.getElementById(PRINT_PAGE_SIZE_STYLE_ID) as HTMLStyleElement | null
+  if (!style) {
+    style = doc.createElement("style")
+    style.id = PRINT_PAGE_SIZE_STYLE_ID
+    doc.head.appendChild(style)
+  }
+  style.textContent = printPageSizeCss(kind)
+}
+
+export function clearPrintPageSizeStyle(
+  doc: Document | undefined = typeof document === "undefined" ? undefined : document,
+): void {
+  doc?.getElementById?.(PRINT_PAGE_SIZE_STYLE_ID)?.remove?.()
+}
 
 interface PauseableVideo {
   pause(): void
