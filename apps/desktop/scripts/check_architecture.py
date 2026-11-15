@@ -374,7 +374,12 @@ for part in csp.split(";"):
     tokens = part.strip().split()
     if tokens:
         directives[tokens[0]] = tokens[1:]
-assert directives.get("script-src") == ["'self'"], "script-src must stay self-only"
+assert directives.get("script-src") == [
+    "'self'",
+    "'wasm-unsafe-eval'",
+    "elefpython:",
+    "http://elefpython.localhost",
+], "script-src must allow only self, WebAssembly compilation, and the verified elefpython protocol"
 assert "'unsafe-eval'" not in csp and "'unsafe-inline'" not in directives.get("script-src", [])
 assert directives.get("style-src") == ["'self'", "'unsafe-inline'"], (
     "CodeMirror's style-mod runtime inserts its base and theme rules in inline style elements"

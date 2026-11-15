@@ -1,3 +1,4 @@
+import { sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
 import assert from "node:assert/strict"
 import { $, $$, browser } from "@wdio/globals"
 import { Key } from "webdriverio"
@@ -21,6 +22,7 @@ import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.j
 import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scenarios/slide-position-grammar.js"
 import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
 import { artRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/art-rendering.js"
+import { pythonRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/python-rendering.js"
 import { richRenderingMediaWorkflow } from "../../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
 import { setupRichRenderingWork, teardownRichRenderingWork } from "../seed-rich-rendering.mjs"
 import { createHash } from "node:crypto"
@@ -1527,6 +1529,21 @@ class DesktopEditorUi {
     }
   }
 
+  async waitForScrollPreview(text) {
+    await browser.waitUntil(() => browser.execute(expected => {
+      const surface = document.querySelector("#desktop-preview .document-surface[data-document-pages-settled='true']")
+      return Boolean(surface?.textContent.includes(expected))
+    }, text), { timeout: 30000, timeoutMsg: "The paginated preview did not settle with the edited source" })
+  }
+
+  async scrollPreviewToBottom() {
+    return browser.execute(() => { const pane = document.querySelector("#desktop-preview"); pane.scrollTop = pane.scrollHeight; return pane.scrollTop })
+  }
+
+  async previewScrollTop() {
+    return browser.execute(() => document.querySelector("#desktop-preview").scrollTop)
+  }
+
   async waitForPreview(text) {
     try {
       await browser.waitUntil(async () => (await $("#desktop-preview").getText()).includes(text), {
@@ -1556,6 +1573,43 @@ class DesktopEditorUi {
       timeout: 10_000,
       timeoutMsg: `The desktop preview did not render ${count} Art roots`
     })
+  }
+
+  async waitForPythonBlocks(count) {
+    await browser.waitUntil(async () => (await $$('#desktop-preview .elef-python-block[data-processed="true"]')).length === count, {
+      timeout: 15_000,
+      timeoutMsg: `The desktop preview did not finish executing ${count} Python blocks`
+    })
+  }
+
+  async readPythonBlockSemantics() {
+    return browser.execute(() => [...document.querySelectorAll("#desktop-preview .elef-python-block")].map(block => {
+      const activeFrame = block.querySelector(".elef-python-frame:not([hidden])") || block
+      const sliderValue = block.querySelector(".elef-python-slider-value")
+      return {
+        mode: block.classList.contains("elef-python-show-code") ? "run-show-code" : "run",
+        processed: block.dataset.processed,
+        hasCode: Boolean(block.querySelector(":scope > pre.elef-python-code")),
+        svgCount: activeFrame.querySelectorAll(".elef-python-figures svg").length,
+        tableCount: activeFrame.querySelectorAll(".elef-python-dataframe-wrap table").length,
+        stdout: activeFrame.querySelector(".elef-python-stdout")?.textContent || "",
+        sliderValue: sliderValue?.textContent || null
+      }
+    }))
+  }
+
+  async scrubPythonSlider(value) {
+    const updated = await browser.execute(nextValue => {
+      const slider = document.querySelector("#desktop-preview .elef-python-slider")
+      if (!slider) return null
+      slider.value = String(nextValue)
+      slider.dispatchEvent(new Event("input", { bubbles: true }))
+      slider.dispatchEvent(new Event("change", { bubbles: true }))
+      return slider.value
+    }, value)
+    if (updated !== String(value)) {
+      throw new Error(`The desktop Python slider did not update to ${value}: ${JSON.stringify(updated)}`)
+    }
   }
 
   async assertRichRenderingMedia() {
@@ -2462,6 +2516,10 @@ describe("desktop binary workflows and native boundaries", () => {
     }
   })
 
+  it("keeps a long source preview scrolled after saving", async () => {
+    await sourcePreviewScrollWorkflow(new DesktopEditorUi())
+  })
+
   it("opens the next work after leaving a focused visual editor", async () => {
     const ui = new DesktopEditorUi()
     await ui.openWork("E2E seed")
@@ -2706,6 +2764,10 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("renders shared Art list semantics in the Tauri binary", async () => {
     await artRenderingWorkflow(new DesktopEditorUi())
+  })
+
+  it("executes shared Python blocks over the elefpython protocol in the Tauri binary", async () => {
+    await pythonRenderingWorkflow(new DesktopEditorUi())
   })
 
   it("renders, presents, saves, and reopens the rich release fixture", async () => {

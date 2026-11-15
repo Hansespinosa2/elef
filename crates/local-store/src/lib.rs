@@ -23,6 +23,7 @@ pub use consts::{
     MANIFEST_FILE, MANIFEST_SCHEMA_VERSION, MAX_ARCHIVE_ENTRIES, MAX_ARCHIVE_UNCOMPRESSED_BYTES,
     MAX_ASSET_BYTES, MAX_LIBRARY_PREVIEW_SOURCE_BYTES, MAX_SOURCE_BYTES,
 };
+pub use io::sha256 as sha256_hex;
 pub use library::Library;
 pub use merge::MergeOutcome;
 pub use types::{
