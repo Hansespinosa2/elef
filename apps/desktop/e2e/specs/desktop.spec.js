@@ -1092,7 +1092,11 @@ class DesktopEditorUi {
     await browser.waitUntil(async () => browser.execute(() => {
       const preview = document.querySelector(".preview-pane")
       const frame = preview?.querySelector(".document-page-frame, .slide-frame")
-      return Boolean(frame && frame.getBoundingClientRect().width > 0 && frame.getBoundingClientRect().width <= preview.getBoundingClientRect().width)
+      const content = frame?.querySelector(".document-page, .slide")
+      if (!frame || !content) return false
+      const frameRect = frame.getBoundingClientRect()
+      const contentRect = content.getBoundingClientRect()
+      return frameRect.width > 0 && Math.abs(frameRect.width - contentRect.width) < 2 && Math.abs(frameRect.height - contentRect.height) < 2
     }), { timeout: 5_000, timeoutMsg: "The desktop preview frame did not fit after resizing" })
     await browser.execute(() => document.querySelector(".editor-splitter").focus())
     await browser.keys("End")

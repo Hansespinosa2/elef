@@ -581,7 +581,13 @@ class WebEditorUi {
     expect((await preview.boundingBox()).width).toBeLessThan(beforePreview - 50)
     const frame = preview.locator(".document-page-frame, .slide-frame").first()
     await expect(frame).toBeVisible()
-    await expect.poll(async () => (await frame.boundingBox()).width <= (await preview.boundingBox()).width).toBe(true)
+    await expect.poll(async () => frame.evaluate(element => {
+      const content = element.querySelector(".document-page, .slide")
+      if (!content) return false
+      const frameRect = element.getBoundingClientRect()
+      const contentRect = content.getBoundingClientRect()
+      return Math.abs(frameRect.width - contentRect.width) < 2 && Math.abs(frameRect.height - contentRect.height) < 2
+    })).toBe(true)
     await this.page.keyboard.press("End")
     await expect(splitter).toHaveAttribute("aria-valuenow", "80")
   }
