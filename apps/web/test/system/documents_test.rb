@@ -2881,6 +2881,37 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /Continued\z/, wait: 5
   end
 
+  test "preserves formatting and math when editing a paragraph continued across pages" do
+    paragraph = ("A **strong idea** with $x+1$ and [a link](/notes) continues here. " * 100).strip
+    source = "#{paragraph}\n\nClosing paragraph."
+    document = Document.create!(title: "Formatted flow", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    count = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const blocks = [...surface.querySelectorAll('.document-editor-block[data-editor-block-id]')];
+        const paragraph = blocks.find(block => block.querySelector('strong'));
+        const fragments = blocks.filter(block => block.dataset.editorBlockId === paragraph.dataset.editorBlockId);
+        const last = fragments.at(-1);
+        const target = last.querySelector('p');
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        range.collapse(false);
+        last.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return fragments.length;
+      })()
+    JAVASCRIPT
+    assert_operator count, :>, 1
+    active_document_block.send_keys(" Added")
+    assert_field "Markdown source", with: source.sub(paragraph, "#{paragraph} Added"), wait: 5
+  end
+
   test "repacks document and removes trailing page when content is shortened" do
     paragraph = ("Flowing text stays at a fixed size and carries onto the next A4 page. " * 60).strip
     source = "# A4 flow\n\n#{paragraph}"
