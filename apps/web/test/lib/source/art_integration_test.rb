@@ -120,7 +120,7 @@ class SourceArtIntegrationTest < ActiveSupport::TestCase
   test "Ruby and JavaScript block maps agree at adjacent Markdown and nested directive boundaries" do
     fixtures = [
       [":::art\n- Alpha\n- Beta\n## After", ["- Alpha\n- Beta", "## After"]],
-      [":::art\n- Alpha\n- Beta\n***\nAfter", ["- Alpha\n- Beta", "***\nAfter"]],
+      [":::art\n- Alpha\n- Beta\n***\nAfter", ["- Alpha\n- Beta", "***", "After"]],
       [":::art\n- Item one\n  :::note\n- Item two", ["- Item one\n  :::note\n- Item two"]],
       [":::art\n- Item one\n  :::art\n- Item two", ["- Item one\n  :::art\n- Item two"]]
     ]

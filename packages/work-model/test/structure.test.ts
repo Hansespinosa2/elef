@@ -248,6 +248,75 @@ test("consecutive non-blank lines group into a single block for alignment and st
   assert.equal(mapSlide.blocks[1]?.reveal_event, 0)
   // Multi-construct grouped blocks are non-editable in visual mode to prevent lossy inline round-tripping.
   assert.equal(mapSlide.editable_regions[1]?.editable, false)
+  assert.equal(mapSlide.editable_regions[1]?.role, "block")
+  assert.notEqual(mapSlide.editable_regions[1]?.kind, "heading")
   assert.equal(mapSlide.editable_regions[2]?.editable, true)
+})
+
+test("document mode preserves construct boundaries for visual editing while presentation mode groups", () => {
+  const headings = "# One\n# Two\n# Three"
+  const docHeadings = buildEditorStructure(headings, { mode: "document" })
+  assert.equal(docHeadings.editorMap.slides[0]?.blocks.length, 3)
+  assert.deepEqual(
+    docHeadings.editorMap.slides[0]?.editable_regions.map(region => [region.kind, region.editable]),
+    [["heading", true], ["heading", true], ["heading", true]]
+  )
+
+  const mixed = "## Fitzgerald\nAmerican novelist\n- The Great Gatsby"
+  const docMixed = buildEditorStructure(mixed, { mode: "document" })
+  assert.equal(docMixed.editorMap.slides[0]?.blocks.map(block => block.markdown).length, 3)
+  assert.deepEqual(
+    docMixed.editorMap.slides[0]?.editable_regions.map(region => region.editable),
+    [true, true, true]
+  )
+
+  const artThematic = ":::art\n- Alpha\n- Beta\n***\nAfter"
+  const docArt = buildEditorStructure(artThematic, { mode: "document" })
+  assert.deepEqual(docArt.slides[0]?.blocks.map(block => block.markdown), ["- Alpha\n- Beta", "***", "After"])
+  const presArt = buildEditorStructure(artThematic, { mode: "presentation" })
+  assert.deepEqual(presArt.slides[0]?.blocks.map(block => block.markdown), ["- Alpha\n- Beta", "***\nAfter"])
+
+  const adjacentMathAndCode = "Intro\n$$\nx^2\n$$\nMiddle\n```js\nconst y = 1\n```\nOutro"
+  const docSplit = buildEditorStructure(adjacentMathAndCode, { mode: "document" })
+  assert.deepEqual(docSplit.slides[0]?.blocks.map(block => block.markdown), [
+    "Intro",
+    "$$\nx^2\n$$",
+    "Middle",
+    "```js\nconst y = 1\n```",
+    "Outro"
+  ])
+  const presGrouped = buildEditorStructure(adjacentMathAndCode, { mode: "presentation" })
+  assert.equal(presGrouped.slides[0]?.blocks.length, 1)
+  assert.equal(presGrouped.editorMap.slides[0]?.editable_regions[0]?.editable, false)
+})
+
+test("multi-line heading groups do not leak into slide titles or column headings and setext headings stay read-only", () => {
+  const mixedTitleSource = "# Slide Title\nBody paragraph\n\n## Col 1\n\nLeft\n\n## Col 2\n\nRight"
+  const mixedTitle = buildEditorStructure(mixedTitleSource, { mode: "presentation" })
+  assert.equal(mixedTitle.slides[0]?.layout, "body")
+  assert.equal(mixedTitle.slides[0]?.title, null)
+  assert.equal(mixedTitle.editorMap.slides[0]?.editable_regions[0]?.role, "block")
+  assert.notEqual(mixedTitle.editorMap.slides[0]?.editable_regions[0]?.kind, "heading")
+  assert.equal(mixedTitle.editorMap.slides[0]?.editable_regions[0]?.editable, false)
+
+  const twoColGroupedBody = "# Two Column\n\n## Col 1\n\nFirst line\nSecond line\n\n## Col 2\n\nRight"
+  const twoCol = buildEditorStructure(twoColGroupedBody, { mode: "presentation" })
+  assert.equal(twoCol.slides[0]?.layout, "two-column")
+  assert.equal(twoCol.slides[0]?.title, "# Two Column")
+  assert.equal(twoCol.slides[0]?.regions[0]?.[1]?.markdown, "First line\nSecond line")
+  assert.equal(twoCol.editorMap.slides[0]?.editable_regions[2]?.editable, true)
+
+  for (const setext of ["Heading\n===", "Paragraph\nHeading\n===", "Paragraph\nHeading\n----", "Heading\n=", "Heading\n-"]) {
+    for (const mode of ["document", "presentation"] as const) {
+      const result = buildEditorStructure(setext, { mode })
+      assert.equal(result.editorMap.slides[0]?.editable_regions[0]?.editable, false, `${mode}: ${JSON.stringify(setext)}`)
+    }
+  }
+  const docTripleDashSetext = buildEditorStructure("Paragraph\nHeading\n---", { mode: "document" })
+  assert.equal(docTripleDashSetext.editorMap.slides[0]?.editable_regions[0]?.editable, false)
+
+  const mathBlock = "$$\na\n=\nb\n$$"
+  const mathStructure = buildEditorStructure(mathBlock, { mode: "document" })
+  assert.equal(mathStructure.editorMap.slides[0]?.editable_regions[0]?.editable, true)
 })
 

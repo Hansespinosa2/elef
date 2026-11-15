@@ -326,3 +326,42 @@ test("consecutive non-blank lines render in a single aligned and stepped block",
   )
 })
 
+test("grouped blocks starting with headings do not hijack slide title or two-column layout", () => {
+  const mixedTitle = [
+    "# Slide Title",
+    "Body paragraph",
+    "",
+    "## Col 1",
+    "",
+    "Left",
+    "",
+    "## Col 2",
+    "",
+    "Right"
+  ].join("\n")
+  const mixedPreview = renderPreviewCore({ kind: "presentation", source: mixedTitle, title: "Mixed" })
+  assert.match(mixedPreview.html, /<section class="slide slide-body">/)
+  assert.doesNotMatch(mixedPreview.html, /slide-title/)
+  assert.doesNotMatch(mixedPreview.html, /slide-two-column/)
+
+  const twoCards = [
+    "# Authors",
+    "",
+    ":::align{center}",
+    ":::step{1}",
+    "## Fitzgerald",
+    "American novelist",
+    "- The Great Gatsby",
+    "",
+    ":::align{center}",
+    ":::step{2}",
+    "## Hemingway",
+    "American novelist"
+  ].join("\n")
+  const cardsPreview = renderPreviewCore({ kind: "presentation", source: twoCards, title: "Cards" })
+  assert.match(cardsPreview.html, /<section class="slide slide-body"/)
+  assert.doesNotMatch(cardsPreview.html, /slide-two-column/)
+  assert.match(cardsPreview.html, /data-elef-reveal-event="0"><h2>Fitzgerald<\/h2>/)
+  assert.match(cardsPreview.html, /data-elef-reveal-event="1"><h2>Hemingway<\/h2>/)
+})
+
