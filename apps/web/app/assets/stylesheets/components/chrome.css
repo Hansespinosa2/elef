@@ -75,7 +75,9 @@
 .bug-report-actions .button { border-radius: 0.55rem; cursor: pointer; font: inherit; font-size: 0.86rem; font-weight: 800; padding: 0.55rem 0.8rem; }
 .bug-report-actions .button.primary { background: var(--oradia-green-deep); border: 1px solid var(--oradia-green-deep); color: #f5faf5; }
 .bug-report-actions .button.primary:disabled { opacity: 0.65; }
-.bug-report-error { background: #3a2428; border: 1px solid #92565e; border-radius: 0.55rem; color: #f3c7c9; line-height: 1.45; margin-top: 0.9rem; padding: 0.7rem 0.8rem; }
+.bug-report-error { background: #3a2428; border: 1px solid #92565e; border-radius: 0.55rem; color: #f3c7c9; color-scheme: dark; line-height: 1.45; margin-top: 0.9rem; padding: 0.7rem 0.8rem; }
+.bug-report-error::selection,
+.bug-report-error ::selection { background-color: var(--work-code-selection-background); color: #f3c7c9; }
 .bug-report-error[hidden], .bug-report-success[hidden] { display: none; }
 .bug-report-success { line-height: 1.5; margin-top: 1rem; }
 .bug-report-success a { color: var(--oradia-green); }

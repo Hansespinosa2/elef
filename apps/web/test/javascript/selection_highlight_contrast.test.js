@@ -23,6 +23,8 @@ const editorCss = readCss("components", "editor.css")
 const documentsCss = readCss("components", "documents.css")
 const slidesCss = readCss("components", "slides.css")
 const codeCss = readCss("components", "code.css")
+const baseCss = readCss("base.css")
+const chromeCss = readCss("components", "chrome.css")
 const libraryCss = readCss("components", "library.css")
 const settingsCss = readCss("components", "settings.css")
 const applicationCss = readCss("application.css")
@@ -157,6 +159,18 @@ test("dark code blocks, chrome pills, and present/print toolbars keep dark selec
     blockFor(codeCss, ".presentation-mode > :not(.presentation-stage)::selection,\n.presentation-mode > :not(.presentation-stage) ::selection"),
     /var\(--work-code-selection-background\)/,
   )
+
+  for (const [css, selector, selSelector, inkHex] of [
+    [codeCss, ".slide-overflow-warnings", ".slide-overflow-warnings::selection,\n.slide-overflow-warnings ::selection", "#f5d982"],
+    [baseCss, ".elef-app .error-panel", ".elef-app .error-panel::selection,\n.elef-app .error-panel ::selection", "#f3c7c9"],
+    [baseCss, ".elef-app .flash", ".elef-app .flash::selection,\n.elef-app .flash ::selection", "#d7eddb"],
+    [chromeCss, ".bug-report-error", ".bug-report-error::selection,\n.bug-report-error ::selection", "#f3c7c9"],
+  ]) {
+    assert.match(blockFor(css, selector), /color-scheme:\s*dark;/)
+    const selBlock = blockFor(css, selSelector)
+    assert.match(selBlock, /var\(--work-code-selection-background\)/)
+    assert.match(selBlock, new RegExp(`color:\\s*${inkHex};`, "i"))
+  }
 })
 
 test("light non-work surfaces and shell snippet previews match their host polarity", () => {
@@ -175,7 +189,7 @@ test("light non-work surfaces and shell snippet previews match their host polari
     blockFor(libraryCss, ":where(.lineage-graph-canvas) .slide::selection,\n:where(.lineage-graph-canvas) .slide ::selection"),
     /var\(--work-selection-background\)/,
   )
-  // Keep slide override at (0, 1, 1) via :where() so .presentation-surface pre ::selection (0, 1, 2) still wins.
+  // Keep slide override at (0, 1, 1) via :where() so .presentation-surface pre:not(...) ::selection (0, 3, 2) still wins.
   assert.doesNotMatch(libraryCss, /\.lineage-graph-canvas\s+\.slide/)
 
   assert.match(blockFor(libraryCss, ".preview-warnings,\n.presentation-warnings,\np.release-state"), /color-scheme:\s*light;/)
@@ -272,6 +286,9 @@ test("every theme adapts to desktop dark and light host shells and passes WCAG A
     ["desktop light host over dark theme reveal marker", hostLightSlate800, lightSel, lightHostRevealInk],
     ["desktop light host over dark theme base", hostLightSlate950, lightSel, hostLightInk],
     ["code block pre", "#191714", codeSel, codeInk],
+    ["slide overflow warnings", "#493a18", codeSel, parseHex("#f5d982")],
+    ["error panel / bug report error", "#3a2428", codeSel, parseHex("#f3c7c9")],
+    ["flash banner", "#263c31", codeSel, parseHex("#d7eddb")],
     ["preview warnings", "#fff8df", lightSel, parseHex("#765700")],
   ]) {
     const bg = Array.isArray(bgHex) ? bgHex : parseHex(bgHex)
