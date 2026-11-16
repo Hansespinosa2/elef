@@ -2903,6 +2903,36 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal 0, state.fetch("overflow")
   end
 
+  test "flows a long nested item before an atomic code block" do
+    document = Document.create!(title: "Long nested item with code", source: "Initial content")
+    visit document_path(document)
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const outer = document.createElement('ul');
+        const parent = document.createElement('li');
+        const nested = document.createElement('ol');
+        const first = document.createElement('li');
+        first.textContent = 'Long nested item '.repeat(400);
+        const second = document.createElement('li');
+        const code = document.createElement('pre');
+        code.textContent = 'atomic code';
+        second.append('Second item', code);
+        nested.append(first, second); parent.append('Parent', nested); outer.append(parent);
+        const expected = outer.textContent;
+        surface.replaceChildren(outer);
+        controller.paginate(); controller.paginate();
+        return { expected, actual: [...surface.querySelectorAll('.document-page-content')].map(page => page.textContent).join(''),
+          code: surface.querySelectorAll('pre').length, overflow: surface.querySelectorAll('.is-overflowing-content').length };
+      })()
+    JAVASCRIPT
+    assert_equal state.fetch("expected"), state.fetch("actual")
+    assert_equal 1, state.fetch("code")
+    assert_equal 0, state.fetch("overflow")
+  end
+
   test "continues a loose list item without splitting its Markdown structure" do
     long_item = ("Loose list item text flows over the page. " * 90).strip
     source = "- #{long_item}\n\n- Final item"

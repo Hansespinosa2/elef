@@ -141,7 +141,7 @@ jobs:
 
   scan_ruby:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -156,7 +156,7 @@ jobs:
 
   scan_js:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -171,7 +171,7 @@ jobs:
 
   test:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17
@@ -227,7 +227,7 @@ jobs:
 
   sqlite-test:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -263,7 +263,7 @@ jobs:
 
   system-test:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17
@@ -335,7 +335,7 @@ jobs:
           if-no-files-found: ignore
 
   desktop:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The Stable and identity smokes added full binary builds to this job;
     # 60 matches the arch-package job's budget for the longer suite.
     timeout-minutes: 60
@@ -517,7 +517,7 @@ jobs:
 
   affected:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       postgres:

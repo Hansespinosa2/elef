@@ -581,13 +581,12 @@ export default class extends Controller<HTMLElement> {
   splitNestedGroupText(block: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {
     const group = block.matches("ul, ol, blockquote") ? block : block.querySelector("ul, ol, blockquote")
     if (!group || !this.isolatedTarget(block, group) || !group.querySelector("ul, ol, blockquote")) return null
-    const containsAtomicContent = Boolean(group.querySelector("table, pre, [data-elef-art-root], .elef-python-block"))
     const map = this.textMap(group)
     const insideText = (offset: number): boolean => map.nodes.some(entry =>
-      offset > entry.start && offset < entry.end && Boolean(entry.node.textContent?.trim()))
+      offset > entry.start && offset < entry.end && Boolean(entry.node.textContent?.trim()) &&
+      !entry.node.parentElement?.closest("table, pre, [data-elef-art-root], .elef-python-block"))
     let stop = this.largestFittingNestedItemBoundary(block, group, page)
     if (!stop) {
-      if (containsAtomicContent) return null
       const words = this.wordBoundaries(map.text).filter(insideText)
       let best = this.largestFittingBoundary(block, group, map, words, page)
       if (!best) best = this.largestFittingBoundary(block, group, map, this.characterBoundaries(map.text).filter(insideText), page)
