@@ -246,6 +246,8 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
   .printing-work .presentation-editor-block-controls,
   .printing-work .presentation-editor-slide-toolbar,
   .printing-work .document-block-position-control,
+  .printing-work .elef-vim-normal-caret,
+  .printing-work .elef-projection-selections,
   .printing-work .empty-slide-add-image { display: none !important; }
   .printing-work #desktop-preview { display: block !important; position: static !important; width: 100% !important; max-width: none !important; height: auto !important; max-height: none !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; overflow: visible !important; background: #fff !important; color-adjust: exact; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   /* Presentations print one fixed 16:9 landscape page per slide, exactly as
@@ -329,6 +331,7 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
   .printing-work.printing-document .document-page-frame.is-sealed {
     display: block !important;
     position: static !important;
+    box-sizing: border-box !important;
     aspect-ratio: auto !important;
     width: 210mm !important;
     height: 297mm !important;
@@ -354,6 +357,7 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
     display: flex !important;
     flex-direction: column !important;
     position: static !important;
+    box-sizing: border-box !important;
     transform: none !important;
     width: 210mm !important;
     height: 100% !important;
@@ -383,6 +387,24 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
     background: transparent !important;
     outline: none !important;
     break-inside: avoid;
+  }
+  .printing-work.printing-document .document-page-frame:has(> .document-page.is-overflowing-content) {
+    height: auto !important;
+    overflow: visible !important;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .printing-work.printing-document .document-page-frame > .document-page.is-overflowing-content {
+    display: block !important;
+    height: auto !important;
+    min-height: 297mm !important;
+    overflow: visible !important;
+    break-inside: auto;
+    page-break-inside: auto;
+  }
+  .printing-work.printing-document .document-page.is-overflowing-content .document-editor-block {
+    break-inside: auto;
+    page-break-inside: auto;
   }
 }
 

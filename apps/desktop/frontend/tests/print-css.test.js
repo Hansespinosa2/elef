@@ -46,6 +46,8 @@ test("the desktop print stylesheet hides every app-shell and editor-chrome surfa
     ".editor-footer",
     ".presentation-editor-tools",
     ".document-block-position-control",
+    ".elef-vim-normal-caret",
+    ".elef-projection-selections",
     "[data-preview-scroll-snapshot]",
     ".empty-slide-add-image",
   ]) {
@@ -98,6 +100,7 @@ test("the desktop document print neutralizes the paginated editor projection at 
     "container-type: normal !important",
     "width: 210mm !important",
     "height: 297mm !important",
+    "box-sizing: border-box !important",
     "padding: 16mm !important",
     "content-visibility: visible !important",
     "contain-intrinsic-size: none !important",
@@ -165,4 +168,14 @@ test("the print markers stay print-media-only so persisting them is screen-safe"
     !/finally\s*{[^}]*classList\.remove/.test(printFlow),
     "expected printCurrentWork to keep the markers once the native command resolves",
   )
+})
+
+test("oversized atomic document pages relax frame height and clipping in both web and desktop print CSS", () => {
+  const desktopPrint = printBlock(hostCss)
+  const webPrint = printBlock(webPrintCss)
+  for (const [label, css] of [["file_library_host.css", desktopPrint], ["components/documents.css", webPrint]]) {
+    assert.ok(css.includes(".is-overflowing-content"), `expected ${label} @media print to handle .is-overflowing-content`)
+    assert.ok(css.includes("overflow: visible"), `expected ${label} @media print to unclip overflowing content`)
+  }
+  assert.ok(webPrint.includes(".document-page.is-overflowing-content .document-page-content"), "expected web print CSS to override .document-page.is-overflowing-content .document-page-content overflow: auto")
 })

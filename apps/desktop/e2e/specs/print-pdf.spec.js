@@ -52,7 +52,7 @@ const RUNTIME_BUNDLE = (
     stdin: {
       contents: `
         export { registerEditorRuntime } from "@elef/editor-runtime"
-        export { flushDesktopPreviewForPrint, installPreviewHtml, renderEditorView } from "@elef/editor-runtime/test-internals"
+        export { executeDesktopPrint, flushDesktopPreviewForPrint, installPreviewHtml, renderEditorView } from "@elef/editor-runtime/test-internals"
         export { ALL_PRINT_MARKERS, mountPresentation, pausePrintVideos, printMarkerClasses, syncPrintPageSizeStyle } from "@elef/client"
       `,
       resolveDir: SPEC_DIR,
@@ -198,12 +198,12 @@ function webPrintHtml({ bareHtml, kind }) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>/*STYLES*/</style></head><body>${main}</body></html>`
 }
 
-async function mountDesktopShellAndPaginate(page, { kind, source, markers, editorMode, preparePrint = markers.length > 0 }) {
+async function mountDesktopShellAndPaginate(page, { kind, source, markers, editorMode, preparePrint = markers.length > 0, style = styleOf() }) {
   const styles = await desktopStyles()
   const previewHtml = renderPreview({
     kind,
     source,
-    style: styleOf(),
+    style,
     title: "Probe work",
     allowRemoteMedia: false,
   }).html
@@ -973,4 +973,1048 @@ test("presentation print CSS preserves all slides and unrevealed blocks even wit
     expect(box.width).toBeCloseTo(960, 0)
     expect(box.height).toBeCloseTo(540, 0)
   }
+})
+
+test("flushDesktopPreviewForPrint waits for incomplete images cleanly and re-schedules late print-freeze loads on unfreeze", async ({ page }) => {
+  let releaseFirstImage
+  let releaseSlowImage
+  let markFirstImageRequested
+  let markSlowImageRequested
+  const firstImageGate = new Promise((resolve) => { releaseFirstImage = resolve })
+  const slowImageGate = new Promise((resolve) => { releaseSlowImage = resolve })
+  const firstImageRequested = new Promise((resolve) => { markFirstImageRequested = resolve })
+  const slowImageRequested = new Promise((resolve) => { markSlowImageRequested = resolve })
+  const svgImage = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="520"><rect width="400" height="520" fill="#224466"/></svg>'
+
+  await page.route("https://print-resource-test.invalid/**", async (route) => {
+    const url = route.request().url()
+    if (url.endsWith("/first.svg")) {
+      markFirstImageRequested()
+      await firstImageGate
+    } else {
+      markSlowImageRequested()
+      await slowImageGate
+    }
+    await route.fulfill({ status: 200, contentType: "image/svg+xml", body: svgImage })
+  })
+
+  await mountDesktopShellAndPaginate(page, {
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    markers: ["printing-work", "printing-document"],
+    editorMode: "source",
+    preparePrint: false,
+  })
+
+  const fillerHtml = renderPreview({
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    style: styleOf(),
+    title: "Probe work",
+    allowRemoteMedia: false,
+  }).html
+
+  // Install fresh preview with an incomplete remote image before flushing for print.
+  await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    const form = document.querySelector("#desktop-editor-form")
+    form.setAttribute("data-controller", "preview")
+    runtime.installPreviewHtml(preview, html)
+    const img = document.createElement("img")
+    img.src = "https://print-resource-test.invalid/first.svg"
+    img.alt = "Deferred print diagram"
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(img)
+
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    window.__flushDone = false
+    window.__flushPromise = runtime.flushDesktopPreviewForPrint(preview, form.previewController).then((ok) => {
+      window.__flushDone = true
+      return ok
+    })
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+  await firstImageRequested
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)))
+  const pendingState = await page.evaluate(() => ({
+    flushDone: window.__flushDone,
+    settled: document.querySelector('#desktop-preview [data-document-pages-target="surface"]')?.dataset.documentPagesSettled ?? null,
+  }))
+  expect(pendingState).toEqual({ flushDone: false, settled: "false" })
+
+  releaseFirstImage()
+  const completedFlush = await page.evaluate(async () => {
+    const ok = await window.__flushPromise
+    const img = document.querySelector('#desktop-preview img[src$="/first.svg"]')
+    const surface = document.querySelector('#desktop-preview [data-document-pages-target="surface"]')
+    return {
+      ok,
+      flushDone: window.__flushDone,
+      settled: surface?.dataset.documentPagesSettled ?? null,
+      imgComplete: img?.complete ?? false,
+      naturalHeight: img?.naturalHeight ?? 0,
+      framesWithLoadedImg: document.querySelectorAll("#desktop-preview .document-page-frame").length,
+    }
+  })
+  expect(completedFlush.ok).toBe(true)
+  expect(completedFlush.flushDone).toBe(true)
+  expect(completedFlush.settled).toBe("true")
+  expect(completedFlush.imgComplete).toBe(true)
+  expect(completedFlush.naturalHeight).toBe(520)
+  expect(completedFlush.framesWithLoadedImg).toBeGreaterThanOrEqual(2)
+
+  // Now verify bounded timeout fallback + deferred reflow recovery when an image finishes while frozen.
+  await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    const form = document.querySelector("#desktop-editor-form")
+    runtime.installPreviewHtml(preview, html)
+    const img = document.createElement("img")
+    img.src = "https://print-resource-test.invalid/slow.svg"
+    img.alt = "Slow print diagram"
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(img)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    window.__boundedOk = await runtime.flushDesktopPreviewForPrint(preview, form.previewController, { resourceTimeoutMs: 40 })
+    const reader = preview.querySelector('[data-controller~="document-pages"]')
+    reader?.documentPagesController?.freezeForPrint?.()
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+  await slowImageRequested
+  releaseSlowImage()
+  await page.waitForFunction(() => {
+    const img = document.querySelector('#desktop-preview img[src$="/slow.svg"]')
+    const reader = document.querySelector('#desktop-preview [data-controller~="document-pages"]')
+    return img?.complete === true && reader?.documentPagesController?.pendingReflowWhileFrozen === true
+  })
+
+  const frozenLoadState = await page.evaluate(() => {
+    const reader = document.querySelector('#desktop-preview [data-controller~="document-pages"]')
+    const surface = reader?.querySelector('[data-document-pages-target="surface"]')
+    const pagesController = reader?.documentPagesController
+    return {
+      boundedOk: window.__boundedOk,
+      imgComplete: document.querySelector('#desktop-preview img[src$="/slow.svg"]')?.complete ?? false,
+      frozen: pagesController?.frozenForPrint ?? null,
+      pendingReflowWhileFrozen: pagesController?.pendingReflowWhileFrozen ?? null,
+      settledWhileFrozen: surface?.dataset.documentPagesSettled ?? null,
+    }
+  })
+  expect(frozenLoadState).toEqual({
+    boundedOk: true,
+    imgComplete: true,
+    frozen: true,
+    pendingReflowWhileFrozen: true,
+    settledWhileFrozen: "true",
+  })
+
+  const afterUnfreeze = await page.evaluate(() => {
+    window.dispatchEvent(new Event("input", { bubbles: true }))
+    const reader = document.querySelector('#desktop-preview [data-controller~="document-pages"]')
+    const surface = reader?.querySelector('[data-document-pages-target="surface"]')
+    const pagesController = reader?.documentPagesController
+    return {
+      frozen: pagesController?.frozenForPrint ?? null,
+      pendingReflowWhileFrozen: pagesController?.pendingReflowWhileFrozen ?? null,
+      settledRightAfterUnfreeze: surface?.dataset.documentPagesSettled ?? null,
+    }
+  })
+  expect(afterUnfreeze).toEqual({
+    frozen: false,
+    pendingReflowWhileFrozen: false,
+    settledRightAfterUnfreeze: "false",
+  })
+
+  await page.waitForSelector('#desktop-preview [data-document-pages-target="surface"][data-document-pages-settled="true"]')
+})
+
+test("desktop dark-theme document PDF hides vim overlays and preserves dark page legibility", async ({ page }) => {
+  await mountDesktopShellAndPaginate(page, {
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    markers: ["printing-work", "printing-document"],
+    editorMode: "visual",
+    style: { theme: "dark", typography: "book" },
+  })
+
+  const overlayCheck = await page.evaluate(() => {
+    const form = document.querySelector("#desktop-editor-form")
+    const preview = document.querySelector("#desktop-preview")
+    const caret = document.createElement("div")
+    caret.className = "elef-vim-normal-caret"
+    caret.style.cssText = "display:block;width:12px;height:20px;left:24px;top:24px"
+    caret.textContent = "CaretLeakToken"
+    form.append(caret)
+    const selections = document.createElement("div")
+    selections.className = "elef-projection-selections"
+    selections.textContent = "SelectionLeakToken"
+    preview.append(selections)
+    return true
+  })
+  expect(overlayCheck).toBe(true)
+
+  await page.emulateMedia({ media: "print" })
+  const printVisibility = await page.evaluate(() => ({
+    caretDisplay: getComputedStyle(document.querySelector(".elef-vim-normal-caret")).display,
+    selectionsDisplay: getComputedStyle(document.querySelector(".elef-projection-selections")).display,
+    pageColor: getComputedStyle(document.querySelector(".document-page")).color,
+    pageBg: getComputedStyle(document.querySelector(".document-page")).backgroundImage,
+  }))
+  expect(printVisibility.caretDisplay).toBe("none")
+  expect(printVisibility.selectionsDisplay).toBe("none")
+  expect(printVisibility.pageColor).toBe("rgb(233, 238, 233)")
+  expect(printVisibility.pageBg).toContain("linear-gradient")
+
+  await page.emulateMedia({ media: null })
+  const pdf = await pdfTextAndBoxes(page)
+  expect(pdf.pagesCount).toBeGreaterThanOrEqual(2)
+  expect(pageBytes(pdf.text)).toContain(pageBytes("Multi-Page Section 18"))
+  expect(pdf.text).not.toContain("SourcePaneLeakToken")
+  expect(pdf.text).not.toContain("CaretLeakToken")
+  expect(pdf.text).not.toContain("SelectionLeakToken")
+})
+
+test("flushDesktopPreviewForPrint restarts resource waiting cleanly if a new projection swaps in mid-wait", async ({ page }) => {
+  let releaseNewImage
+  let markOldImageRequested
+  let markNewImageRequested
+  const newImageGate = new Promise((resolve) => { releaseNewImage = resolve })
+  const oldImageRequested = new Promise((resolve) => { markOldImageRequested = resolve })
+  const newImageRequested = new Promise((resolve) => { markNewImageRequested = resolve })
+  const stalledRequests = new Map()
+  const waitForStalledRequest = (version) =>
+    new Promise((resolve) => {
+      if (stalledRequests.get(version) === true) resolve()
+      else stalledRequests.set(version, resolve)
+    })
+  const neverResolves = new Promise(() => {})
+  const svgImage = '<svg xmlns="http://www.w3.org/2000/svg" width="360" height="520"><rect width="360" height="520" fill="#335577"/></svg>'
+
+  await page.route("https://print-swap-test.invalid/**", async (route) => {
+    const url = route.request().url()
+    if (url.endsWith("/old.svg")) {
+      markOldImageRequested()
+      await neverResolves
+      return
+    }
+    if (url.includes("/stalled.svg")) {
+      const version = new URL(url).searchParams.get("v")
+      const notify = stalledRequests.get(version)
+      stalledRequests.set(version, true)
+      if (typeof notify === "function") notify()
+      await neverResolves
+      return
+    }
+    markNewImageRequested()
+    await newImageGate
+    await route.fulfill({ status: 200, contentType: "image/svg+xml", body: svgImage })
+  })
+
+  await mountDesktopShellAndPaginate(page, {
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    markers: ["printing-work", "printing-document"],
+    editorMode: "source",
+    preparePrint: false,
+  })
+
+  const fillerHtml = renderPreview({
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    style: styleOf(),
+    title: "Swap probe",
+    allowRemoteMedia: false,
+  }).html
+
+  await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    const form = document.querySelector("#desktop-editor-form")
+    form.setAttribute("data-controller", "preview")
+    runtime.installPreviewHtml(preview, html)
+    const oldImg = document.createElement("img")
+    oldImg.src = "https://print-swap-test.invalid/old.svg"
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(oldImg)
+
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    window.__swapFlushDone = false
+    window.__swapFlushPromise = runtime.flushDesktopPreviewForPrint(preview, form.previewController).then((ok) => {
+      window.__swapFlushDone = true
+      return ok
+    })
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+  await oldImageRequested
+  await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    // Swap in a fresh projection with a new incomplete image while old.svg was pending.
+    runtime.installPreviewHtml(preview, html)
+    const newImg = document.createElement("img")
+    newImg.src = "https://print-swap-test.invalid/new.svg"
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(newImg)
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+  await newImageRequested
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)))
+  const stillWaiting = await page.evaluate(() => ({
+    done: window.__swapFlushDone,
+    newImgComplete: document.querySelector('#desktop-preview img[src$="/new.svg"]')?.complete ?? null,
+  }))
+  expect(stillWaiting).toEqual({ done: false, newImgComplete: false })
+
+  releaseNewImage()
+  const finished = await page.evaluate(async () => {
+    const ok = await window.__swapFlushPromise
+    const img = document.querySelector('#desktop-preview img[src$="/new.svg"]')
+    const surface = document.querySelector('#desktop-preview [data-document-pages-target="surface"]')
+    return {
+      ok,
+      done: window.__swapFlushDone,
+      complete: img?.complete ?? false,
+      naturalHeight: img?.naturalHeight ?? 0,
+      settled: surface?.dataset.documentPagesSettled ?? null,
+    }
+  })
+  expect(finished).toEqual({
+    ok: true,
+    done: true,
+    complete: true,
+    naturalHeight: 520,
+    settled: "true",
+  })
+
+  // Fail closed when swaps continue past MAX_PRINT_SETTLE_PASSES with incomplete images.
+  await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    const form = document.querySelector("#desktop-editor-form")
+    runtime.installPreviewHtml(preview, html)
+    const img = document.createElement("img")
+    img.src = "https://print-swap-test.invalid/stalled.svg?v=0"
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(img)
+
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    window.__swapThrashPromise = runtime.flushDesktopPreviewForPrint(preview, form.previewController, { resourceTimeoutMs: 2000 })
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+  await waitForStalledRequest("0")
+  for (const version of ["1", "2", "3"]) {
+    await page.evaluate(async ({ runtimeSource, html, version }) => {
+      const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+      const preview = document.querySelector("#desktop-preview")
+      runtime.installPreviewHtml(preview, html)
+      const img = document.createElement("img")
+      img.src = `https://print-swap-test.invalid/stalled.svg?v=${version}`
+      preview.querySelector('[data-document-pages-target="surface"]')?.append(img)
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml, version })
+    await waitForStalledRequest(version)
+  }
+
+  const swapThrashOk = await page.evaluate(() => window.__swapThrashPromise)
+  expect(swapThrashOk).toBe(false)
+})
+
+test("executeDesktopPrint keeps pagination frozen until native print resolves, arms interaction recovery, and aborts cleanly on navigation", async ({ page }) => {
+  await mountDesktopShellAndPaginate(page, {
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    markers: ["printing-work", "printing-document"],
+    editorMode: "source",
+    preparePrint: false,
+  })
+
+  const fillerHtml = renderPreview({
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    style: styleOf(),
+    title: "Print orchestration test",
+    allowRemoteMedia: false,
+  }).html
+
+  // Case 1: Stray interaction events before/during nativePrintWork must not unfreeze; interaction after resolve unfreezes + reflows.
+  const armedFlow = await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    const form = document.querySelector("#desktop-editor-form")
+    form.setAttribute("data-controller", "preview")
+    runtime.installPreviewHtml(preview, html)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    const reader = preview.querySelector('[data-controller~="document-pages"]')
+    const pagesController = reader.documentPagesController
+    let frozenDuringNativeCall = null
+    let pendingBeforeResolve = null
+
+    const ok = await runtime.executeDesktopPrint({
+      sourceFile: "document.md",
+      getPreview: () => preview,
+      getPreviewController: () => form.previewController,
+      isStillActive: () => true,
+      exitPresentation: async () => {},
+      hasUnsavedChanges: () => false,
+      flushSave: async () => true,
+      showNotice: () => {},
+      nativePrintWork: async () => {
+        for (const eventName of ["pointerdown", "keydown", "input", "focusin"]) {
+          window.dispatchEvent(new Event(eventName, { bubbles: true }))
+        }
+        frozenDuringNativeCall = pagesController.frozenForPrint
+        pagesController.schedulePagination()
+        pendingBeforeResolve = pagesController.pendingReflowWhileFrozen
+      },
+    })
+
+    const frozenRightAfterResolve = pagesController.frozenForPrint
+    const hasDocMarkers = document.body.classList.contains("printing-work") && document.body.classList.contains("printing-document") && !document.body.classList.contains("printing-presentation")
+
+    window.dispatchEvent(new Event("focusin", { bubbles: true }))
+    const surface = preview.querySelector('[data-document-pages-target="surface"]')
+    return {
+      ok,
+      frozenDuringNativeCall,
+      pendingBeforeResolve,
+      frozenRightAfterResolve,
+      frozenAfterUserFocus: pagesController.frozenForPrint,
+      pendingAfterUserFocus: pagesController.pendingReflowWhileFrozen,
+      settledAfterUserFocus: surface?.dataset.documentPagesSettled ?? null,
+      hasDocMarkers,
+    }
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+  expect(armedFlow).toEqual({
+    ok: true,
+    frozenDuringNativeCall: true,
+    pendingBeforeResolve: true,
+    frozenRightAfterResolve: true,
+    frozenAfterUserFocus: false,
+    pendingAfterUserFocus: false,
+    settledAfterUserFocus: "false",
+    hasDocMarkers: true,
+  })
+  await page.waitForSelector('#desktop-preview [data-document-pages-target="surface"][data-document-pages-settled="true"]')
+
+  // Case 2: Work switch during rAF after freezeForPrint and during flushSave abort cleanly without markers or nativePrintWork call.
+  const abortedFlow = await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    const form = document.querySelector("#desktop-editor-form")
+    runtime.installPreviewHtml(preview, html)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    document.body.classList.remove(...runtime.ALL_PRINT_MARKERS)
+    const pagesController = preview.querySelector('[data-controller~="document-pages"]').documentPagesController
+    let active = true
+    let nativeCalled = false
+    const noticeMessages = []
+
+    const origFreeze = pagesController.freezeForPrint.bind(pagesController)
+    pagesController.freezeForPrint = (opts) => {
+      origFreeze(opts)
+      // Simulate closing / switching away from the work while awaiting the pre-print animation frame.
+      active = false
+    }
+
+    const ok = await runtime.executeDesktopPrint({
+      sourceFile: "document.md",
+      getPreview: () => preview,
+      getPreviewController: () => form.previewController,
+      isStillActive: () => active,
+      exitPresentation: async () => {},
+      hasUnsavedChanges: () => false,
+      flushSave: async () => true,
+      showNotice: (msg) => noticeMessages.push(msg),
+      nativePrintWork: async () => { nativeCalled = true },
+    })
+
+    // Also verify navigation during flushSave aborts before preview flush or nativePrintWork.
+    let saveActive = true
+    let flushCalled = false
+    const saveAbortOk = await runtime.executeDesktopPrint({
+      sourceFile: "document.md",
+      getPreview: () => preview,
+      getPreviewController: () => ({
+        flushForPrint: async () => { flushCalled = true; return true },
+      }),
+      isStillActive: () => saveActive,
+      exitPresentation: async () => {},
+      hasUnsavedChanges: () => true,
+      flushSave: async () => { saveActive = false; return true },
+      showNotice: (msg) => noticeMessages.push(msg),
+      nativePrintWork: async () => { nativeCalled = true },
+    })
+
+    return {
+      ok,
+      saveAbortOk,
+      flushCalled,
+      nativeCalled,
+      frozenAfterAbort: pagesController.frozenForPrint,
+      anyPrintMarker: runtime.ALL_PRINT_MARKERS.some((cls) => document.body.classList.contains(cls)),
+      noticeCount: noticeMessages.length,
+    }
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+  expect(abortedFlow).toEqual({
+    ok: false,
+    saveAbortOk: false,
+    flushCalled: false,
+    nativeCalled: false,
+    frozenAfterAbort: false,
+    anyPrintMarker: false,
+    noticeCount: 0,
+  })
+})
+
+test("oversized atomic document items flow across PDF pages without clipping in desktop and web print", async ({ page }) => {
+  const lead = `OverflowLeadToken ${Array.from({ length: 160 }, (_, index) => `AtomicItemSpan${index} wraps cleanly without clipping across sheet bounds.`).join(" ")} OverflowEndToken`
+  const oversizedDocSource = `# Oversized Art Report\n\n:::art\n1. ${lead}\n:::\n\n## FollowingPageHeading\n\nFollowingSectionBodyToken stays cleanly on the subsequent page.`
+
+  await mountDesktopShellAndPaginate(page, {
+    kind: "document",
+    source: oversizedDocSource,
+    markers: ["printing-work", "printing-document"],
+    editorMode: "source",
+  })
+
+  const overflowingPages = await page.locator("#desktop-preview .document-page.is-overflowing-content").count()
+  expect(overflowingPages).toBeGreaterThanOrEqual(1)
+
+  await page.emulateMedia({ media: "print" })
+  const desktopOverflow = await page.evaluate(() => getComputedStyle(document.querySelector("#desktop-preview .document-page.is-overflowing-content .document-page-content")).overflow)
+  expect(desktopOverflow).toBe("visible")
+  await page.emulateMedia({ media: null })
+
+  const desktopPdf = await pdfTextAndBoxes(page)
+  expect(desktopPdf.pagesCount).toBeGreaterThanOrEqual(3)
+  expect(pageBytes(desktopPdf.text)).toContain(pageBytes("OverflowLeadToken"))
+  expect(pageBytes(desktopPdf.text)).toContain(pageBytes("AtomicItemSpan159"))
+  expect(pageBytes(desktopPdf.text)).toContain(pageBytes("OverflowEndToken"))
+  expect(pageBytes(desktopPdf.text)).toContain(pageBytes("FollowingPageHeading"))
+  expect(pageBytes(desktopPdf.text)).toContain(pageBytes("FollowingSectionBodyToken"))
+  for (const box of desktopPdf.boxes) {
+    expect(box.width).toBeCloseTo(595.28, 0)
+    expect(box.height).toBeCloseTo(841.89, 0)
+  }
+
+  await mountWebPrintAndPaginate(page, {
+    kind: "document",
+    source: oversizedDocSource,
+  })
+
+  await page.emulateMedia({ media: "print" })
+  const webOverflow = await page.evaluate(() => getComputedStyle(document.querySelector(".document-print .document-page.is-overflowing-content .document-page-content")).overflow)
+  expect(webOverflow).toBe("visible")
+  await page.emulateMedia({ media: null })
+
+  const webPdf = await pdfTextAndBoxes(page)
+  expect(webPdf.pagesCount).toBeGreaterThanOrEqual(3)
+  expect(pageBytes(webPdf.text)).toContain(pageBytes("OverflowLeadToken"))
+  expect(pageBytes(webPdf.text)).toContain(pageBytes("AtomicItemSpan159"))
+  expect(pageBytes(webPdf.text)).toContain(pageBytes("OverflowEndToken"))
+  expect(pageBytes(webPdf.text)).toContain(pageBytes("FollowingPageHeading"))
+  expect(pageBytes(webPdf.text)).toContain(pageBytes("FollowingSectionBodyToken"))
+})
+
+test("executeDesktopPrint aborts cleanly if preview becomes stale before native print and holds projection steady during capture", async ({ page }) => {
+  await mountDesktopShellAndPaginate(page, {
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    markers: ["printing-work", "printing-document"],
+    editorMode: "source",
+    preparePrint: false,
+  })
+
+  const fillerHtml = renderPreview({
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    style: styleOf(),
+    title: "Capture guard probe",
+    allowRemoteMedia: false,
+  }).html
+
+  const staleAbort = await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const form = document.querySelector("#desktop-editor-form")
+    const preview = document.querySelector("#desktop-preview")
+    form.setAttribute("data-preview-url-value", "/mock-desktop-preview")
+    form.setAttribute("data-controller", "preview")
+    runtime.installPreviewHtml(preview, html)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    const previewController = form.previewController
+    const pagesController = preview.querySelector('[data-controller~="document-pages"]').documentPagesController
+    document.body.classList.remove(...runtime.ALL_PRINT_MARKERS)
+
+    let nativeCalled = false
+    const origFreeze = previewController.freezeForPrint.bind(previewController)
+    previewController.freezeForPrint = (opts) => {
+      origFreeze(opts)
+      // Restore original freeze before triggering a simulated edit during pre-native rAF.
+      previewController.freezeForPrint = origFreeze
+      previewController.schedule()
+    }
+
+    const ok = await runtime.executeDesktopPrint({
+      sourceFile: "document.md",
+      getPreview: () => preview,
+      getPreviewController: () => form.previewController,
+      isStillActive: () => true,
+      exitPresentation: async () => {},
+      hasUnsavedChanges: () => false,
+      flushSave: async () => true,
+      showNotice: () => {},
+      nativePrintWork: async () => { nativeCalled = true },
+    })
+    clearTimeout(previewController.timer)
+    previewController.timer = null
+
+    return {
+      ok,
+      nativeCalled,
+      previewFrozen: previewController.frozenForPrint,
+      pagesFrozen: pagesController.frozenForPrint,
+      anyPrintMarker: runtime.ALL_PRINT_MARKERS.some((cls) => document.body.classList.contains(cls)),
+    }
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+  expect(staleAbort).toEqual({
+    ok: false,
+    nativeCalled: false,
+    previewFrozen: false,
+    pagesFrozen: false,
+    anyPrintMarker: false,
+  })
+
+  // Now verify that once nativePrintWork is invoked, previewController holds any incoming projection until interaction recovery.
+  const replacementHtml = fillerHtml.replace("Multi-Page Section 18", "LateReplacedToken")
+  const captureGuard = await page.evaluate(async ({ runtimeSource, html, replacement }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const form = document.querySelector("#desktop-editor-form")
+    const preview = document.querySelector("#desktop-preview")
+    runtime.installPreviewHtml(preview, html)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    const previewController = form.previewController
+    previewController.projectionFresh = true
+    previewController.pendingRefreshWhileFrozen = false
+    let replacedDuringNative = null
+    let previewFrozenDuringNative = null
+    const sourceText = previewController.currentSource()
+
+    const ok = await runtime.executeDesktopPrint({
+      sourceFile: "document.md",
+      getPreview: () => preview,
+      getPreviewController: () => form.previewController,
+      isStillActive: () => true,
+      exitPresentation: async () => {},
+      hasUnsavedChanges: () => false,
+      flushSave: async () => true,
+      showNotice: () => {},
+      nativePrintWork: async () => {
+        previewFrozenDuringNative = previewController.frozenForPrint
+        previewController.installProjection({ html: replacement, warnings: [] }, { ok: true }, sourceText)
+        replacedDuringNative = preview.textContent.includes("LateReplacedToken")
+      },
+    })
+
+    const replacedRightAfterResolve = preview.textContent.includes("LateReplacedToken")
+    window.dispatchEvent(new Event("focusin", { bubbles: true }))
+    const replacedAfterUserFocus = preview.textContent.includes("LateReplacedToken")
+
+    return {
+      ok,
+      previewFrozenDuringNative,
+      replacedDuringNative,
+      replacedRightAfterResolve,
+      replacedAfterUserFocus,
+      previewFrozenAfterFocus: previewController.frozenForPrint,
+    }
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml, replacement: replacementHtml })
+
+  expect(captureGuard).toEqual({
+    ok: true,
+    previewFrozenDuringNative: true,
+    replacedDuringNative: false,
+    replacedRightAfterResolve: false,
+    replacedAfterUserFocus: true,
+    previewFrozenAfterFocus: false,
+  })
+})
+
+test("flushDesktopPreviewForPrint awaits image.decode() on already-complete images including swapped projections", async ({ page }) => {
+  await mountDesktopShellAndPaginate(page, {
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    markers: ["printing-work", "printing-document"],
+    editorMode: "source",
+    preparePrint: false,
+  })
+
+  const fillerHtml = renderPreview({
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    style: styleOf(),
+    title: "Decode probe",
+    allowRemoteMedia: false,
+  }).html
+  const dataSvg = `data:image/svg+xml;charset=utf-8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="80"><rect width="120" height="80" fill="#224466"/></svg>')}`
+
+  const directDecodeState = await page.evaluate(async ({ runtimeSource, html, imgSrc }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    const form = document.querySelector("#desktop-editor-form")
+    form.setAttribute("data-controller", "preview")
+    runtime.installPreviewHtml(preview, html)
+
+    const img = document.createElement("img")
+    img.src = imgSrc
+    await new Promise((resolve) => {
+      if (img.complete && img.naturalWidth > 0) resolve()
+      else img.addEventListener("load", resolve, { once: true })
+    })
+    let releaseDecode
+    img.decode = () => new Promise((resolve) => { releaseDecode = resolve })
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(img)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    let flushDone = false
+    const flushPromise = runtime.flushDesktopPreviewForPrint(preview, form.previewController, { resourceTimeoutMs: 2000 }).then((ok) => {
+      flushDone = true
+      return ok
+    })
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const blockedWhileDecoding = !flushDone && img.complete && img.naturalWidth > 0
+
+    releaseDecode()
+    const ok = await flushPromise
+    return { blockedWhileDecoding, ok, flushDone }
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml, imgSrc: dataSvg })
+
+  expect(directDecodeState).toEqual({
+    blockedWhileDecoding: true,
+    ok: true,
+    flushDone: true,
+  })
+
+  // Also check swapped projection with an already-complete image whose decode() is deferred.
+  let markSwappedSourceRequested
+  const swappedSourceRequested = new Promise((resolve) => { markSwappedSourceRequested = resolve })
+  await page.route("https://print-decode-swap.invalid/**", async (route) => {
+    markSwappedSourceRequested()
+    await new Promise(() => {})
+  })
+
+  await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    const form = document.querySelector("#desktop-editor-form")
+    runtime.installPreviewHtml(preview, html)
+    const oldImg = document.createElement("img")
+    oldImg.src = "https://print-decode-swap.invalid/pending.svg"
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(oldImg)
+
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    window.__swapDecodeDone = false
+    window.__swapDecodePromise = runtime.flushDesktopPreviewForPrint(preview, form.previewController, { resourceTimeoutMs: 2000 }).then((ok) => {
+      window.__swapDecodeDone = true
+      return ok
+    })
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+  await swappedSourceRequested
+  const swappedDecodeState = await page.evaluate(async ({ runtimeSource, html, imgSrc }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    const completeImg = document.createElement("img")
+    completeImg.src = imgSrc
+    await new Promise((resolve) => {
+      if (completeImg.complete && completeImg.naturalWidth > 0) resolve()
+      else completeImg.addEventListener("load", resolve, { once: true })
+    })
+    let releaseSwappedDecode
+    completeImg.decode = () => new Promise((resolve) => { releaseSwappedDecode = resolve })
+
+    runtime.installPreviewHtml(preview, html)
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(completeImg)
+
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    const blockedAfterSwap = window.__swapDecodeDone === false
+    releaseSwappedDecode()
+    const ok = await window.__swapDecodePromise
+    return { blockedAfterSwap, ok, done: window.__swapDecodeDone }
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml, imgSrc: dataSvg })
+
+  expect(swappedDecodeState).toEqual({
+    blockedAfterSwap: true,
+    ok: true,
+    done: true,
+  })
+
+  // Bounded decode stall respects resourceTimeoutMs.
+  const boundedDecodeStallOk = await page.evaluate(async ({ runtimeSource, html, imgSrc }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    const form = document.querySelector("#desktop-editor-form")
+    runtime.installPreviewHtml(preview, html)
+    const stalledImg = document.createElement("img")
+    stalledImg.src = imgSrc
+    await new Promise((resolve) => {
+      if (stalledImg.complete && stalledImg.naturalWidth > 0) resolve()
+      else stalledImg.addEventListener("load", resolve, { once: true })
+    })
+    stalledImg.decode = () => new Promise(() => {})
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(stalledImg)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    return runtime.flushDesktopPreviewForPrint(preview, form.previewController, { resourceTimeoutMs: 40 })
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml, imgSrc: dataSvg })
+
+  expect(boundedDecodeStallOk).toBe(true)
+})
+
+test("PreviewController unfreezeForPrint({ replayPending: false }) clears persistent freeze without replaying stale refreshes", async ({ page }) => {
+  await page.route("https://mock-preview.invalid/**", async (route) => {
+    const filler = renderPreview({
+      kind: "document",
+      source: MULTI_PAGE_DOCUMENT_SOURCE,
+      style: styleOf(),
+      title: "Mock refreshed",
+      allowRemoteMedia: false,
+    }).html
+    await route.fulfill({
+      status: 200,
+      headers: { "Access-Control-Allow-Origin": "*" },
+      contentType: "application/json",
+      body: JSON.stringify({ html: filler, warnings: [] }),
+    })
+  })
+
+  await mountDesktopShellAndPaginate(page, {
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    markers: ["printing-work", "printing-document"],
+    editorMode: "source",
+    preparePrint: false,
+  })
+
+  const fillerHtml = renderPreview({
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    style: styleOf(),
+    title: "Reset probe",
+    allowRemoteMedia: false,
+  }).html
+
+  const resetState = await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const form = document.querySelector("#desktop-editor-form")
+    const preview = document.querySelector("#desktop-preview")
+    form.setAttribute("data-preview-url-value", "https://mock-preview.invalid/preview")
+    form.setAttribute("data-controller", "preview")
+    runtime.installPreviewHtml(preview, html)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    const previewController = form.previewController
+    previewController.freezeForPrint({ armInteractionRecovery: false })
+    previewController.schedule()
+    const frozenDuringEdit = {
+      frozenForPrint: previewController.frozenForPrint,
+      pendingRefreshWhileFrozen: previewController.pendingRefreshWhileFrozen,
+      timerSet: Boolean(previewController.timer),
+    }
+
+    previewController.unfreezeForPrint({ replayPending: false })
+    const clearedWithoutReplay = {
+      frozenForPrint: previewController.frozenForPrint,
+      pendingRefreshWhileFrozen: previewController.pendingRefreshWhileFrozen,
+      timerSet: Boolean(previewController.timer),
+    }
+
+    const refreshedAfterReset = await previewController.refresh(++previewController.requestId)
+    return {
+      frozenDuringEdit,
+      clearedWithoutReplay,
+      refreshedAfterReset,
+      stillFrozenAfterRefresh: previewController.frozenForPrint,
+    }
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+    expect(resetState).toEqual({
+    frozenDuringEdit: {
+      frozenForPrint: true,
+      pendingRefreshWhileFrozen: true,
+      timerSet: false,
+    },
+    clearedWithoutReplay: {
+      frozenForPrint: false,
+      pendingRefreshWhileFrozen: false,
+      timerSet: false,
+    },
+    refreshedAfterReset: true,
+    stillFrozenAfterRefresh: false,
+  })
+})
+
+test("frozen refresh does not emit false unavailable error, pre-freeze reflow timers recover on unfreeze, and double-swaps during decode keep waiting", async ({ page }) => {
+  let releaseFinalImage
+  let markFirstSwapRequested
+  let markSecondSwapRequested
+  const finalImageGate = new Promise((resolve) => { releaseFinalImage = resolve })
+  const firstSwapRequested = new Promise((resolve) => { markFirstSwapRequested = resolve })
+  const secondSwapRequested = new Promise((resolve) => { markSecondSwapRequested = resolve })
+  const svgImage = '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="480"><rect width="320" height="480" fill="#334455"/></svg>'
+  const dataSvg = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgImage)}`
+
+  await page.route("https://print-double-swap.invalid/**", async (route) => {
+    const url = route.request().url()
+    if (url.endsWith("/first-pending.svg")) {
+      markFirstSwapRequested()
+      await new Promise(() => {})
+      return
+    }
+    markSecondSwapRequested()
+    await finalImageGate
+    await route.fulfill({ status: 200, contentType: "image/svg+xml", body: svgImage })
+  })
+
+  await mountDesktopShellAndPaginate(page, {
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    markers: ["printing-work", "printing-document"],
+    editorMode: "source",
+    preparePrint: false,
+  })
+
+  const fillerHtml = renderPreview({
+    kind: "document",
+    source: MULTI_PAGE_DOCUMENT_SOURCE,
+    style: styleOf(),
+    title: "Edge guard probe",
+    allowRemoteMedia: false,
+  }).html
+
+  // 1. PreviewController.refresh() while frozen with projectionFresh === false and "Updating preview…" must not enter "Preview unavailable".
+  // 2. DocumentPagesController reflowTimer queued prior to freezeForPrint() must record pendingReflowWhileFrozen and reflow on unfreezeForPrint().
+  const guardState = await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const form = document.querySelector("#desktop-editor-form")
+    const preview = document.querySelector("#desktop-preview")
+    form.setAttribute("data-preview-url-value", "https://mock-preview.invalid/preview")
+    form.setAttribute("data-controller", "preview")
+    runtime.installPreviewHtml(preview, html)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    const previewController = form.previewController
+    previewController.projectionFresh = false
+    previewController.setStatus("Updating preview…")
+    previewController.hideRetry()
+    previewController.freezeForPrint({ armInteractionRecovery: false })
+    const refreshResult = await previewController.refresh(++previewController.requestId)
+    const statusWhileFrozen = previewController.statusTarget.textContent
+    const retryHiddenWhileFrozen = previewController.retryTarget.hidden
+    previewController.unfreezeForPrint({ replayPending: false })
+    previewController.projectionFresh = true
+
+    const reader = preview.querySelector('[data-controller~="document-pages"]')
+    const pagesController = reader.documentPagesController
+    pagesController.schedulePagination()
+    pagesController.freezeForPrint({ armInteractionRecovery: false })
+    await new Promise((resolve) => setTimeout(resolve, 360))
+    const pendingRecorded = pagesController.pendingReflowWhileFrozen
+    pagesController.unfreezeForPrint()
+    const pendingClearedOnUnfreeze = pagesController.pendingReflowWhileFrozen
+    return {
+      refreshResult,
+      statusWhileFrozen,
+      retryHiddenWhileFrozen,
+      pendingRecorded,
+      pendingClearedOnUnfreeze,
+    }
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+  expect(guardState).toEqual({
+    refreshResult: false,
+    statusWhileFrozen: "Updating preview…",
+    retryHiddenWhileFrozen: true,
+    pendingRecorded: true,
+    pendingClearedOnUnfreeze: false,
+  })
+  await page.waitForSelector('#desktop-preview [data-document-pages-target="surface"][data-document-pages-settled="true"]')
+
+  // 3. Double-swap during post-swap decode wait must keep waiting for the third projection's pending image.
+  await page.evaluate(async ({ runtimeSource, html }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const form = document.querySelector("#desktop-editor-form")
+    const preview = document.querySelector("#desktop-preview")
+    runtime.installPreviewHtml(preview, html)
+    const img1 = document.createElement("img")
+    img1.src = "https://print-double-swap.invalid/first-pending.svg"
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(img1)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+
+    window.__doubleSwapDone = false
+    window.__doubleSwapPromise = runtime.flushDesktopPreviewForPrint(preview, form.previewController, { resourceTimeoutMs: 3000 }).then((ok) => {
+      window.__doubleSwapDone = true
+      return ok
+    })
+    await new Promise((resolve) => requestAnimationFrame(resolve))
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml })
+
+  await firstSwapRequested
+  // Swap #1: complete image with deferred decode() (hits the !hasPendingPreviewResources branch).
+  await page.evaluate(async ({ runtimeSource, html, imgSrc }) => {
+    const runtime = await import(`data:text/javascript;charset=utf-8,${encodeURIComponent(runtimeSource)}`)
+    const preview = document.querySelector("#desktop-preview")
+    const decodeImg = document.createElement("img")
+    decodeImg.src = imgSrc
+    await new Promise((resolve) => {
+      if (decodeImg.complete && decodeImg.naturalWidth > 0) resolve()
+      else decodeImg.addEventListener("load", resolve, { once: true })
+    })
+    window.__middleDecodeCalled = false
+    decodeImg.decode = () => {
+      window.__middleDecodeCalled = true
+      return new Promise((resolve) => { window.__releaseMiddleDecode = resolve })
+    }
+
+    runtime.installPreviewHtml(preview, html)
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(decodeImg)
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    if (!window.__middleDecodeCalled || window.__doubleSwapDone) {
+      throw new Error(`expected middle decode to be in flight (called=${window.__middleDecodeCalled}, done=${window.__doubleSwapDone})`)
+    }
+
+    // Swap #2: while middle decode is waiting, swap in a third projection with an incomplete image.
+    runtime.installPreviewHtml(preview, html)
+    const img3 = document.createElement("img")
+    img3.src = "https://print-double-swap.invalid/final-pending.svg"
+    preview.querySelector('[data-document-pages-target="surface"]')?.append(img3)
+    window.__releaseMiddleDecode()
+  }, { runtimeSource: RUNTIME_BUNDLE, html: fillerHtml, imgSrc: dataSvg })
+
+  await secondSwapRequested
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)))
+  expect(await page.evaluate(() => window.__doubleSwapDone)).toBe(false)
+
+  releaseFinalImage()
+  const doubleSwapResult = await page.evaluate(async () => {
+    const ok = await window.__doubleSwapPromise
+    const img = document.querySelector('#desktop-preview img[src$="/final-pending.svg"]')
+    return {
+      ok,
+      done: window.__doubleSwapDone,
+      complete: img?.complete ?? false,
+      naturalHeight: img?.naturalHeight ?? 0,
+    }
+  })
+  expect(doubleSwapResult).toEqual({
+    ok: true,
+    done: true,
+    complete: true,
+    naturalHeight: 480,
+  })
 })

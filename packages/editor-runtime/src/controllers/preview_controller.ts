@@ -14,8 +14,15 @@ export default class extends Controller<HTMLElement> {
   static targets = ["container", "warnings", "status", "retry"]
   static values = { url: String, delay: { type: Number, default: 300 }, timeout: { type: Number, default: 8000 } }
 
+  frozenForPrint = false
+  pendingRefreshWhileFrozen = false
+  private printUnfreezeCleanup: (() => void) | null = null
+  private printInteractionRecoveryCleanup: (() => void) | null = null
+
   connect() {
     this.element.previewController = this
+    this.frozenForPrint = false
+    this.pendingRefreshWhileFrozen = false
     this.requestFields = [
       this.element.querySelector(".editor-input-proxy"),
       this.element.querySelector(".editor-title-input"),
@@ -81,6 +88,7 @@ export default class extends Controller<HTMLElement> {
 
   disconnect() {
     this.active = false
+    this.unfreezeForPrint()
     this.cancelPendingPreviewScroll?.()
     clearTimeout(this.timer)
     this.timer = null
@@ -96,7 +104,60 @@ export default class extends Controller<HTMLElement> {
     if (this.element.previewController === this) delete this.element.previewController
   }
 
+  freezeForPrint(options: { armInteractionRecovery?: boolean } = {}): void {
+    this.unfreezeForPrint()
+    if (!this.active) return
+    this.frozenForPrint = true
+    this.pendingRefreshWhileFrozen = false
+    if (typeof window === "undefined") return
+    const unfreeze = () => this.unfreezeForPrint()
+    window.addEventListener("afterprint", unfreeze, { once: true })
+    this.printUnfreezeCleanup = () => {
+      window.removeEventListener("afterprint", unfreeze)
+    }
+    if (options.armInteractionRecovery !== false) {
+      this.armPrintInteractionRecovery()
+    }
+  }
+
+  armPrintInteractionRecovery(): void {
+    if (!this.active || !this.frozenForPrint || typeof window === "undefined") return
+    this.printInteractionRecoveryCleanup?.()
+    const unfreeze = () => this.unfreezeForPrint()
+    const interactionEvents = ["pointerdown", "keydown", "input", "focusin"] as const
+    interactionEvents.forEach((eventName) => {
+      window.addEventListener(eventName, unfreeze, { capture: true, once: true, passive: true })
+    })
+    this.printInteractionRecoveryCleanup = () => {
+      interactionEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, unfreeze, { capture: true })
+      })
+    }
+  }
+
+  unfreezeForPrint(options: { replayPending?: boolean } = {}): void {
+    const wasFrozen = this.frozenForPrint
+    const needsRefresh = this.pendingRefreshWhileFrozen
+    this.frozenForPrint = false
+    this.pendingRefreshWhileFrozen = false
+    this.printInteractionRecoveryCleanup?.()
+    this.printInteractionRecoveryCleanup = null
+    this.printUnfreezeCleanup?.()
+    this.printUnfreezeCleanup = null
+    if (!wasFrozen || !this.active || options.replayPending === false) return
+    if (needsRefresh) {
+      this.schedule()
+    } else if (this.pendingProjection && !this.isEditingProjection()) {
+      this.applyPendingProjection()
+    }
+  }
+
   schedule() {
+    if (this.frozenForPrint) {
+      this.pendingRefreshWhileFrozen = true
+      this.projectionFresh = false
+      return
+    }
     clearTimeout(this.timer)
     this.timer = null
     this.pendingProjection = null
@@ -120,6 +181,11 @@ export default class extends Controller<HTMLElement> {
   // 300ms schedule, so an Enter followed by typing keeps pushing its own
   // consequence back. Same immediate path as a manual retry.
   refreshNow(): void {
+    if (this.frozenForPrint) {
+      this.pendingRefreshWhileFrozen = true
+      this.projectionFresh = false
+      return
+    }
     clearTimeout(this.timer)
     this.timer = null
     this.pendingProjection = null
@@ -132,6 +198,10 @@ export default class extends Controller<HTMLElement> {
 
   async refresh(requestId = this.requestId) {
     this.timer = null
+    if (this.frozenForPrint) {
+      this.pendingRefreshWhileFrozen = true
+      return false
+    }
     if (this.requestController) {
       if (this.active && requestId === this.requestId) this.queuedRequestId = requestId
       return false
@@ -233,6 +303,8 @@ export default class extends Controller<HTMLElement> {
         })
       } else if (
         this.active &&
+        !this.frozenForPrint &&
+        !this.pendingRefreshWhileFrozen &&
         !this.requestController &&
         !this.projectionFresh &&
         !this.pendingProjection &&
@@ -277,7 +349,7 @@ export default class extends Controller<HTMLElement> {
   }
 
   applyPendingProjection() {
-    if (!this.pendingProjection || this.isEditingProjection()) return
+    if (this.frozenForPrint || !this.pendingProjection || this.isEditingProjection()) return
 
     const projection = this.pendingProjection
     this.pendingProjection = null
@@ -286,6 +358,7 @@ export default class extends Controller<HTMLElement> {
 
   async flushForPrint(): Promise<boolean> {
     if (!this.active) return false
+    if (this.frozenForPrint) this.unfreezeForPrint({ replayPending: false })
 
     if (this.finishEditing()) {
       await Promise.resolve()
@@ -330,6 +403,14 @@ export default class extends Controller<HTMLElement> {
   }
 
   installProjection(payload: any, response: any, source: any) {
+    if (this.frozenForPrint) {
+      if (!this.sameSource(this.currentSource(), source)) {
+        this.pendingRefreshWhileFrozen = true
+      } else {
+        this.pendingProjection = { payload, response, source }
+      }
+      return
+    }
     if (!this.sameSource(this.currentSource(), source)) {
       this.schedule()
       return
