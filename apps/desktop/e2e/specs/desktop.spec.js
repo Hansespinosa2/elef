@@ -1095,8 +1095,7 @@ class DesktopEditorUi {
       return { x: Math.round(rect.left + rect.width / 2), y: Math.round((Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2),
         screenX: Math.round(screenX + (outerWidth - innerWidth) / 2 + rect.left + rect.width / 2),
         screenY: Math.round(screenY + outerHeight - innerHeight + (Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2),
-        macScreenX: Math.round(screenX + rect.left + rect.width / 2),
-        macScreenY: Math.round(screenY + (Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2) }
+        viewportWidth: innerWidth, viewportHeight: innerHeight }
     })
     const hit = await browser.execute(({ x, y }) => {
       const target = document.elementFromPoint(x, y)
@@ -1112,9 +1111,20 @@ class DesktopEditorUi {
     if (process.platform === "linux") {
       execFileSync("xdotool", ["mousemove", String(point.screenX), String(point.screenY), "mousedown", "1", "mousemove", "--sync", String(point.screenX + 150), String(point.screenY), "mouseup", "1"], { timeout: 10_000 })
     } else if (process.platform === "darwin") {
+      const bounds = execFileSync("osascript", ["-e", `tell application "System Events"
+        tell first window of (first application process whose unix id is ${desktopProcessId()})
+          set {windowX, windowY} to position
+          set {windowWidth, windowHeight} to size
+          return (windowX as text) & "," & (windowY as text) & "," & (windowWidth as text) & "," & (windowHeight as text)
+        end tell
+      end tell`], { encoding: "utf8", timeout: 10_000 }).trim().split(",").map(Number)
+      if (bounds.length !== 4 || bounds.some(value => !Number.isFinite(value))) throw new Error(`Invalid macOS window bounds: ${bounds}`)
+      const [windowX, windowY, windowWidth, windowHeight] = bounds
+      const macX = Math.round(windowX + (windowWidth - point.viewportWidth) / 2 + point.x)
+      const macY = Math.round(windowY + windowHeight - point.viewportHeight + point.y)
       const script = `import CoreGraphics
 import Foundation
-let start = CGPoint(x: ${point.macScreenX}, y: ${point.macScreenY})
+let start = CGPoint(x: ${macX}, y: ${macY})
 func post(_ type: CGEventType, _ point: CGPoint) { CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap) }
 post(.mouseMoved, start)
 usleep(100000)
