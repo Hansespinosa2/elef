@@ -435,13 +435,13 @@ function editorBlocks(
   const regions: MapRegion[] = []
   const groupConsecutive = mode === "presentation"
   let current: SourceLine[] = []
-  let currentBlockStartCount = 0
+  let currentMultiConstruct = false
   let pendingPosition: PendingPosition | null = null
   let fence: FenceState | null = null
   let mathFence: string | null = null
 
   const pushCurrentLine = (line: SourceLine, lineIndex: number): void => {
-    if (boundaryMap.blockStarts.has(lineIndex)) currentBlockStartCount += 1
+    if (current.length > 0 && boundaryMap.blockStarts.has(lineIndex)) currentMultiConstruct = true
     current.push(line)
   }
 
@@ -455,7 +455,7 @@ function editorBlocks(
     const markdown = source.slice(blockStart, blockEnd).replace(/(?:\r\n|\r|\n)$/, "")
     const blockIndex = blocks.length
     const id = `slide-${slideIndex + 1}-block-${blockIndex + 1}`
-    const kind = editableBlockKind(markdown, currentBlockStartCount > 1)
+    const kind = editableBlockKind(markdown, currentMultiConstruct)
     const range: SourceRange = { start: blockStart, end: blockEnd }
     const contentRange: SourceRange = { start: blockStart, end: blockStart + markdown.length }
     const block: MapBlock = {
@@ -481,12 +481,12 @@ function editorBlocks(
         }
       }
     }
-    const region = editableRegion(markdown, blockStart, id, slideIndex, blockIndex, kind, slide, mode, currentBlockStartCount > 1)
+    const region = editableRegion(markdown, blockStart, id, slideIndex, blockIndex, kind, slide, mode, currentMultiConstruct)
     block.editable_region_id = region.id
     blocks.push(block)
     regions.push(region)
     current = []
-    currentBlockStartCount = 0
+    currentMultiConstruct = false
     pendingPosition = null
   }
 
@@ -1242,7 +1242,7 @@ function markdownBlocks(markdown: string, artResolution: ArtBindings, sourceBoun
   const artBindings = indexArtBindings(artResolution.bindings, markdown.split("\n").length)
   const boundaryMap = toBoundarySets(sourceBoundaryMap)
   let current: Array<string> = []
-  let currentBlockStartCount = 0
+  let currentMultiConstruct = false
   let currentStartLine: number | null = null
   let currentEndLine: number | null = null
   const flush = (): void => {
@@ -1251,16 +1251,16 @@ function markdownBlocks(markdown: string, artResolution: ArtBindings, sourceBoun
       markdown: current.join("\n"),
       startLine: currentStartLine as number,
       endLine: currentEndLine as number,
-      multiConstruct: currentBlockStartCount > 1
+      multiConstruct: currentMultiConstruct
     })
     current = []
-    currentBlockStartCount = 0
+    currentMultiConstruct = false
     currentStartLine = null
     currentEndLine = null
   }
   const pushLine = (line: string, index: number): void => {
     if (!current.length) currentStartLine = index
-    if (boundaryMap.blockStarts.has(index)) currentBlockStartCount += 1
+    if (current.length > 0 && boundaryMap.blockStarts.has(index)) currentMultiConstruct = true
     current.push(line)
     currentEndLine = index + 1
   }

@@ -365,6 +365,11 @@ test("single-card grouped slides keep body layout and isolate multi-construct ki
   const statementSlide = buildEditorStructure("# Takeaway\n\nSingle concise statement\nwith soft wrap", { mode: "presentation" })
   assert.equal(statementSlide.slides[0]?.layout, "statement")
   assert.equal(statementSlide.editorMap.slides[0]?.editable_regions[1]?.editable, true)
+
+  const splitLooseList = buildEditorStructure("- Item 1\n\n- Item 2\n# Heading", { mode: "presentation" })
+  assert.equal(splitLooseList.slides[0]?.layout, "body")
+  assert.equal(splitLooseList.editorMap.slides[0]?.blocks[1]?.kind, "paragraph")
+  assert.equal(splitLooseList.editorMap.slides[0]?.editable_regions[1]?.editable, false)
 })
 
 test("parsePythonFenceInfo classifies static and executable python fences", () => {
