@@ -12,7 +12,7 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById, syncPrintPageSizeStyle } from "@elef/client"
+import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, clearPrintPageSizeStyle, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById, syncPrintPageSizeStyle } from "@elef/client"
 import type { ExportMenuHandle, ExportMenuProps, GraphController, LibraryPaletteCommand } from "@elef/client"
 
 interface OpenedEditor {
@@ -334,6 +334,7 @@ export async function executeDesktopPrint(options: DesktopPrintOptions): Promise
       frozenPreviewController = null
       documentPagesController = null
       document.body.classList.remove(...ALL_PRINT_MARKERS)
+      clearPrintPageSizeStyle()
       return false
     }
     // The platform print dialog (and its PDF destination) opens only
@@ -735,9 +736,14 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     saveFlow = session
   }
 
+  function unfreezeEditorForPrint(): void {
+    elements.editorForm.previewController?.unfreezeForPrint?.({ replayPending: false })
+    elements.editorForm.querySelector?.('[data-controller~="document-pages"]')?.documentPagesController?.unfreezeForPrint?.({ replayPending: false })
+  }
+
   function closeSession(): void {
     activeWorkSessionToken += 1
-    elements.editorForm.previewController?.unfreezeForPrint?.({ replayPending: false })
+    unfreezeEditorForPrint()
     if (!saveFlow) return
     editorFor(elements.editorField)?.detachSession?.(saveFlow)
     saveFlow.dispose()
@@ -934,7 +940,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   let libraryShown = false
   function showLibrary(): void {
     activeWorkSessionToken += 1
-    elements.editorForm.previewController?.unfreezeForPrint?.({ replayPending: false })
+    unfreezeEditorForPrint()
     elements.editorForm.previewController?.finishEditing()
     document.body.dataset.desktopView = "library"
     elements.welcome.hidden = Boolean(library)
