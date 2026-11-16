@@ -335,7 +335,7 @@ jobs:
           if-no-files-found: ignore
 
   desktop:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The Stable and identity smokes added full binary builds to this job;
     # 60 matches the arch-package job's budget for the longer suite.
     timeout-minutes: 60
