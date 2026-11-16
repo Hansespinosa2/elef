@@ -30,7 +30,7 @@ jobs:
   plan:
     name: CI plan (shadow)
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       affected: ${{ steps.plan.outputs.affected }}
@@ -68,7 +68,7 @@ jobs:
           retention-days: 14
 
   desktop-fast:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout code
@@ -141,7 +141,7 @@ jobs:
 
   scan_ruby:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -156,7 +156,7 @@ jobs:
 
   scan_js:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -171,7 +171,7 @@ jobs:
 
   test:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17
@@ -227,7 +227,7 @@ jobs:
 
   sqlite-test:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -263,7 +263,7 @@ jobs:
 
   system-test:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     services:
       postgres:
         image: postgres:17
@@ -335,7 +335,7 @@ jobs:
           if-no-files-found: ignore
 
   desktop:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The Stable and identity smokes added full binary builds to this job;
     # 60 matches the arch-package job's budget for the longer suite.
     timeout-minutes: 60
@@ -517,7 +517,7 @@ jobs:
 
   affected:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     services:
       postgres:
@@ -573,7 +573,7 @@ jobs:
         run: bin/check affected
 
   arch-package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - name: Checkout code
@@ -773,7 +773,7 @@ jobs:
 
   production-smoke:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout code
@@ -806,7 +806,7 @@ jobs:
 
   development-smoke:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout code
@@ -843,7 +843,7 @@ jobs:
     name: CI result matrix (informational)
     needs: [ plan, desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, affected, desktop, arch-package, desktop-macos, renderer-macos, production-smoke, development-smoke ]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Publish the ran/skipped matrix to the run summary
@@ -875,7 +875,7 @@ jobs:
   release-gate:
     name: Desktop release Gate A
     needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, affected, desktop, arch-package, desktop-macos, renderer-macos, production-smoke, development-smoke ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -902,7 +902,7 @@ jobs:
   record-ci-attestation:
     if: github.event_name == 'pull_request'
     needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, affected, desktop, desktop-macos, renderer-macos, production-smoke, development-smoke ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the exact pull request test candidate
         uses: actions/checkout@v7
@@ -939,7 +939,7 @@ jobs:
   publish-deployment-ref:
     name: Authorize deployment after CI
     if: github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'main')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 70
     permissions:
       contents: write
