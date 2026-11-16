@@ -53,6 +53,11 @@
   --oradia-line: #e8e7e1;
   --oradia-green: #526d58;
   --oradia-green-deep: #405b46;
+  --oradia-color-scheme: light;
+  --oradia-shell-selection-background: var(--oradia-vim-selection);
+  --work-dark-color-scheme: light;
+  --work-dark-selection-background: var(--oradia-vim-selection);
+  --work-dark-reveal-marker-ink: #4f5852;
 }
 
 :root[data-theme="light"] body.elef-app { background: var(--oradia-slate-950) !important; color: var(--oradia-ink) !important; }
@@ -82,6 +87,11 @@
     --oradia-line: #e8e7e1;
     --oradia-green: #526d58;
     --oradia-green-deep: #405b46;
+    --oradia-color-scheme: light;
+    --oradia-shell-selection-background: var(--oradia-vim-selection);
+    --work-dark-color-scheme: light;
+    --work-dark-selection-background: var(--oradia-vim-selection);
+    --work-dark-reveal-marker-ink: #4f5852;
   }
   :root[data-theme="system"] body.elef-app .app-header { background: rgb(255 254 250 / 94%) !important; }
 }

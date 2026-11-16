@@ -35,21 +35,21 @@
    differ. Revealed list items drop their native bullet (the source
    marker takes its place); local reflow while revealed is expected. */
 .editor-reveal-marker::before {
-  color: var(--oradia-muted);
+  color: var(--work-reveal-marker-ink, #4f5852);
   content: attr(data-editor-reveal-prefix);
   font-family: var(--oradia-mono);
   white-space: pre;
 }
 li.editor-reveal-marker { list-style: none; }
 .editor-reveal-fence::before {
-  color: var(--oradia-muted);
+  color: var(--work-reveal-marker-ink, #4f5852);
   content: attr(data-editor-reveal-fence-open);
   display: block;
   font-family: var(--oradia-mono);
   white-space: pre-wrap;
 }
 .editor-reveal-fence[data-editor-reveal-fence-close]::after {
-  color: var(--oradia-muted);
+  color: var(--work-reveal-marker-ink, #4f5852);
   content: attr(data-editor-reveal-fence-close);
   display: block;
   font-family: var(--oradia-mono);
@@ -125,7 +125,9 @@ li.editor-reveal-marker { list-style: none; }
 .editor-mode[data-mode="insert"] { color: var(--oradia-vim-insert); }
 .editor-mode[data-mode="visual"] { color: var(--oradia-vim-visual); }
 .editor-command { color: var(--oradia-ink); font-family: var(--oradia-mono); min-width: 1rem; }
-.editor-projection { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 0.85rem; box-shadow: 0 14px 35px rgba(0, 0, 0, 0.14); color: var(--oradia-paper-ink); min-height: 22rem; overflow: hidden; padding: clamp(0.75rem, 2vw, 1.25rem); position: relative; z-index: 5; }
+.editor-projection { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 0.85rem; box-shadow: 0 14px 35px rgba(0, 0, 0, 0.14); color: var(--oradia-paper-ink); color-scheme: light; min-height: 22rem; overflow: hidden; padding: clamp(0.75rem, 2vw, 1.25rem); position: relative; z-index: 5; }
+.editor-projection ::selection,
+.editor-projection::selection { background-color: var(--oradia-vim-selection); color: var(--oradia-paper-ink); }
 .editor-projection.preview-pane { background: var(--oradia-paper-bright); border-color: var(--oradia-paper-line); box-shadow: 0 14px 35px rgba(0, 0, 0, 0.14); }
 .editor-projection .document-reader { container-type: inline-size; }
 .editor-projection .document-page-frame { width: min(794px, 100%); }
@@ -137,7 +139,13 @@ li.editor-reveal-marker { list-style: none; }
 .document-editor-block.position-left { text-align: left; }
 .document-editor-block.position-center { text-align: center; }
 .document-editor-block.position-right { text-align: right; }
-.document-block-position-control { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; right: 0.25rem; top: 0.15rem; transition: opacity 120ms ease; z-index: 4; }
+.document-block-position-control { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; color-scheme: dark; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; right: 0.25rem; top: 0.15rem; transition: opacity 120ms ease; z-index: 4; }
+.editor-projection .document-block-position-control::selection,
+.editor-projection .document-block-position-control ::selection,
+.editor-projection .presentation-editor-slide-toolbar::selection,
+.editor-projection .presentation-editor-slide-toolbar ::selection,
+.editor-projection .presentation-editor-block-controls::selection,
+.editor-projection .presentation-editor-block-controls ::selection { background-color: var(--work-code-selection-background); color: #e9eee9; }
 .document-editor-block-shell:hover .document-block-position-control,
 .document-editor-block-shell:focus-within .document-block-position-control,
 .document-block-position-control:focus-within,
@@ -160,7 +168,7 @@ li.editor-reveal-marker { list-style: none; }
 .presentation-editor-projection { padding: clamp(0.35rem, 1vw, 0.75rem); }
 .presentation-editor-projection .slides { gap: 1.25rem; }
 .presentation-editor-projection .slide-frame { outline: 1px solid transparent; outline-offset: 0.25rem; }
-.presentation-editor-slide-toolbar { align-items: center; background: rgba(24, 33, 38, 0.9); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; flex-wrap: wrap; gap: 0.35rem; left: 1.25rem; padding: 0.3rem 0.45rem; position: absolute; right: 1.25rem; top: 0.8rem; z-index: 3; }
+.presentation-editor-slide-toolbar { align-items: center; background: rgba(24, 33, 38, 0.9); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; color-scheme: dark; display: flex; flex-wrap: wrap; gap: 0.35rem; left: 1.25rem; padding: 0.3rem 0.45rem; position: absolute; right: 1.25rem; top: 0.8rem; z-index: 3; }
 .presentation-editor-slide-label { font-size: 0.7rem; font-weight: 800; margin-right: auto; text-transform: uppercase; }
 .presentation-editor-slide-toolbar button, .presentation-editor-block-controls select { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px; color: inherit; cursor: pointer; font: inherit; font-size: 0.68rem; font-weight: 700; padding: 0.25rem 0.5rem; }
 .presentation-editor-slide-toolbar button:hover, .presentation-editor-block-controls select:hover { background: rgba(255, 255, 255, 0.18); }
@@ -168,7 +176,7 @@ li.editor-reveal-marker { list-style: none; }
 .presentation-editor-projection .slide-title[contenteditable="true"], .presentation-editor-projection .slide-block[contenteditable="true"] { border-radius: 0.45rem; outline: 1px solid transparent; outline-offset: 0.35rem; transition: outline-color 120ms ease, background 120ms ease; }
 .presentation-editor-projection [contenteditable="true"]:hover, .presentation-editor-projection [contenteditable="true"]:focus { background: rgba(79, 139, 104, 0.08); outline-color: rgba(79, 139, 104, 0.5); }
 .slide-block-shell { position: relative; }
-.presentation-editor-block-controls { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; left: 100%; margin-left: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; top: 0; transition: opacity 120ms ease; white-space: nowrap; z-index: 4; }
+.presentation-editor-block-controls { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; color-scheme: dark; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; left: 100%; margin-left: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; top: 0; transition: opacity 120ms ease; white-space: nowrap; z-index: 4; }
 .presentation-editor-block-controls.pill-left { left: auto; margin-left: 0; margin-right: 0.35rem; right: 100%; }
 .presentation-editor-block-controls.pill-inside { left: auto; margin-left: 0; right: 0.25rem; top: 0.15rem; }
 .slide-block-shell:hover .presentation-editor-block-controls,
