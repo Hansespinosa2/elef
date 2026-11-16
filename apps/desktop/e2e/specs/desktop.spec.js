@@ -2699,14 +2699,14 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("resizes source and preview for documents and presentations", async () => {
     const originalSize = await browser.getWindowSize()
-    const originalPosition = await browser.getWindowPosition()
+    const originalPosition = await browser.getWindowRect()
     try {
       await browser.setWindowSize(1280, 840)
-      if (process.platform === "darwin") await browser.setWindowPosition(0, 0)
+      if (process.platform === "darwin") await browser.setWindowRect(0, 0, null, null)
       await sourcePreviewResizeWorkflow(new DesktopEditorUi())
     } finally {
       await browser.setWindowSize(originalSize.width, originalSize.height)
-      if (process.platform === "darwin") await browser.setWindowPosition(originalPosition.x, originalPosition.y)
+      if (process.platform === "darwin") await browser.setWindowRect(originalPosition.x, originalPosition.y, null, null)
     }
   })
 
