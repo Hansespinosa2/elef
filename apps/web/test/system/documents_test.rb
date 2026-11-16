@@ -2865,8 +2865,42 @@ class DocumentsTest < ApplicationSystemTestCase
       })()
     JAVASCRIPT
     assert_operator count, :>, 1
+    assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.document-page-content li[data-document-page-continuation]')).listStyleType")
     active_document_block.send_keys(" updated")
     assert_field "Markdown source", with: source.sub(long_item, "#{long_item} updated"), wait: 5
+  end
+
+  test "flows nested lists around an atomic code block" do
+    document = Document.create!(title: "Nested code flow", source: "Initial content")
+    visit document_path(document)
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const outer = document.createElement('ul');
+        const parent = document.createElement('li');
+        const nested = document.createElement('ol');
+        for (let n = 1; n <= 100; n++) {
+          const item = document.createElement('li');
+          item.textContent = `Nested item ${n}`;
+          if (n === 50) { const code = document.createElement('pre'); code.textContent = 'atomic code'; item.append(code); }
+          nested.append(item);
+        }
+        parent.append('Parent', nested);
+        outer.append(parent);
+        surface.replaceChildren(outer);
+        controller.paginate(); controller.paginate();
+        return { pages: surface.querySelectorAll('.document-page').length,
+          items: [...surface.querySelectorAll('ol > li')].map(item => item.textContent),
+          code: surface.querySelectorAll('pre').length,
+          overflow: surface.querySelectorAll('.is-overflowing-content').length };
+      })()
+    JAVASCRIPT
+    assert_operator state.fetch("pages"), :>, 1
+    assert_equal 100, state.fetch("items").length
+    assert_equal 1, state.fetch("code")
+    assert_equal 0, state.fetch("overflow")
   end
 
   test "continues a loose list item without splitting its Markdown structure" do
