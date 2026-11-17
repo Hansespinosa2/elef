@@ -16,7 +16,7 @@
       1000
     ],
     "device_scale_factor": 1,
-    "browser": "Chromium 152.0.7977.82 (Arch Linux build), headless",
+    "browser": "Chrome for Testing 152.0.7977.82 (Linux64), headless",
     "theme": "light",
     "typography": "modern",
     "fonts": "document.fonts.status settled to loaded; KaTeX webfonts served locally; generic sans-serif/serif resolve to Liberation Sans/Serif (reference-fonts.conf; Ubuntu runners otherwise prefer DejaVu/Noto and paginate differently)",
@@ -38,8 +38,8 @@
       "images": 26,
       "lists": 105,
       "headings": 106,
-      "rendered_pages": 95,
-      "rendered_dom_nodes": 14599,
+      "rendered_pages": 96,
+      "rendered_dom_nodes": 14574,
       "rendered_katex": 210,
       "rendered_math_errors": 0
     },
@@ -70,7 +70,7 @@
     "assets/perf-4.svg": "6f2c6ea0909c240a741a5134ffa1d46bf04a08f160179b6c3a9d9ed8676d9e4e"
   },
   "recalibration": {
-    "reason": "S1 KaTeX output switched html -> mathml: fewer DOM nodes per equation with different metrics, so identical frozen sources paginate to 98/86 under the reference layout. S2 MathML elements route through the vendored KaTeX webfont stack (documents.css) instead of per-glyph system fallback, which paginated math differently per machine (86 locally vs 90 on CI). S3 Size1 preload converges cold opens with warm ones at 91 (cold samples otherwise paginate large operators in fallback metrics and never redo). S4 shared pagination now flows text and list fragments into available page space with two-line widow/orphan control; the mixed fixture measures 95 pages and 14,599 DOM nodes, while math-heavy remains at 91 pages with 45,960 DOM nodes. Source hashes and fixture bytes are unchanged; these exact outputs were re-measured under the pinned reference layout with ELEF_PERF_MODE=calibrate and repeated before updating the exact page-count contract.",
+    "reason": "S1 KaTeX output switched html -> mathml: fewer DOM nodes per equation with different metrics, so identical frozen sources paginate to 98/86 under the reference layout. S2 MathML elements route through the vendored KaTeX webfont stack (documents.css) instead of per-glyph system fallback, which paginated math differently per machine (86 locally vs 90 on CI). S3 Size1 preload converges cold opens with warm ones at 91 (cold samples otherwise paginate large operators in fallback metrics and never redo). S4 shared pagination now flows text and list fragments into available page space with two-line widow/orphan control. S5 list pagination now permits one preceding item on an otherwise empty page when that is required to split a following oversized item safely; the mixed fixture measures 96 pages and 14,574 DOM nodes, while math-heavy remains at 91 pages. Source hashes and fixture bytes are unchanged; mixed-fixture output was measured twice under the pinned Chrome for Testing reference layout before updating the exact page-count contract.",
     "renderer": "katex output mathml, throwOnError, locally served webfonts"
   }
 }

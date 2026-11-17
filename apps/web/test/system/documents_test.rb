@@ -2792,6 +2792,9 @@ class DocumentsTest < ApplicationSystemTestCase
         const surface = document.querySelector('.document-editor-projection .document-surface');
         const reader = surface.closest('[data-controller~="document-pages"]');
         const controller = window.Stimulus.getControllerForElementAndIdentifier(reader, 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
         controller.paginate();
         controller.paginate();
         const blocks = [...surface.querySelectorAll('.document-editor-block[data-editor-block-id]')];
@@ -2811,6 +2814,79 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal "First item#{long_item}Last item", state.flatten.join
     active_document_block.send_keys(" updated")
     assert_field "Markdown source", with: source.sub(long_item, "#{long_item} updated"), wait: 5
+  end
+
+  test "restores the caret offset inside a list item split across pages" do
+    long_item = ("Caret restoration follows the selected text through page flow. " * 50).strip
+    document = Document.create!(title: "Caret in continued item", source: "- #{long_item}")
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+      })()
+    JAVASCRIPT
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    expected = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const itemFragments = () => [...surface.querySelectorAll('.document-page-content li')];
+        const before = itemFragments();
+        const focusItem = before.at(-1);
+        if (!focusItem) return null;
+        const walker = document.createTreeWalker(focusItem, NodeFilter.SHOW_TEXT);
+        let textNode = null;
+        while (walker.nextNode()) textNode = walker.currentNode;
+        if (!textNode) return null;
+        const localOffset = Math.max(0, textNode.textContent.length - 12);
+        focusItem.closest('[data-editor-block-id]').focus({ preventScroll: true });
+        const selection = window.getSelection();
+        selection.setPosition(textNode, localOffset);
+        const beforeRange = document.createRange();
+        beforeRange.selectNodeContents(focusItem);
+        beforeRange.setEnd(textNode, localOffset);
+        const offset = before.slice(0, -1).reduce((total, item) => total + item.textContent.length, 0) + beforeRange.toString().length;
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+        return { offset, fragments: before.length };
+      })()
+    JAVASCRIPT
+    assert expected, "expected a text caret in the final list-item fragment"
+    assert_operator expected.fetch("fragments"), :>, 1
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const fragments = [...surface.querySelectorAll('.document-page-content li')];
+        const selection = window.getSelection();
+        const node = selection?.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection?.focusNode?.parentElement;
+        const item = node?.closest('li');
+        if (!selection?.focusNode || !item) return null;
+        const index = fragments.indexOf(item);
+        const range = document.createRange();
+        range.selectNodeContents(item);
+        range.setEnd(selection.focusNode, selection.focusOffset);
+        return {
+          offset: fragments.slice(0, index).reduce((total, fragment) => total + fragment.textContent.length, 0) + range.toString().length,
+          page: [...surface.querySelectorAll('.document-page-frame')].indexOf(item.closest('.document-page-frame'))
+        };
+      })()
+    JAVASCRIPT
+    assert result, "expected the caret to remain inside the continued list item"
+    assert_equal expected.fetch("offset"), result.fetch("offset"), "caret should remain at the same list-item text offset after repagination"
+    assert_operator result.fetch("page"), :>, 0
   end
 
   test "flows an oversized nested ordered list without changing its source" do
@@ -3221,6 +3297,32 @@ class DocumentsTest < ApplicationSystemTestCase
     rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
     source = "| Item | Description |\n| --- | --- |\n#{rows}"
     document = Document.create!(title: "Continued table editing", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    value = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frames = [...document.querySelectorAll('.document-editor-projection .document-page-frame')];
+        const cell = frames[1]?.querySelector('tbody tr:first-child td:last-child');
+        if (!cell) return null;
+        const block = cell.closest('[data-editor-block-id]');
+        const range = document.createRange();
+        range.selectNodeContents(cell); range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+        return cell.textContent;
+      })()
+    JAVASCRIPT
+    assert value, "expected a table cell on the continuation page"
+    active_document_block.send_keys(" added")
+    assert_field "Markdown source", with: source.sub(value, "#{value} added"), wait: 5
+  end
+
+  test "edits a continued table cell when another cell contains a link" do
+    rows = (1..60).map do |n|
+      n == 1 ? "| [Row #{n}](https://example.com) | Value #{n} |" : "| Row #{n} | Value #{n} |"
+    end.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Continued linked table editing", source: source)
     visit edit_document_path(document)
     wait_for_settled_document_projection
     value = page.evaluate_script(<<~JAVASCRIPT)

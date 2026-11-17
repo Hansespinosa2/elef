@@ -866,7 +866,8 @@ export default class extends Controller<HTMLElement> {
       // two or more items remain. If the first item itself is taller than
       // the available space, splitLeadingGroupText handles that item below.
       const minimumItems = 2
-      if (bestCount >= minimumItems && bestCount < children.length) {
+      if (bestCount > 0 && bestCount < children.length &&
+          (bestCount >= minimumItems || page.content.childElementCount === 0)) {
         const fragments: [HTMLElement, HTMLElement] = [
           this.childFragment(block, list, children.slice(0, bestCount)),
           this.childFragment(block, list, children.slice(bestCount))
@@ -1229,14 +1230,19 @@ export default class extends Controller<HTMLElement> {
     const block = node?.closest?.("[data-editor-block-id][contenteditable='true']")
     if (!(block instanceof HTMLElement) || !this.surfaceTarget.contains(block)) return null
 
-    // A fresh preview arrives as unpaginated HTML, so its focused block has no
-    // flow ID yet. Assign one before paginate() replaces the surface; otherwise
-    // restoreCaret() cannot find the new fragment and the editor loses focus.
-    this.ensureFlowId(block)
-    const flowId = block.dataset.documentPageFlowId
-    const fragments = flowId ? this.pageFragments(flowId) : [block]
-    const index = fragments.indexOf(block)
-    const prefix = fragments.slice(0, Math.max(0, index)).reduce((sum, fragment) => sum + this.visibleTextLength(fragment), 0)
+    // The paginator splits the outer editor-block shell, while selection lives
+    // in its inner contenteditable block. Keep the flow ID on the same shell
+    // paginate() consumes so offsets can include preceding fragments.
+    const flowBlock = block.closest<HTMLElement>("[data-document-page-flow-id]") ||
+      block.closest<HTMLElement>(".document-editor-block-shell") || block
+    this.ensureFlowId(flowBlock)
+    const flowId = flowBlock.dataset.documentPageFlowId
+    const fragments = flowId ? this.pageFragments(flowId) : [flowBlock]
+    const index = fragments.indexOf(flowBlock)
+    const prefix = fragments.slice(0, Math.max(0, index)).reduce((sum, fragment) => {
+      const editable = this.editorBlockInFragment(fragment, block.dataset.editorBlockId)
+      return sum + this.visibleTextLength(editable || fragment)
+    }, 0)
     const local = visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
     if (local === null) return null
 
@@ -1261,15 +1267,22 @@ export default class extends Controller<HTMLElement> {
 
   restoreCaret(caret: CapturedCaret): void {
     const fragments = caret.flowId ? this.pageFragments(caret.flowId) : []
-    const block = fragments.find((fragment) => fragment.dataset.editorBlockId === caret.blockId)
-    if (!block || block.contentEditable !== "true") return
+    const block = fragments
+      .map((fragment) => this.editorBlockInFragment(fragment, caret.blockId))
+      .find((candidate) => candidate?.contentEditable === "true")
+    if (!block) return
 
     let target = block
     let point = null
     if (caret.caretTargetId) {
       const markedTargets = [...this.surfaceTarget.querySelectorAll("[data-document-page-caret-target]")]
-      const caretTarget = markedTargets.find((element) => element.dataset.documentPageCaretTarget === caret.caretTargetId)
+      const matches = markedTargets.filter((element) => element.dataset.documentPageCaretTarget === caret.caretTargetId)
       markedTargets.forEach((element) => element.removeAttribute("data-document-page-caret-target"))
+      // A split list item or quote paragraph clones the caret marker into
+      // both fragments. Its captured local offset belongs to the unsplit
+      // block, so only use the marker when it is unique; otherwise the
+      // block-wide visible offset below selects the correct fragment.
+      const caretTarget = matches.length === 1 ? matches[0] : null
       const targetBlock = caretTarget?.closest?.("[data-editor-block-id]")
       if (caretTarget && targetBlock instanceof HTMLElement && targetBlock.contentEditable === "true") {
         target = targetBlock
@@ -1280,13 +1293,15 @@ export default class extends Controller<HTMLElement> {
     if (!point) {
       let offset = caret.visibleOffset
       for (const fragment of fragments) {
-        const length = this.visibleTextLength(fragment)
+        const editable = this.editorBlockInFragment(fragment, caret.blockId)
+        const textRoot = editable || fragment
+        const length = this.visibleTextLength(textRoot)
         if (offset <= length) {
-          target = fragment
+          target = textRoot
           break
         }
         offset -= length
-        target = fragment
+        target = textRoot
       }
       point = pointAtVisibleOffset(target, offset)
     }
@@ -1298,6 +1313,14 @@ export default class extends Controller<HTMLElement> {
   pageFragments(flowId: string): HTMLElement[] {
     return ([...this.surfaceTarget.querySelectorAll("[data-document-page-flow-id]")] as HTMLElement[])
       .filter((block: HTMLElement) => block.dataset.documentPageFlowId === flowId)
+  }
+
+  editorBlockInFragment(fragment: HTMLElement, blockId: string | undefined): HTMLElement | null {
+    if (!blockId) return null
+    const candidates = fragment.matches("[data-editor-block-id]")
+      ? [fragment]
+      : [...fragment.querySelectorAll<HTMLElement>("[data-editor-block-id]")]
+    return candidates.find((candidate) => candidate.dataset.editorBlockId === blockId) || null
   }
 
   visibleTextLength(element: Element): number {

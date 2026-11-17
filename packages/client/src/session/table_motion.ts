@@ -358,7 +358,10 @@ export function fragmentedTableSourceOffset(
           const marker = child && !child.children.length
             ? (markers[child.tagName] ?? []).find(mark => raw.trim() === mark + rendered + mark)
             : undefined
-          if (!child || !marker) return invalid
+          const link = child?.tagName === "A"
+            ? /^\s*\[([^\[\]\n]+)\]\((?:<[^<>\n]+>|[^()\s]+)(?:\s+(?:"[^"\n]*"|'[^'\n]*'))?\)\s*$/.exec(raw)
+            : null
+          if (!child || (!marker && (!link || link[1] !== rendered))) return invalid
           if (cell === node || cell.contains(node)) {
             if (!Number.isInteger(offset) || offset < 0) return invalid
             let local: number
@@ -382,7 +385,10 @@ export function fragmentedTableSourceOffset(
               }
               if (!found) return invalid
             }
-            result = span.start + raw.indexOf(marker) + marker.length + local
+            const contentStart = link
+              ? raw.indexOf("[") + 1
+              : raw.indexOf(marker ?? "") + (marker?.length ?? 0)
+            result = span.start + contentStart + local
           }
           continue
         }

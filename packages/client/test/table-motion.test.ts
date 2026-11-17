@@ -177,6 +177,19 @@ test("fragmented formatted cell points map inside verified Markdown delimiters",
   assert.deepEqual(fragmentedTableSourceOffset(source, fragments, strong.firstChild!, 5), { kind: "unmappable" });
 });
 
+test("a simple linked cell does not block edits elsewhere in a continued table", () => {
+  const { fragments } = fragmentedTable();
+  const source = FRAGMENTED_SOURCE.replace("| same | first |", "| [same](https://example.com) | first |");
+  const linkedCell = fragments[0]!.querySelector("tbody td")!;
+  linkedCell.innerHTML = '<a href="https://example.com">same</a>';
+  const linkedText = linkedCell.querySelector("a")!.firstChild!;
+  const otherCell = fragments[1]!.querySelector("tbody td:last-child")!.firstChild!;
+  assert.deepEqual(fragmentedTableSourceOffset(source, fragments, linkedText, 2),
+    { kind: "mapped", offset: source.indexOf("[same]") + 1 + 2 });
+  assert.deepEqual(fragmentedTableSourceOffset(source, fragments, otherCell, 3),
+    { kind: "mapped", offset: source.indexOf("second") + 3 });
+});
+
 test("fragmented table endpoints produce the exact cross-page source range", () => {
   const { fragments } = fragmentedTable();
   const first = fragments[0]!.querySelector("tbody td:last-child")!.firstChild!;
