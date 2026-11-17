@@ -1292,11 +1292,14 @@ export default class extends Controller<HTMLElement> {
 
     if (!point) {
       let offset = caret.visibleOffset
-      for (const fragment of fragments) {
+      for (const [index, fragment] of fragments.entries()) {
         const editable = this.editorBlockInFragment(fragment, caret.blockId)
         const textRoot = editable || fragment
         const length = this.visibleTextLength(textRoot)
-        if (offset <= length) {
+        // At a continuation boundary the same source offset is the end of
+        // this fragment and the start of the next one. Prefer the next
+        // fragment so repagination keeps the caret on its visible page.
+        if (offset < length || index === fragments.length - 1) {
           target = textRoot
           break
         }

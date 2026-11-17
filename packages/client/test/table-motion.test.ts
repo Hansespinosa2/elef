@@ -190,6 +190,20 @@ test("a simple linked cell does not block edits elsewhere in a continued table",
     { kind: "mapped", offset: source.indexOf("second") + 3 });
 });
 
+test("fragmented tables map links whose destinations contain balanced parentheses", () => {
+  const { fragments } = fragmentedTable();
+  const destination = "https://example.com/path_(detail)";
+  const source = FRAGMENTED_SOURCE.replace("| same | first |", `| [same](${destination}) | first |`);
+  const linkedCell = fragments[0]!.querySelector("tbody td")!;
+  linkedCell.innerHTML = `<a href="${destination}">same</a>`;
+  const linkedText = linkedCell.querySelector("a")!.firstChild!;
+  const otherCell = fragments[1]!.querySelector("tbody td:last-child")!.firstChild!;
+  assert.deepEqual(fragmentedTableSourceOffset(source, fragments, linkedText, 2),
+    { kind: "mapped", offset: source.indexOf("[same]") + 1 + 2 });
+  assert.deepEqual(fragmentedTableSourceOffset(source, fragments, otherCell, 3),
+    { kind: "mapped", offset: source.indexOf("second") + 3 });
+});
+
 test("fragmented table endpoints produce the exact cross-page source range", () => {
   const { fragments } = fragmentedTable();
   const first = fragments[0]!.querySelector("tbody td:last-child")!.firstChild!;

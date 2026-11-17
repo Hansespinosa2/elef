@@ -2889,6 +2889,92 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_operator result.fetch("page"), :>, 0
   end
 
+  test "keeps a caret at a continuation boundary on the following page" do
+    paragraph = ("Caret restoration follows the selected text through page flow. " * 50).strip
+    document = Document.create!(title: "Caret at continuation boundary", source: paragraph)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+
+    boundary = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+        return true;
+      })()
+    JAVASCRIPT
+    assert boundary
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    offset = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const fragments = [...surface.querySelectorAll('.document-page-content [data-editor-block-id][contenteditable="true"]')];
+        if (fragments.length < 2) return null;
+        const continuation = fragments[1];
+        const visibleText = (root) => {
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) => node.parentElement?.closest('.katex, .katex-mathml, [aria-hidden="true"], [contenteditable="false"]')
+              ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+          });
+          let text = '';
+          while (walker.nextNode()) text += walker.currentNode.textContent;
+          return text;
+        };
+        const walker = document.createTreeWalker(continuation, NodeFilter.SHOW_TEXT);
+        if (!walker.nextNode()) return null;
+        const textNode = walker.currentNode;
+        continuation.closest('[data-editor-block-id]').focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().setPosition(textNode, 0);
+        const sourceOffset = visibleText(fragments[0]).length;
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+        return sourceOffset;
+      })()
+    JAVASCRIPT
+    assert offset, "expected a caret at the start of the continued paragraph fragment"
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const selection = window.getSelection();
+        const node = selection?.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection?.focusNode?.parentElement;
+        const block = node?.closest('[data-editor-block-id][contenteditable="true"]');
+        if (!selection?.focusNode || !block) return null;
+        const fragments = [...surface.querySelectorAll('.document-page-content [data-editor-block-id][contenteditable="true"]')];
+        const index = fragments.indexOf(block);
+        const visibleText = (root) => {
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) => node.parentElement?.closest('.katex, .katex-mathml, [aria-hidden="true"], [contenteditable="false"]')
+              ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+          });
+          let text = '';
+          while (walker.nextNode()) text += walker.currentNode.textContent;
+          return text;
+        };
+        const range = document.createRange();
+        range.selectNodeContents(block);
+        range.setEnd(selection.focusNode, selection.focusOffset);
+        return {
+          offset: fragments.slice(0, index).reduce((total, fragment) => total + visibleText(fragment).length, 0) + range.toString().length,
+          page: [...surface.querySelectorAll('.document-page-frame')].indexOf(block.closest('.document-page-frame'))
+        };
+      })()
+    JAVASCRIPT
+    assert result, "expected the caret to remain in a continued paragraph fragment"
+    assert_equal offset, result.fetch("offset"), "caret should remain at the same source offset"
+    assert_operator result.fetch("page"), :>, 0, "caret at the continuation boundary should stay on the following page"
+  end
+
   test "flows an oversized nested ordered list without changing its source" do
     nested = (1..60).map { |n| "  #{n}. Nested item #{n} with explanatory text" }.join("\n")
     source = "Opening paragraph.\n\n- Parent item\n#{nested}\n- Outer tail"
@@ -3317,9 +3403,9 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: source.sub(value, "#{value} added"), wait: 5
   end
 
-  test "edits a continued table cell when another cell contains a link" do
+  test "edits a continued table cell when another cell contains a link with balanced destination parentheses" do
     rows = (1..60).map do |n|
-      n == 1 ? "| [Row #{n}](https://example.com) | Value #{n} |" : "| Row #{n} | Value #{n} |"
+      n == 1 ? "| [Row #{n}](https://example.com/path_(detail)) | Value #{n} |" : "| Row #{n} | Value #{n} |"
     end.join("\n")
     source = "| Item | Description |\n| --- | --- |\n#{rows}"
     document = Document.create!(title: "Continued linked table editing", source: source)

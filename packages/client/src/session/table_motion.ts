@@ -64,6 +64,81 @@ function splitLines(value: string): Array<{ text: string; start: number }> {
   return lines
 }
 
+// Return the source offset of a plain link label only when the whole cell is
+// one verifiable Markdown link. Balanced destination parentheses are valid
+// CommonMark, so count them instead of treating the first `)` as the end.
+function markdownLinkLabelOffset(raw: string, rendered: string): number | null {
+  const prefix = /^\s*\[([^\[\]\n]+)\]\(/.exec(raw)
+  if (!prefix || prefix[1] !== rendered) return null
+
+  const open = prefix[0].length - 1
+  const contentStart = open + 1
+  let depth = 1
+  let angleDestination = false
+  let titleQuote: "'" | '"' | null = null
+  let close = -1
+  for (let index = contentStart; index < raw.length; index += 1) {
+    const char = raw[index]
+    if (char === "\\") { index += 1; continue }
+    if (titleQuote) {
+      if (char === titleQuote) titleQuote = null
+      continue
+    }
+    if (angleDestination) {
+      if (char === ">") angleDestination = false
+      continue
+    }
+    if (char === "<" && depth === 1) { angleDestination = true; continue }
+    if ((char === "'" || char === '"') && depth === 1 && /\s/.test(raw[index - 1] ?? "")) {
+      titleQuote = char
+      continue
+    }
+    if (char === "(") depth += 1
+    if (char === ")") {
+      depth -= 1
+      if (depth === 0) { close = index; break }
+    }
+  }
+  if (close < 0 || raw.slice(close + 1).trim() !== "") return null
+
+  const linkContent = raw.slice(contentStart, close).trim()
+  if (!validMarkdownLinkDestination(linkContent)) return null
+  return raw.indexOf("[") + 1
+}
+
+function validMarkdownLinkDestination(content: string): boolean {
+  if (!content) return false
+  let destinationEnd = content.length
+  if (content.startsWith("<")) {
+    let close = -1
+    for (let index = 1; index < content.length; index += 1) {
+      if (content[index] === "\\") { index += 1; continue }
+      if (content[index] === ">") { close = index; break }
+      if (content[index] === "<" || /[\r\n]/.test(content[index] ?? "")) return false
+    }
+    if (close <= 1) return false
+    destinationEnd = close + 1
+  } else {
+    let depth = 0
+    for (let index = 0; index < content.length; index += 1) {
+      const char = content[index]
+      if (char === "\\") { index += 1; continue }
+      if (char === "(") depth += 1
+      else if (char === ")") {
+        depth -= 1
+        if (depth < 0) return false
+      } else if (/\s/.test(char ?? "") && depth === 0) {
+        destinationEnd = index
+        break
+      }
+    }
+    if (depth !== 0 || destinationEnd === 0) return false
+  }
+
+  const title = content.slice(destinationEnd).trim()
+  return title === "" || /^(?:"[^"\r\n]*"|'[^'\r\n]*'|\([^()\r\n]*\))$/.test(title)
+}
+
 function lineAt(lines: Array<{ text: string; start: number }>, offset: number): number {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] as { text: string; start: number }
@@ -358,10 +433,8 @@ export function fragmentedTableSourceOffset(
           const marker = child && !child.children.length
             ? (markers[child.tagName] ?? []).find(mark => raw.trim() === mark + rendered + mark)
             : undefined
-          const link = child?.tagName === "A"
-            ? /^\s*\[([^\[\]\n]+)\]\((?:<[^<>\n]+>|[^()\s]+)(?:\s+(?:"[^"\n]*"|'[^'\n]*'))?\)\s*$/.exec(raw)
-            : null
-          if (!child || (!marker && (!link || link[1] !== rendered))) return invalid
+          const linkLabelOffset = child?.tagName === "A" ? markdownLinkLabelOffset(raw, rendered) : null
+          if (!child || (!marker && linkLabelOffset === null)) return invalid
           if (cell === node || cell.contains(node)) {
             if (!Number.isInteger(offset) || offset < 0) return invalid
             let local: number
@@ -385,8 +458,8 @@ export function fragmentedTableSourceOffset(
               }
               if (!found) return invalid
             }
-            const contentStart = link
-              ? raw.indexOf("[") + 1
+            const contentStart = linkLabelOffset !== null
+              ? linkLabelOffset
               : raw.indexOf(marker ?? "") + (marker?.length ?? 0)
             result = span.start + contentStart + local
           }
