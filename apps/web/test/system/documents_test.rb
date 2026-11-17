@@ -3429,6 +3429,47 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: source.sub(value, "#{value} added"), wait: 5
   end
 
+  test "repaginates a continued table without duplicating rows or breaking edits" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Repaginated continued table", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+
+    outcome = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const surface = document.querySelector('.document-editor-projection .document-surface');
+      const owner = surface.closest('[data-controller~="document-pages"]');
+      const controller = window.Stimulus.getControllerForElementAndIdentifier(owner, 'document-pages');
+      const collectRows = () => [...surface.querySelectorAll('.document-page-content table tbody tr')]
+        .map((row) => row.cells[0]?.textContent.trim());
+      const before = collectRows();
+      surface.addEventListener('elef:document-pages-settled', () => done({ before, after: collectRows() }), { once: true });
+      surface.dataset.documentPagesSettled = 'false';
+      controller.paginate();
+    JAVASCRIPT
+    expected_rows = (1..60).map { |n| "Row #{n}" }
+    assert_equal expected_rows, outcome.fetch("before")
+    assert_equal expected_rows, outcome.fetch("after")
+
+    value = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frames = [...document.querySelectorAll('.document-editor-projection .document-page-frame')];
+        const cell = frames[1]?.querySelector('tbody tr:first-child td:last-child');
+        if (!cell) return null;
+        const block = cell.closest('[data-editor-block-id]');
+        const range = document.createRange();
+        range.selectNodeContents(cell); range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+        return cell.textContent;
+      })()
+    JAVASCRIPT
+    assert value, "expected an editable table cell after repagination"
+    active_document_block.send_keys(" edited")
+    assert_field "Markdown source", with: source.sub(value, "#{value} edited"), wait: 5
+  end
+
   test "paginates oversized tables across pages" do
     rows = (1..60).map { |n| "| Row #{n} | Value #{n} description text |" }.join("\n")
     source = "# Table pagination\n\n| Item | Description |\n| --- | --- |\n#{rows}"
