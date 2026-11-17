@@ -562,10 +562,10 @@ export default class extends Controller<HTMLElement> {
     if (textMap.text.length < 2) return null
 
     const wordBoundaries = this.wordBoundaries(textMap.text)
-    let best = this.largestFittingBoundary(block, target, textMap, wordBoundaries, page)
+    let best = this.largestFittingTextBoundary(block, target, textMap, wordBoundaries, page)
     if (!best) {
       const characterBoundaries = this.characterBoundaries(textMap.text)
-      best = this.largestFittingBoundary(block, target, textMap, characterBoundaries, page)
+      best = this.largestFittingTextBoundary(block, target, textMap, characterBoundaries, page)
     }
     if (!best) return null
 
@@ -588,8 +588,8 @@ export default class extends Controller<HTMLElement> {
     let stop = this.largestFittingNestedItemBoundary(block, group, page)
     if (!stop) {
       const words = this.wordBoundaries(map.text).filter(insideText)
-      let best = this.largestFittingBoundary(block, group, map, words, page)
-      if (!best) best = this.largestFittingBoundary(block, group, map, this.characterBoundaries(map.text).filter(insideText), page)
+      let best = this.largestFittingTextBoundary(block, group, map, words, page)
+      if (!best) best = this.largestFittingTextBoundary(block, group, map, this.characterBoundaries(map.text).filter(insideText), page)
       if (!best) return null
       stop = this.pointAtTextOffset(map, best)
     }
@@ -729,8 +729,8 @@ export default class extends Controller<HTMLElement> {
     if (!target) return null
     const map = this.textMap(target)
     if (map.text.length < 2) return null
-    let boundary = this.largestFittingBoundary(single, target, map, this.wordBoundaries(map.text), page)
-    if (!boundary) boundary = this.largestFittingBoundary(single, target, map, this.characterBoundaries(map.text), page)
+    let boundary = this.largestFittingTextBoundary(single, target, map, this.wordBoundaries(map.text), page)
+    if (!boundary) boundary = this.largestFittingTextBoundary(single, target, map, this.characterBoundaries(map.text), page)
     if (!boundary) return null
     const left = this.textFragment(single, target, map, 0, boundary)
     const right = this.textFragment(single, target, map, boundary, map.text.length)
@@ -862,7 +862,11 @@ export default class extends Controller<HTMLElement> {
     if (list && list.children.length > 1 && [...list.children].every((child) => child.tagName === "LI")) {
       const children = [...list.children]
       const bestCount = this.largestFittingChildCount(block, list, children, page)
-      if (bestCount > 0 && bestCount < children.length) {
+      // Avoid leaving a single list item alone at the foot of a page when
+      // two or more items remain. If the first item itself is taller than
+      // the available space, splitLeadingGroupText handles that item below.
+      const minimumItems = 2
+      if (bestCount >= minimumItems && bestCount < children.length) {
         const fragments: [HTMLElement, HTMLElement] = [
           this.childFragment(block, list, children.slice(0, bestCount)),
           this.childFragment(block, list, children.slice(bestCount))
@@ -1086,6 +1090,43 @@ export default class extends Controller<HTMLElement> {
     }
 
     return best
+  }
+
+  largestFittingTextBoundary(block: HTMLElement, target: Element, textMap: TextMap, boundaries: number[], page: DocumentPage): number {
+    // Word's default widow/orphan control keeps at least two visual lines on
+    // either page fragment. Probe the measured line boxes so wrapped text,
+    // inline math and font metrics all use the same rule.
+    let best = this.largestFittingBoundary(block, target, textMap, boundaries, page)
+    const targetPath = this.nodePath(block, target)
+    while (best) {
+      const left = this.textFragment(block, target, textMap, 0, best)
+      const leftTarget = this.nodeAtPath(left, targetPath)
+      page.content.append(left)
+      let leftLines: number
+      try { leftLines = this.visibleLineCount(leftTarget) }
+      finally { page.content.removeChild(left) }
+      if (leftLines < 2) return 0
+
+      const right = this.textFragment(block, target, textMap, best, textMap.text.length)
+      const rightTarget = this.nodeAtPath(right, targetPath)
+      page.content.append(right)
+      let rightLines: number
+      try { rightLines = this.visibleLineCount(rightTarget) }
+      finally { page.content.removeChild(right) }
+      if (rightLines >= 2) return best
+
+      const index = boundaries.lastIndexOf(best)
+      if (index <= 0) return 0
+      best = this.largestFittingBoundary(block, target, textMap, boundaries.slice(0, index), page)
+    }
+    return 0
+  }
+
+  visibleLineCount(element: Element): number {
+    const range = document.createRange()
+    range.selectNodeContents(element)
+    const rects = [...range.getClientRects()]
+    return new Set(rects.filter(rect => rect.height > 0).map(rect => Math.round(rect.top))).size
   }
 
   textFragment(block: HTMLElement, target: Element, textMap: TextMap, from: number, to: number): HTMLElement {

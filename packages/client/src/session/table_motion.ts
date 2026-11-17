@@ -283,6 +283,147 @@ export function tableRelativeForVisible(source: string, block: Element, domVisib
   return tableSourceOffset(source, grid, domVisible)
 }
 
+export type FragmentedTableSourceResult =
+  | { kind: "mapped"; offset: number }
+  | { kind: "not-table" }
+  | { kind: "unmappable" }
+
+// Map a DOM point, rather than a linear visible offset: every continuation
+// repeats the header, and cell edges (especially empty cells) are ambiguous
+// in a concatenated string. Offsets are relative to the supplied source.
+// The caller must supply every fragment of the same block, in document order,
+// and must not use an unverified fallback when the result is unmappable.
+export function fragmentedTableSourceOffset(
+  source: string, fragments: readonly Element[], node: Node, offset: number,
+): FragmentedTableSourceResult {
+  const notTable: FragmentedTableSourceResult = { kind: "not-table" }
+  const invalid: FragmentedTableSourceResult = { kind: "unmappable" }
+  if (fragments.length === 0) return notTable
+  const tables = fragments.map(fragment => {
+    const found: Element[] = [...fragment.querySelectorAll("table")]
+    if (fragment.matches("table")) found.unshift(fragment)
+    return found
+  })
+  if (tables.every(found => found.length === 0)) return notTable
+  if (tables.some(found => found.length !== 1) || new Set(fragments).size !== fragments.length) return invalid
+
+  // The accepted source is one pipe-delimited table with a single header
+  // and delimiter. Reject other Markdown rather than guessing at its spans.
+  const lines = splitLines(source)
+  if (lines.at(-1)?.text === "") lines.pop()
+  if (lines.length < 2 || lines.some(line => !isTableRow(line.text)) ||
+      !isDelimiterRow(lines[1]?.text ?? "") ||
+      lines.some((line, index) => index !== 1 && isDelimiterRow(line.text))) return invalid
+  const rows = lines.filter((_line, index) => index !== 1).map(line => splitRowCells(line.text, line.start))
+  const header = rows[0]
+  if (!header?.length || rows.some(row => row.length !== header.length)) return invalid
+
+  let bodyRow = 1
+  let result: number | null = null
+  const ids = fragments.map(fragment => fragment.getAttribute("data-editor-block-id"))
+  if (ids.some(id => id !== ids[0])) return invalid
+  for (let index = 0; index < fragments.length; index += 1) {
+    const fragment = fragments[index]
+    const table = tables[index]?.[0]
+    if (!fragment || !table) return invalid
+    const previous = fragments[index - 1]
+    if (previous) {
+      const position = previous.compareDocumentPosition(fragment)
+      if ((position & 1) !== 0 || (position & 4) === 0) return invalid
+    }
+    const sections = [...table.children]
+    if (sections.length !== 2 || sections[0]?.tagName !== "THEAD" || sections[1]?.tagName !== "TBODY") return invalid
+    const heads = [...sections[0].children]
+    const body = [...sections[1].children]
+    if (heads.length !== 1 || heads[0]?.tagName !== "TR" || body.some(row => row.tagName !== "TR")) return invalid
+    const renderedRows = [heads[0], ...body]
+    for (let rowIndex = 0; rowIndex < renderedRows.length; rowIndex += 1) {
+      const row = renderedRows[rowIndex]
+      const sourceRow = rowIndex === 0 ? header : rows[bodyRow++]
+      if (!row || !sourceRow) return invalid
+      const cells = [...row.children]
+      if (cells.length !== sourceRow.length) return invalid
+      for (let column = 0; column < cells.length; column += 1) {
+        const cell = cells[column]
+        const span = sourceRow[column]
+        if (!cell || !span || cell.tagName !== (rowIndex === 0 ? "TH" : "TD") ||
+            cell.hasAttribute("rowspan") || cell.hasAttribute("colspan")) return invalid
+        const raw = source.slice(span.start, span.start + span.length)
+        const rendered = cell.textContent ?? ""
+        // Accept a single, exactly verified inline wrapper. Its text maps
+        // inside the delimiters, so edits leave the Markdown intact.
+        if ([...cell.childNodes].some(child => child.nodeType !== 3)) {
+          const child = cell.children.length === 1 && cell.childNodes.length === 1 ? cell.children[0] : null
+          const markers: Record<string, string[]> = { STRONG: ["**", "__"], EM: ["*", "_"], DEL: ["~~"], CODE: ["`"] }
+          const marker = child && !child.children.length
+            ? (markers[child.tagName] ?? []).find(mark => raw.trim() === mark + rendered + mark)
+            : undefined
+          if (!child || !marker) return invalid
+          if (cell === node || cell.contains(node)) {
+            if (!Number.isInteger(offset) || offset < 0) return invalid
+            let local: number
+            if (node === cell) {
+              if (offset > 1) return invalid
+              local = offset === 0 ? 0 : rendered.length
+            } else if (node === child) {
+              if (offset > child.childNodes.length) return invalid
+              local = [...child.childNodes].slice(0, offset).reduce((sum, part) => sum + (part.textContent ?? "").length, 0)
+            } else {
+              local = 0
+              let found = false
+              for (const part of child.childNodes) {
+                if (part === node) {
+                  if (offset > (part.textContent ?? "").length) return invalid
+                  local += offset
+                  found = true
+                  break
+                }
+                local += (part.textContent ?? "").length
+              }
+              if (!found) return invalid
+            }
+            result = span.start + raw.indexOf(marker) + marker.length + local
+          }
+          continue
+        }
+        const normalizedRaw = normalizeCellText(raw)
+        const normalizedRendered = normalizeCellText(rendered)
+        const contentStart = normalizedRendered.trim() === ""
+          ? normalizedRaw.length - normalizedRendered.length
+          : normalizedRaw.indexOf(normalizedRendered)
+        if (/[\r\n]/.test(rendered) ||
+            contentStart < 0 || normalizedRaw.slice(0, contentStart).trim() !== "" ||
+            normalizedRaw.slice(contentStart, contentStart + rendered.length) !== normalizedRendered ||
+            normalizedRaw.slice(contentStart + rendered.length).trim() !== "") return invalid
+        if (cell === node || cell.contains(node)) {
+          if (!Number.isInteger(offset) || offset < 0) return invalid
+          let local = 0
+          if (cell === node) {
+            if (offset > cell.childNodes.length) return invalid
+            for (const child of [...cell.childNodes].slice(0, offset)) local += (child.textContent ?? "").length
+          } else {
+            let found = false
+            for (const child of cell.childNodes) {
+              const length = (child.textContent ?? "").length
+              if (child === node) {
+                if (offset > length) return invalid
+                local += offset
+                found = true
+                break
+              }
+              local += length
+            }
+            if (!found) return invalid
+          }
+          result = span.start + contentStart + local
+        }
+      }
+    }
+  }
+  if (bodyRow !== rows.length || result === null) return invalid
+  return { kind: "mapped", offset: result }
+}
+
 export function adjustTableColumnMove(value: string, originHead: number, newHead: number): number {
   if (originHead === newHead) return newHead
   const origin = tableCellAt(value, originHead)

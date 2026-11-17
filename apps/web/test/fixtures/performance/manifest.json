@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Frozen 100-page acceptance fixtures for the visual-editor revamp: complete rendering and editability within three seconds (p95). Regenerate byte-identically with the generator command below; page counts were established under the reference layout and verified stable across runs.",
+  "description": "Frozen long-document acceptance fixtures for the visual-editor revamp: complete rendering and editability within three seconds (p95). Regenerate byte-identically with the generator command below; page counts are measured under the reference layout and verified stable across runs.",
   "generator": {
     "script": "generate.mjs",
     "command": "node generate.mjs --out <dir> --seed 7 --mixed-units 105 --math-units 158",
@@ -38,8 +38,8 @@
       "images": 26,
       "lists": 105,
       "headings": 106,
-      "rendered_pages": 98,
-      "rendered_dom_nodes": 14361,
+      "rendered_pages": 95,
+      "rendered_dom_nodes": 14599,
       "rendered_katex": 210,
       "rendered_math_errors": 0
     },
@@ -58,7 +58,7 @@
       "lists": 0,
       "headings": 159,
       "rendered_pages": 91,
-      "rendered_dom_nodes": 45880,
+      "rendered_dom_nodes": 45960,
       "rendered_katex": 1264,
       "rendered_math_errors": 0
     }
@@ -70,7 +70,7 @@
     "assets/perf-4.svg": "6f2c6ea0909c240a741a5134ffa1d46bf04a08f160179b6c3a9d9ed8676d9e4e"
   },
   "recalibration": {
-    "reason": "S1 KaTeX output switched html -> mathml: fewer DOM nodes per equation with different metrics, so identical frozen sources paginate to 98/86 under the reference layout. S2 MathML elements route through the vendored KaTeX webfont stack (documents.css) instead of per-glyph system fallback, which paginated math differently per machine (86 locally vs 90 on CI). S3 Size1 preload converges cold opens with warm ones at 91 (cold samples otherwise paginate large operators in fallback metrics and never redo). Source sha256 pins unchanged; counts re-measured via ELEF_PERF_MODE=calibrate (stable across runs; every measure sample must reproduce them exactly).",
+    "reason": "S1 KaTeX output switched html -> mathml: fewer DOM nodes per equation with different metrics, so identical frozen sources paginate to 98/86 under the reference layout. S2 MathML elements route through the vendored KaTeX webfont stack (documents.css) instead of per-glyph system fallback, which paginated math differently per machine (86 locally vs 90 on CI). S3 Size1 preload converges cold opens with warm ones at 91 (cold samples otherwise paginate large operators in fallback metrics and never redo). S4 shared pagination now flows text and list fragments into available page space with two-line widow/orphan control; the mixed fixture measures 95 pages and 14,599 DOM nodes, while math-heavy remains at 91 pages with 45,960 DOM nodes. Source hashes and fixture bytes are unchanged; these exact outputs were re-measured under the pinned reference layout with ELEF_PERF_MODE=calibrate and repeated before updating the exact page-count contract.",
     "renderer": "katex output mathml, throwOnError, locally served webfonts"
   }
 }

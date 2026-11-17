@@ -2700,8 +2700,16 @@ class DocumentsTest < ApplicationSystemTestCase
         style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
         document.head.append(style);
         controller.paginate();
+        const lineCount = (element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          return new Set([...range.getClientRects()].filter(rect => rect.height > 0).map(rect => Math.round(rect.top))).size;
+        };
         const inspect = () => [...surface.querySelectorAll('.document-page-content')].map(content => ({
           paragraphs: [...content.querySelectorAll('p')].map(p => p.textContent),
+          flowedParagraphLines: [...content.querySelectorAll('p')]
+            .filter(p => p.textContent.startsWith('Natural flow'))
+            .map(lineCount),
           lists: [...content.querySelectorAll('ol')].map(ol => ({ start: ol.start, items: [...ol.children].map(li => li.textContent.trim()) }))
         }));
         const first = inspect();
@@ -2715,6 +2723,8 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_operator paragraph_fragments.length, :>, 1
     assert_equal paragraph, paragraph_fragments.join
     assert pages.first.fetch("paragraphs").any? { |text| text.start_with?("Natural flow") }, "paragraph should begin on the page with its predecessor"
+    assert pages.flat_map { |entry| entry.fetch("flowedParagraphLines") }.all? { |lines| lines >= 2 },
+      "continued paragraphs must keep at least two visual lines on each page"
     list_fragments = pages.flat_map { |entry| entry.fetch("lists") }
     assert_operator list_fragments.length, :>, 1
     assert_equal (3..12).map { |n| "Ordered item #{n}" }, list_fragments.flat_map { |entry| entry.fetch("items") }
@@ -3175,6 +3185,60 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
     active_document_block.send_keys(" noted")
     assert_field "Markdown source", with: /Paragraph 50 inside the blockquote.*noted/, wait: 5
+  end
+
+  test "replaces a selection across table fragments at the correct source offsets" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Table selection across pages", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    outcome = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const frames = [...surface.querySelectorAll('.document-page-frame')];
+        const first = frames[0]?.querySelector('tbody tr:last-child td:last-child');
+        const second = frames[1]?.querySelector('tbody tr:first-child td:first-child');
+        if (!first || !second) return null;
+        const firstText = first.firstChild, secondText = second.firstChild;
+        const selection = window.getSelection();
+        selection.setBaseAndExtent(firstText, 2, secondText, 3);
+        const block = first.closest('[data-editor-block-id]');
+        const firstValue = first.textContent, secondValue = second.textContent;
+        const event = new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: 'X' });
+        block.dispatchEvent(event);
+        return { firstValue, secondValue, cancelled: event.defaultPrevented };
+      })()
+    JAVASCRIPT
+    assert outcome, "expected the table to span two pages"
+    assert outcome.fetch("cancelled"), "expected the cross-fragment edit to use the source transaction"
+    from = source.index(outcome.fetch("firstValue")) + 2
+    to = source.index(outcome.fetch("secondValue")) + 3
+    assert_field "Markdown source", with: source[0...from] + "X" + source[to..], wait: 5
+  end
+
+  test "edits a table cell on a continuation page without changing other rows" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Continued table editing", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    value = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frames = [...document.querySelectorAll('.document-editor-projection .document-page-frame')];
+        const cell = frames[1]?.querySelector('tbody tr:first-child td:last-child');
+        if (!cell) return null;
+        const block = cell.closest('[data-editor-block-id]');
+        const range = document.createRange();
+        range.selectNodeContents(cell); range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+        return cell.textContent;
+      })()
+    JAVASCRIPT
+    assert value, "expected a table cell on the continuation page"
+    active_document_block.send_keys(" added")
+    assert_field "Markdown source", with: source.sub(value, "#{value} added"), wait: 5
   end
 
   test "paginates oversized tables across pages" do

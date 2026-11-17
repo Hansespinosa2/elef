@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adjustTableColumnMove, skipTableDelimiterRow, tableCellAt, tableSourceOffset, tableVisibleOffset } from "../src/session/table_motion.js";
+import { parseHTML } from "linkedom";
+import { adjustTableColumnMove, fragmentedTableSourceOffset, skipTableDelimiterRow, tableCellAt, tableSourceOffset, tableVisibleOffset } from "../src/session/table_motion.js";
 
 // Index map of RAGGED (row 1 starts at 9):
 // row 0: 0='|' 1-4='aaaa' 5='|' 6='b' 7='|' 8='\n'
@@ -113,4 +114,119 @@ test("table grid mappings round-trip through engine offsets", () => {
     assert.ok(dom !== null, `source ${sourceOffset} maps to the grid`);
     assert.equal(tableSourceOffset(table, grid, dom as number), sourceOffset);
   }
+});
+
+const FRAGMENTED_SOURCE = "| Header | Other |\n| --- | --- |\n| same | first |\n| same | second |\n| last |  |";
+
+function fragmentedTable() {
+  const { document } = parseHTML(`<main>
+    <div data-editor-block-id="one"><table><thead><tr><th>Header</th><th>Other</th></tr></thead><tbody><tr><td>same</td><td>first</td></tr></tbody></table></div>
+    <div data-editor-block-id="one"><table><thead><tr><th>Header</th><th>Other</th></tr></thead><tbody><tr><td>same</td><td>second</td></tr></tbody></table></div>
+    <div data-editor-block-id="one"><table><thead><tr><th>Header</th><th>Other</th></tr></thead><tbody><tr><td>last</td><td></td></tr></tbody></table></div>
+  </main>`);
+  return { document, fragments: [...document.querySelectorAll("[data-editor-block-id]")] };
+}
+
+test("fragmented tables map actual cells, repeated values and cell edges to source", () => {
+  const { fragments } = fragmentedTable();
+  const first = fragments[0]!.querySelector("tbody td")!;
+  const second = fragments[1]!.querySelector("tbody td")!;
+  const last = fragments[2]!.querySelector("tbody td")!;
+  const empty = fragments[2]!.querySelector("tbody td:last-child")!;
+  const map = (node: Node, offset: number) => fragmentedTableSourceOffset(FRAGMENTED_SOURCE, fragments, node, offset);
+  assert.deepEqual(map(first.firstChild!, 2), { kind: "mapped", offset: FRAGMENTED_SOURCE.indexOf("same") + 2 });
+  assert.deepEqual(map(second.firstChild!, 2), { kind: "mapped", offset: FRAGMENTED_SOURCE.lastIndexOf("same") + 2 });
+  assert.deepEqual(map(last.firstChild!, 4), { kind: "mapped", offset: FRAGMENTED_SOURCE.indexOf("last") + 4 });
+  assert.deepEqual(map(empty, 0), { kind: "mapped", offset: FRAGMENTED_SOURCE.lastIndexOf("|") });
+  assert.deepEqual(map(second, 0), { kind: "mapped", offset: FRAGMENTED_SOURCE.lastIndexOf("same") });
+  assert.deepEqual(map(second, 1), { kind: "mapped", offset: FRAGMENTED_SOURCE.lastIndexOf("same") + 4 });
+  assert.deepEqual(map(second.firstChild!, 5), { kind: "unmappable" });
+  assert.deepEqual(map(second.firstChild!, -1), { kind: "unmappable" });
+});
+
+test("fragmented tables map repeated header points and distinguish non-tables", () => {
+  const { document, fragments } = fragmentedTable();
+  const firstHeader = fragments[0]!.querySelector("th")!.firstChild!;
+  const repeatedHeader = fragments[1]!.querySelector("th")!.firstChild!;
+  assert.deepEqual(fragmentedTableSourceOffset(FRAGMENTED_SOURCE, fragments, firstHeader, 2), { kind: "mapped", offset: FRAGMENTED_SOURCE.indexOf("Header") + 2 });
+  assert.deepEqual(fragmentedTableSourceOffset(FRAGMENTED_SOURCE, fragments, repeatedHeader, 2), { kind: "mapped", offset: FRAGMENTED_SOURCE.indexOf("Header") + 2 });
+  assert.deepEqual(fragmentedTableSourceOffset(FRAGMENTED_SOURCE, fragments, fragments[1]!, 0), { kind: "unmappable" });
+  assert.deepEqual(fragmentedTableSourceOffset("plain", [document.createElement("p")], firstHeader, 0), { kind: "not-table" });
+});
+
+test("fragmented mapping accepts live cell edge spaces and simple formatting in other cells", () => {
+  const { fragments } = fragmentedTable();
+  const cell = fragments[1]!.querySelector("tbody td")!;
+  cell.textContent = "same ";
+  const source = FRAGMENTED_SOURCE.replace("| same | second |", "| same  | second |").replace("| last |", "| **last** |");
+  fragments[2]!.querySelector("tbody td")!.innerHTML = "<strong>last</strong>";
+  assert.deepEqual(fragmentedTableSourceOffset(source, fragments, cell.firstChild!, 5),
+    { kind: "mapped", offset: source.lastIndexOf("same") + 5 });
+});
+
+test("fragmented formatted cell points map inside verified Markdown delimiters", () => {
+  const { fragments } = fragmentedTable();
+  const cell = fragments[1]!.querySelector("tbody td")!;
+  cell.innerHTML = "<strong>same</strong>";
+  const source = FRAGMENTED_SOURCE.replace("| same | second |", "| **same** | second |");
+  const strong = cell.firstElementChild!;
+  const start = source.indexOf("**same**") + 2;
+  assert.deepEqual(fragmentedTableSourceOffset(source, fragments, strong.firstChild!, 2), { kind: "mapped", offset: start + 2 });
+  assert.deepEqual(fragmentedTableSourceOffset(source, fragments, cell, 0), { kind: "mapped", offset: start });
+  assert.deepEqual(fragmentedTableSourceOffset(source, fragments, strong, 1), { kind: "mapped", offset: start + 4 });
+  assert.deepEqual(fragmentedTableSourceOffset(source, fragments, strong.firstChild!, 5), { kind: "unmappable" });
+});
+
+test("fragmented table endpoints produce the exact cross-page source range", () => {
+  const { fragments } = fragmentedTable();
+  const first = fragments[0]!.querySelector("tbody td:last-child")!.firstChild!;
+  const last = fragments[2]!.querySelector("tbody td")!.firstChild!;
+  const from = fragmentedTableSourceOffset(FRAGMENTED_SOURCE, fragments, first, 2);
+  const to = fragmentedTableSourceOffset(FRAGMENTED_SOURCE, fragments, last, 2);
+  assert.equal(from.kind, "mapped");
+  assert.equal(to.kind, "mapped");
+  if (from.kind !== "mapped" || to.kind !== "mapped") throw new Error("unmapped endpoints");
+  assert.equal(FRAGMENTED_SOURCE.slice(from.offset, to.offset), "rst |\n| same | second |\n| la");
+  assert.equal(FRAGMENTED_SOURCE.slice(0, from.offset) + "X" + FRAGMENTED_SOURCE.slice(to.offset),
+    "| Header | Other |\n| --- | --- |\n| same | fiXst |  |");
+});
+
+test("fragmented table offsets count split text nodes within a cell", () => {
+  const { document, fragments } = fragmentedTable();
+  const cell = fragments[1]!.querySelector("tbody td:last-child")!;
+  cell.replaceChildren(document.createTextNode("sec"), document.createTextNode("ond"));
+  assert.deepEqual(fragmentedTableSourceOffset(FRAGMENTED_SOURCE, fragments, cell.childNodes[1]!, 2),
+    { kind: "mapped", offset: FRAGMENTED_SOURCE.indexOf("second") + 5 });
+  assert.deepEqual(fragmentedTableSourceOffset(FRAGMENTED_SOURCE, fragments, cell, 1),
+    { kind: "mapped", offset: FRAGMENTED_SOURCE.indexOf("second") + 3 });
+});
+
+test("fragmented tables validate all fragments before mapping", () => {
+  const { document, fragments } = fragmentedTable();
+  const point = fragments[0]!.querySelector("td")!.firstChild!;
+  const map = (parts: Element[] = fragments, source = FRAGMENTED_SOURCE) => fragmentedTableSourceOffset(source, parts, point, 1);
+  assert.deepEqual(map(), { kind: "mapped", offset: FRAGMENTED_SOURCE.indexOf("same") + 1 });
+  assert.deepEqual(map(fragments.slice(0, 2)), { kind: "unmappable" });
+  assert.deepEqual(map([fragments[1]!, fragments[0]!, fragments[2]!]), { kind: "unmappable" });
+  assert.deepEqual(map([fragments[0]!, fragments[0]!, fragments[2]!]), { kind: "unmappable" });
+  assert.deepEqual(map(fragments, FRAGMENTED_SOURCE.replace("last", "stale")), { kind: "unmappable" });
+  fragments[2]!.querySelector("td")!.innerHTML = "<strong>last</strong>";
+  assert.deepEqual(map(), { kind: "unmappable" });
+  fragments[2]!.querySelector("td")!.textContent = "last";
+  fragments[2]!.querySelector("th")!.textContent = "changed";
+  assert.deepEqual(map(), { kind: "unmappable" });
+  fragments[2]!.querySelector("th")!.textContent = "Header";
+  fragments[2]!.querySelector("td")!.setAttribute("colspan", "2");
+  assert.deepEqual(map(), { kind: "unmappable" });
+  assert.deepEqual(map([...fragments, document.createElement("div")]), { kind: "unmappable" });
+});
+
+test("fragmented tables reject unsupported source syntax rather than guessing", () => {
+  const { fragments } = fragmentedTable();
+  const point = fragments[0]!.querySelector("td")!.firstChild!;
+  const map = (source: string) => fragmentedTableSourceOffset(source, fragments, point, 1);
+  assert.deepEqual(map(`prefix\n${FRAGMENTED_SOURCE}`), { kind: "unmappable" });
+  assert.deepEqual(map(FRAGMENTED_SOURCE.replace("same", "**same**")), { kind: "unmappable" });
+  assert.deepEqual(map(FRAGMENTED_SOURCE.replace("same", "sa\\me")), { kind: "unmappable" });
+  assert.deepEqual(map(FRAGMENTED_SOURCE.replace("| --- | --- |", "| --- | --- |\n| --- | --- |")), { kind: "unmappable" });
 });
