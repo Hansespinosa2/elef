@@ -2,10 +2,13 @@ import assert from "node:assert/strict"
 import test from "node:test"
 import { readFile } from "node:fs/promises"
 
-async function loadController(name) {
+async function loadController(name, clientImports = "") {
   const source = (await readFile(new URL(`../../app/javascript/controllers/${name}_controller.js`, import.meta.url), "utf8"))
-    .replace(/^import\s+[\s\S]*?\s+from\s+["']([^"']+)["'];?\s*/gm, (_statement, specifier) =>
-      specifier === "@hotwired/stimulus" ? "class Controller {}\n" : "")
+    .replace(/^import\s+[\s\S]*?\s+from\s+["']([^"']+)["'];?\s*/gm, (_statement, specifier) => {
+      if (specifier === "@hotwired/stimulus") return "class Controller {}\n"
+      if (specifier === "@elef/client") return clientImports
+      return ""
+    })
   return (await import(`data:text/javascript;base64,${Buffer.from(source).toString("base64")}`)).default
 }
 
@@ -21,6 +24,10 @@ function installGlobal(name, value) {
 const DirtyController = await loadController("dirty")
 const AutofocusController = await loadController("autofocus")
 const PrintViewController = await loadController("print_view")
+const PrintViewConnectController = await loadController(
+  "print_view",
+  "const attachCanvasScaling = () => () => {};\nconst syncPrintPageSizeStyle = (kind) => { globalThis.__printPageKinds?.push(kind) };\nconst clearPrintPageSizeStyle = () => { globalThis.__printPageKinds?.push(\"cleared\") };\n",
+)
 
 test("dirty state keeps newer edits dirty when an older save completes", () => {
   const fields = [{ value: "Work" }, { value: "# Original" }]
@@ -147,4 +154,31 @@ test("print cleanup pauses videos, resets playback, and still calls the browser 
   assert.equal(firstVideo.currentTime, 0)
   assert.equal(unsafeVideo.pauseCalls, 1)
   assert.equal(printed, 1)
+})
+
+test("print view connect syncs unnamed @page geometry for presentation and document print views", () => {
+  const kinds = []
+  const restoreWindow = installGlobal("window", { location: { search: "" } })
+  const restoreKinds = installGlobal("__printPageKinds", kinds)
+  try {
+    const controller = new PrintViewConnectController()
+    controller.element = {
+      classList: { contains: name => name === "presentation-print" },
+      querySelectorAll: () => [],
+    }
+    controller.connect()
+    controller.disconnect()
+
+    controller.element = {
+      classList: { contains: () => false },
+      querySelectorAll: () => [],
+    }
+    controller.connect()
+    controller.disconnect()
+
+    assert.deepEqual(kinds, ["presentation", "cleared", "document", "cleared"])
+  } finally {
+    restoreKinds()
+    restoreWindow()
+  }
 })

@@ -77,9 +77,17 @@ function now(): number {
 export default class extends Controller<HTMLElement> {
   static targets = ["surface"]
 
+  frozenForPrint = false
+  pendingReflowWhileFrozen = false
+  private printUnfreezeCleanup: (() => void) | null = null
+  private printInteractionRecoveryCleanup: (() => void) | null = null
+
   connect() {
     markStage("pages-connect")
     this.active = true
+    this.frozenForPrint = false
+    this.pendingReflowWhileFrozen = false
+    this.element.documentPagesController = this
     this.nextFlowId = 0
     this.nextCaretTargetId = 0
     this.paginationGeneration = 0
@@ -132,6 +140,10 @@ export default class extends Controller<HTMLElement> {
       const firstPass = () => {
         this.resourceTimer = null
         if (this.paginatedOnce || !this.active) return
+        if (this.isPrinting()) {
+          this.pendingReflowWhileFrozen = true
+          return
+        }
         this.paginate()
       }
       this.resourceTimer = setTimeout(firstPass, 3000)
@@ -163,6 +175,10 @@ export default class extends Controller<HTMLElement> {
   // once resources settle so the late pass never double-fires.
   maybeFirstPass(): void {
     if (this.paginatedOnce || !this.active) return
+    if (this.isPrinting()) {
+      this.pendingReflowWhileFrozen = true
+      return
+    }
     this.watchSurfaceImages()
     if (!this.resourcesReady()) return
     clearTimeout(this.resourceTimer)
@@ -205,6 +221,8 @@ export default class extends Controller<HTMLElement> {
 
   disconnect() {
     this.active = false
+    this.unfreezeForPrint()
+    if (this.element.documentPagesController === this) delete this.element.documentPagesController
     this.resourceConnection = null
     window.removeEventListener("resize", this.boundResize)
     this.form?.removeEventListener("elef:editor-mode-change", this.modeChangedHandler)
@@ -220,7 +238,7 @@ export default class extends Controller<HTMLElement> {
   }
 
   resizeFrames(): void {
-    if (!this.surfaceTarget) return
+    if (!this.surfaceTarget || this.isPrinting()) return
     markStage("resize-frames-start")
     const preview = this.element.closest(".library-preview") || this.sourceModePreview()
     const previewStyle = preview && getComputedStyle(preview)
@@ -259,6 +277,10 @@ export default class extends Controller<HTMLElement> {
 
   schedulePagination(): void {
     if (!this.active) return
+    if (this.isPrinting()) {
+      this.pendingReflowWhileFrozen = true
+      return
+    }
     this.watchSurfaceImages()
     // Pre-first-pass schedules re-check the resources gate (install
     // swaps in new images; user interaction during the wait must not
@@ -276,25 +298,42 @@ export default class extends Controller<HTMLElement> {
     clearTimeout(this.reflowTimer)
     this.reflowTimer = setTimeout(() => {
       this.reflowTimer = null
-      if (!this.active || this.reflowFrame) return
+      if (!this.active) return
+      if (this.isPrinting()) {
+        this.pendingReflowWhileFrozen = true
+        return
+      }
+      if (this.reflowFrame) return
       this.reflowFrame = requestAnimationFrame(() => {
         this.reflowFrame = null
-        if (!this.active || this.focusedEditable() || !this.projectionFresh()) return
+        if (!this.active) return
+        if (this.isPrinting()) {
+          this.pendingReflowWhileFrozen = true
+          return
+        }
+        if (this.focusedEditable() || !this.projectionFresh()) return
         this.paginate()
       })
     }, 300)
   }
 
-  paginate(): void {
+  paginate({ quietFrames = true, immediateFinish = false, preserveCaret = true }: { quietFrames?: boolean; immediateFinish?: boolean; preserveCaret?: boolean } = {}): void {
     if (!this.surfaceTarget || !this.active) return
+    if (this.isPrinting()) {
+      this.pendingReflowWhileFrozen = true
+      return
+    }
+    this.pendingReflowWhileFrozen = false
     this.watchSurfaceImages()
-    if (!this.paginatedOnce) this.firstPassWithoutFonts = document.fonts?.status === "loading"
+    if (!this.paginatedOnce || this.firstPassWithoutFonts) {
+      this.firstPassWithoutFonts = document.fonts?.status === "loading"
+    }
 
     markStage("paginate-start")
     resetPaginateStats()
     this.openPage = null
     const generation = ++this.paginationGeneration
-    const caret = this.captureCaret() || this.pendingCaretRestore
+    const caret = preserveCaret ? (this.captureCaret() || this.pendingCaretRestore) : null
     this.pendingCaretRestore = caret
     this.resizeObserver?.disconnect()
     const blocks = this.logicalBlocks()
@@ -356,16 +395,19 @@ export default class extends Controller<HTMLElement> {
     // rebuilds bare frames, so its measurements stay exact.
     pages.forEach(({ frame }) => {
       frame.classList.remove("is-sealed")
-      frame.classList.add("is-quiet")
+      if (quietFrames && !this.isPrinting()) frame.classList.add("is-quiet")
+      else frame.classList.remove("is-quiet")
     })
     markStage("paginate-finalize-end")
-    requestAnimationFrame(() => {
+    const finalize = () => {
       if (!this.active || generation !== this.paginationGeneration) return
       markStage("paginate-end")
       if (caret) this.restoreCaret(caret)
       this.pendingCaretRestore = null
       this.finishPagination({ paginated: true })
-    })
+    }
+    if (immediateFinish) finalize()
+    else requestAnimationFrame(finalize)
   }
 
   finishPagination({ paginated = false }: { paginated?: boolean } = {}): void {
@@ -373,6 +415,90 @@ export default class extends Controller<HTMLElement> {
     this.surfaceTarget.dataset.documentPagesSettled = "true"
     this.surfaceTarget.dispatchEvent(new CustomEvent("elef:document-pages-settled", { bubbles: true }))
     if (paginated) this.surfaceTarget.dispatchEvent(new CustomEvent("elef:document-paginated", { bubbles: true }))
+  }
+
+  isPrinting(): boolean {
+    return this.frozenForPrint || (typeof window !== "undefined" && Boolean(window.matchMedia?.("print")?.matches))
+  }
+
+  flushForPrint(): void {
+    this.unfreezeForPrint()
+    this.pendingReflowWhileFrozen = false
+    if (!this.active || !this.surfaceTarget) return
+    const hadPendingReflow = Boolean(this.reflowTimer || this.reflowFrame)
+    if (this.reflowTimer) {
+      clearTimeout(this.reflowTimer)
+      this.reflowTimer = null
+    }
+    if (this.reflowFrame) {
+      cancelAnimationFrame(this.reflowFrame)
+      this.reflowFrame = null
+    }
+    if (this.resourceTimer) {
+      clearTimeout(this.resourceTimer)
+      this.resourceTimer = null
+    }
+
+    const unsettled = this.surfaceTarget.dataset.documentPagesSettled !== "true"
+    const fontsReadyAfterFallback = this.firstPassWithoutFonts && document.fonts?.status === "loaded"
+    if (!this.paginatedOnce || hadPendingReflow || unsettled || fontsReadyAfterFallback) {
+      this.pendingCaretRestore = null
+      this.paginate({ quietFrames: false, immediateFinish: true, preserveCaret: false })
+    } else {
+      ++this.paginationGeneration
+    }
+
+    this.surfaceTarget.querySelectorAll(".document-page-frame.is-quiet, .document-page-frame.is-sealed").forEach((frame: HTMLElement) => {
+      frame.classList.remove("is-quiet", "is-sealed")
+    })
+    if (this.surfaceTarget.dataset.documentPagesSettled !== "true") {
+      this.finishPagination({ paginated: false })
+    }
+  }
+
+  freezeForPrint(options: { armInteractionRecovery?: boolean } = {}): void {
+    this.unfreezeForPrint()
+    if (!this.active) return
+    this.frozenForPrint = true
+    if (typeof window === "undefined") return
+    const unfreeze = () => this.unfreezeForPrint()
+    window.addEventListener("afterprint", unfreeze, { once: true })
+    this.printUnfreezeCleanup = () => {
+      window.removeEventListener("afterprint", unfreeze)
+    }
+    if (options.armInteractionRecovery !== false) {
+      this.armPrintInteractionRecovery()
+    }
+  }
+
+  armPrintInteractionRecovery(): void {
+    if (!this.active || !this.frozenForPrint || typeof window === "undefined") return
+    this.printInteractionRecoveryCleanup?.()
+    const unfreeze = () => this.unfreezeForPrint()
+    const interactionEvents = ["pointerdown", "keydown", "input", "focusin"] as const
+    interactionEvents.forEach((eventName) => {
+      window.addEventListener(eventName, unfreeze, { capture: true, once: true, passive: true })
+    })
+    this.printInteractionRecoveryCleanup = () => {
+      interactionEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, unfreeze, { capture: true })
+      })
+    }
+  }
+
+  unfreezeForPrint(): void {
+    const wasFrozen = this.frozenForPrint
+    const needsReflow = this.pendingReflowWhileFrozen
+    this.frozenForPrint = false
+    this.pendingReflowWhileFrozen = false
+    this.printInteractionRecoveryCleanup?.()
+    this.printInteractionRecoveryCleanup = null
+    this.printUnfreezeCleanup?.()
+    this.printUnfreezeCleanup = null
+    if (wasFrozen && this.active) {
+      this.resizeFrames()
+      if (needsReflow) this.schedulePagination()
+    }
   }
 
   logicalBlocks(): HTMLElement[] {
@@ -1386,7 +1512,7 @@ export default class extends Controller<HTMLElement> {
   }
 
   focusedEditable(): boolean {
-    const active = document.activeElement
+    const active = typeof document === "undefined" ? null : document.activeElement
     return Boolean(active instanceof HTMLElement && active.isContentEditable && this.surfaceTarget.contains(active))
   }
 

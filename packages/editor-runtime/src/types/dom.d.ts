@@ -3,6 +3,7 @@ import type { Application } from "@hotwired/stimulus";
 declare global {
   interface Element {
     previewController?: any;
+    documentPagesController?: any;
     visualEditorController?: any;
     presentationEditorController?: any;
   }
