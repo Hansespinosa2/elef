@@ -6,9 +6,13 @@ export default class extends Controller<HTMLElement> {
 
   start(event: PointerEvent): void {
     if (event.button !== 0 || this.pointer !== null) return
-    this.pointer = event.pointerId
     this.element.setPointerCapture(event.pointerId)
+    this.pointer = event.pointerId
     event.preventDefault()
+  }
+
+  disconnect(): void {
+    this.pointer = null
   }
 
   move(event: PointerEvent): void {
