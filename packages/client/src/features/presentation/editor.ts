@@ -442,7 +442,7 @@ export class PresentationEditor {
     const sourceOffset = (endpoint: HTMLElement, node: Node, offset: number): number | null => {
       if (this.pendingProjectionEdits?.size) this.flushPendingProjectionEdits()
       const endpointRegion = this.regionForBlock(endpoint.dataset.editorBlockId)
-      if (!endpointRegion) return null
+      if (!endpointRegion || endpointRegion.kind === "code") return null
       const visible = this.deps.visibleOffsetAtPoint(endpoint, node, offset)
       if (visible === null) return null
       const slice = editor.value.slice(endpointRegion.content_range.start, endpointRegion.content_range.end)
@@ -451,12 +451,15 @@ export class PresentationEditor {
         ?? this.deps.sourceOffsetForVisibleOffset(slice, visible)
       return endpointRegion.content_range.start + relative
     }
-    const wrapped = projectionWrapSelection(event, canvas, selection, sourceOffset)
+    const wrapped = activeDisplayMathForNodes(selection.anchorNode, selection.focusNode)
+      ? null
+      : projectionWrapSelection(event, canvas, selection, sourceOffset)
     if (wrapped) {
       event.preventDefault?.()
       const { from, to, anchor, head, marker } = wrapped
       const selected = editor.value.slice(from, to)
       const result = wrapMarkdownText(selected, marker)
+      if (result.text === selected) return
       const forward = anchor <= head
       const newAnchor = from + (forward ? result.from : result.to)
       const newHead = from + (forward ? result.to : result.from)

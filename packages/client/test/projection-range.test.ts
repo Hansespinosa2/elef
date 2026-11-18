@@ -60,3 +60,65 @@ test("visual selections map both directions for Markdown wrapping", () => {
     assert.equal(projectionWrapSelection({ inputType: "insertCompositionText", data: "*", preventDefault() {} }, root, selection, offset), null);
   }
 });
+
+test("visual wrapping declines code, math, and cross-cell table ranges while allowing single-cell wrapping", () => {
+  const { document } = parseHTML(
+    `<main>` +
+      `<div data-editor-block-id="code" contenteditable="true"><pre><code>const x = 1</code></pre></div>` +
+      `<div data-editor-block-id="math" contenteditable="true">` +
+        `<span data-elef-math-source="a+b">a+b</span>` +
+        `<span class="editor-reveal-math">c+d</span>` +
+        `<span class="katex">x^2</span>` +
+        `<span data-editor-math-source="y" class="editor-math-active">$y$</span>` +
+      `</div>` +
+      `<div data-editor-block-id="table" contenteditable="true"><table><tbody><tr>` +
+        `<td>alpha</td><td>beta</td>` +
+      `</tr></tbody></table></div>` +
+    `</main>`,
+  );
+  const root = document.querySelector("main") as unknown as Element;
+  const offset = (_block: HTMLElement, _node: Node, position: number) => position;
+
+  const codeText = root.querySelector("pre code")!.firstChild as Node;
+  assert.equal(projectionWrapSelection(
+    { inputType: "insertText", data: "*", preventDefault() {} },
+    root,
+    { isCollapsed: false, anchorNode: codeText, anchorOffset: 0, focusNode: codeText, focusOffset: 5 } as unknown as Selection,
+    offset,
+  ), null);
+
+  for (const selector of ["[data-elef-math-source]", ".editor-reveal-math", ".katex", ".editor-math-active"]) {
+    const mathText = root.querySelector(selector)!.firstChild as Node;
+    assert.equal(projectionWrapSelection(
+      { inputType: "insertText", data: "*", preventDefault() {} },
+      root,
+      { isCollapsed: false, anchorNode: mathText, anchorOffset: 0, focusNode: mathText, focusOffset: 2 } as unknown as Selection,
+      offset,
+    ), null, `expected ${selector} to decline visual wrapping`);
+  }
+
+  const cells = [...root.querySelectorAll("td")];
+  const cellA = cells[0]!.firstChild as Node;
+  const cellB = cells[1]!.firstChild as Node;
+  assert.equal(projectionWrapSelection(
+    { inputType: "insertText", data: "*", preventDefault() {} },
+    root,
+    { isCollapsed: false, anchorNode: cellA, anchorOffset: 0, focusNode: cellB, focusOffset: 4 } as unknown as Selection,
+    offset,
+  ), null);
+
+  const tableBlock = root.querySelector('[data-editor-block-id="table"]') as Node;
+  assert.equal(projectionWrapSelection(
+    { inputType: "insertText", data: "*", preventDefault() {} },
+    root,
+    { isCollapsed: false, anchorNode: tableBlock, anchorOffset: 0, focusNode: cellA, focusOffset: 3 } as unknown as Selection,
+    offset,
+  ), null);
+
+  assert.deepEqual(projectionWrapSelection(
+    { inputType: "insertText", data: "*", preventDefault() {} },
+    root,
+    { isCollapsed: false, anchorNode: cellA, anchorOffset: 0, focusNode: cellA, focusOffset: 5 } as unknown as Selection,
+    offset,
+  ), { from: 0, to: 5, anchor: 0, head: 5, marker: "*" });
+});
