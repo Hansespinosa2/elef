@@ -6,6 +6,7 @@ export interface ProjectionRangeInput {
   readonly inputType: string
   readonly data?: string | null | undefined
   readonly cancelable?: boolean | undefined
+  readonly isComposing?: boolean | undefined
   preventDefault?(): void
   readonly dataTransfer?: {
     getData(type: string): string
@@ -16,6 +17,35 @@ export interface ProjectionRangeEdit {
   from: number
   to: number
   insert: string
+}
+
+export function projectionWrapSelection(
+  event: ProjectionRangeInput,
+  root: Element,
+  selection: Selection | null,
+  sourceOffset: (block: HTMLElement, node: Node, offset: number) => number | null,
+): { from: number; to: number; anchor: number; head: number; marker: "*" | "`" } | null {
+  if (event.cancelable === false || event.isComposing || !event.preventDefault || event.inputType !== "insertText"
+      || (event.data !== "*" && event.data !== "`") || !selection || selection.isCollapsed
+      || !selection.anchorNode || !selection.focusNode) return null
+  const elFor = (node: Node): Element | null => node.nodeType === 1 ? (node as Element) : node.parentElement
+  const blockFor = (node: Node): HTMLElement | null =>
+    elFor(node)?.closest<HTMLElement>("[data-editor-block-id][contenteditable='true']") ?? null
+  const anchorEl = elFor(selection.anchorNode)
+  const focusEl = elFor(selection.focusNode)
+  const protectedSelector = "pre, [data-editor-math-source], [data-editor-math-active], .editor-math-active, [data-elef-math-source], .editor-reveal-math, .katex"
+  if (anchorEl?.closest(protectedSelector) || focusEl?.closest(protectedSelector)) return null
+  const first = blockFor(selection.anchorNode)
+  const last = blockFor(selection.focusNode)
+  if (!first || !last || !root.contains(first) || !root.contains(last)) return null
+  const anchorCell = anchorEl?.closest("th, td") ?? null
+  const focusCell = focusEl?.closest("th, td") ?? null
+  if ((anchorCell || focusCell || first.querySelector("table") || last.querySelector("table"))
+      && (!anchorCell || anchorCell !== focusCell)) return null
+  const anchor = sourceOffset(first, selection.anchorNode, selection.anchorOffset)
+  const head = sourceOffset(last, selection.focusNode, selection.focusOffset)
+  if (anchor === null || head === null || anchor === head) return null
+  return { from: Math.min(anchor, head), to: Math.max(anchor, head), anchor, head, marker: event.data }
 }
 
 export function projectionRangeEdit(

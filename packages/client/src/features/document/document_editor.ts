@@ -12,7 +12,8 @@ import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/pr
 import { fragmentedTableSourceOffset, tableGridForBlock, tableRelativeForVisible, tableSourceOffset, tableVisibleForSource } from "../../session/table_motion.js"
 import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
 import { markStage } from "../../session/stage_marks.js"
-import { projectionRangeEdit } from "../../session/projection_range.js"
+import { projectionRangeEdit, projectionWrapSelection } from "../../session/projection_range.js"
+import { wrapMarkdownText } from "../../session/markdown_wrap.js"
 import { paintProjectionSelections } from "../../session/projection_selections.js"
 import { appendPageFragment } from "./page_fragments.js"
 
@@ -89,6 +90,7 @@ export interface DocumentEditorSeam {
   focus(): void
   commitSource(source: string): unknown
   replaceRange(replacement: string, from: number, to: number): void
+  replaceRangeWithSelection(replacement: string, from: number, to: number, selection: { from: number; to: number }): void
   replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
   setSelectionRange(anchor: number, head?: number): void
   handleVimKey(event: DocumentProjectionKeyEvent): boolean
@@ -104,6 +106,7 @@ export interface DocumentProjectionEvent {
 
 export interface DocumentProjectionBeforeinputEvent {
   readonly cancelable?: boolean
+  readonly isComposing?: boolean
   preventDefault?(): void
   readonly target: EventTarget | null | undefined
   readonly inputType: string
@@ -219,7 +222,7 @@ export class DocumentEditor {
   hasPresentationProjection: boolean | undefined
   pendingProjectionFrame: number | undefined
   pendingProjectionEdits: Map<string, DocumentProjectionEdit> | undefined
-  pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null } | null | undefined
+  pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null; anchorSourceOffset?: number } | null | undefined
   suppressProjectionInput = false
   pendingTableInput: TableInputSnapshot | null = null
   // A pending caret is scoped to the transaction that armed it: sourceLength
@@ -435,10 +438,10 @@ export class DocumentEditor {
     const selection = window.getSelection()
     if (!selection?.anchorNode || !selection.focusNode) return
     let unmappableTableRange = false
-    const ranged = projectionRangeEdit(event, this.projectionTarget, selection, (endpoint, node, offset) => {
+    const sourceOffset = (endpoint: HTMLElement, node: Node, offset: number): number | null => {
       if (this.pendingProjectionEdits?.size) this.flushPendingProjectionEdits()
       const endpointRegion = this.regionForBlock(endpoint.dataset.editorBlockId)
-      if (!endpointRegion) return null
+      if (!endpointRegion || endpointRegion.kind === "code") return null
       const slice = editor.value.slice(endpointRegion.content_range.start, endpointRegion.content_range.end)
       const tablePoint = endpoint.querySelector("table")
         ? fragmentedTableSourceOffset(slice, this.blockFragments(endpoint.dataset.editorBlockId), node, offset)
@@ -452,7 +455,26 @@ export class DocumentEditor {
         ?? alignVisibleOffset(slice, visibleBlockText(content), visible)
         ?? this.deps.sourceOffsetForVisibleOffset(slice, visible)
       return endpointRegion.content_range.start + relative
-    })
+    }
+    const wrapped = activeDisplayMathForNodes(selection.anchorNode, selection.focusNode)
+      ? null
+      : projectionWrapSelection(event, this.projectionTarget, selection, sourceOffset)
+    if (wrapped) {
+      event.preventDefault?.()
+      const { from, to, anchor, head, marker } = wrapped
+      const selected = editor.value.slice(from, to)
+      const result = wrapMarkdownText(selected, marker)
+      if (result.text === selected) return
+      const forward = anchor <= head
+      const newAnchor = from + (forward ? result.from : result.to)
+      const newHead = from + (forward ? result.to : result.from)
+      this.pendingCaretRestore = { sourceOffset: newHead, anchorSourceOffset: newAnchor, preferredBlockId: null }
+      editor.replaceRangeWithSelection(result.text, from, to,
+        { from: newAnchor - from, to: newHead - from })
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      return
+    }
+    const ranged = projectionRangeEdit(event, this.projectionTarget, selection, sourceOffset)
     if (ranged) {
       event.preventDefault?.()
       this.pendingCaretRestore = { sourceOffset: ranged.from + ranged.insert.length, preferredBlockId: null }
@@ -1251,6 +1273,7 @@ export class DocumentEditor {
     this.pendingCaretRestore = null
     requestAnimationFrame(() => {
       this.restoreCaret(pending.sourceOffset, pending.preferredBlockId)
+      if (pending.anchorSourceOffset !== undefined) this.restoreSelection(pending.anchorSourceOffset, pending.sourceOffset, pending.preferredBlockId)
       this.restoreSelections()
     })
   }

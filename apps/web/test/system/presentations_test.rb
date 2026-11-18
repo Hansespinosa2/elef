@@ -95,17 +95,27 @@ class PresentationsTest < ApplicationSystemTestCase
     # the pill between find and select; re-resolve bounded times (same
     # idiom as type_visual_text). Callers still assert the resulting
     # source and slide positions, so a retry never masks a lost update.
+    wait_for_fresh_projection unless page.evaluate_script("Boolean(document.activeElement?.closest(\".editor-projection [contenteditable='true']\"))")
+    selector = "select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']"
     attempts = 0
     begin
-      shell = first(
-        "select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']",
-        visible: :all
-      ).find(:xpath, "./ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' slide-block-shell ')][1]")
-      shell.find(".slide-block").click
-      find("select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']").select(value)
-    rescue Selenium::WebDriver::Error::StaleElementReferenceError
+      shell = first(selector, visible: :all).find(
+        :xpath,
+        "./ancestor::div[contains(concat(' ', normalize-space(@class), ' '), ' slide-block-shell ')][1]"
+      )
+      block = shell.find(".slide-block")
+      page.execute_script(
+        "arguments[0].scrollIntoView({block: 'center'}); arguments[0].focus({preventScroll: true});",
+        block
+      )
+      block.click
+      find(selector, wait: 3).select(value)
+    rescue Selenium::WebDriver::Error::StaleElementReferenceError, Capybara::ElementNotFound
       attempts += 1
-      retry if attempts < 3
+      if attempts < 3
+        wait_for_fresh_projection unless page.evaluate_script("Boolean(document.activeElement?.closest(\".editor-projection [contenteditable='true']\"))")
+        retry
+      end
       raise
     end
   end

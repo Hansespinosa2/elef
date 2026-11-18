@@ -225,6 +225,7 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
   .printing-work #start-presentation,
   .printing-work #exit-presentation,
   .printing-work .source-pane,
+  .printing-work .editor-splitter,
   .printing-work .editor-shell-header,
   .printing-work .editor-toolbar,
   .printing-work .editor-footer,

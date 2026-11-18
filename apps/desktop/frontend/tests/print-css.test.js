@@ -42,6 +42,7 @@ test("the desktop print stylesheet hides every app-shell and editor-chrome surfa
     "#work-notice",
     ".command-palette",
     ".source-pane",
+    ".editor-splitter",
     ".editor-shell-header",
     ".editor-footer",
     ".presentation-editor-tools",
