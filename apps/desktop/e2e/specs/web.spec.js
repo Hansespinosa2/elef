@@ -1,4 +1,4 @@
-import { sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
+import { measureSourceSelectionAlignment, sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
 import { sourcePreviewResizeWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-resize.js"
 import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../../apps/web/test/e2e/scenarios/edit-and-preview.js"
@@ -595,6 +595,11 @@ class WebEditorUi {
     await splitter.focus()
     await this.page.keyboard.press("End")
     await expect(splitter).toHaveAttribute("aria-valuenow", "80")
+  }
+
+  async assertSourceSelectionAlignment() {
+    const { textLeft, selectionLeft } = await this.page.evaluate(measureSourceSelectionAlignment)
+    expect(Math.abs(textLeft - selectionLeft)).toBeLessThanOrEqual(1)
   }
 
   async assertDocumentPageAspectRatio() {

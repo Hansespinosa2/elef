@@ -1,4 +1,4 @@
-import { sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
+import { measureSourceSelectionAlignment, sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
 import { sourcePreviewResizeWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-resize.js"
 import assert from "node:assert/strict"
 import { $, $$, browser } from "@wdio/globals"
@@ -863,6 +863,13 @@ class DesktopEditorUi {
     }, source)
     if (updated?.source !== source || updated.selectionStart !== source.length || updated.selectionEnd !== source.length || updated.editingMode !== "source") {
       throw new Error(`The desktop editor did not accept the shared scenario source at the end of the buffer: ${JSON.stringify(updated)}`)
+    }
+  }
+
+  async assertSourceSelectionAlignment() {
+    const { textLeft, selectionLeft } = await browser.execute(measureSourceSelectionAlignment)
+    if (Math.abs(textLeft - selectionLeft) > 1) {
+      throw new Error(`Source selection starts at ${selectionLeft}, text starts at ${textLeft}`)
     }
   }
 
