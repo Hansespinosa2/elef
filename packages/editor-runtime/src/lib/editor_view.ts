@@ -82,6 +82,7 @@ const EDITOR_VIEW = `
         </section>
       </div>
 
+      <div class="editor-splitter" role="separator" aria-label="Resize source and preview" aria-orientation="vertical" aria-valuemin="20" aria-valuemax="80" aria-valuenow="46" tabindex="0" data-controller="editor-splitter" data-action="pointerdown->editor-splitter#start pointermove->editor-splitter#move pointerup->editor-splitter#end pointercancel->editor-splitter#end lostpointercapture->editor-splitter#end keydown->editor-splitter#keydown"></div>
       <script type="application/json" data-editor-map-json></script>
       <div class="editor-projection preview-pane" data-visual-editor-target="projection" data-preview-target="container" data-presentation-target="stage" aria-label="Visual editing surface" data-action="dragover->media#dragOver dragleave->media#dragLeave drop->media#drop" tabindex="-1"></div>
     </div>
@@ -244,6 +245,7 @@ export function renderEditorView(container: Element | null, config: EditorViewCo
 
   const sourceField = root.querySelector(".source-field") as HTMLElement
   sourceField.id = ids.field || "elef-editor-field"
+  root.querySelector(".editor-splitter")?.setAttribute("aria-controls", sourceField.id)
   sourceField.dataset.editorInitialSourceValue = JSON.stringify(config.source || "")
   sourceField.dataset.authoringRegistry = JSON.stringify(config.authoringRegistry || [])
 

@@ -30,7 +30,7 @@ jobs:
   plan:
     name: CI plan (shadow)
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     outputs:
       affected: ${{ steps.plan.outputs.affected }}
@@ -68,7 +68,7 @@ jobs:
           retention-days: 14
 
   desktop-fast:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Checkout code
@@ -379,10 +379,35 @@ jobs:
       - name: Install shared scenario dependencies
         run: npm ci --prefix apps/desktop/e2e
       - name: Audit desktop JavaScript dependencies
+        # R15 (Andres; review/expiry 2026-12-01): picomatch <= 4.0.7 (GHSA-fc5q-39xc-vjpf,
+        # first_patched_version: null) is pulled into apps/desktop/e2e only via
+        # @wdio/local-runner -> expect-webdriverio -> expect -> jest-util/jest-message-util
+        # and is never shipped in web or desktop artifacts. Remove this exception once
+        # upstream publishes a patched picomatch (> 4.0.7).
         run: |
           npm audit --audit-level=high
           npm audit --prefix apps/desktop/frontend --audit-level=high
-          npm audit --prefix apps/desktop/e2e --audit-level=high
+          node -e '
+            const { spawnSync } = require("node:child_process");
+            const res = spawnSync("npm", ["audit", "--prefix", "apps/desktop/e2e", "--audit-level=high", "--json"], { encoding: "utf8" });
+            const report = JSON.parse(res.stdout);
+            if (report.error) { console.error(report.error); process.exit(1); }
+            const vulns = report.vulnerabilities || {};
+            const allowed = new Set(["https://github.com/advisories/GHSA-fc5q-39xc-vjpf"]);
+            const rootAdvisories = (name, seen = new Set()) => {
+              if (seen.has(name) || !vulns[name]) return [];
+              seen.add(name);
+              return (vulns[name].via || []).flatMap(item => typeof item === "string" ? rootAdvisories(item, seen) : [item]);
+            };
+            for (const [name, v] of Object.entries(vulns)) {
+              if (v.severity !== "high" && v.severity !== "critical") continue;
+              const causes = rootAdvisories(name).filter(a => a && (a.severity === "high" || a.severity === "critical"));
+              if (causes.length === 0 || causes.some(a => !allowed.has(a.url))) {
+                console.error("Unapproved high/critical advisory in apps/desktop/e2e:", name, causes);
+                process.exit(1);
+              }
+            }
+          '
       - name: Cache the pinned Cargo audit binary
         uses: actions/cache@v6
         with:
@@ -577,7 +602,7 @@ jobs:
         run: bin/check affected
 
   arch-package:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
       - name: Checkout code
@@ -641,10 +666,35 @@ jobs:
       - name: Install shared scenario dependencies
         run: npm ci --prefix apps/desktop/e2e
       - name: Audit desktop JavaScript dependencies
+        # R15 (Andres; review/expiry 2026-12-01): picomatch <= 4.0.7 (GHSA-fc5q-39xc-vjpf,
+        # first_patched_version: null) is pulled into apps/desktop/e2e only via
+        # @wdio/local-runner -> expect-webdriverio -> expect -> jest-util/jest-message-util
+        # and is never shipped in web or desktop artifacts. Remove this exception once
+        # upstream publishes a patched picomatch (> 4.0.7).
         run: |
           npm audit --audit-level=high
           npm audit --prefix apps/desktop/frontend --audit-level=high
-          npm audit --prefix apps/desktop/e2e --audit-level=high
+          node -e '
+            const { spawnSync } = require("node:child_process");
+            const res = spawnSync("npm", ["audit", "--prefix", "apps/desktop/e2e", "--audit-level=high", "--json"], { encoding: "utf8" });
+            const report = JSON.parse(res.stdout);
+            if (report.error) { console.error(report.error); process.exit(1); }
+            const vulns = report.vulnerabilities || {};
+            const allowed = new Set(["https://github.com/advisories/GHSA-fc5q-39xc-vjpf"]);
+            const rootAdvisories = (name, seen = new Set()) => {
+              if (seen.has(name) || !vulns[name]) return [];
+              seen.add(name);
+              return (vulns[name].via || []).flatMap(item => typeof item === "string" ? rootAdvisories(item, seen) : [item]);
+            };
+            for (const [name, v] of Object.entries(vulns)) {
+              if (v.severity !== "high" && v.severity !== "critical") continue;
+              const causes = rootAdvisories(name).filter(a => a && (a.severity === "high" || a.severity === "critical"));
+              if (causes.length === 0 || causes.some(a => !allowed.has(a.url))) {
+                console.error("Unapproved high/critical advisory in apps/desktop/e2e:", name, causes);
+                process.exit(1);
+              }
+            }
+          '
       - name: Build Rails Tailwind stylesheet
         working-directory: apps/web
         run: bin/rails tailwindcss:build
@@ -777,7 +827,7 @@ jobs:
 
   production-smoke:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout code
@@ -810,7 +860,7 @@ jobs:
 
   development-smoke:
     if: github.event_name != 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout code
@@ -847,7 +897,7 @@ jobs:
     name: CI result matrix (informational)
     needs: [ plan, desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, affected, desktop, arch-package, desktop-macos, renderer-macos, production-smoke, development-smoke ]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Publish the ran/skipped matrix to the run summary
@@ -879,7 +929,7 @@ jobs:
   release-gate:
     name: Desktop release Gate A
     needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, affected, desktop, arch-package, desktop-macos, renderer-macos, production-smoke, development-smoke ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -906,7 +956,7 @@ jobs:
   record-ci-attestation:
     if: github.event_name == 'pull_request'
     needs: [ desktop-fast, scan_ruby, scan_js, test, sqlite-test, system-test, affected, desktop, desktop-macos, renderer-macos, production-smoke, development-smoke ]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check out the exact pull request test candidate
         uses: actions/checkout@v7
@@ -943,7 +993,7 @@ jobs:
   publish-deployment-ref:
     name: Authorize deployment after CI
     if: github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'main')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 70
     permissions:
       contents: write
