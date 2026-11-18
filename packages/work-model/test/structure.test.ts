@@ -120,6 +120,22 @@ test("buildEditorMap returns the map subset of the structure", () => {
   assert.ok(Array.isArray(map.editable_regions))
 })
 
+test("table source maps allow balanced link destinations only for verified table editing", () => {
+  const source = [
+    "| Item | Description |",
+    "| --- | --- |",
+    "| [Reference](https://example.com/path_(detail)) | Value |",
+    "",
+    "A [reference](https://example.com/path_(detail)) in a paragraph."
+  ].join("\n")
+  const map = buildEditorMap(source, { mode: "document" })
+  const regions = map.slides[0]?.editable_regions ?? []
+  const table = regions.find(region => region.kind === "table")
+  const paragraph = regions.find(region => region.kind === "paragraph")
+  assert.equal(table?.editable, true)
+  assert.equal(paragraph?.editable, false)
+})
+
 test("position directive binds to exactly the single next block and bare ::: does not extend scope", () => {
   const source = "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\n:::\n\nOutside"
   const map = buildEditorMap(source, { mode: "presentation" })

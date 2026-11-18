@@ -497,7 +497,21 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_operator desktop["projection"], :>, 0
     assert_operator desktop["document"], :<=, desktop["viewport"] + 1
 
+    splitter = find("[role='separator'][aria-label='Resize source and preview']")
+    splitter.send_keys(:arrow_right)
+    assert_equal "48", splitter["aria-valuenow"]
+    wider_source = page.evaluate_script("document.querySelector('.source-pane').getBoundingClientRect().width")
+    assert_operator wider_source, :>, desktop["sourceWidth"]
+    splitter.send_keys(:home)
+    assert_equal "20", splitter["aria-valuenow"]
+    splitter.send_keys(:end)
+    assert_equal "80", splitter["aria-valuenow"]
+    splitter.send_keys(:home)
+    page.driver.browser.action.move_to(splitter.native).click_and_hold.move_by(150, 0).release.perform
+    assert_operator splitter["aria-valuenow"].to_i, :>, 20
+
     page.driver.browser.manage.window.resize_to(700, 900)
+    assert_no_selector "[role='separator'][aria-label='Resize source and preview']", visible: true
     narrow = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const source = document.querySelector('.source-pane').getBoundingClientRect();

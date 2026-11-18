@@ -795,7 +795,10 @@ function clientCanRoundTrip(markdown: string, kind: string): boolean {
   if (kind === "quote" && sourceLines(markdown).some(line => /^[ \t]*>[ \t]*>/.test(line.text))) return false
   if (kind !== "image" && /!\[[^\]]*\]\(elef-asset:[0-9a-f]{64}(?:\s+[^)]*)?\)/.test(markdown)) return false
   if (kind === "paragraph" && !displayMathFenceSource(markdown) && /(?:^|\r\n|\r|\n)[ \t]*\S[^\r\n]*(?:\r\n|\r|\n)[ \t]{0,3}(?:=+|-+)[ \t]*(?:\r\n|\r|\n|$)/.test(markdown)) return false
-  return !unsupportedBlockSyntax(markdown)
+  // Continued table editing verifies every rendered cell and source span
+  // through fragmentedTableSourceOffset. Keep nested link destinations
+  // disabled for other block kinds, whose generic mapper cannot prove them.
+  return !unsupportedBlockSyntax(markdown, kind === "table")
 }
 
 function supportedFencedCode(markdown: string): boolean {
@@ -832,12 +835,12 @@ function tableCellCount(line: string): number {
   return Math.max(pipes.length - leading - trailing + 1, 0)
 }
 
-function unsupportedBlockSyntax(markdown: string): boolean {
+function unsupportedBlockSyntax(markdown: string, tableCellMapperVerifiesLinks = false): boolean {
   if (/<\s*!--|--\s*>|<\/?[A-Za-z][^>]*>/.test(markdown)) return true
   if (/<\s*(?:https?:\/\/|mailto:)[^>]+>|<\s*[^<>\s@]+@[^<>\s@]+\s*>/i.test(markdown)) return true
   if (/\[[^\]]+\]\s*\[[^\]]*\]|^\s*\[[^\]]+\]:|\[\^[^\]]+\]/m.test(markdown)) return true
   if (/&(?:[A-Za-z][A-Za-z0-9]+|#\d+|#x[0-9A-Fa-f]+);/.test(markdown)) return true
-  if (/\]\([^)]*\(/.test(markdown)) return true
+  if (!tableCellMapperVerifiesLinks && /\]\([^)]*\(/.test(markdown)) return true
   if (/[A-Za-z0-9][_*]{1,2}[^\s*_]+?[*_]{1,2}[A-Za-z0-9]/.test(markdown)) return true
   if (sourceLines(markdown).some(line => /(?: {2,}|\\)\r?$/.test(line.text))) return true
   return unsupportedEscapedPunctuation(markdown)

@@ -1,4 +1,5 @@
-import { sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
+import { measureSourceSelectionAlignment, sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
+import { sourcePreviewResizeWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-resize.js"
 import assert from "node:assert/strict"
 import { $, $$, browser } from "@wdio/globals"
 import { Key } from "webdriverio"
@@ -18,6 +19,7 @@ import { PIXEL_PNG_BYTES, PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../../../
 import { presentationModeWorkflow } from "../../../../apps/web/test/e2e/scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../../apps/web/test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-aspect-ratio.js"
+import { documentPageFlowWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-flow.js"
 import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.js"
 import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scenarios/slide-position-grammar.js"
 import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
@@ -864,6 +866,13 @@ class DesktopEditorUi {
     }
   }
 
+  async assertSourceSelectionAlignment() {
+    const { textLeft, selectionLeft } = await browser.execute(measureSourceSelectionAlignment)
+    if (Math.abs(textLeft - selectionLeft) > 1) {
+      throw new Error(`Source selection starts at ${selectionLeft}, text starts at ${textLeft}`)
+    }
+  }
+
   async restoreSource(source) {
     const restoredSource = await browser.execute(nextSource => {
       const controller = document.querySelector("#desktop-editor-field")?.editorController
@@ -1065,6 +1074,110 @@ class DesktopEditorUi {
     } finally {
       await browser.setWindowSize(originalSize.width, originalSize.height)
     }
+  }
+
+  async assertSourcePreviewResize() {
+    const splitter = await $("[role='separator'][aria-label='Resize source and preview']")
+    await splitter.waitForDisplayed()
+    await browser.execute(() => { window.focus(); document.querySelector(".editor-splitter").focus() })
+    if (process.platform === "darwin") focusDesktopWindow()
+    const initialSplit = Number(await splitter.getAttribute("aria-valuenow"))
+    await browser.keys(Key.ArrowLeft)
+    await browser.waitUntil(async () => Number(await splitter.getAttribute("aria-valuenow")) === Math.max(20, initialSplit - 2), {
+      timeout: 5_000, timeoutMsg: "The desktop splitter did not respond to ArrowLeft"
+    })
+    // WebKit WebDriver forwards private-use Home/End values as event.key;
+    // use canonical events, as in sendPresentationKey above.
+    await browser.execute(() => document.querySelector(".editor-splitter").dispatchEvent(new KeyboardEvent("keydown", { key: "Home", bubbles: true })))
+    await browser.waitUntil(async () => await splitter.getAttribute("aria-valuenow") === "20", {
+      timeout: 5_000, timeoutMsg: "The desktop splitter did not respond to Home"
+    })
+    const dimensions = () => browser.execute(() => ({
+      source: document.querySelector(".source-pane").getBoundingClientRect().width,
+      preview: document.querySelector(".preview-pane").getBoundingClientRect().width
+    }))
+    const before = await dimensions()
+    await browser.execute(() => document.querySelector(".editor-splitter").scrollIntoView({ block: "center" }))
+    const point = await browser.execute(() => {
+      const rect = document.querySelector(".editor-splitter").getBoundingClientRect()
+      return { x: Math.round(rect.left + rect.width / 2), y: Math.round((Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2),
+        screenX: Math.round(screenX + (outerWidth - innerWidth) / 2 + rect.left + rect.width / 2),
+        screenY: Math.round(screenY + outerHeight - innerHeight + (Math.max(0, rect.top) + Math.min(innerHeight, rect.bottom)) / 2),
+        viewportWidth: innerWidth, viewportHeight: innerHeight }
+    })
+    const hit = await browser.execute(({ x, y }) => {
+      const target = document.elementFromPoint(x, y)
+      window.__splitterEvents = []
+      const listeners = []
+      for (const name of ["pointerdown", "pointermove", "pointerup", "gotpointercapture", "lostpointercapture"]) {
+        const listener = event => {
+          if (window.__splitterEvents.length < 30) window.__splitterEvents.push({ type: event.type, target: event.target.className, x: event.clientX, y: event.clientY })
+        }
+        document.addEventListener(name, listener, { capture: true })
+        listeners.push([name, listener])
+      }
+      window.__removeSplitterListeners = () => {
+        for (const [name, listener] of listeners) document.removeEventListener(name, listener, { capture: true })
+      }
+      return { tag: target?.tagName, className: target?.className }
+    }, point)
+    let events = []
+    try {
+      focusDesktopWindow()
+      if (process.platform === "linux") {
+        execFileSync("xdotool", ["mousemove", String(point.screenX), String(point.screenY), "mousedown", "1", "mousemove", "--sync", String(point.screenX + 150), String(point.screenY), "mouseup", "1"], { timeout: 10_000 })
+      } else if (process.platform === "darwin") {
+        const bounds = execFileSync("osascript", ["-e", `tell application "System Events"
+          tell first window of (first application process whose unix id is ${desktopProcessId()})
+            set {windowX, windowY} to position
+            set {windowWidth, windowHeight} to size
+            return (windowX as text) & "," & (windowY as text) & "," & (windowWidth as text) & "," & (windowHeight as text)
+          end tell
+        end tell`], { encoding: "utf8", timeout: 10_000 }).trim().split(",").map(Number)
+        if (bounds.length !== 4 || bounds.some(value => !Number.isFinite(value))) throw new Error(`Invalid macOS window bounds: ${bounds}`)
+        const [windowX, windowY, windowWidth, windowHeight] = bounds
+        const macX = Math.round(windowX + (windowWidth - point.viewportWidth) / 2 + point.x)
+        const macY = Math.round(windowY + windowHeight - point.viewportHeight + point.y)
+        const script = `import CoreGraphics
+import Foundation
+let start = CGPoint(x: ${macX}, y: ${macY})
+func post(_ type: CGEventType, _ point: CGPoint) { CGEvent(mouseEventSource: nil, mouseType: type, mouseCursorPosition: point, mouseButton: .left)?.post(tap: .cghidEventTap) }
+post(.mouseMoved, start)
+usleep(100000)
+post(.leftMouseDown, start)
+usleep(100000)
+for i in 1...20 { post(.leftMouseDragged, CGPoint(x: start.x + CGFloat(i * 150 / 20), y: start.y)); usleep(20000) }
+post(.leftMouseUp, CGPoint(x: start.x + 150, y: start.y))`
+        execFileSync("swift", ["-e", script], { timeout: 30_000 })
+      } else throw new Error(`Native drag is unsupported on ${process.platform}`)
+      events = await browser.execute(() => window.__splitterEvents)
+    } finally {
+      await browser.execute(() => {
+        window.__removeSplitterListeners?.()
+        delete window.__removeSplitterListeners
+      }).catch(() => {})
+    }
+    await browser.waitUntil(async () => Number(await splitter.getAttribute("aria-valuenow")) > 20, {
+      timeout: 5_000, timeoutMsg: `Dragging the desktop splitter did not resize the panes: ${JSON.stringify({ point, hit, events })}`
+    })
+    const after = await dimensions()
+    if (after.source <= before.source + 50 || after.preview >= before.preview - 50) {
+      throw new Error(`Desktop panes did not resize in opposite directions: ${JSON.stringify({ before, after })}`)
+    }
+    await browser.waitUntil(async () => browser.execute(() => {
+      const preview = document.querySelector(".preview-pane")
+      const frame = preview?.querySelector(".document-page-frame, .slide-frame")
+      const content = frame?.querySelector(".document-page, .slide")
+      if (!frame || !content) return false
+      const frameRect = frame.getBoundingClientRect()
+      const contentRect = content.getBoundingClientRect()
+      return frameRect.width > 0 && Math.abs(frameRect.width - contentRect.width) < 2 && Math.abs(frameRect.height - contentRect.height) < 2
+    }), { timeout: 5_000, timeoutMsg: "The desktop preview frame did not fit after resizing" })
+    await browser.execute(() => document.querySelector(".editor-splitter").focus())
+    await browser.execute(() => document.querySelector(".editor-splitter").dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true })))
+    await browser.waitUntil(async () => await splitter.getAttribute("aria-valuenow") === "80", {
+      timeout: 5_000, timeoutMsg: "The desktop splitter did not respond to End"
+    })
   }
 
   async assertCaretPosition(position) {
@@ -1534,6 +1647,10 @@ class DesktopEditorUi {
       const surface = document.querySelector("#desktop-preview .document-surface[data-document-pages-settled='true']")
       return Boolean(surface?.textContent.includes(expected))
     }, text), { timeout: 30000, timeoutMsg: "The paginated preview did not settle with the edited source" })
+  }
+
+  async pageFlowProbe(probe) {
+    return browser.execute(probe, "#desktop-preview .document-surface")
   }
 
   async scrollPreviewToBottom() {
@@ -2614,6 +2731,28 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("keeps document pages at A4 proportions when the desktop window is resized", async () => {
     await documentPageAspectRatioWorkflow(new DesktopEditorUi())
+  })
+
+  it("flows document content across pages in the desktop preview", async () => {
+    await documentPageFlowWorkflow(new DesktopEditorUi())
+  })
+
+  it("resizes source and preview for documents and presentations", async () => {
+    const originalSize = await browser.getWindowSize()
+    const originalPosition = await browser.getWindowRect()
+    try {
+      await browser.setWindowSize(1280, 840)
+      if (process.platform === "darwin") await browser.setWindowRect(0, 0, null, null)
+      await sourcePreviewResizeWorkflow(new DesktopEditorUi())
+    } finally {
+      await browser.execute(() => {
+        const splitter = document.querySelector(".editor-splitter")
+        splitter?.parentElement?.style.removeProperty("--source-split")
+        splitter?.setAttribute("aria-valuenow", "46")
+      }).catch(() => {})
+      await browser.setWindowSize(originalSize.width, originalSize.height)
+      if (process.platform === "darwin") await browser.setWindowRect(originalPosition.x, originalPosition.y, null, null)
+    }
   })
 
   it("accepts trusted keyboard input in CodeMirror and persists it", async () => {
