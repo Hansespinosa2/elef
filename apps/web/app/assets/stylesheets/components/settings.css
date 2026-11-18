@@ -75,7 +75,12 @@
   color: var(--oradia-ink);
 }
 .snippet-template { line-height: 1.45; margin: 0.45rem 0 0; }
-.snippet-example-preview { margin-top: 0.45rem; min-height: 3.5rem; overflow-x: auto; }
+.snippet-example-preview { color-scheme: var(--oradia-color-scheme, dark); margin-top: 0.45rem; min-height: 3.5rem; overflow-x: auto; }
+.snippet-example-preview ::selection,
+.snippet-example-preview::selection {
+  background-color: var(--oradia-shell-selection-background, var(--work-code-selection-background));
+  color: var(--oradia-ink);
+}
 .snippet-example-preview > :first-child { margin-top: 0; }
 .snippet-example-preview > :last-child { margin-bottom: 0; }
 .snippet-example-preview .katex-display { margin: 0.5rem 0; overflow-x: auto; overflow-y: hidden; }

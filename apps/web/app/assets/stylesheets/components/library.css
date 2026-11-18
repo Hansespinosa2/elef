@@ -2,6 +2,7 @@
   background: var(--oradia-paper-bright);
   border: 1px solid var(--oradia-paper-line);
   border-radius: 1rem;
+  color-scheme: light;
   display: flex;
   flex-direction: column;
   height: min(740px, 78vh);
@@ -9,6 +10,12 @@
   overflow: hidden;
   position: relative;
 }
+.lineage-graph-canvas::selection,
+.lineage-graph-canvas ::selection { background-color: var(--oradia-vim-selection); color: var(--oradia-paper-ink); }
+:where(.lineage-graph-canvas) .slide::selection,
+:where(.lineage-graph-canvas) .slide ::selection { background-color: var(--work-selection-background); color: var(--work-surface-ink); }
+.lineage-graph-canvas .lineage-hover-card::selection,
+.lineage-graph-canvas .lineage-hover-card ::selection { background-color: var(--work-code-selection-background); color: #fffdf8; }
 .lineage-timeline-scroll { flex: 1; min-height: 0; overflow: auto; }
 .lineage-timeline-zoom { overflow: hidden; position: relative; }
 .lineage-timeline-content { position: relative; transform-origin: 0 0; }
@@ -175,6 +182,18 @@
 .library-tab:hover, .library-tab.is-active { background: var(--sidebar, var(--oradia-slate-800)); color: var(--ink, var(--oradia-ink)); }
 .preview-warnings { margin-bottom: 1rem; }
 .preview-warnings[hidden] { display: none; }
+.preview-warnings,
+.presentation-warnings,
+p.release-state { color-scheme: light; }
+.preview-warnings::selection,
+.preview-warnings ::selection,
+.presentation-warnings::selection,
+.presentation-warnings ::selection,
+p.release-state::selection,
+p.release-state ::selection { background-color: var(--oradia-vim-selection); color: #765700; }
+.editor-footer .release-state { color-scheme: var(--oradia-color-scheme, dark); }
+.editor-footer .release-state::selection,
+.editor-footer .release-state ::selection { background-color: var(--oradia-shell-selection-background, var(--work-code-selection-background)); color: var(--oradia-ink); }
 /* Shared create/native dialog chrome: the host-neutral client and desktop host dialogs use .app-dialog, so it lives here, not in a host-only sheet. */
 .app-dialog { width: min(420px, calc(100vw - 36px)); padding: 28px; border: 1px solid var(--line, var(--oradia-line)); border-radius: 15px; background: var(--panel, var(--oradia-slate-900)); color: var(--ink, var(--oradia-ink)); box-shadow: var(--shadow, 0 22px 60px rgb(0 0 0 / 22%)); }
 .app-dialog::backdrop { background: rgb(15 18 15 / 40%); backdrop-filter: blur(4px); }
