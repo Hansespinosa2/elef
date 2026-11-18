@@ -1,6 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
+import { buildEditorStructure } from "@elef/work-model/document-map";
 
 import {
   mountPresentationEditor,
@@ -112,6 +113,12 @@ function fakeEditor() {
     },
     replaceRange(text: string, from: number, to: number) {
       state.value = state.value.slice(0, from) + text + state.value.slice(to);
+    },
+    replaceRangeWithSelection(text: string, from: number, to: number, selection: { from: number; to: number }) {
+      state.value = state.value.slice(0, from) + text + state.value.slice(to);
+      state.selectionStart = Math.min(from + selection.from, from + selection.to);
+      state.selectionEnd = Math.max(from + selection.from, from + selection.to);
+      state.selectionHead = from + selection.to;
     },
     replaceRanges(changes: { from: number; to: number; insert: string }[]) {
       [...changes]
@@ -1200,5 +1207,198 @@ test("presentation restoreSelections clears without mapping in source mode", () 
 
   assert.equal(removed, 1);
   assert.equal(appended.length, 0);
+  mount.destroy();
+});
+
+test("client presentation editor aligns and deletes a non-editable multi-construct grouped block", () => {
+  const source = [
+    "# Authors",
+    "",
+    "## Fitzgerald",
+    "American novelist",
+    "- The Great Gatsby",
+    "",
+    "Footer",
+  ].join("\n");
+  const { editorMap } = buildEditorStructure(source, { mode: "presentation" });
+  const { document, form } = mountForm();
+  const editorState = fakeEditor();
+  editorState.value = source;
+  const mount = mountEditor(form, editorMap as unknown as Parameters<typeof mountEditor>[1], editorState);
+
+  assert.equal(editorMap.slides[0]?.editable_regions[1]?.editable, false);
+
+  const select = document.createElement("select");
+  Object.defineProperty(select, "value", { value: "center", configurable: true });
+  select.setAttribute("data-presentation-editor-align", "");
+  select.setAttribute("data-slide-index", "0");
+  select.setAttribute("data-block-index", "1");
+  form.append(select);
+  mount.editor.alignmentChanged({ target: select, preventDefault: () => {} });
+
+  assert.equal(
+    editorState.value,
+    "# Authors\n\n:::align{center}\n\n## Fitzgerald\nAmerican novelist\n- The Great Gatsby\n\nFooter",
+  );
+
+  const updated = buildEditorStructure(editorState.value, { mode: "presentation" }).editorMap;
+  mount.destroy();
+  const secondMount = mountEditor(form, updated as unknown as Parameters<typeof mountEditor>[1], editorState);
+  secondMount.editor.deleteBlock(0, 1);
+
+  assert.equal(editorState.value, "# Authors\n\nFooter");
+  secondMount.destroy();
+});
+
+test("presentation visual wrapping on an opaque selection prevents default without committing, blurring, or stranding caret restore", () => {
+  const { document, form } = mountForm();
+  const canvas = document.createElement("div");
+  canvas.className = "presentation-editor-projection";
+  canvas.setAttribute("data-presentation-editor-target", "canvas");
+  const block = document.createElement("div");
+  block.setAttribute("data-editor-block-id", "b1");
+  block.setAttribute("contenteditable", "true");
+  Object.defineProperty(block, "contentEditable", { value: "true" });
+  block.textContent = "---";
+  let blurred = 0;
+  block.blur = () => { blurred += 1; };
+  canvas.append(block);
+  form.append(canvas);
+
+  const editorState = fakeEditor();
+  editorState.value = "---";
+  let wrapCalls = 0;
+  let rangeCalls = 0;
+  editorState.replaceRange = () => { rangeCalls += 1; };
+  editorState.replaceRangeWithSelection = () => { wrapCalls += 1; };
+  const map = testMap();
+  map.editable_regions = [{ id: "r1", block_id: "b1", kind: "paragraph", editable: true, content_range: { start: 0, end: 3 } }];
+
+  const mount = mountPresentationEditor(form as unknown as Parameters<typeof mountPresentationEditor>[0], {
+    editorMap: map,
+    getEditor: () => editorState,
+    deps: {
+      ...stubDeps(),
+      visibleOffsetAtPoint: (_block, _node, offset) => offset,
+      sourceOffsetForVisibleOffset: (_slice, offset) => offset,
+    },
+    env: {
+      ...stubEnv(),
+      activeElement: () => block as unknown as Element,
+      getSelection: () => ({
+        isCollapsed: false,
+        anchorNode: block.firstChild,
+        anchorOffset: 0,
+        focusNode: block.firstChild,
+        focusOffset: 3,
+      }) as unknown as Selection,
+    },
+  });
+
+  for (const data of ["*", "`"]) {
+    let prevented = false;
+    mount.editor.projectionBeforeinput({
+      target: block as unknown as EventTarget,
+      inputType: "insertText",
+      data,
+      preventDefault() { prevented = true; },
+    });
+    assert.equal(prevented, true);
+    assert.equal(editorState.value, "---");
+    assert.equal(wrapCalls, 0);
+    assert.equal(rangeCalls, 0);
+    assert.equal(blurred, 0);
+    assert.equal(mount.editor.pendingCaretRestore, undefined);
+  }
+  mount.destroy();
+});
+
+test("presentation visual wrapping declines code blocks and active display math spans", () => {
+  const { document, form } = mountForm();
+  const canvas = document.createElement("div");
+  canvas.className = "presentation-editor-projection";
+  canvas.setAttribute("data-presentation-editor-target", "canvas");
+  const codeBlock = document.createElement("div");
+  codeBlock.setAttribute("data-editor-block-id", "c1");
+  codeBlock.setAttribute("contenteditable", "true");
+  Object.defineProperty(codeBlock, "contentEditable", { value: "true" });
+  codeBlock.textContent = "const x = 1";
+  const mathBlock = document.createElement("div");
+  mathBlock.setAttribute("data-editor-block-id", "m1");
+  mathBlock.setAttribute("contenteditable", "true");
+  Object.defineProperty(mathBlock, "contentEditable", { value: "true" });
+  const mathSpan = document.createElement("span");
+  mathSpan.className = "editor-math-active editor-live-math-display";
+  mathSpan.setAttribute("data-editor-math-active", "true");
+  mathSpan.setAttribute("data-editor-math-source", "x + y");
+  mathSpan.textContent = "$$x + y$$";
+  mathBlock.append(mathSpan);
+  canvas.append(codeBlock, mathBlock);
+  form.append(canvas);
+
+  const editorState = fakeEditor();
+  editorState.value = "```js\nconst x = 1\n```\n\n$$x + y$$";
+  let wrapCalls = 0;
+  let blurred = 0;
+  codeBlock.blur = () => { blurred += 1; };
+  mathBlock.blur = () => { blurred += 1; };
+  editorState.replaceRangeWithSelection = () => { wrapCalls += 1; };
+  const map = testMap();
+  map.editable_regions = [
+    { id: "r1", block_id: "c1", kind: "code", editable: true, content_range: { start: 0, end: 21 } },
+    { id: "r2", block_id: "m1", kind: "paragraph", editable: true, content_range: { start: 23, end: 32 } },
+  ];
+
+  let selection = {
+    isCollapsed: false,
+    anchorNode: codeBlock.firstChild,
+    anchorOffset: 0,
+    focusNode: codeBlock.firstChild,
+    focusOffset: 5,
+  };
+  let active: Element = codeBlock as unknown as Element;
+
+  const mount = mountPresentationEditor(form as unknown as Parameters<typeof mountPresentationEditor>[0], {
+    editorMap: map,
+    getEditor: () => editorState,
+    deps: {
+      ...stubDeps(),
+      visibleOffsetAtPoint: (_block, _node, offset) => offset,
+      sourceOffsetForVisibleOffset: (_slice, offset) => offset,
+    },
+    env: {
+      ...stubEnv(),
+      activeElement: () => active,
+      getSelection: () => selection as unknown as Selection,
+    },
+  });
+
+  mount.editor.projectionBeforeinput({
+    target: codeBlock as unknown as EventTarget,
+    inputType: "insertText",
+    data: "*",
+    preventDefault() {},
+  });
+  assert.equal(wrapCalls, 0);
+  assert.equal(blurred, 0);
+  assert.equal(mount.editor.pendingCaretRestore, undefined);
+
+  active = mathBlock as unknown as Element;
+  selection = {
+    isCollapsed: false,
+    anchorNode: mathSpan.firstChild,
+    anchorOffset: 2,
+    focusNode: mathSpan.firstChild,
+    focusOffset: 3,
+  };
+  mount.editor.projectionBeforeinput({
+    target: mathBlock as unknown as EventTarget,
+    inputType: "insertText",
+    data: "*",
+    preventDefault() {},
+  });
+  assert.equal(wrapCalls, 0);
+  assert.equal(blurred, 0);
+  assert.equal(mount.editor.pendingCaretRestore, undefined);
   mount.destroy();
 });

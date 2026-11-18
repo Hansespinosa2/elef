@@ -105,6 +105,96 @@ test("document cross-block beforeinput commits one source edit and releases stal
   }
 });
 
+test("fragmented table input commits native edits only after input, including composition and edge spaces", () => {
+  const { document, Node: DomNode } = parseHTML(`<main id="host"><div id="projection">
+    <div data-editor-block-id="table"><table><thead><tr><th>H</th></tr></thead><tbody><tr><td>one</td></tr></tbody></table></div>
+    <div data-editor-block-id="table"><table><thead><tr><th>H</th></tr></thead><tbody><tr><td>two</td></tr></tbody></table></div>
+  </div></main>`);
+  const host = document.querySelector("#host")!;
+  const projection = document.querySelector("#projection")!;
+  const blocks = [...projection.querySelectorAll<HTMLElement>("[data-editor-block-id]")];
+  const block = blocks[1]!;
+  Object.defineProperty(block, "contentEditable", { value: "true" });
+  const cell = block.querySelector("td")!;
+  let value = "| H |\n| --- |\n| one |\n| two |";
+  const editor = new DocumentEditor({ element: host, projection, deps: {} as DocumentEditorDeps });
+  const region = { id: "r", block_id: "table", kind: "table", editable: true, content_range: { start: 0, end: value.length } };
+  editor.map = { editable_regions: [region] };
+  editor.readyEditor = { get value() { return value; }, replaceRange(insert: string, from: number, to: number) {
+    value = value.slice(0, from) + insert + value.slice(to);
+  } } as unknown as NonNullable<typeof editor.editorController>;
+  editor.shiftMapAfterEdit = (_from, _to, length) => { region.content_range.end += length; };
+  editor.blockFragments = () => blocks;
+  editor.restoreCaret = () => true;
+  const oldWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const oldNode = Object.getOwnPropertyDescriptor(globalThis, "Node");
+  let selectionNode = () => cell.firstChild;
+  Object.defineProperty(globalThis, "Node", { configurable: true, value: DomNode });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { getSelection: () => ({
+    isCollapsed: true, anchorNode: selectionNode(), focusNode: selectionNode(),
+    anchorOffset: cell.textContent!.length, focusOffset: cell.textContent!.length,
+  }) } });
+  const before = (inputType: string, cancelable = true, data?: string | null, dataTransfer?: { types: string[]; getData(type: string): string }) => {
+    let prevented = false;
+    editor.projectionBeforeinput({ target: block, inputType, cancelable, data, dataTransfer, preventDefault() { prevented = true; } });
+    return prevented;
+  };
+  try {
+    before("insertText"); // An externally cancelled event has no input.
+    assert.equal(value, "| H |\n| --- |\n| one |\n| two |");
+    before("insertText"); cell.textContent = "two ";
+    editor.projectionInput({ target: block, preventDefault() {} });
+    assert.match(value, /\| two  \|$/);
+    before("insertCompositionText", false); cell.textContent = "two 字";
+    editor.projectionInput({ target: block, preventDefault() {} });
+    assert.match(value, /\| two 字 \|$/);
+    value = value.replace("two 字", "**two 字**");
+    region.content_range.end = value.length;
+    cell.innerHTML = "<strong>two 字</strong>";
+    selectionNode = () => cell.firstElementChild!.firstChild;
+    before("insertCompositionText", false);
+    cell.firstElementChild!.textContent = "two 字文";
+    editor.projectionInput({ target: block, preventDefault() {} });
+    assert.match(value, /\| \*\*two 字文\*\* \|$/);
+    let refreshed = false;
+    (host as any).previewController = { refreshNow() { refreshed = true; } };
+    assert.equal(before("insertFromPaste", true, "", { types: ["text/plain"], getData: () => "bad|pipe" }), true);
+    before("insertCompositionText", false);
+    cell.firstElementChild!.textContent = "two 字文|";
+    editor.projectionInput({ target: block, preventDefault() {} });
+    assert.equal(refreshed, false);
+    assert.equal(cell.textContent, "two 字文");
+    assert.match(value, /\| \*\*two 字文\*\* \|$/);
+  } finally {
+    if (oldWindow) Object.defineProperty(globalThis, "window", oldWindow); else delete (globalThis as Record<string, unknown>).window;
+    if (oldNode) Object.defineProperty(globalThis, "Node", oldNode); else delete (globalThis as Record<string, unknown>).Node;
+  }
+});
+
+test("fragmented table key routing refuses an unmappable caret and rolls back unmappable motion", () => {
+  const { editor, projection } = mountDocument();
+  const block = projection.querySelector<HTMLElement>("[data-editor-block-id]")!;
+  block.innerHTML = "<table></table>";
+  editor.blockFragments = () => [block, block];
+  let head = 4, prevented = false, called = false;
+  editor.readyEditor = {
+    value: "source", get selectionStart() { return head; }, get selectionEnd() { return head; },
+    get selectionHead() { return head; }, vimEnabled: true, insertMode: false,
+    setSelectionRange(_anchor: number, next: number) { head = next; },
+  } as unknown as NonNullable<typeof editor.editorController>;
+  const event = { key: "h", target: block, defaultPrevented: false, isComposing: false,
+    altKey: false, ctrlKey: false, metaKey: false, shiftKey: false, preventDefault() { prevented = true; } };
+  editor.captureCaret = () => null;
+  assert.equal(editor.routeTableSafeKey(event, block, () => { called = true; return true; }), true);
+  assert.equal(prevented, true);
+  assert.equal(called, false);
+  editor.captureCaret = () => ({ blockId: "b1", sourceOffset: 4 });
+  editor.selectionPointForSourceOffset = () => null;
+  editor.restoreCaret = () => true;
+  editor.routeTableSafeKey(event, block, () => { head = 3; return true; });
+  assert.equal(head, 4);
+});
+
 test("document editor stale sync touches only the focused block", () => {
   // T1: while a projection block holds DOM focus, preview-stale must not
   // re-sweep every block (measured 400-850ms on 100-page fixtures); only
@@ -472,4 +562,146 @@ test("gap offsets on a concealed marker resolve to the following block", () => {
   // the first block: only strictly-interior gap offsets move forward.
   const eol = editor.selectionPointForSourceOffset(9, null);
   assert.equal(eol?.blockId, "b1");
+});
+
+test("document visual wrapping on an opaque selection prevents default without committing, blurring, or stranding caret restore", () => {
+  const { document } = parseHTML(
+    `<div id="host" data-editor-mode="visual"><div id="projection">` +
+      `<div class="document-editor-block" data-editor-block-id="b1" contenteditable="true">---</div>` +
+    `</div></div>`,
+  );
+  const host = document.querySelector("#host") as unknown as HTMLElement;
+  const projection = document.querySelector("#projection") as unknown as Element;
+  const block = projection.querySelector<HTMLElement>("[data-editor-block-id='b1']")!;
+  Object.defineProperty(block, "contentEditable", { value: "true" });
+  let blurred = 0;
+  block.blur = () => { blurred += 1; };
+  let value = "---";
+  let wrapCalls = 0;
+  let rangeCalls = 0;
+  const editor = new DocumentEditor({
+    element: host,
+    projection,
+    deps: {
+      sourceOffsetForVisibleOffset: (_slice: string, offset: number) => offset,
+      visibleOffsetAtPoint: (_block: Element, _node: Node | null, offset: number) => offset,
+    } as unknown as DocumentEditorDeps,
+  });
+  editor.readyEditor = {
+    get value() { return value; },
+    replaceRange() { rangeCalls += 1; },
+    replaceRangeWithSelection() { wrapCalls += 1; },
+  } as unknown as NonNullable<typeof editor.editorController>;
+  editor.map = { editable_regions: [
+    { id: "r1", block_id: "b1", kind: "paragraph", editable: true, content_range: { start: 0, end: 3 } },
+  ] };
+  editor.visibleOffsetInBlockGroup = (_block, _node, offset) => offset;
+  editor.combinedBlockForId = () => block;
+
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const previousNode = Object.getOwnPropertyDescriptor(globalThis, "Node");
+  const previousCss = Object.getOwnPropertyDescriptor(globalThis, "CSS");
+  Object.defineProperty(globalThis, "Node", { configurable: true, writable: true, value: { ELEMENT_NODE: 1, TEXT_NODE: 3 } });
+  Object.defineProperty(globalThis, "CSS", { configurable: true, writable: true, value: { escape: (candidate: string) => candidate } });
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { getSelection: () => ({
+    isCollapsed: false, anchorNode: block.firstChild, anchorOffset: 0, focusNode: block.firstChild, focusOffset: 3,
+  }) } });
+  try {
+    for (const data of ["*", "`"]) {
+      let prevented = false;
+      withActiveElement(block, () => editor.projectionBeforeinput({
+        target: block, inputType: "insertText", data, preventDefault() { prevented = true; },
+      }));
+      assert.equal(prevented, true);
+      assert.equal(value, "---");
+      assert.equal(wrapCalls, 0);
+      assert.equal(rangeCalls, 0);
+      assert.equal(blurred, 0);
+      assert.equal(editor.pendingCaretRestore, undefined);
+    }
+  } finally {
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else delete (globalThis as Record<string, unknown>).window;
+    if (previousNode) Object.defineProperty(globalThis, "Node", previousNode);
+    else delete (globalThis as Record<string, unknown>).Node;
+    if (previousCss) Object.defineProperty(globalThis, "CSS", previousCss);
+    else delete (globalThis as Record<string, unknown>).CSS;
+  }
+});
+
+test("document visual wrapping declines code blocks and active display math spans", () => {
+  const { document } = parseHTML(
+    `<div id="host" data-editor-mode="visual"><div id="projection">` +
+      `<div class="document-editor-block" data-editor-block-id="c1" contenteditable="true">const x = 1</div>` +
+      `<div class="document-editor-block" data-editor-block-id="m1" contenteditable="true"><span class="editor-math-active editor-live-math-display" data-editor-math-active="true" data-editor-math-source="x + y">$$x + y$$</span></div>` +
+    `</div></div>`,
+  );
+  const host = document.querySelector("#host") as unknown as HTMLElement;
+  const projection = document.querySelector("#projection") as unknown as Element;
+  const codeBlock = projection.querySelector<HTMLElement>("[data-editor-block-id='c1']")!;
+  const mathBlock = projection.querySelector<HTMLElement>("[data-editor-block-id='m1']")!;
+  const mathSpan = mathBlock.querySelector(".editor-math-active")!;
+  Object.defineProperty(codeBlock, "contentEditable", { value: "true" });
+  Object.defineProperty(mathBlock, "contentEditable", { value: "true" });
+  let value = "```js\nconst x = 1\n```\n\n$$x + y$$";
+  let wrapCalls = 0;
+  let blurred = 0;
+  codeBlock.blur = () => { blurred += 1; };
+  mathBlock.blur = () => { blurred += 1; };
+  const editor = new DocumentEditor({
+    element: host,
+    projection,
+    deps: {
+      sourceOffsetForVisibleOffset: (_slice: string, offset: number) => offset,
+      visibleOffsetAtPoint: (_block: Element, _node: Node | null, offset: number) => offset,
+    } as unknown as DocumentEditorDeps,
+  });
+  editor.readyEditor = {
+    get value() { return value; },
+    replaceRange() {},
+    replaceRangeWithSelection() { wrapCalls += 1; },
+  } as unknown as NonNullable<typeof editor.editorController>;
+  editor.map = { editable_regions: [
+    { id: "r1", block_id: "c1", kind: "code", editable: true, content_range: { start: 0, end: 21 } },
+    { id: "r2", block_id: "m1", kind: "paragraph", editable: true, content_range: { start: 23, end: 32 } },
+  ] };
+  editor.visibleOffsetInBlockGroup = (_block, _node, offset) => offset;
+  editor.combinedBlockForId = (id) => (id === "c1" ? codeBlock : mathBlock);
+
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  const previousNode = Object.getOwnPropertyDescriptor(globalThis, "Node");
+  const previousCss = Object.getOwnPropertyDescriptor(globalThis, "CSS");
+  Object.defineProperty(globalThis, "Node", { configurable: true, writable: true, value: { ELEMENT_NODE: 1, TEXT_NODE: 3 } });
+  Object.defineProperty(globalThis, "CSS", { configurable: true, writable: true, value: { escape: (candidate: string) => candidate } });
+  let currentSelection: { anchorNode: Node | null; focusNode: Node | null; anchorOffset: number; focusOffset: number } = {
+    anchorNode: codeBlock.firstChild, anchorOffset: 0, focusNode: codeBlock.firstChild, focusOffset: 5,
+  };
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { getSelection: () => ({
+    isCollapsed: false, ...currentSelection,
+  }) } });
+  try {
+    withActiveElement(codeBlock, () => editor.projectionBeforeinput({
+      target: codeBlock, inputType: "insertText", data: "*", preventDefault() {},
+    }));
+    assert.equal(wrapCalls, 0);
+    assert.equal(blurred, 0);
+    assert.equal(editor.pendingCaretRestore, undefined);
+
+    currentSelection = {
+      anchorNode: mathSpan.firstChild, anchorOffset: 2, focusNode: mathSpan.firstChild, focusOffset: 3,
+    };
+    withActiveElement(mathBlock, () => editor.projectionBeforeinput({
+      target: mathBlock, inputType: "insertText", data: "*", preventDefault() {},
+    }));
+    assert.equal(wrapCalls, 0);
+    assert.equal(blurred, 0);
+    assert.equal(editor.pendingCaretRestore, undefined);
+  } finally {
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else delete (globalThis as Record<string, unknown>).window;
+    if (previousNode) Object.defineProperty(globalThis, "Node", previousNode);
+    else delete (globalThis as Record<string, unknown>).Node;
+    if (previousCss) Object.defineProperty(globalThis, "CSS", previousCss);
+    else delete (globalThis as Record<string, unknown>).CSS;
+  }
 });

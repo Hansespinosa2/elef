@@ -1,0 +1,5 @@
+{
+  "version": "0.27.3-elef1",
+  "pyodide": "0.27.3",
+  "packages": ["numpy", "scipy", "pandas", "matplotlib", "scikit-learn", "elef"]
+}

@@ -275,6 +275,12 @@ test("alignVisibleOffset bridges DOM lagging the engine by invisible whitespace"
   assert.equal(alignVisibleOffset("a\nb", "ab", 2), 3);
 });
 
+test("alignVisibleOffset maps text inside indented ordered list items", () => {
+  const source = "- Parent\n  1. First\n  2. Second\n- Tail";
+  const visible = "ParentFirstSecondTail";
+  assert.equal(alignVisibleOffset(source, visible, "ParentFirstSecond".length), source.indexOf("Second") + "Second".length);
+});
+
 test("alignVisibleOffset treats contenteditable nbsp as engine space", () => {
   // Chrome stores a just-typed trailing space as \u00a0 while the engine
   // commits a regular space; post-run typing must still map precisely.

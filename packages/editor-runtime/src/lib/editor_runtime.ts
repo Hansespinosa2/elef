@@ -5,6 +5,7 @@ import artLayoutController from "../controllers/art_layout_controller.js"
 import documentLinkPaletteController from "../controllers/document_link_palette_controller.js"
 import documentPagesController from "../controllers/document_pages_controller.js"
 import editorController from "../controllers/editor_controller.js"
+import editorSplitterController from "../controllers/editor_splitter_controller.js"
 import mathShortcutPaletteController from "../controllers/math_shortcut_palette_controller.js"
 import mathShorthandController from "../controllers/math_shorthand_controller.js"
 import mediaController from "../controllers/media_controller.js"
@@ -28,6 +29,7 @@ export function registerEditorRuntime(): void {
   if (editorRuntimeRegistered) return
   editorRuntimeRegistered = true
   register("editor", editorController)
+  register("editor-splitter", editorSplitterController)
   register("appearance", appearanceController)
   register("document-link-palette", documentLinkPaletteController)
   register("math-shortcut-palette", mathShortcutPaletteController)

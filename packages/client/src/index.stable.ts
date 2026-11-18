@@ -60,10 +60,14 @@ export {
   PRESENTATION_PRINT_GEOMETRY,
   PRINT_DOCUMENT_MARKER,
   PRINT_MARKER,
+  PRINT_PAGE_SIZE_STYLE_ID,
   PRINT_PRESENTATION_MARKER,
+  clearPrintPageSizeStyle,
   pausePrintVideos,
   printMarkerClasses,
+  printPageSizeCss,
   printWorkKindForSourceFile,
+  syncPrintPageSizeStyle,
 } from "./features/export/print.js";
 export type { PrintWorkKind } from "./features/export/print.js";
 export {
@@ -93,3 +97,4 @@ export type {
   UpdaterStatus,
 } from "./application/types.js";
 export type { ElefHost } from "@elef/contracts";
+export { appendPageFragment } from "./features/document/page_fragments.js";

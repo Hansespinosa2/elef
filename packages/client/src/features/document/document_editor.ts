@@ -9,15 +9,22 @@ import { alignSourceOffset, alignVisibleOffset, touchesConcealedBoundary, transl
 import { routeProjectionKeymapKey, routeProjectionVimKey } from "../../session/projection_keys.js"
 import { updateVimNormalCaret } from "../../session/vim_caret.js"
 import { applyVisualAssistInsert, type AssistInsertEdit } from "../../session/projection_assist.js"
-import { tableGridForBlock, tableRelativeForVisible, tableSourceOffset, tableVisibleForSource } from "../../session/table_motion.js"
+import { fragmentedTableSourceOffset, tableGridForBlock, tableRelativeForVisible, tableSourceOffset, tableVisibleForSource } from "../../session/table_motion.js"
 import { activeDisplayMathForNodes, mathEndPlacement, mathMatchForSpan } from "../../session/projection_math.js"
 import { markStage } from "../../session/stage_marks.js"
-import { projectionRangeEdit } from "../../session/projection_range.js"
+import { projectionRangeEdit, projectionWrapSelection } from "../../session/projection_range.js"
+import { wrapMarkdownText } from "../../session/markdown_wrap.js"
 import { paintProjectionSelections } from "../../session/projection_selections.js"
+import { appendPageFragment } from "./page_fragments.js"
 
 export interface DocumentEditorRange {
   start: number
   end: number
+}
+
+function tableCellShape(node: Node): string {
+  if (node.nodeType === 3) return ""
+  return `<${(node as Element).tagName}>${[...node.childNodes].map(tableCellShape).join("")}</${(node as Element).tagName}>`
 }
 
 export interface DocumentEditorBlock {
@@ -83,6 +90,7 @@ export interface DocumentEditorSeam {
   focus(): void
   commitSource(source: string): unknown
   replaceRange(replacement: string, from: number, to: number): void
+  replaceRangeWithSelection(replacement: string, from: number, to: number, selection: { from: number; to: number }): void
   replaceRanges(changes: Array<{ from: number; to: number; insert: string }>): void
   setSelectionRange(anchor: number, head?: number): void
   handleVimKey(event: DocumentProjectionKeyEvent): boolean
@@ -98,6 +106,7 @@ export interface DocumentProjectionEvent {
 
 export interface DocumentProjectionBeforeinputEvent {
   readonly cancelable?: boolean
+  readonly isComposing?: boolean
   preventDefault?(): void
   readonly target: EventTarget | null | undefined
   readonly inputType: string
@@ -166,6 +175,17 @@ interface DocumentProjectionEdit {
   blockElement: Element
 }
 
+interface TableInputSnapshot {
+  blockId: string
+  cell: Element | null
+  text: string
+  source: string
+  start: number | null
+  caretOffset: number | null
+  shape: string
+  cells: Array<{ cell: Element; html: string }>
+}
+
 interface DocumentShiftable {
   id?: string
   block_id?: string
@@ -202,8 +222,9 @@ export class DocumentEditor {
   hasPresentationProjection: boolean | undefined
   pendingProjectionFrame: number | undefined
   pendingProjectionEdits: Map<string, DocumentProjectionEdit> | undefined
-  pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null } | null | undefined
+  pendingCaretRestore: { sourceOffset: number; preferredBlockId: string | null; anchorSourceOffset?: number } | null | undefined
   suppressProjectionInput = false
+  pendingTableInput: TableInputSnapshot | null = null
   // A pending caret is scoped to the transaction that armed it: sourceLength
   // records the post-edit document length, so a later restore can tell a
   // still-pending reinstall (same length) from a superseded entry a newer
@@ -405,6 +426,7 @@ export class DocumentEditor {
     // beforeinput/input pairs never interleave, so clearing here cannot
     // steal a live suppression.
     this.suppressProjectionInput = false
+    this.pendingTableInput = null
     const editor = this.editorController
     if (!editor || this.updatingProjection) return
     const block = (event.target as Element | null | undefined)?.closest?.("[data-editor-block-id]") as HTMLElement | null | undefined
@@ -415,24 +437,100 @@ export class DocumentEditor {
     if (!region) return
     const selection = window.getSelection()
     if (!selection?.anchorNode || !selection.focusNode) return
-    const ranged = projectionRangeEdit(event, this.projectionTarget, selection, (endpoint, node, offset) => {
+    let unmappableTableRange = false
+    const sourceOffset = (endpoint: HTMLElement, node: Node, offset: number): number | null => {
       if (this.pendingProjectionEdits?.size) this.flushPendingProjectionEdits()
       const endpointRegion = this.regionForBlock(endpoint.dataset.editorBlockId)
-      if (!endpointRegion) return null
+      if (!endpointRegion || endpointRegion.kind === "code") return null
+      const slice = editor.value.slice(endpointRegion.content_range.start, endpointRegion.content_range.end)
+      const tablePoint = endpoint.querySelector("table")
+        ? fragmentedTableSourceOffset(slice, this.blockFragments(endpoint.dataset.editorBlockId), node, offset)
+        : { kind: "not-table" as const }
+      if (tablePoint.kind === "mapped") return endpointRegion.content_range.start + tablePoint.offset
+      if (tablePoint.kind === "unmappable") { unmappableTableRange = true; return null }
       const visible = this.visibleOffsetInBlockGroup(endpoint, node, offset)
       if (visible === null) return null
-      const slice = editor.value.slice(endpointRegion.content_range.start, endpointRegion.content_range.end)
       const content = this.combinedBlockForId(endpoint.dataset.editorBlockId) || endpoint
       const relative = tableRelativeForVisible(slice, content, visible)
         ?? alignVisibleOffset(slice, visibleBlockText(content), visible)
         ?? this.deps.sourceOffsetForVisibleOffset(slice, visible)
       return endpointRegion.content_range.start + relative
-    })
+    }
+    const wrapped = activeDisplayMathForNodes(selection.anchorNode, selection.focusNode)
+      ? null
+      : projectionWrapSelection(event, this.projectionTarget, selection, sourceOffset)
+    if (wrapped) {
+      event.preventDefault?.()
+      const { from, to, anchor, head, marker } = wrapped
+      const selected = editor.value.slice(from, to)
+      const result = wrapMarkdownText(selected, marker)
+      if (result.text === selected) return
+      const forward = anchor <= head
+      const newAnchor = from + (forward ? result.from : result.to)
+      const newHead = from + (forward ? result.to : result.from)
+      this.pendingCaretRestore = { sourceOffset: newHead, anchorSourceOffset: newAnchor, preferredBlockId: null }
+      editor.replaceRangeWithSelection(result.text, from, to,
+        { from: newAnchor - from, to: newHead - from })
+      ;(document.activeElement as HTMLElement | null)?.blur()
+      return
+    }
+    const ranged = projectionRangeEdit(event, this.projectionTarget, selection, sourceOffset)
     if (ranged) {
       event.preventDefault?.()
       this.pendingCaretRestore = { sourceOffset: ranged.from + ranged.insert.length, preferredBlockId: null }
       editor.replaceRange(ranged.insert, ranged.from, ranged.to)
       ;(document.activeElement as HTMLElement | null)?.blur()
+      return
+    }
+    if (unmappableTableRange) { event.preventDefault?.(); return }
+    const fragments = this.blockFragments(blockId)
+    if (fragments.length > 1 && fragments.some((fragment) => fragment.querySelector?.("table"))) {
+      if (!blockId) { event.preventDefault?.(); return }
+      // Fragmented tables cannot be reconciled from linear visible offsets:
+      // continuation headers are copies and cell boundaries have no width.
+      const cellFor = (node: Node): Element | null =>
+        (node.nodeType === Node.ELEMENT_NODE ? node as Element : node.parentElement)?.closest("th, td") ?? null
+      const cell = cellFor(selection.anchorNode)
+      const snapshot: TableInputSnapshot = {
+        blockId,
+        cell: cell && cell === cellFor(selection.focusNode) && block.contains(cell) ? cell : null,
+        text: cell?.textContent ?? "",
+        source: editor.value,
+        start: null,
+        caretOffset: null,
+        shape: cell ? tableCellShape(cell) : "",
+        cells: fragments.flatMap(fragment => [...fragment.querySelectorAll("th, td")])
+          .map(other => ({ cell: other, html: other.innerHTML }))
+      }
+      this.pendingTableInput = snapshot
+      const decline = (): void => {
+        // A noncancelable composition update is restored from this snapshot
+        // by projectionInput; it must never remain as unsaved DOM-only text.
+        if (event.cancelable !== false) event.preventDefault?.()
+      }
+      if (this.pendingProjectionEdits?.size || !snapshot.cell) { decline(); return }
+      const slice = editor.value.slice(region.content_range.start, region.content_range.end)
+      const anchor = fragmentedTableSourceOffset(slice, fragments, selection.anchorNode, selection.anchorOffset)
+      const focus = fragmentedTableSourceOffset(slice, fragments, selection.focusNode, selection.focusOffset)
+      const start = fragmentedTableSourceOffset(slice, fragments, snapshot.cell, 0)
+      if (anchor.kind !== "mapped" || focus.kind !== "mapped" || start.kind !== "mapped") { decline(); return }
+      const transferTypes = Array.from(event.dataTransfer?.types ?? [])
+      let transferText: string | null = null
+      if (transferTypes.includes("text/plain")) {
+        try { transferText = event.dataTransfer?.getData("text/plain") ?? null } catch { transferText = null }
+      }
+      const isTransfer = event.inputType === "insertFromPaste" || event.inputType === "insertFromDrop"
+      const insertedText = isTransfer
+        ? transferText ?? (typeof event.data === "string" ? event.data : null)
+        : event.data
+      const supportedInput = /^(insertText|insertCompositionText|insertReplacementText|delete[A-Za-z]+|insertFromPaste|insertFromDrop)$/.test(event.inputType)
+      // Pipe, escape, and line-break input changes Markdown table structure.
+      // Reject it before native editing when possible; noncancelable updates
+      // are rolled back from the complete fragment snapshot in projectionInput.
+      if (!supportedInput || (isTransfer && insertedText === null) ||
+          (typeof insertedText === "string" && /[|\\\r\n]/.test(insertedText))) { decline(); return }
+      snapshot.start = region.content_range.start + start.offset
+      snapshot.caretOffset = region.content_range.start + focus.offset
       return
     }
     if (this.pendingProjectionEdits?.size) return
@@ -486,7 +584,7 @@ export class DocumentEditor {
       return
     }
     markStage("key-visibletext-start")
-    const visibleText = visibleBlockText(block)
+    const visibleText = this.blockFragments(blockId).map((fragment) => visibleBlockText(fragment)).join("")
     markStage("key-visibletext-end")
     const edit = translateProjectionInput({
       inputType: event.inputType,
@@ -540,6 +638,46 @@ export class DocumentEditor {
   }
 
   projectionInput(event: DocumentProjectionEvent): void {
+    const tableInput = this.pendingTableInput
+    this.pendingTableInput = null
+    if (tableInput && this.editorController && !this.updatingProjection) {
+      const editor = this.editorController
+      const cell = tableInput.cell
+      const text = cell?.textContent ?? ""
+      const unchanged = editor.value === tableInput.source && Boolean(cell?.isConnected) &&
+        Boolean(cell && tableCellShape(cell) === tableInput.shape) &&
+        tableInput.cells.every(({ cell: other, html }) => other.isConnected && (other === cell || other.innerHTML === html))
+      if (unchanged && cell && tableInput.start !== null) {
+        let from = 0
+        while (from < tableInput.text.length && from < text.length && tableInput.text[from] === text[from]) from += 1
+        let oldEnd = tableInput.text.length, newEnd = text.length
+        while (oldEnd > from && newEnd > from && tableInput.text[oldEnd - 1] === text[newEnd - 1]) { oldEnd -= 1; newEnd -= 1 }
+        if (from !== oldEnd || from !== newEnd) {
+          const insert = text.slice(from, newEnd)
+          if (/[|\\\r\n]/.test(insert)) {
+            this.restoreTableInput(tableInput)
+            return
+          }
+          const start = tableInput.start + from, end = tableInput.start + oldEnd
+          this.shiftMapAfterEdit(start, end, insert.length, tableInput.blockId)
+          editor.replaceRange(insert, start, end)
+          const row = cell.closest("thead tr")
+          if (row) {
+            const column = [...row.children].indexOf(cell)
+            for (const fragment of this.blockFragments(tableInput.blockId)) {
+              const copy = fragment.querySelectorAll("thead th")[column]
+              if (copy && copy !== cell) copy.innerHTML = cell.innerHTML
+            }
+          }
+        }
+        return
+      }
+      // Restore rejected or noncancelable native mutations. Markdown source
+      // remains authoritative when a DOM edit cannot be mapped safely.
+      this.restoreTableInput(tableInput)
+      if (editor.value !== tableInput.source) this.element.previewController?.refreshNow?.()
+      return
+    }
     // Engine-routed keys dispatch input to refresh the preview while the
     // block DOM still shows the old text; reconciling it would write stale
     // content back over the engine. Consumed first so a suppressed event
@@ -555,7 +693,18 @@ export class DocumentEditor {
       const blockId = ((event.target as Element).closest?.("[data-editor-block-id]") as HTMLElement | null | undefined)?.dataset.editorBlockId
       const region = this.regionForBlock(blockId)
       if (region && region.kind !== "code") {
-        this.blockFragments(blockId).forEach((fragment) => this.deps.renderInlineMath(fragment))
+        const fragments = this.blockFragments(blockId)
+        const selection = window.getSelection()
+        const node = selection?.focusNode
+        const cell = (node?.nodeType === Node.ELEMENT_NODE ? node as Element : node?.parentElement)?.closest("thead th")
+        if (fragments.length > 1 && cell && fragments[0]?.contains(cell)) {
+          const column = [...(cell.parentElement?.children ?? [])].indexOf(cell)
+          if (column >= 0) fragments.slice(1).forEach((fragment) => {
+            const copy = fragment.querySelectorAll("thead th")[column]
+            if (copy) copy.textContent = cell.textContent
+          })
+        }
+        fragments.forEach((fragment) => this.deps.renderInlineMath(fragment))
       }
       markStage("key-input-end")
       return
@@ -564,6 +713,13 @@ export class DocumentEditor {
 
     const blockElement = (event.target as Element).closest?.("[data-editor-block-id]")
     if (!blockElement || !this.canEditBlock(blockElement)) return
+    const fragments = this.blockFragments((blockElement as HTMLElement).dataset.editorBlockId)
+    if (fragments.length > 1 && fragments.some((fragment) => fragment.querySelector?.("table"))) {
+      // An input without its beforeinput snapshot cannot be mapped reliably.
+      // Reinstall from authoritative Markdown instead of leaving DOM-only text.
+      this.element.previewController?.refreshNow?.()
+      return
+    }
     const block = this.map?.slides?.flatMap((slide) => slide.blocks || []).find((candidate) => candidate.id === (blockElement as HTMLElement).dataset.editorBlockId)
     const region = this.map?.editable_regions?.find((candidate) => candidate.block_id === block?.id)
     if (!block || !region) return
@@ -582,6 +738,18 @@ export class DocumentEditor {
       blockElement
     })
     this.scheduleProjectionFlush()
+  }
+
+  restoreTableInput(snapshot: TableInputSnapshot): void {
+    let detachedCell = false
+    for (const { cell, html } of snapshot.cells) {
+      if (!cell.isConnected) { detachedCell = true; continue }
+      if (cell.innerHTML !== html) cell.innerHTML = html
+    }
+    if (snapshot.caretOffset !== null && this.editorController?.value === snapshot.source) {
+      this.restoreCaret(snapshot.caretOffset, snapshot.blockId)
+    }
+    if (detachedCell) this.element.previewController?.refreshNow?.()
   }
 
   captureCaret(): { blockId: string; sourceOffset: number } | null {
@@ -631,6 +799,13 @@ export class DocumentEditor {
     // caret then corrupts the next shorthand decision). The aligner
     // declines genuinely divergent text, which falls back to the map.
     const fragments = this.blockFragments(current.blockId)
+    if (fragments.length > 1 && fragments.some((fragment) => fragment.querySelector?.("table"))) {
+      if (!focusNode || !block || !fragments.includes(block)) return null
+      const point = fragmentedTableSourceOffset(source, fragments, focusNode, selection?.focusOffset ?? 0)
+      return point.kind === "mapped"
+        ? { blockId: current.blockId ?? "", sourceOffset: region.content_range.start + point.offset }
+        : null
+    }
     // Tables render as one shell: the linear map below skips the header
     // row as concealed (a later-line divider match) and cannot see cell
     // boundaries, so resolve through the rendered grid when a fragment
@@ -688,6 +863,36 @@ export class DocumentEditor {
     const source = this.editorController.value.slice(region.content_range.start, region.content_range.end)
     const blocks = this.blockFragments(region.block_id)
     const relative = sourceOffset - region.content_range.start
+    if (blocks.length > 1 && blocks.some((fragment) => fragment.querySelector?.("table"))) {
+      // Invert only points accepted by the same whole-table validator used
+      // for edits. This also avoids choosing a repeated continuation header.
+      for (const fragment of blocks) {
+        for (const cell of fragment.querySelectorAll("th, td")) {
+          const start = fragmentedTableSourceOffset(source, blocks, cell, 0)
+          if (start.kind !== "mapped") continue
+          let remaining = relative - start.offset
+          if (remaining < 0 || remaining > (cell.textContent ?? "").length) continue
+          let node: Node = cell
+          while (node.childNodes.length) {
+            let next: Node | null = null
+            for (const child of node.childNodes) {
+              const length = (child.textContent ?? "").length
+              if (remaining <= length) { next = child; break }
+              remaining -= length
+            }
+            if (!next) break
+            node = next
+          }
+          const offset = node.nodeType === Node.TEXT_NODE ? remaining : 0
+          const verified = fragmentedTableSourceOffset(source, blocks, node, offset)
+          if (verified.kind !== "mapped" || verified.offset !== relative) continue
+          const visibleOffset = this.visibleOffsetInBlockGroup(fragment, node, offset)
+          if (visibleOffset === null) return null
+          return { element: fragment as HTMLElement, node, offset, visibleOffset, blockId: region.block_id ?? "" }
+        }
+      }
+      return null
+    }
     // DOM-grounded placement first: the block DOM can lead the engine by
     // whitespace the source trimmed (a just-typed edge space), which the
     // canonical map cannot see. The aligner declines concealed syntax
@@ -757,7 +962,9 @@ export class DocumentEditor {
       return false
     }
     const region = this.allRegions().find((candidate) => candidate.block_id === point.blockId)
-    const inlinePoint = region ? this.deps.inlinePointForSourceOffset(
+    const fragments = this.blockFragments(point.blockId)
+    const fragmentedTable = fragments.length > 1 && fragments.some((fragment) => fragment.querySelector?.("table"))
+    const inlinePoint = region && !fragmentedTable ? this.deps.inlinePointForSourceOffset(
       this.blockFragments(point.blockId),
       this.editorController.value.slice(region.content_range.start, region.content_range.end),
       sourceOffset - region.content_range.start,
@@ -1066,6 +1273,7 @@ export class DocumentEditor {
     this.pendingCaretRestore = null
     requestAnimationFrame(() => {
       this.restoreCaret(pending.sourceOffset, pending.preferredBlockId)
+      if (pending.anchorSourceOffset !== undefined) this.restoreSelection(pending.anchorSourceOffset, pending.sourceOffset, pending.preferredBlockId)
       this.restoreSelections()
     })
   }
@@ -1090,11 +1298,37 @@ export class DocumentEditor {
   // Shared visual key routing (session/projection_keys); documents and
   // presentations execute identical behavior through these delegates.
   routeVimKey(event: DocumentProjectionKeyEvent, blockElement: Element): boolean {
-    return routeProjectionVimKey(this, event, blockElement)
+    return this.routeTableSafeKey(event, blockElement, () => routeProjectionVimKey(this, event, blockElement))
   }
 
   routeKeymapKey(event: DocumentProjectionKeyEvent, blockElement: Element): boolean {
-    return routeProjectionKeymapKey(this, event, blockElement)
+    return this.routeTableSafeKey(event, blockElement, () => routeProjectionKeymapKey(this, event, blockElement))
+  }
+
+  routeTableSafeKey(event: DocumentProjectionKeyEvent, block: Element, route: () => boolean): boolean {
+    const editor = this.editorController
+    const id = (block as HTMLElement).dataset.editorBlockId
+    const fragments = this.blockFragments(id)
+    if (!editor || fragments.length < 2 || !fragments.some(fragment => fragment.querySelector("table"))) return route()
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") return route()
+    // The engine must never execute against a caret the projection cannot
+    // identify. Keep copy and ordinary insert-mode typing in the browser.
+    const routed = (editor.vimEnabled && !editor.insertMode) ||
+      event.altKey || event.metaKey || event.ctrlKey || event.key === "Tab"
+    if (!routed) return route()
+    const caret = this.captureCaret()
+    if (!caret) { event.preventDefault(); return true }
+    const value = editor.value, start = editor.selectionStart, end = editor.selectionEnd, head = editor.selectionHead
+    const handled = route()
+    if (handled && editor.value === value &&
+        (!this.selectionPointForSourceOffset(editor.selectionHead, id) ||
+         (editor.selectionStart !== editor.selectionEnd &&
+          !this.selectionPointForSourceOffset(editor.selectionHead === editor.selectionStart ? editor.selectionEnd : editor.selectionStart, id)))) {
+      const anchor = head === start ? end : start
+      editor.setSelectionRange(anchor, head)
+      this.restoreCaret(caret.sourceOffset, id)
+    }
+    return handled
   }
 
   projectionKeydown(event: DocumentProjectionKeyEvent): void {
@@ -1786,7 +2020,7 @@ export class DocumentEditor {
         ? fragment
         : fragment.querySelector("[data-document-page-flow-content]")
       if (!target || target.tagName !== combinedTarget.tagName) return
-      ;[...target.childNodes].forEach((child) => combinedTarget.append(child.cloneNode(true)))
+      appendPageFragment(combinedTarget, target)
     })
     combinedTarget.removeAttribute("data-document-page-flow-content")
     this.mergeAdjacentInlineElements(combinedTarget)
@@ -1820,6 +2054,20 @@ export class DocumentEditor {
     if (localOffset === null) return null
     const fragments = this.blockFragments((block as HTMLElement).dataset.editorBlockId)
     const index = fragments.indexOf(block)
+    if (index > 0) {
+      const header = block.querySelector("table thead")
+      if (header) {
+        // Every continuation repeats the table header for readers, but the
+        // source has only one. A caret in that repeated header maps to the
+        // original header; body offsets must exclude all repeated copies.
+        if (node && header.contains(node)) return localOffset
+        const preceding = fragments.slice(0, index).reduce((sum, fragment, fragmentIndex) => {
+          const repeatedHeader = fragmentIndex > 0 ? fragment.querySelector("table thead") : null
+          return sum + this.visibleTextLength(fragment) - (repeatedHeader ? this.visibleTextLength(repeatedHeader) : 0)
+        }, 0)
+        return preceding + Math.max(0, localOffset - this.visibleTextLength(header))
+      }
+    }
     return fragments.slice(0, Math.max(0, index)).reduce((sum, fragment) => sum + this.visibleTextLength(fragment), 0) + localOffset
   }
 

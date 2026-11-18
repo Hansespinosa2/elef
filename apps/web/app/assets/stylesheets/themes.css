@@ -4,6 +4,9 @@
   --work-surface-ink: var(--oradia-ink);
   --work-heading-ink: var(--oradia-ink);
   --work-editor-slide-border: var(--oradia-slate-700);
+  --work-color-scheme: var(--work-dark-color-scheme);
+  --work-selection-background: var(--work-dark-selection-background);
+  --work-reveal-marker-ink: var(--work-dark-reveal-marker-ink);
 }
 
 .work-theme-light {
@@ -12,6 +15,9 @@
   --work-surface-ink: var(--oradia-paper-ink);
   --work-heading-ink: var(--oradia-paper-ink);
   --work-editor-slide-border: #cfc4b2;
+  --work-color-scheme: light;
+  --work-selection-background: var(--oradia-vim-selection);
+  --work-reveal-marker-ink: #4f5852;
 }
 
 .work-theme-match {
@@ -20,6 +26,9 @@
   --work-surface-ink: var(--oradia-paper-ink);
   --work-heading-ink: var(--oradia-paper-ink);
   --work-editor-slide-border: #cfc4b2;
+  --work-color-scheme: light;
+  --work-selection-background: var(--oradia-vim-selection);
+  --work-reveal-marker-ink: #4f5852;
 }
 
 .document-theme-dark {
@@ -28,6 +37,9 @@
   --document-page-ink: var(--oradia-ink);
   --document-heading-ink: var(--oradia-ink);
   --document-blockquote-ink: var(--oradia-muted);
+  --document-color-scheme: var(--work-dark-color-scheme);
+  --document-selection-background: var(--work-dark-selection-background);
+  --work-reveal-marker-ink: var(--work-dark-reveal-marker-ink);
 }
 
 .document-theme-light {
@@ -36,6 +48,9 @@
   --document-page-ink: var(--oradia-paper-ink);
   --document-heading-ink: var(--oradia-paper-ink);
   --document-blockquote-ink: var(--oradia-paper-muted);
+  --document-color-scheme: light;
+  --document-selection-background: var(--oradia-vim-selection);
+  --work-reveal-marker-ink: #4f5852;
 }
 
 .document-theme-match {
@@ -44,6 +59,9 @@
   --document-page-ink: var(--oradia-paper-ink);
   --document-heading-ink: var(--oradia-paper-ink);
   --document-blockquote-ink: var(--oradia-paper-muted);
+  --document-color-scheme: light;
+  --document-selection-background: var(--oradia-vim-selection);
+  --work-reveal-marker-ink: #4f5852;
 }
 
 /* Canonical presentation themes: one color mode + one font per theme,
@@ -61,6 +79,9 @@
   --work-surface-ink: var(--oradia-paper-ink);
   --work-heading-ink: var(--oradia-paper-ink);
   --work-editor-slide-border: #cfc4b2;
+  --work-color-scheme: light;
+  --work-selection-background: var(--oradia-vim-selection);
+  --work-reveal-marker-ink: #4f5852;
 }
 
 .presentation-surface.slides-presentation-modern-dark {
@@ -69,6 +90,9 @@
   --work-surface-ink: var(--oradia-ink);
   --work-heading-ink: var(--oradia-ink);
   --work-editor-slide-border: var(--oradia-slate-700);
+  --work-color-scheme: var(--work-dark-color-scheme);
+  --work-selection-background: var(--work-dark-selection-background);
+  --work-reveal-marker-ink: var(--work-dark-reveal-marker-ink);
 }
 
 .presentation-surface.slides-presentation-technical-light {
@@ -78,4 +102,7 @@
   --work-heading-ink: var(--oradia-paper-ink);
   --work-editor-slide-border: #5f6b72;
   --presentation-muted: #333937;
+  --work-color-scheme: light;
+  --work-selection-background: rgba(222, 238, 226, 0.58);
+  --work-reveal-marker-ink: var(--oradia-paper-ink);
 }

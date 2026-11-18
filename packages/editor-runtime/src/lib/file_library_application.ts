@@ -12,7 +12,7 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById } from "@elef/client"
+import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, clearPrintPageSizeStyle, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById, syncPrintPageSizeStyle } from "@elef/client"
 import type { ExportMenuHandle, ExportMenuProps, GraphController, LibraryPaletteCommand } from "@elef/client"
 
 interface OpenedEditor {
@@ -27,6 +27,346 @@ export function focusOpenedEditor(editor: OpenedEditor | null | undefined, mode:
   if (mode === "visual") return editor.projectionController()?.restoreCaret(0) === true
   editor.focus()
   return true
+}
+
+export const PRINT_RESOURCE_TIMEOUT_MS = 3000
+const MAX_PRINT_SETTLE_PASSES = 3
+
+function pendingPreviewImages(preview: HTMLElement): HTMLImageElement[] {
+  return [...preview.querySelectorAll("img")].filter((image) => !image.complete)
+}
+
+function previewWaitingForFonts(): boolean {
+  return typeof document !== "undefined" && Boolean(document.fonts && document.fonts.status === "loading" && document.fonts.ready)
+}
+
+function hasPendingPreviewResources(preview: HTMLElement): boolean {
+  return pendingPreviewImages(preview).length > 0 || previewWaitingForFonts()
+}
+
+function snapshotPreviewProjection(preview: HTMLElement, previewController: any) {
+  return {
+    children: Array.from(preview.children),
+    images: Array.from(preview.querySelectorAll("img")),
+    requestId: previewController?.requestId ?? null,
+    reader: preview.querySelector<HTMLElement>('[data-controller~="document-pages"]'),
+  }
+}
+
+function isPreviewControllerFresh(preview: HTMLElement, previewController: any): boolean {
+  if (!preview.childElementCount || previewController?.active === false) return false
+  return !(
+    previewController?.timer ||
+    previewController?.requestController ||
+    previewController?.pendingProjection ||
+    previewController?.pendingRefreshWhileFrozen ||
+    previewController?.projectionFresh === false
+  )
+}
+
+function didPreviewProjectionSwap(
+  previous: ReturnType<typeof snapshotPreviewProjection>,
+  preview: HTMLElement,
+  previewController: any,
+): boolean {
+  const current = snapshotPreviewProjection(preview, previewController)
+  if (current.requestId !== previous.requestId || current.reader !== previous.reader) return true
+  if (current.children.length !== previous.children.length) return true
+  if (current.children.some((child, index) => child !== previous.children[index])) return true
+  if (current.images.length !== previous.images.length) return true
+  return current.images.some((image, index) => image !== previous.images[index])
+}
+
+// Wait briefly for in-flight fonts and images before paginating for print.
+// The timeout stays intentionally bounded so unreachable remote media in an
+// offline desktop Work never hangs or blocks PDF export forever; if a slow
+// image finishes after pagination freezes, DocumentPagesController records
+// pendingReflowWhileFrozen and reflows cleanly upon interaction recovery.
+async function waitForPreviewResources(preview: HTMLElement, timeoutMs = PRINT_RESOURCE_TIMEOUT_MS): Promise<void> {
+  const imagesToWait = [...preview.querySelectorAll("img")].filter(
+    (image) => !image.complete || (image.naturalWidth > 0 && typeof image.decode === "function"),
+  )
+  const waitingForFonts = previewWaitingForFonts()
+  if (!imagesToWait.length && !waitingForFonts) return
+
+  await new Promise<void>((resolve) => {
+    let remaining = imagesToWait.length + (waitingForFonts ? 1 : 0)
+    let finished = false
+    let observer: MutationObserver | null = null
+    const cleanups: Array<() => void> = []
+    const settleChecks: Array<() => void> = []
+    const done = () => {
+      if (finished) return
+      finished = true
+      clearTimeout(timer)
+      observer?.disconnect()
+      cleanups.forEach((cleanup) => cleanup())
+      resolve()
+    }
+    const tick = () => {
+      remaining -= 1
+      if (remaining <= 0) done()
+    }
+    const timer = setTimeout(done, Math.max(0, timeoutMs))
+
+    imagesToWait.forEach((image) => {
+      let settledOnce = false
+      let ticked = false
+      const finishTick = () => {
+        if (ticked) return
+        ticked = true
+        tick()
+      }
+      const cleanup = () => {
+        image.removeEventListener("load", settled)
+        image.removeEventListener("error", settled)
+      }
+      const settled = () => {
+        if (settledOnce) return
+        settledOnce = true
+        cleanup()
+        if (!finished && preview.contains(image) && image.complete && image.naturalWidth > 0 && typeof image.decode === "function") {
+          void image.decode().then(finishTick, finishTick)
+          return
+        }
+        finishTick()
+      }
+      const checkDetached = () => {
+        if (!preview.contains(image)) {
+          settledOnce = true
+          cleanup()
+          finishTick()
+        }
+      }
+      cleanups.push(cleanup)
+      settleChecks.push(checkDetached)
+      image.addEventListener("load", settled, { once: true })
+      image.addEventListener("error", settled, { once: true })
+      if (!preview.contains(image)) checkDetached()
+      else if (image.complete) settled()
+    })
+
+    if (!finished && imagesToWait.length && typeof MutationObserver !== "undefined") {
+      observer = new MutationObserver(() => {
+        settleChecks.forEach((check) => check())
+      })
+      observer.observe(preview, { childList: true, subtree: true })
+    }
+
+    if (waitingForFonts) {
+      void document.fonts.ready.then(
+        () => tick(),
+        () => tick(),
+      )
+    }
+  })
+}
+
+export async function flushDesktopPreviewForPrint(
+  preview: HTMLElement,
+  previewController: any,
+  options: { resourceTimeoutMs?: number } = {},
+): Promise<boolean> {
+  if (previewController?.flushForPrint) {
+    const ready = await previewController.flushForPrint()
+    if (!ready) return false
+  } else {
+    if (previewController?.finishEditing?.()) {
+      await Promise.resolve()
+      previewController.applyPendingProjection?.()
+    }
+    if (previewController?.timer) {
+      clearTimeout(previewController.timer)
+      previewController.timer = null
+      if ((await previewController.refresh(++previewController.requestId)) !== true) return false
+    }
+    if (!preview.childElementCount) {
+      if ((await previewController?.refresh?.()) !== true) return false
+    }
+  }
+  if (!preview.childElementCount) return false
+
+  const timeoutMs = Math.max(0, options.resourceTimeoutMs ?? PRINT_RESOURCE_TIMEOUT_MS)
+  const deadline = Date.now() + timeoutMs
+  let settledReader: any = null
+
+  for (let pass = 0; pass < MAX_PRINT_SETTLE_PASSES; pass++) {
+    const snapshot = snapshotPreviewProjection(preview, previewController)
+    if (snapshot.reader && !(snapshot.reader as any).documentPagesController) {
+      await Promise.resolve()
+    }
+    await waitForPreviewResources(preview, Math.max(0, deadline - Date.now()))
+    if (!isPreviewControllerFresh(preview, previewController)) {
+      return false
+    }
+
+    const swapped = didPreviewProjectionSwap(snapshot, preview, previewController)
+    settledReader = preview.querySelector<HTMLElement>('[data-controller~="document-pages"]')
+    if (!swapped) break
+    if (!hasPendingPreviewResources(preview)) {
+      const postSwapSnapshot = snapshotPreviewProjection(preview, previewController)
+      if (postSwapSnapshot.reader && !(postSwapSnapshot.reader as any).documentPagesController) {
+        await Promise.resolve()
+      }
+      await waitForPreviewResources(preview, Math.max(0, deadline - Date.now()))
+      if (!isPreviewControllerFresh(preview, previewController)) return false
+      settledReader = preview.querySelector<HTMLElement>('[data-controller~="document-pages"]')
+      if (!didPreviewProjectionSwap(postSwapSnapshot, preview, previewController)) break
+    }
+    if (pass + 1 >= MAX_PRINT_SETTLE_PASSES || Date.now() >= deadline) return false
+  }
+
+  if (settledReader && !settledReader.documentPagesController) {
+    await Promise.resolve()
+  }
+  const documentPagesController = settledReader?.documentPagesController
+  documentPagesController?.flushForPrint?.()
+  return true
+}
+
+export interface DesktopPrintOptions {
+  sourceFile: string | undefined | null;
+  getPreview: () => HTMLElement | null;
+  getPreviewController: () => any;
+  isStillActive: (preview?: HTMLElement | null, reader?: HTMLElement | null) => boolean;
+  exitPresentation: () => Promise<void>;
+  hasUnsavedChanges: () => boolean;
+  flushSave: () => Promise<boolean>;
+  nativePrintWork: (() => Promise<any>) | null | undefined;
+  showNotice: (message: string, kind?: string) => void;
+  settledTimeoutMs?: number;
+}
+
+export async function executeDesktopPrint(options: DesktopPrintOptions): Promise<boolean> {
+  if (!options.isStillActive()) return false
+  const { exitPresentation } = options
+  let documentPagesController: any = null
+  let frozenPreviewController: any = null
+  try {
+    if (document.body.classList.contains("presenting-work")) await exitPresentation()
+    if (!options.isStillActive()) return false
+    if (options.hasUnsavedChanges() && !(await options.flushSave())) return false
+    if (!options.isStillActive()) return false
+    const preview = options.getPreview()
+    if (!preview || !options.isStillActive(preview)) return false
+    const previewController = options.getPreviewController()
+    if (!(await flushDesktopPreviewForPrint(preview, previewController))) {
+      if (options.isStillActive(preview)) options.showNotice("Render the Work before printing it.", "error")
+      return false
+    }
+    if (
+      !options.isStillActive(preview) ||
+      options.getPreviewController() !== previewController ||
+      !isPreviewControllerFresh(preview, previewController)
+    ) {
+      return false
+    }
+    const preparedSnapshot = snapshotPreviewProjection(preview, previewController)
+    // Wait for any in-flight document pagination pass (which also clears source-mode
+    // scroll snapshots and surface opacity: 0) before snapshotting for print, then
+    // freeze both preview projection updates and pagination while printing.
+    const reader = preview.querySelector<HTMLElement>('[data-controller~="document-pages"]')
+    const documentSurface = preview.querySelector<HTMLElement>('[data-document-pages-target="surface"]')
+    if (documentSurface && documentSurface.dataset.documentPagesSettled === "false") {
+      await new Promise<void>(resolve => {
+        const onSettled = () => {
+          clearTimeout(timeout)
+          documentSurface.removeEventListener("elef:document-pages-settled", onSettled)
+          resolve()
+        }
+        const timeout = setTimeout(() => {
+          documentSurface.removeEventListener("elef:document-pages-settled", onSettled)
+          resolve()
+        }, options.settledTimeoutMs ?? 4000)
+        documentSurface.addEventListener("elef:document-pages-settled", onSettled, { once: true })
+      })
+    }
+    if (
+      !options.isStillActive(preview, reader) ||
+      options.getPreviewController() !== previewController ||
+      !isPreviewControllerFresh(preview, previewController) ||
+      didPreviewProjectionSwap(preparedSnapshot, preview, previewController)
+    ) {
+      return false
+    }
+    const currentReader = preview.querySelector<HTMLElement>('[data-controller~="document-pages"]')
+    if (!options.isStillActive(preview, currentReader)) return false
+    const currentSurface = preview.querySelector<HTMLElement>('[data-document-pages-target="surface"]')
+    if (currentSurface && currentSurface.style.opacity === "0") {
+      currentSurface.style.removeProperty("opacity")
+    }
+    preview.querySelectorAll<HTMLElement>(".document-page-frame.is-quiet, .document-page-frame.is-sealed").forEach(frame => {
+      frame.classList.remove("is-quiet", "is-sealed")
+    })
+    const frozenSnapshot = snapshotPreviewProjection(preview, previewController)
+    frozenPreviewController = previewController
+    frozenPreviewController?.freezeForPrint?.({ armInteractionRecovery: false })
+    documentPagesController = (currentReader as any)?.documentPagesController
+    documentPagesController?.freezeForPrint?.({ armInteractionRecovery: false })
+    // The printed payload is the Work preview only: the kind marker selects
+    // the matching web print geometry (A4 document pages, fixed 16:9
+    // presentation pages) from the shared print contract, and pausing videos
+    // mirrors the web print-view controller so PDFs carry the poster frame.
+    // The markers cover the native dialog lifetime, not the command: the
+    // platform dialog (and its PDF destination) outlives the resolve of the
+    // native print_work command, so clearing markers when the command
+    // resolves renders the unmarked live editor shell into the PDF. Markers
+    // are print-media-only (no screen rule references them), so keeping them
+    // is safe; each preparation clears every marker first, then adds the
+    // current kind pair, so switching work kinds leaves no stale marker.
+    const printKind = printWorkKindForSourceFile(options.sourceFile)
+    const printMarkers = printMarkerClasses(printKind)
+    pausePrintVideos(preview)
+    syncPrintPageSizeStyle(printKind)
+    document.body.classList.remove(...ALL_PRINT_MARKERS)
+    document.body.classList.add(...printMarkers)
+    void document.body.offsetHeight
+    await new Promise(resolve => requestAnimationFrame(resolve))
+    const stillActive = options.isStillActive(preview, currentReader)
+    if (
+      !stillActive ||
+      options.getPreviewController() !== frozenPreviewController ||
+      !isPreviewControllerFresh(preview, frozenPreviewController) ||
+      didPreviewProjectionSwap(frozenSnapshot, preview, frozenPreviewController)
+    ) {
+      frozenPreviewController?.unfreezeForPrint?.({ replayPending: stillActive })
+      documentPagesController?.unfreezeForPrint?.()
+      frozenPreviewController = null
+      documentPagesController = null
+      document.body.classList.remove(...ALL_PRINT_MARKERS)
+      clearPrintPageSizeStyle()
+      return false
+    }
+    // The platform print dialog (and its PDF destination) opens only
+    // through the native print_work command: script window.print() is a
+    // silent no-op in the desktop webviews on macOS and Linux, which is
+    // why desktop PDF export never produced a dialog. It stays as the
+    // last-resort fallback where no native pipeline answers. The native
+    // dialog fires no afterprint event, so the markers intentionally stay
+    // on every path: dialog shown, cancelled, or failed.
+    const nativePrintWork = typeof options.nativePrintWork === "function" ? options.nativePrintWork : null
+    const printViaNative = nativePrintWork !== null
+    if (nativePrintWork) {
+      await nativePrintWork()
+      documentPagesController?.armPrintInteractionRecovery?.()
+      frozenPreviewController?.armPrintInteractionRecovery?.()
+    } else {
+      window.print()
+      frozenPreviewController?.unfreezeForPrint?.()
+      documentPagesController?.unfreezeForPrint?.()
+    }
+    // Harness probe: the e2e run cannot dismiss the platform dialog, so
+    // it asserts this flag (native seam reached) instead of dialog pixels,
+    // plus the marker set below (the render-time print state).
+    if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
+      globalThis.__elefPrintResult = { native: printViaNative, kind: printKind }
+    }
+    return true
+  } catch (error) {
+    frozenPreviewController?.unfreezeForPrint?.()
+    documentPagesController?.unfreezeForPrint?.()
+    throw error
+  }
 }
 
 export interface WorkFolder {
@@ -219,6 +559,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
   let workFolders: WorkFolder[] = []
   let activeWorkFolder: WorkFolder | null = null
+  let activeWorkSessionToken = 0
+  function setActiveWorkFolder(work: WorkFolder | null): void {
+    activeWorkFolder = work
+    activeWorkSessionToken += 1
+  }
   let presentationEditorHandle: any = null
   let saveFlow: any = null
   let sessionStatusKind = "clean"
@@ -386,7 +731,14 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     saveFlow = session
   }
 
+  function unfreezeEditorForPrint(): void {
+    elements.editorForm.previewController?.unfreezeForPrint?.({ replayPending: false })
+    elements.editorForm.querySelector?.('[data-controller~="document-pages"]')?.documentPagesController?.unfreezeForPrint?.({ replayPending: false })
+  }
+
   function closeSession(): void {
+    activeWorkSessionToken += 1
+    unfreezeEditorForPrint()
     if (!saveFlow) return
     editorFor(elements.editorField)?.detachSession?.(saveFlow)
     saveFlow.dispose()
@@ -582,6 +934,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
 
   let libraryShown = false
   function showLibrary(): void {
+    activeWorkSessionToken += 1
+    unfreezeEditorForPrint()
     elements.editorForm.previewController?.finishEditing()
     document.body.dataset.desktopView = "library"
     elements.welcome.hidden = Boolean(library)
@@ -827,7 +1181,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // save ownership occur in one synchronous turn, with no stale A buffer
       // able to schedule a write for B during graph/controller preparation.
       closeSession()
-      activeWorkFolder = null
+      setActiveWorkFolder(null)
       try {
         configureEditorKind(elements.editorField.closest(".editor-shell"), isDocument ? "document" : "presentation", {
           documentTitles,
@@ -863,7 +1217,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       }
     const viewSetupStartedAt = (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) ? performance.now() : null
       transport.activateWorkFolder(work, id)
-      activeWorkFolder = work
+      setActiveWorkFolder(work)
       openSession(work)
       elements.workTitle.textContent = work.name
       elements.workTitle.hidden = !isDocument
@@ -895,6 +1249,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       shellElement<HTMLElement>("#breadcrumb-current").textContent = work.name
       setStatus("Work opened")
       if (viewSetupStartedAt !== null) recordOpenStage("workViewSetup", viewSetupStartedAt)
+      elements.editorForm.previewController?.unfreezeForPrint?.({ replayPending: false })
       await measureOpenStage("previewRefresh", () => elements.editorForm.previewController?.refresh())
       // The refresh skips its enable event while projection editing is
       // active, and the deferred install waits on a focusout that may never
@@ -937,7 +1292,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     }
     if (event.type === "deleted") {
       if (activeWorkFolder?.id === event.work.id) {
-        activeWorkFolder = null
+        setActiveWorkFolder(null)
         closeSession()
       }
       workFolders = workFolders.filter(item => item.id !== event.work.id)
@@ -955,7 +1310,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
 
   async function completeImport(imported: any): Promise<void> {
     if (imported.replaced && activeWorkFolder?.id === imported.work_folder.id) {
-      activeWorkFolder = null
+      setActiveWorkFolder(null)
       closeSession()
       showLibrary()
     }
@@ -1187,54 +1542,41 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     setStatus(prepared ? `Elef will install version ${update.version} when you quit.` : "Update postponed")
   }
 
+  let isPrintingWork = false
+
   async function printCurrentWork(): Promise<void> {
-    if (!activeWorkFolder) {
+    if (isPrintingWork) return
+    const targetWork = activeWorkFolder
+    if (!targetWork || elements.workView.hidden) {
       showNotice("Open a Work before printing it.")
       return
     }
-    if (hasUnsavedChanges() && !(await flushSave())) return
-    const preview = document.querySelector("#desktop-preview") as HTMLElement
-    if (!preview.childElementCount && !(await elements.editorForm.previewController?.refresh())) {
-      showNotice("Render the Work before printing it.", "error")
-      return
+    const targetSessionToken = activeWorkSessionToken
+    const stillActiveWork = (preview?: HTMLElement | null, reader?: HTMLElement | null) => {
+      if (activeWorkSessionToken !== targetSessionToken) return false
+      if (activeWorkFolder !== targetWork || elements.workView.hidden) return false
+      if (preview && !preview.isConnected) return false
+      if (reader && !reader.isConnected) return false
+      return true
     }
-    // The printed payload is the Work preview only: the kind marker selects
-    // the matching web print geometry (A4 document pages, fixed 16:9
-    // presentation pages) from the shared print contract, and pausing videos
-    // mirrors the web print-view controller so PDFs carry the poster frame.
-    // The markers cover the native dialog lifetime, not the command: the
-    // platform dialog (and its PDF destination) outlives the resolve of the
-    // native print_work command, so clearing markers when the command
-    // resolves renders the unmarked live editor shell into the PDF. Markers
-    // are print-media-only (no screen rule references them), so keeping them
-    // is safe; each preparation clears every marker first, then adds the
-    // current kind pair, so switching work kinds leaves no stale marker.
-    const printKind = printWorkKindForSourceFile(activeWorkFolder?.source_file)
-    const printMarkers = printMarkerClasses(printKind)
-    pausePrintVideos(preview)
-    document.body.classList.remove(...ALL_PRINT_MARKERS)
-    document.body.classList.add(...printMarkers)
-    await new Promise(resolve => requestAnimationFrame(resolve))
+    isPrintingWork = true
     try {
-      // The platform print dialog (and its PDF destination) opens only
-      // through the native print_work command: script window.print() is a
-      // silent no-op in the desktop webviews on macOS and Linux, which is
-      // why desktop PDF export never produced a dialog. It stays as the
-      // last-resort fallback where no native pipeline answers. The native
-      // dialog fires no afterprint event, so the markers intentionally stay
-      // on every path: dialog shown, cancelled, or failed.
-      const printViaNative = typeof fileLibrary.printWork === "function"
-      if (printViaNative) await fileLibrary.printWork()
-      else window.print()
-      // Harness probe: the e2e run cannot dismiss the platform dialog, so
-      // it asserts this flag (native seam reached) instead of dialog pixels,
-      // plus the marker set below (the render-time print state).
-      if (typeof __ELEF_E2E__ !== "undefined" && __ELEF_E2E__) {
-        globalThis.__elefPrintResult = { native: printViaNative, kind: printKind }
-      }
+      await executeDesktopPrint({
+        sourceFile: targetWork.source_file,
+        getPreview: () => document.querySelector("#desktop-preview") as HTMLElement | null,
+        getPreviewController: () => elements.editorForm.previewController,
+        isStillActive: stillActiveWork,
+        exitPresentation,
+        hasUnsavedChanges,
+        flushSave,
+        nativePrintWork: typeof fileLibrary.printWork === "function" ? () => fileLibrary.printWork() : null,
+        showNotice,
+      })
     } catch (error) {
       console.error("[desktop-print]", error)
-      showNotice("The print dialog could not be opened.", "error")
+      if (stillActiveWork()) showNotice("The print dialog could not be opened.", "error")
+    } finally {
+      isPrintingWork = false
     }
   }
 
@@ -1284,6 +1626,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     // failure for an up-to-date render. Blur first (same as openWorkNow):
     // the focusout handler installs any pending projection, and the task
     // boundary lets that microtask land before the refresh below runs.
+    preview.unfreezeForPrint?.({ replayPending: false })
     preview.finishEditing()
     await new Promise(resolve => setTimeout(resolve, 0))
     if (!(await preview.refresh())) {
