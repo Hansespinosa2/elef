@@ -379,10 +379,35 @@ jobs:
       - name: Install shared scenario dependencies
         run: npm ci --prefix apps/desktop/e2e
       - name: Audit desktop JavaScript dependencies
+        # R15 (Andres; review/expiry 2026-12-01): picomatch <= 4.0.7 (GHSA-fc5q-39xc-vjpf,
+        # first_patched_version: null) is pulled into apps/desktop/e2e only via
+        # @wdio/local-runner -> expect-webdriverio -> expect -> jest-util/jest-message-util
+        # and is never shipped in web or desktop artifacts. Remove this exception once
+        # upstream publishes a patched picomatch (> 4.0.7).
         run: |
           npm audit --audit-level=high
           npm audit --prefix apps/desktop/frontend --audit-level=high
-          npm audit --prefix apps/desktop/e2e --audit-level=high
+          node -e '
+            const { spawnSync } = require("node:child_process");
+            const res = spawnSync("npm", ["audit", "--prefix", "apps/desktop/e2e", "--audit-level=high", "--json"], { encoding: "utf8" });
+            const report = JSON.parse(res.stdout);
+            if (report.error) { console.error(report.error); process.exit(1); }
+            const vulns = report.vulnerabilities || {};
+            const allowed = new Set(["https://github.com/advisories/GHSA-fc5q-39xc-vjpf"]);
+            const rootAdvisories = (name, seen = new Set()) => {
+              if (seen.has(name) || !vulns[name]) return [];
+              seen.add(name);
+              return (vulns[name].via || []).flatMap(item => typeof item === "string" ? rootAdvisories(item, seen) : [item]);
+            };
+            for (const [name, v] of Object.entries(vulns)) {
+              if (v.severity !== "high" && v.severity !== "critical") continue;
+              const causes = rootAdvisories(name).filter(a => a && (a.severity === "high" || a.severity === "critical"));
+              if (causes.length === 0 || causes.some(a => !allowed.has(a.url))) {
+                console.error("Unapproved high/critical advisory in apps/desktop/e2e:", name, causes);
+                process.exit(1);
+              }
+            }
+          '
       - name: Cache the pinned Cargo audit binary
         uses: actions/cache@v6
         with:
@@ -641,10 +666,35 @@ jobs:
       - name: Install shared scenario dependencies
         run: npm ci --prefix apps/desktop/e2e
       - name: Audit desktop JavaScript dependencies
+        # R15 (Andres; review/expiry 2026-12-01): picomatch <= 4.0.7 (GHSA-fc5q-39xc-vjpf,
+        # first_patched_version: null) is pulled into apps/desktop/e2e only via
+        # @wdio/local-runner -> expect-webdriverio -> expect -> jest-util/jest-message-util
+        # and is never shipped in web or desktop artifacts. Remove this exception once
+        # upstream publishes a patched picomatch (> 4.0.7).
         run: |
           npm audit --audit-level=high
           npm audit --prefix apps/desktop/frontend --audit-level=high
-          npm audit --prefix apps/desktop/e2e --audit-level=high
+          node -e '
+            const { spawnSync } = require("node:child_process");
+            const res = spawnSync("npm", ["audit", "--prefix", "apps/desktop/e2e", "--audit-level=high", "--json"], { encoding: "utf8" });
+            const report = JSON.parse(res.stdout);
+            if (report.error) { console.error(report.error); process.exit(1); }
+            const vulns = report.vulnerabilities || {};
+            const allowed = new Set(["https://github.com/advisories/GHSA-fc5q-39xc-vjpf"]);
+            const rootAdvisories = (name, seen = new Set()) => {
+              if (seen.has(name) || !vulns[name]) return [];
+              seen.add(name);
+              return (vulns[name].via || []).flatMap(item => typeof item === "string" ? rootAdvisories(item, seen) : [item]);
+            };
+            for (const [name, v] of Object.entries(vulns)) {
+              if (v.severity !== "high" && v.severity !== "critical") continue;
+              const causes = rootAdvisories(name).filter(a => a && (a.severity === "high" || a.severity === "critical"));
+              if (causes.length === 0 || causes.some(a => !allowed.has(a.url))) {
+                console.error("Unapproved high/critical advisory in apps/desktop/e2e:", name, causes);
+                process.exit(1);
+              }
+            }
+          '
       - name: Build Rails Tailwind stylesheet
         working-directory: apps/web
         run: bin/rails tailwindcss:build
