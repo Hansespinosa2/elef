@@ -93,3 +93,4 @@ export type {
   UpdaterStatus,
 } from "./application/types.js";
 export type { ElefHost } from "@elef/contracts";
+export { appendPageFragment } from "./features/document/page_fragments.js";

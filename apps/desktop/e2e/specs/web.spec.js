@@ -13,6 +13,7 @@ import { PIXEL_PNG_MARKDOWN } from "../../../../apps/web/test/e2e/scenarios/medi
 import { presentationModeWorkflow } from "../../../../apps/web/test/e2e/scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../../apps/web/test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-aspect-ratio.js"
+import { documentPageFlowWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-flow.js"
 import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.js"
 import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scenarios/slide-position-grammar.js"
 import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
@@ -711,6 +712,10 @@ class WebEditorUi {
     await expect(this.page.locator(".document-surface[data-document-pages-settled='true']")).toContainText(text, { timeout: 30000 })
   }
 
+  async pageFlowProbe(probe) {
+    return this.page.evaluate(probe, ".editor-projection.preview-pane .document-surface")
+  }
+
   async scrollPreviewToBottom() {
     return this.page.locator('[data-preview-target="container"]').evaluate(pane => { pane.scrollTop = pane.scrollHeight; return pane.scrollTop })
   }
@@ -1161,6 +1166,10 @@ test("Vim relative line numbers update from CodeMirror cursor positions", async 
 
 test("document pages keep their A4 aspect ratio when the web editor is resized", async ({ page }) => {
   await documentPageAspectRatioWorkflow(new WebEditorUi(page))
+})
+
+test("document content flows across pages in the web preview", async ({ page }) => {
+  await documentPageFlowWorkflow(new WebEditorUi(page))
 })
 
 test("shared library and document graph flow works in the web app", async ({ page }) => {

@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   web-performance:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     services:
       postgres:
@@ -52,10 +52,30 @@ jobs:
       - name: Build the shared packages
         # dist/ is untracked; benchmark the current sources on fresh runners.
         run: npm run build:packages
+      - name: Install pinned Chrome reference build
+        run: |
+          chrome_version="$(ruby -rjson -e 'manifest = JSON.parse(File.read("apps/web/test/fixtures/performance/manifest.json")); version = manifest.dig("reference_layout", "browser")[/([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)/, 1]; abort "reference browser version missing" unless version; puts version')"
+          chrome_dir="$RUNNER_TEMP/chrome-for-testing-$chrome_version"
+          mkdir -p "$chrome_dir"
+          curl --fail --location --retry 3 --retry-all-errors --silent --show-error \
+            "https://storage.googleapis.com/chrome-for-testing-public/$chrome_version/linux64/chrome-linux64.zip" \
+            --output "$RUNNER_TEMP/chrome-linux64.zip"
+          curl --fail --location --retry 3 --retry-all-errors --silent --show-error \
+            "https://storage.googleapis.com/chrome-for-testing-public/$chrome_version/linux64/chromedriver-linux64.zip" \
+            --output "$RUNNER_TEMP/chromedriver-linux64.zip"
+          unzip -q "$RUNNER_TEMP/chrome-linux64.zip" -d "$chrome_dir"
+          unzip -q "$RUNNER_TEMP/chromedriver-linux64.zip" -d "$chrome_dir"
+          chrome_binary="$chrome_dir/chrome-linux64/chrome"
+          chromedriver_path="$chrome_dir/chromedriver-linux64/chromedriver"
+          chmod +x "$chrome_binary" "$chromedriver_path"
+          "$chrome_binary" --version | grep -F "$chrome_version"
+          "$chromedriver_path" --version | grep -F "$chrome_version"
+          echo "CHROME_BINARY=$chrome_binary" >> "$GITHUB_ENV"
+          echo "CHROMEDRIVER_PATH=$chromedriver_path" >> "$GITHUB_ENV"
       - name: Install reference system fonts
-        # The manifest's rendered_pages counts reproduce only when generic
-        # sans-serif/serif resolve to Liberation (reference layout); Ubuntu
-        # runners otherwise prefer DejaVu/Noto and paginate differently.
+        # The manifest's rendered_pages counts are calibrated on the Ubuntu
+        # runner with generic sans-serif/serif resolving to Liberation; other
+        # system fonts can change line wraps and page counts.
         run: |
           sudo apt-get update
           sudo apt-get install -y fonts-liberation fontconfig

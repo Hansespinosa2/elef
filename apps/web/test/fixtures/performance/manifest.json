@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Frozen 100-page acceptance fixtures for the visual-editor revamp: complete rendering and editability within three seconds (p95). Regenerate byte-identically with the generator command below; page counts were established under the reference layout and verified stable across runs.",
+  "description": "Frozen long-document acceptance fixtures for the visual-editor revamp: complete rendering and editability within three seconds (p95). Regenerate byte-identically with the generator command below; page counts are measured under the reference layout and verified stable across runs.",
   "generator": {
     "script": "generate.mjs",
     "command": "node generate.mjs --out <dir> --seed 7 --mixed-units 105 --math-units 158",
@@ -16,10 +16,11 @@
       1000
     ],
     "device_scale_factor": 1,
-    "browser": "Chromium 152.0.7977.82 (Arch Linux build), headless",
+    "browser": "Chrome for Testing 152.0.7977.82 (Linux64), headless",
+    "os": "Ubuntu 24.04 (GitHub Actions runner)",
     "theme": "light",
     "typography": "modern",
-    "fonts": "document.fonts.status settled to loaded; KaTeX webfonts served locally; generic sans-serif/serif resolve to Liberation Sans/Serif (reference-fonts.conf; Ubuntu runners otherwise prefer DejaVu/Noto and paginate differently)",
+    "fonts": "document.fonts.status settled to loaded; KaTeX webfonts served locally; generic sans-serif/serif resolve to Liberation Sans/Serif (reference-fonts.conf overrides Ubuntu image defaults)",
     "images": "attached blobs (web, matched by basename) or work-folder images/ (desktop)",
     "line_endings": "LF"
   },
@@ -38,8 +39,8 @@
       "images": 26,
       "lists": 105,
       "headings": 106,
-      "rendered_pages": 98,
-      "rendered_dom_nodes": 14361,
+      "rendered_pages": 97,
+      "rendered_dom_nodes": 14590,
       "rendered_katex": 210,
       "rendered_math_errors": 0
     },
@@ -58,7 +59,7 @@
       "lists": 0,
       "headings": 159,
       "rendered_pages": 91,
-      "rendered_dom_nodes": 45880,
+      "rendered_dom_nodes": 45960,
       "rendered_katex": 1264,
       "rendered_math_errors": 0
     }
@@ -70,7 +71,7 @@
     "assets/perf-4.svg": "6f2c6ea0909c240a741a5134ffa1d46bf04a08f160179b6c3a9d9ed8676d9e4e"
   },
   "recalibration": {
-    "reason": "S1 KaTeX output switched html -> mathml: fewer DOM nodes per equation with different metrics, so identical frozen sources paginate to 98/86 under the reference layout. S2 MathML elements route through the vendored KaTeX webfont stack (documents.css) instead of per-glyph system fallback, which paginated math differently per machine (86 locally vs 90 on CI). S3 Size1 preload converges cold opens with warm ones at 91 (cold samples otherwise paginate large operators in fallback metrics and never redo). Source sha256 pins unchanged; counts re-measured via ELEF_PERF_MODE=calibrate (stable across runs; every measure sample must reproduce them exactly).",
+    "reason": "S1 KaTeX output switched html -> mathml: fewer DOM nodes per equation with different metrics, so identical frozen sources paginate to 98/86 under the reference layout. S2 MathML elements route through the vendored KaTeX webfont stack (documents.css) instead of per-glyph system fallback, which paginated math differently per machine (86 locally vs 90 on CI). S3 Size1 preload converges cold opens with warm ones at 91 (cold samples otherwise paginate large operators in fallback metrics and never redo). S4 shared pagination now flows text and list fragments into available page space with two-line widow/orphan control. S5 list pagination now permits one preceding item on an otherwise empty page when that is required to split a following oversized item safely; local Arch Chromium 152 calibration with Liberation fonts measured 96 pages and 14,574 DOM nodes, while math-heavy remained at 91. S6 the pinned Chrome for Testing 152.0.7977.82 build on the Ubuntu 24.04 CI runner measured 97 pages and 14,590 DOM nodes for all 40 mixed-fixture open samples, so the exact contract follows the documented CI reference layout. Source hashes and fixture bytes are unchanged.",
     "renderer": "katex output mathml, throwOnError, locally served webfonts"
   }
 }
