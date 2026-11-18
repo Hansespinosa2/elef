@@ -9,6 +9,17 @@ pub(crate) async fn confirm_native_action(
     title: &str,
     kind: MessageDialogKind,
 ) -> Result<bool, CommandError> {
+    confirm_native_action_with_buttons(app, message, title, kind, MessageDialogButtons::OkCancel)
+        .await
+}
+
+pub(crate) async fn confirm_native_action_with_buttons(
+    app: &AppHandle,
+    message: String,
+    title: &str,
+    kind: MessageDialogKind,
+    buttons: MessageDialogButtons,
+) -> Result<bool, CommandError> {
     let parent = app.get_webview_window("main").ok_or_else(|| {
         CommandError::new(
             "not_found",
@@ -24,7 +35,7 @@ pub(crate) async fn confirm_native_action(
         .title(title)
         .kind(kind)
         .parent(&parent)
-        .buttons(MessageDialogButtons::OkCancel);
+        .buttons(buttons);
     tauri::async_runtime::spawn_blocking(move || dialog.blocking_show())
         .await
         .map_err(|_| CommandError::new("internal", "The confirmation could not be opened.", true))

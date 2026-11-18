@@ -292,13 +292,14 @@ assert macos_updater_allowed == {"install_update"}, f"only the macOS updater cap
 assert macos_updater_capability["platforms"] == ["macOS"], "updater command permissions must be macOS-only"
 assert "core:default" not in permissions, "use only the individual core permissions needed"
 assert {permission for permission in permissions if permission.startswith("core:")} == {
+    "core:app:allow-version",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:window:allow-close",
     "core:window:allow-destroy",
     "core:window:allow-set-fullscreen",
     "core:resources:allow-close",
-}, "grant only events, window close completion, presentation fullscreen, and releasing updater resources"
+}, "grant only the About version query, events, window close completion, presentation fullscreen, and releasing updater resources"
 assert "await this.destroy();" in (REPO_ROOT / "apps/desktop/frontend/node_modules/@tauri-apps/api/window.js").read_text(), "recheck window permissions when the close-listener implementation changes"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
 assert config["app"]["security"]["capabilities"] == ["main-capability", "macos-updater-capability"], "Stable must attach only its common and macOS-only updater capabilities"

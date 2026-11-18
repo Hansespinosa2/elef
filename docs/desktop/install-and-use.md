@@ -43,7 +43,9 @@ Choose **File → Export Work…** and save the .elef archive. Move that file by
 
 ## Updates and offline use
 
-macOS Stable checks the GitHub Releases update feed for a newer signed version. Updater downloads are signed and verified by Elef before installation. When an update is ready, choose **Install on quit**; Elef installs it after a normal quit once saving succeeds, then relaunches. If the feed cannot be reached or the download fails verification, the update is deferred and editing remains available. A blocked release is flipped to prerelease so the feed no longer offers it. Linux updates are handled by the package manager.
+macOS Stable checks the GitHub Releases update feed for a newer signed version. Background checks only show availability; they never download or install without consent. Choose **Check for updates**, then **Install on Quit** in the native offer. Elef downloads and verifies the update while you keep working. Your next normal quit saves your work, activates the prepared update without another prompt, and exits; the next launch uses the new version. Quitting during download waits for preparation, and repeated quit requests cannot interrupt it. A failed save or conflict keeps the window open and retains the approved update for a later safe quit. A failed download or verification keeps the existing installation. Force Quit or terminating the process cannot complete an update. A blocked release is flipped to prerelease so the feed no longer offers it. Linux updates are handled by the package manager.
+
+Choose **Elef → About Elef** to see the version reported by the installed application.
 
 Work editing, rendering, local media, library search, presentation, and export work offline without Rails or a database. Update checks need a network connection and fail without blocking the app. Elef does not synchronize libraries between devices; move a complete work folder or .elef archive yourself.
 

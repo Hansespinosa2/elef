@@ -11,7 +11,7 @@ export async function checkForDesktopUpdate(check, install) {
   }
 }
 
-export async function installDesktopUpdate(update, { onProgress, relaunch, prepare = async () => true }) {
+export async function installDesktopUpdate(update, { onProgress, relaunch = async () => {}, prepare = async () => true }) {
   if (!update || typeof update.install !== "function") {
     throw Object.assign(new TypeError("There is no verified update to install."), {
       code: "invalid_input",
