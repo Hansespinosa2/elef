@@ -95,7 +95,7 @@ class PresentationsTest < ApplicationSystemTestCase
     # the pill between find and select; re-resolve bounded times (same
     # idiom as type_visual_text). Callers still assert the resulting
     # source and slide positions, so a retry never masks a lost update.
-    wait_for_fresh_projection
+    wait_for_fresh_projection unless page.evaluate_script("Boolean(document.activeElement?.closest(\".editor-projection [contenteditable='true']\"))")
     selector = "select[data-presentation-editor-align][data-slide-index='#{slide_index}'][data-block-index='#{block_index}']"
     attempts = 0
     begin
@@ -113,7 +113,7 @@ class PresentationsTest < ApplicationSystemTestCase
     rescue Selenium::WebDriver::Error::StaleElementReferenceError, Capybara::ElementNotFound
       attempts += 1
       if attempts < 3
-        wait_for_fresh_projection
+        wait_for_fresh_projection unless page.evaluate_script("Boolean(document.activeElement?.closest(\".editor-projection [contenteditable='true']\"))")
         retry
       end
       raise
