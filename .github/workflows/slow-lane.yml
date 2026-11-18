@@ -62,7 +62,7 @@ jobs:
       - name: Install Linux desktop build dependencies
         run: |
           timeout 600 sudo apt-get update
-          if apt-cache show webkitgtk-webdriver >/dev/null 2>&1; then
+          if apt-cache show webkitgtk-webdriver 2>/dev/null | grep -q '^Filename:'; then
             webkit_driver_pkg=webkitgtk-webdriver
           else
             webkit_driver_pkg=webkit2gtk-driver
