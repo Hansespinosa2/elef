@@ -132,10 +132,12 @@
   width: 100%;
 }
 
-.presentation-mode .slide-block.is-presentation-reveal-hidden,
-.presenting-work .slide-block.is-presentation-reveal-hidden {
-  pointer-events: none !important;
-  visibility: hidden !important;
+@media screen {
+  .presentation-mode .slide-block.is-presentation-reveal-hidden,
+  .presenting-work .slide-block.is-presentation-reveal-hidden {
+    pointer-events: none !important;
+    visibility: hidden !important;
+  }
 }
 
 .slide-title {

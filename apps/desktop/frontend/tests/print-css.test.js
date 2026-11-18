@@ -14,6 +14,10 @@ const webPrintCss = await readFile(
   new URL("../../../web/app/assets/stylesheets/components/documents.css", import.meta.url),
   "utf8",
 )
+const slidesCss = await readFile(
+  new URL("../../../web/app/assets/stylesheets/components/slides.css", import.meta.url),
+  "utf8",
+)
 const printFlow = await readFile(
   new URL("../../../../packages/editor-runtime/src/lib/file_library_application.ts", import.meta.url),
   "utf8",
@@ -28,15 +32,23 @@ function printBlock(css) {
 test("the desktop print stylesheet hides every app-shell and editor-chrome surface", () => {
   const print = printBlock(hostCss)
   for (const selector of [
+    ".desktop-app-shell > :not(#work-view)",
     "#export-menu",
+    "#export-menu-mount",
+    ".work-view > :not(#desktop-editor-form)",
     ".export-menu",
     "#export-pptx-status",
     "#start-presentation",
     "#work-notice",
+    ".command-palette",
+    ".source-pane",
     ".editor-shell-header",
     ".editor-footer",
     ".presentation-editor-tools",
     ".document-block-position-control",
+    ".elef-vim-normal-caret",
+    ".elef-projection-selections",
+    "[data-preview-scroll-snapshot]",
     ".empty-slide-add-image",
   ]) {
     assert.ok(print.includes(selector), `expected the print stylesheet to hide ${selector}`)
@@ -75,14 +87,53 @@ test("the desktop document print path selects A4 without touching the PPTX pipel
   assert.ok(print.includes("printing-document"), "expected a document print marker")
   assert.ok(print.includes("printing-presentation"), "expected a presentation print marker")
   assert.ok(print.includes("A4"), "expected A4 document geometry")
+  assert.ok(print.includes("@page { size: A4 portrait; margin: 0; }"), "expected zero-margin A4 default @page for WebKit fallback")
   assert.ok(!print.includes("exportPptx"), "the print stylesheet must not invoke the PPTX seam")
 })
 
+test("the desktop document print neutralizes the paginated editor projection at web A4 geometry", () => {
+  const print = printBlock(hostCss)
+  for (const token of [
+    ".printing-work.printing-document #desktop-preview .document-reader",
+    ".printing-work.printing-document .document-page-frame",
+    ".printing-work.printing-document .document-page-frame > .document-page",
+    "container-type: normal !important",
+    "width: 210mm !important",
+    "height: 297mm !important",
+    "box-sizing: border-box !important",
+    "padding: 16mm !important",
+    "content-visibility: visible !important",
+    "contain-intrinsic-size: none !important",
+    "html:has(> body.printing-work)",
+  ]) {
+    assert.ok(print.includes(token), `expected the print stylesheet to include ${token}`)
+  }
+  for (const token of [
+    ".editor-projection .document-reader",
+    ".document-page-frame > .document-page",
+    "contain-intrinsic-size: none",
+  ]) {
+    assert.ok(webPrintCss.includes(token), `expected components/documents.css @media print to include ${token}`)
+  }
+})
+
 test("the desktop print flow prepares through the shared print contract", () => {
-  for (const token of ["pausePrintVideos", "printMarkerClasses", "printWorkKindForSourceFile", "ALL_PRINT_MARKERS"]) {
+  for (const token of ["pausePrintVideos", "printMarkerClasses", "printWorkKindForSourceFile", "ALL_PRINT_MARKERS", "syncPrintPageSizeStyle", "elef:document-pages-settled"]) {
     assert.ok(printFlow.includes(token), `expected printCurrentWork to use the shared ${token}`)
   }
+  assert.ok(printFlow.includes("elements.workView.hidden"), "expected printCurrentWork to require an open visible work view")
+  assert.ok(printFlow.includes('document.body.classList.contains("presenting-work")) await exitPresentation()'), "expected printCurrentWork to exit presentation mode before printing")
   assert.ok(printFlow.includes("kind: printKind"), "expected the harness probe to carry the work kind")
+})
+
+test("presentation-mode hiding stays screen-scoped so printing never drops slides or revealed blocks", () => {
+  const screenStart = hostCss.indexOf("@media screen")
+  const printStart = hostCss.indexOf("@media print")
+  assert.notEqual(screenStart, -1, "expected @media screen scoping in file_library_host.css")
+  assert.ok(screenStart < printStart, "expected @media screen before @media print")
+  const presentingIdx = hostCss.indexOf(".presenting-work .slide-frame")
+  assert.ok(presentingIdx > screenStart && presentingIdx < printStart, "expected .presenting-work rules inside @media screen")
+  assert.ok(/@media screen\s*\{[^}]*is-presentation-reveal-hidden/s.test(slidesCss), "expected reveal-hidden hiding to be scoped to @media screen")
 })
 
 test("the desktop presentation print neutralizes the editor projection so one slide fills one page", () => {
@@ -117,4 +168,14 @@ test("the print markers stay print-media-only so persisting them is screen-safe"
     !/finally\s*{[^}]*classList\.remove/.test(printFlow),
     "expected printCurrentWork to keep the markers once the native command resolves",
   )
+})
+
+test("oversized atomic document pages relax frame height and clipping in both web and desktop print CSS", () => {
+  const desktopPrint = printBlock(hostCss)
+  const webPrint = printBlock(webPrintCss)
+  for (const [label, css] of [["file_library_host.css", desktopPrint], ["components/documents.css", webPrint]]) {
+    assert.ok(css.includes(".is-overflowing-content"), `expected ${label} @media print to handle .is-overflowing-content`)
+    assert.ok(css.includes("overflow: visible"), `expected ${label} @media print to unclip overflowing content`)
+  }
+  assert.ok(webPrint.includes(".document-page.is-overflowing-content .document-page-content"), "expected web print CSS to override .document-page.is-overflowing-content .document-page-content overflow: auto")
 })

@@ -5,9 +5,13 @@ import {
   ALL_PRINT_MARKERS,
   DOCUMENT_PRINT_GEOMETRY,
   PRESENTATION_PRINT_GEOMETRY,
+  PRINT_PAGE_SIZE_STYLE_ID,
+  clearPrintPageSizeStyle,
   pausePrintVideos,
   printMarkerClasses,
+  printPageSizeCss,
   printWorkKindForSourceFile,
+  syncPrintPageSizeStyle,
 } from "../src/features/export/print.js";
 
 test("print kinds resolve from the work source file like the desktop preview context", () => {
@@ -102,4 +106,45 @@ test("shared print geometry pins the web print views", () => {
     { ...DOCUMENT_PRINT_GEOMETRY },
     { widthMm: 210, heightMm: 297, paddingMm: 16 },
   );
+});
+
+test("printPageSizeCss and syncPrintPageSizeStyle pin the unnamed @page rule per kind", () => {
+  assert.equal(printPageSizeCss("document"), "@media print { @page { size: A4 portrait; margin: 0; } }");
+  assert.equal(printPageSizeCss("presentation"), "@media print { @page { size: 13.333in 7.5in; margin: 0; } }");
+
+  const nodes = new Map<string, { id: string; textContent: string }>();
+  const mockDoc = {
+    head: {
+      appendChild(node: { id: string; textContent: string }) {
+        nodes.set(node.id, node);
+        return node;
+      },
+    },
+    getElementById(id: string) {
+      return nodes.get(id) ?? null;
+    },
+    createElement() {
+      const node = {
+        id: "",
+        textContent: "",
+        remove() {
+          nodes.delete(this.id);
+        },
+      };
+      return node;
+    },
+  };
+
+  syncPrintPageSizeStyle("presentation", mockDoc as never);
+  assert.equal(nodes.get(PRINT_PAGE_SIZE_STYLE_ID)?.textContent, printPageSizeCss("presentation"));
+
+  syncPrintPageSizeStyle("document", mockDoc as never);
+  assert.equal(nodes.size, 1);
+  assert.equal(nodes.get(PRINT_PAGE_SIZE_STYLE_ID)?.textContent, printPageSizeCss("document"));
+
+  clearPrintPageSizeStyle(mockDoc as never);
+  assert.equal(nodes.size, 0);
+
+  clearPrintPageSizeStyle(undefined);
+  syncPrintPageSizeStyle("document", undefined);
 });
