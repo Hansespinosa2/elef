@@ -32,6 +32,9 @@ pub enum EventCode {
     Render,
     Export,
     Import,
+    Snapshot,
+    SnapshotRestore,
+    ExternalMerge,
     UpdateCheck,
     UpdateStage,
     UpdateActivation,
@@ -497,5 +500,56 @@ mod tests {
         for sentinel in sentinel_values() {
             assert_eq!(sanitize_error_category(&sentinel), ErrorCategory::Unknown);
         }
+    }
+
+    #[test]
+    fn snapshot_and_merge_events_serialize_with_build_sha_and_conflict_category() {
+        let directory = tempdir().unwrap();
+        let log_dir = directory.path().join("logs");
+        let destination = directory.path().join("diagnostics.zip");
+
+        let snapshot_event = DiagnosticEvent::new(
+            EventCode::Snapshot,
+            EventResult::Success,
+            None,
+            EventProfile::Stable,
+        );
+        let merge_conflict_event = DiagnosticEvent::new(
+            EventCode::ExternalMerge,
+            EventResult::Failure,
+            Some("conflict"),
+            EventProfile::Stable,
+        );
+        let restore_event = DiagnosticEvent::new(
+            EventCode::SnapshotRestore,
+            EventResult::Success,
+            None,
+            EventProfile::Stable,
+        );
+
+        append_event(&log_dir, &snapshot_event).unwrap();
+        append_event(&log_dir, &merge_conflict_event).unwrap();
+        append_event(&log_dir, &restore_event).unwrap();
+        export_diagnostics(&log_dir, &destination).unwrap();
+
+        let mut zip = ZipArchive::new(File::open(destination).unwrap()).unwrap();
+        let mut event_bytes = String::new();
+        zip.by_name("logs/events.jsonl")
+            .unwrap()
+            .read_to_string(&mut event_bytes)
+            .unwrap();
+        let events = event_bytes
+            .lines()
+            .map(|line| serde_json::from_str::<DiagnosticEvent>(line).unwrap())
+            .collect::<Vec<_>>();
+        assert_eq!(events.len(), 3);
+        assert_eq!(events[0].event_code, EventCode::Snapshot);
+        assert_eq!(events[0].result, EventResult::Success);
+        assert!(is_hex_string(&events[0].build_sha, 40));
+        assert_eq!(events[1].event_code, EventCode::ExternalMerge);
+        assert_eq!(events[1].result, EventResult::Failure);
+        assert_eq!(events[1].error_category, Some(ErrorCategory::Conflict));
+        assert_eq!(events[2].event_code, EventCode::SnapshotRestore);
+        assert_eq!(events[2].result, EventResult::Success);
     }
 }

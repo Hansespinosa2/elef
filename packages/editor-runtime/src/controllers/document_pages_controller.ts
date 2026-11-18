@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { appendPageFragment } from "@elef/client"
 import { pointAtVisibleOffset, visibleOffsetAtPoint } from "./editor_caret.js"
 import { markStage } from "../lib/stage_marks.js"
 import { preserveSurfaceScroll } from "../lib/scroll_preservation.js"
@@ -101,7 +102,15 @@ export default class extends Controller<HTMLElement> {
       if (this.active && !this.focusedEditable()) this.schedulePagination()
     })
     this.resizeObserver = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(this.boundResize)
-    this.mutationObserver = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => this.schedulePagination())
+    this.mutationObserver = typeof MutationObserver === "undefined" ? null : new MutationObserver((records) => {
+      const onlyPythonSliderScrub = records.length > 0 && records.every((record) => {
+        const node = record.target as Element | Node | null
+        const el = node && (node as Element).nodeType === 1 ? (node as Element) : node?.parentElement
+        return Boolean(el?.closest?.(".elef-python-controls"))
+      })
+      if (onlyPythonSliderScrub) return
+      this.schedulePagination()
+    })
 
     window.addEventListener("resize", this.boundResize)
     this.surfaceTarget.addEventListener("focusout", this.boundFocusOut)
@@ -311,19 +320,10 @@ export default class extends Controller<HTMLElement> {
     const units = this.pageUnits(blocks)
     paginateStats().units = units.length
     units.forEach((unit) => {
-      const hadContent = currentPage.content.childElementCount > 0
       unit.forEach((block) => currentPage.content.append(block))
       if (!this.overflows(currentPage)) return
 
       unit.forEach((block) => currentPage.content.removeChild(block))
-      if (hadContent) {
-        currentPage = this.createPage(pages.length + 1)
-        pages.push(currentPage)
-        unit.forEach((block) => currentPage.content.append(block))
-        if (!this.overflows(currentPage)) return
-        unit.forEach((block) => currentPage.content.removeChild(block))
-      }
-
       if (unit.length > 1) {
         unit.slice(0, -1).forEach((block) => currentPage.content.append(block))
         this.flowBlock(unit.at(-1), pages, currentPage, unit.slice(0, -1))
@@ -413,7 +413,7 @@ export default class extends Controller<HTMLElement> {
       : next.querySelector("[data-document-page-flow-content]")
     if (!firstTarget || !nextTarget || firstTarget.tagName !== nextTarget.tagName) return
 
-    while (nextTarget.firstChild) firstTarget.append(nextTarget.firstChild)
+    appendPageFragment(firstTarget, nextTarget)
     next.remove()
   }
 
@@ -497,6 +497,9 @@ export default class extends Controller<HTMLElement> {
           currentPage = this.createPage(pages.length + 1)
           pages.push(currentPage)
           currentPage.content.append(...keepWith)
+          currentPage.content.append(remainder)
+          if (!this.overflows(currentPage)) return
+          currentPage.content.removeChild(remainder)
           split = this.splitBlock(remainder, currentPage)
         }
       }
@@ -511,6 +514,9 @@ export default class extends Controller<HTMLElement> {
 
         currentPage = this.createPage(pages.length + 1)
         pages.push(currentPage)
+        currentPage.content.append(remainder)
+        if (!this.overflows(currentPage)) return
+        currentPage.content.removeChild(remainder)
         split = this.splitBlock(remainder, currentPage)
       }
 
@@ -533,22 +539,33 @@ export default class extends Controller<HTMLElement> {
   }
 
   splitBlock(block: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {
+    if (block.matches(".elef-python-block") || block.querySelector(".elef-python-block")) return null
     const art = this.artRoot(block)
     if (art) return this.splitArtBlock(block, art, page)
 
     const groupedSplit = this.splitGroupedChildren(block, page)
     if (groupedSplit) return groupedSplit
 
+    const childTextSplit = this.splitLeadingGroupText(block, page)
+    if (childTextSplit) return childTextSplit
+
+    const nestedSplit = this.splitNestedGroupText(block, page)
+    if (nestedSplit) return nestedSplit
+
+    // Never split a descendant while cloning its siblings into both halves.
+    // Grouped content needs the structural merge handled above.
+    if (block.matches("ul, ol, blockquote") || block.querySelector("ul, ol, blockquote")) return null
+
     const target = this.splittableTextTarget(block)
-    if (!target) return null
+    if (!target || !this.isolatedTarget(block, target)) return null
     const textMap = this.textMap(target)
     if (textMap.text.length < 2) return null
 
     const wordBoundaries = this.wordBoundaries(textMap.text)
-    let best = this.largestFittingBoundary(block, target, textMap, wordBoundaries, page)
+    let best = this.largestFittingTextBoundary(block, target, textMap, wordBoundaries, page)
     if (!best) {
       const characterBoundaries = this.characterBoundaries(textMap.text)
-      best = this.largestFittingBoundary(block, target, textMap, characterBoundaries, page)
+      best = this.largestFittingTextBoundary(block, target, textMap, characterBoundaries, page)
     }
     if (!best) return null
 
@@ -556,6 +573,185 @@ export default class extends Controller<HTMLElement> {
       this.textFragment(block, target, textMap, 0, best),
       this.textFragment(block, target, textMap, best, textMap.text.length)
     ]
+  }
+
+  // A group can contain another list or quote that is itself taller than a
+  // page. Range cloning preserves the ancestor chain at the break, while the
+  // continuation markers let both the paginator and editor rejoin it.
+  splitNestedGroupText(block: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {
+    const group = block.matches("ul, ol, blockquote") ? block : block.querySelector("ul, ol, blockquote")
+    if (!group || !this.isolatedTarget(block, group) || !group.querySelector("ul, ol, blockquote")) return null
+    const map = this.textMap(group)
+    const insideText = (offset: number): boolean => map.nodes.some(entry =>
+      offset > entry.start && offset < entry.end && Boolean(entry.node.textContent?.trim()) &&
+      !entry.node.parentElement?.closest("table, pre, [data-elef-art-root], .elef-python-block"))
+    let stop = this.largestFittingNestedItemBoundary(block, group, page)
+    if (!stop) {
+      const words = this.wordBoundaries(map.text).filter(insideText)
+      let best = this.largestFittingTextBoundary(block, group, map, words, page)
+      if (!best) best = this.largestFittingTextBoundary(block, group, map, this.characterBoundaries(map.text).filter(insideText), page)
+      if (!best) return null
+      stop = this.pointAtTextOffset(map, best)
+    }
+    let ancestor = stop.node instanceof Element ? stop.node : stop.node.parentElement
+    const chain: Element[] = []
+    while (ancestor && ancestor !== group) {
+      chain.unshift(ancestor)
+      ancestor = ancestor.parentElement
+    }
+    if (ancestor !== group) return null
+    const left = this.rangeFragment(block, group, stop, true)
+    const right = this.rangeFragment(block, group, stop, false)
+    const path = this.nodePath(block, group)
+    let leftParent: Element = this.nodeAtPath(left, path)
+    let rightParent: Element = this.nodeAtPath(right, path)
+    let originalParent: Element = group
+    for (const original of chain) {
+      const leftChild = leftParent.lastElementChild
+      const rightChild = rightParent.firstElementChild
+      if (!leftChild || !rightChild || leftChild.tagName !== original.tagName || rightChild.tagName !== original.tagName) return null
+      if (originalParent instanceof HTMLOListElement && original.tagName === "LI") {
+        this.continueOrderedList(originalParent, original, leftParent, rightParent)
+      }
+      rightChild.setAttribute("data-document-page-continuation", "true")
+      originalParent = original
+      leftParent = leftChild
+      rightParent = rightChild
+    }
+    if (originalParent instanceof HTMLOListElement && stop.node === originalParent) {
+      const nextItem = [...originalParent.childNodes].slice(stop.offset).find(node => node instanceof Element && node.tagName === "LI")
+      if (nextItem instanceof Element) this.continueOrderedList(originalParent, nextItem, leftParent, rightParent)
+    }
+    return [left, right]
+  }
+
+  largestFittingNestedItemBoundary(block: HTMLElement, group: Element, page: DocumentPage): { node: Node; offset: number } | null {
+    const points = [...group.querySelectorAll("li")].flatMap(item => {
+      const parent = item.parentElement
+      if (!parent || !parent.matches("ul, ol")) return []
+      return [{ node: parent as Node, offset: [...parent.childNodes].indexOf(item) + 1 }]
+    })
+    const rangeFor = (point: { node: Node; offset: number }): Range => {
+      const range = document.createRange()
+      range.setStart(group, 0)
+      range.setEnd(point.node, point.offset)
+      return range
+    }
+    points.sort((a, b) => rangeFor(a).compareBoundaryPoints(Range.END_TO_END, rangeFor(b)))
+    let low = 0
+    let high = points.length - 1
+    let best: { node: Node; offset: number } | null = null
+    while (low <= high) {
+      const middle = Math.floor((low + high) / 2)
+      const point = points[middle]
+      if (!point) break
+      const probe = this.rangeFragment(block, group, point, true)
+      page.content.append(probe)
+      this.probingDepth += 1
+      const fits = !this.overflows(page)
+      this.probingDepth -= 1
+      page.content.removeChild(probe)
+      if (fits) { best = point; low = middle + 1 } else high = middle - 1
+    }
+    // A boundary after the final item makes no progress.
+    if (best && !this.rangeFragment(block, group, best, false).textContent?.trim()) return null
+    return best
+  }
+
+  rangeFragment(block: HTMLElement, group: Element, point: { node: Node; offset: number }, before: boolean): HTMLElement {
+    const clone = block.cloneNode(true) as HTMLElement
+    const target = this.nodeAtPath(clone, this.nodePath(block, group))
+    const range = document.createRange()
+    if (before) { range.setStart(group, 0); range.setEnd(point.node, point.offset) }
+    else { range.setStart(point.node, point.offset); range.setEnd(group, group.childNodes.length) }
+    target.replaceChildren(range.cloneContents())
+    target.dataset.documentPageFlowContent = "true"
+    return clone
+  }
+
+  continueOrderedList(original: HTMLOListElement, splitItem: Element, left: Element, right: Element): void {
+    const step = original.reversed ? -1 : 1
+    const initial = original.hasAttribute("start") ? original.start : (original.reversed ? original.children.length : 1)
+    let next = initial
+    for (const item of [...original.children]) {
+      if (item === splitItem) break
+      if (item.hasAttribute("value")) next = (item as HTMLLIElement).value
+      next += step
+    }
+    left.setAttribute("start", String(initial))
+    right.setAttribute("start", String(next))
+  }
+
+  splitLeadingGroupText(block: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {
+    const group = block.matches("ul, ol, blockquote, table") ? block : block.querySelector("ul, ol, blockquote, table")
+    const first = group?.firstElementChild
+    if (!group || !first || !/^(LI|P)$/.test(first.tagName) || !this.isolatedTarget(block, group)) return null
+    if ([...group.childNodes].some(node => node.nodeType !== Node.ELEMENT_NODE && node.textContent?.trim())) return null
+    const single = this.childFragment(block, group, [first])
+    const groupPath = this.nodePath(block, group)
+    const singleGroup = this.nodeAtPath(single, groupPath)
+    if (group instanceof HTMLOListElement && group.reversed && !group.hasAttribute("start")) {
+      singleGroup.setAttribute("start", String(group.children.length))
+    }
+    const singleChild = singleGroup.firstElementChild
+    if (!singleChild) return null
+    if (first.tagName === "LI" && first.children.length > 1 &&
+        [...first.childNodes].every(node => node.nodeType === Node.ELEMENT_NODE || !node.textContent?.trim()) &&
+        [...first.children].every(child => /^(P|UL|OL|BLOCKQUOTE|PRE)$/.test(child.tagName))) {
+      const children = [...singleChild.children]
+      const count = this.largestFittingChildCount(single, singleChild, children, page)
+      if (count > 0 && count < children.length) {
+        const left = this.childFragment(single, singleChild, children.slice(0, count))
+        const right = this.childFragment(single, singleChild, children.slice(count))
+        const leftGroup = this.nodeAtPath(left, groupPath)
+        const rightGroup = this.nodeAtPath(right, groupPath)
+        leftGroup.firstElementChild?.removeAttribute("data-document-page-flow-content")
+        const continued = rightGroup.firstElementChild
+        continued?.removeAttribute("data-document-page-flow-content")
+        continued?.setAttribute("data-document-page-continuation", "true")
+        for (const sibling of [...group.children].slice(1)) rightGroup.append(sibling.cloneNode(true))
+        return [left, right]
+      }
+    }
+    let target: Element = singleChild
+    let trailing: Node[] = []
+    if (first.tagName === "LI" && first.firstElementChild?.tagName === "P" &&
+        [...first.childNodes].slice(0, [...first.childNodes].indexOf(first.firstElementChild)).every(node => node.nodeType === Node.TEXT_NODE && !node.textContent?.trim())) {
+      const paragraph = singleChild.querySelector(":scope > p")
+      if (!paragraph) return null
+      const originalParagraph = first.firstElementChild
+      trailing = [...first.childNodes].slice([...first.childNodes].indexOf(originalParagraph) + 1)
+      singleChild.replaceChildren(paragraph)
+      target = paragraph
+    } else if (first.querySelector("p, div, ul, ol, blockquote, table, pre")) {
+      return null
+    }
+    if (!target) return null
+    const map = this.textMap(target)
+    if (map.text.length < 2) return null
+    let boundary = this.largestFittingTextBoundary(single, target, map, this.wordBoundaries(map.text), page)
+    if (!boundary) boundary = this.largestFittingTextBoundary(single, target, map, this.characterBoundaries(map.text), page)
+    if (!boundary) return null
+    const left = this.textFragment(single, target, map, 0, boundary)
+    const right = this.textFragment(single, target, map, boundary, map.text.length)
+    const leftGroup = this.nodeAtPath(left, groupPath)
+    const rightGroup = this.nodeAtPath(right, groupPath)
+    const leftChild = leftGroup.firstElementChild
+    const rightChild = rightGroup.firstElementChild
+    if (!leftChild || !rightChild) return null
+    leftChild.removeAttribute("data-document-page-flow-content")
+    rightChild.removeAttribute("data-document-page-flow-content")
+    rightChild.setAttribute("data-document-page-continuation", "true")
+    if (target !== singleChild) {
+      const leftParagraph = leftChild.querySelector(":scope > p")
+      const rightParagraph = rightChild.querySelector(":scope > p")
+      leftParagraph?.removeAttribute("data-document-page-flow-content")
+      rightParagraph?.removeAttribute("data-document-page-flow-content")
+      rightParagraph?.setAttribute("data-document-page-continuation", "true")
+      for (const node of trailing) rightChild.append(node.cloneNode(true))
+    }
+    for (const sibling of [...group.children].slice(1)) rightGroup.append(sibling.cloneNode(true))
+    return [left, right]
   }
 
   splitArtBlock(block: HTMLElement, artRoot: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {
@@ -657,20 +853,45 @@ export default class extends Controller<HTMLElement> {
   }
 
   splitGroupedChildren(block: HTMLElement, page: DocumentPage): [HTMLElement, HTMLElement] | null {
-    const list = block.matches("ul, ol") ? block : block.querySelector("ul, ol")
+    // Only split the outermost structural group. Splitting a descendant
+    // would clone its surrounding siblings into both page fragments.
+    const group = block.matches("ul, ol, blockquote, table") ? block : block.querySelector("ul, ol, blockquote, table")
+    if (group && !this.isolatedTarget(block, group)) return null
+    if (group && [...group.childNodes].some(node => node.nodeType !== Node.ELEMENT_NODE && node.textContent?.trim())) return null
+    const list = group?.matches("ul, ol") ? group : null
     if (list && list.children.length > 1 && [...list.children].every((child) => child.tagName === "LI")) {
       const children = [...list.children]
       const bestCount = this.largestFittingChildCount(block, list, children, page)
-      if (bestCount > 0 && bestCount < children.length) {
-        return [
+      // Avoid leaving a single list item alone at the foot of a page when
+      // two or more items remain. If the first item itself is taller than
+      // the available space, splitLeadingGroupText handles that item below.
+      const minimumItems = 2
+      if (bestCount > 0 && bestCount < children.length &&
+          (bestCount >= minimumItems || page.content.childElementCount === 0)) {
+        const fragments: [HTMLElement, HTMLElement] = [
           this.childFragment(block, list, children.slice(0, bestCount)),
           this.childFragment(block, list, children.slice(bestCount))
         ]
+        if (list instanceof HTMLOListElement) {
+          const step = list.reversed ? -1 : 1
+          let listNumber = list.hasAttribute("start") ? list.start : (list.reversed ? children.length : 1)
+          const firstListNumber = listNumber
+          for (const child of children.slice(0, bestCount)) {
+            if (child.hasAttribute("value")) listNumber = (child as HTMLLIElement).value
+            listNumber += step
+          }
+          for (const [index, fragment] of fragments.entries()) {
+            const fragmentList = this.nodeAtPath(fragment, this.nodePath(block, list))
+            fragmentList.setAttribute("start", String(index === 0 ? firstListNumber : listNumber))
+          }
+        }
+        return fragments
       }
     }
 
-    const quote = block.matches("blockquote") ? block : block.querySelector("blockquote")
-    if (quote && quote.children.length > 1 && [...quote.children].every((child) => /^(P|DIV)$/.test(child.tagName))) {
+    const quote = group?.matches("blockquote") ? group : null
+    if (quote && quote.children.length > 1 &&
+        [...quote.childNodes].every(node => node.nodeType === Node.ELEMENT_NODE || !node.textContent?.trim())) {
       const children = [...quote.children]
       const bestCount = this.largestFittingChildCount(block, quote, children, page)
       if (bestCount > 0 && bestCount < children.length) {
@@ -681,7 +902,7 @@ export default class extends Controller<HTMLElement> {
       }
     }
 
-    const table = block.matches("table") ? block : block.querySelector("table")
+    const table = group?.matches("table") ? group : null
     const tableBody = table instanceof HTMLTableElement ? table.tBodies[0] : undefined
     if (table && tableBody && tableBody.rows.length > 1) {
       const children = [...tableBody.rows]
@@ -695,6 +916,19 @@ export default class extends Controller<HTMLElement> {
     }
 
     return null
+  }
+
+  isolatedTarget(block: Element, target: Element): boolean {
+    let child = target
+    while (child !== block) {
+      const parent = child.parentElement
+      if (!parent) return false
+      if ([...parent.childNodes].some(node => node !== child &&
+          !(parent.classList.contains("document-editor-block-shell") && node instanceof Element && node.matches(".document-block-position-control")) &&
+          (node.nodeType === Node.ELEMENT_NODE || Boolean(node.textContent?.trim())))) return false
+      child = parent
+    }
+    return true
   }
 
   largestFittingChildCount(block: HTMLElement, target: Element, children: Element[], page: DocumentPage): number {
@@ -859,6 +1093,43 @@ export default class extends Controller<HTMLElement> {
     return best
   }
 
+  largestFittingTextBoundary(block: HTMLElement, target: Element, textMap: TextMap, boundaries: number[], page: DocumentPage): number {
+    // Word's default widow/orphan control keeps at least two visual lines on
+    // either page fragment. Probe the measured line boxes so wrapped text,
+    // inline math and font metrics all use the same rule.
+    let best = this.largestFittingBoundary(block, target, textMap, boundaries, page)
+    const targetPath = this.nodePath(block, target)
+    while (best) {
+      const left = this.textFragment(block, target, textMap, 0, best)
+      const leftTarget = this.nodeAtPath(left, targetPath)
+      page.content.append(left)
+      let leftLines: number
+      try { leftLines = this.visibleLineCount(leftTarget) }
+      finally { page.content.removeChild(left) }
+      if (leftLines < 2) return 0
+
+      const right = this.textFragment(block, target, textMap, best, textMap.text.length)
+      const rightTarget = this.nodeAtPath(right, targetPath)
+      page.content.append(right)
+      let rightLines: number
+      try { rightLines = this.visibleLineCount(rightTarget) }
+      finally { page.content.removeChild(right) }
+      if (rightLines >= 2) return best
+
+      const index = boundaries.lastIndexOf(best)
+      if (index <= 0) return 0
+      best = this.largestFittingBoundary(block, target, textMap, boundaries.slice(0, index), page)
+    }
+    return 0
+  }
+
+  visibleLineCount(element: Element): number {
+    const range = document.createRange()
+    range.selectNodeContents(element)
+    const rects = [...range.getClientRects()]
+    return new Set(rects.filter(rect => rect.height > 0).map(rect => Math.round(rect.top))).size
+  }
+
   textFragment(block: HTMLElement, target: Element, textMap: TextMap, from: number, to: number): HTMLElement {
     const clone = block.cloneNode(true) as HTMLElement
     const cloneTarget = this.nodeAtPath(clone, this.nodePath(block, target))
@@ -875,7 +1146,13 @@ export default class extends Controller<HTMLElement> {
   textMap(element: Element): TextMap {
     const nodes: TextMapEntry[] = []
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, {
-      acceptNode: (node) => node.parentElement?.closest(HIDDEN_TEXT_SELECTOR) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+      // The source preview marks the entire editor block contenteditable=false.
+      // That outer read-only shell must not hide the block's text from the
+      // paginator; only non-editable descendants of the text target are atomic.
+      acceptNode: (node) => {
+        const hidden = node.parentElement?.closest(HIDDEN_TEXT_SELECTOR)
+        return hidden && element.contains(hidden) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+      }
     })
     let node: Node | null
     let text = ""
@@ -953,14 +1230,19 @@ export default class extends Controller<HTMLElement> {
     const block = node?.closest?.("[data-editor-block-id][contenteditable='true']")
     if (!(block instanceof HTMLElement) || !this.surfaceTarget.contains(block)) return null
 
-    // A fresh preview arrives as unpaginated HTML, so its focused block has no
-    // flow ID yet. Assign one before paginate() replaces the surface; otherwise
-    // restoreCaret() cannot find the new fragment and the editor loses focus.
-    this.ensureFlowId(block)
-    const flowId = block.dataset.documentPageFlowId
-    const fragments = flowId ? this.pageFragments(flowId) : [block]
-    const index = fragments.indexOf(block)
-    const prefix = fragments.slice(0, Math.max(0, index)).reduce((sum, fragment) => sum + this.visibleTextLength(fragment), 0)
+    // The paginator splits the outer editor-block shell, while selection lives
+    // in its inner contenteditable block. Keep the flow ID on the same shell
+    // paginate() consumes so offsets can include preceding fragments.
+    const flowBlock = block.closest<HTMLElement>("[data-document-page-flow-id]") ||
+      block.closest<HTMLElement>(".document-editor-block-shell") || block
+    this.ensureFlowId(flowBlock)
+    const flowId = flowBlock.dataset.documentPageFlowId
+    const fragments = flowId ? this.pageFragments(flowId) : [flowBlock]
+    const index = fragments.indexOf(flowBlock)
+    const prefix = fragments.slice(0, Math.max(0, index)).reduce((sum, fragment) => {
+      const editable = this.editorBlockInFragment(fragment, block.dataset.editorBlockId)
+      return sum + this.visibleTextLength(editable || fragment)
+    }, 0)
     const local = visibleOffsetAtPoint(block, selection.focusNode, selection.focusOffset)
     if (local === null) return null
 
@@ -985,15 +1267,22 @@ export default class extends Controller<HTMLElement> {
 
   restoreCaret(caret: CapturedCaret): void {
     const fragments = caret.flowId ? this.pageFragments(caret.flowId) : []
-    const block = fragments.find((fragment) => fragment.dataset.editorBlockId === caret.blockId)
-    if (!block || block.contentEditable !== "true") return
+    const block = fragments
+      .map((fragment) => this.editorBlockInFragment(fragment, caret.blockId))
+      .find((candidate) => candidate?.contentEditable === "true")
+    if (!block) return
 
     let target = block
     let point = null
     if (caret.caretTargetId) {
       const markedTargets = [...this.surfaceTarget.querySelectorAll("[data-document-page-caret-target]")]
-      const caretTarget = markedTargets.find((element) => element.dataset.documentPageCaretTarget === caret.caretTargetId)
+      const matches = markedTargets.filter((element) => element.dataset.documentPageCaretTarget === caret.caretTargetId)
       markedTargets.forEach((element) => element.removeAttribute("data-document-page-caret-target"))
+      // A split list item or quote paragraph clones the caret marker into
+      // both fragments. Its captured local offset belongs to the unsplit
+      // block, so only use the marker when it is unique; otherwise the
+      // block-wide visible offset below selects the correct fragment.
+      const caretTarget = matches.length === 1 ? matches[0] : null
       const targetBlock = caretTarget?.closest?.("[data-editor-block-id]")
       if (caretTarget && targetBlock instanceof HTMLElement && targetBlock.contentEditable === "true") {
         target = targetBlock
@@ -1003,14 +1292,19 @@ export default class extends Controller<HTMLElement> {
 
     if (!point) {
       let offset = caret.visibleOffset
-      for (const fragment of fragments) {
-        const length = this.visibleTextLength(fragment)
-        if (offset <= length) {
-          target = fragment
+      for (const [index, fragment] of fragments.entries()) {
+        const editable = this.editorBlockInFragment(fragment, caret.blockId)
+        const textRoot = editable || fragment
+        const length = this.visibleTextLength(textRoot)
+        // At a continuation boundary the same source offset is the end of
+        // this fragment and the start of the next one. Prefer the next
+        // fragment so repagination keeps the caret on its visible page.
+        if (offset < length || index === fragments.length - 1) {
+          target = textRoot
           break
         }
         offset -= length
-        target = fragment
+        target = textRoot
       }
       point = pointAtVisibleOffset(target, offset)
     }
@@ -1022,6 +1316,14 @@ export default class extends Controller<HTMLElement> {
   pageFragments(flowId: string): HTMLElement[] {
     return ([...this.surfaceTarget.querySelectorAll("[data-document-page-flow-id]")] as HTMLElement[])
       .filter((block: HTMLElement) => block.dataset.documentPageFlowId === flowId)
+  }
+
+  editorBlockInFragment(fragment: HTMLElement, blockId: string | undefined): HTMLElement | null {
+    if (!blockId) return null
+    const candidates = fragment.matches("[data-editor-block-id]")
+      ? [fragment]
+      : [...fragment.querySelectorAll<HTMLElement>("[data-editor-block-id]")]
+    return candidates.find((candidate) => candidate.dataset.editorBlockId === blockId) || null
   }
 
   visibleTextLength(element: Element): number {

@@ -609,3 +609,52 @@ test("snapshot cadence failures report once and keep the cadence alive", async (
   assert.deepEqual(state.snapshots, [["work-1", "periodic", "NEW"]])
   session.dispose()
 })
+
+test("watcher echoes of a completed save do not merge, rewrite the editor, or force saves while the user keeps typing", async () => {
+  const setTextCalls = []
+  let text = "initial"
+  const fixture = setup({
+    text,
+    policy: {
+      saveDelay: 2000,
+      externalPollMs: 1000,
+      getText: () => text,
+      setText: async value => {
+        setTextCalls.push(value)
+        text = value
+        return true
+      }
+    }
+  })
+  const { session, state, timers, conflicts, externals } = fixture
+
+  // First edit saves normally after the 2s quiet window.
+  text = "saved once"
+  session.noteChange()
+  await timers.advance(2000)
+  await flush()
+  assert.equal(state.saves.length, 1)
+  state.readImpl = async id => {
+    state.reads.push(id)
+    return { source: "saved once", source_file: "talk.md", content_hash: state.savedHash }
+  }
+
+  // User resumes typing before the watcher echo of "saved once" arrives.
+  text = "saved once and still typing"
+  session.noteChange()
+  state.pollQueue.push({ work_id: "work-1", kind: "SourceChanged" })
+  await timers.advance(1000)
+  await flush()
+
+  assert.deepEqual(state.reads, ["work-1"])
+  assert.deepEqual(state.snapshots, [])
+  assert.deepEqual(state.merges, [])
+  assert.deepEqual(setTextCalls, [])
+  assert.equal(state.saves.length, 1)
+  assert.equal(text, "saved once and still typing")
+  assert.equal(session.dirty, true)
+  assert.deepEqual(conflicts, [])
+  assert.equal(externals.length, 1)
+  assert.equal(externals[0].baseline.revision, state.savedHash)
+  session.dispose()
+})

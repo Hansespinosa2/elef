@@ -1,6 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { parseHTML } from "linkedom";
+import { buildEditorStructure } from "@elef/work-model/document-map";
 
 import {
   mountPresentationEditor,
@@ -1207,4 +1208,44 @@ test("presentation restoreSelections clears without mapping in source mode", () 
   assert.equal(removed, 1);
   assert.equal(appended.length, 0);
   mount.destroy();
+});
+
+test("client presentation editor aligns and deletes a non-editable multi-construct grouped block", () => {
+  const source = [
+    "# Authors",
+    "",
+    "## Fitzgerald",
+    "American novelist",
+    "- The Great Gatsby",
+    "",
+    "Footer",
+  ].join("\n");
+  const { editorMap } = buildEditorStructure(source, { mode: "presentation" });
+  const { document, form } = mountForm();
+  const editorState = fakeEditor();
+  editorState.value = source;
+  const mount = mountEditor(form, editorMap as unknown as Parameters<typeof mountEditor>[1], editorState);
+
+  assert.equal(editorMap.slides[0]?.editable_regions[1]?.editable, false);
+
+  const select = document.createElement("select");
+  Object.defineProperty(select, "value", { value: "center", configurable: true });
+  select.setAttribute("data-presentation-editor-align", "");
+  select.setAttribute("data-slide-index", "0");
+  select.setAttribute("data-block-index", "1");
+  form.append(select);
+  mount.editor.alignmentChanged({ target: select, preventDefault: () => {} });
+
+  assert.equal(
+    editorState.value,
+    "# Authors\n\n:::align{center}\n\n## Fitzgerald\nAmerican novelist\n- The Great Gatsby\n\nFooter",
+  );
+
+  const updated = buildEditorStructure(editorState.value, { mode: "presentation" }).editorMap;
+  mount.destroy();
+  const secondMount = mountEditor(form, updated as unknown as Parameters<typeof mountEditor>[1], editorState);
+  secondMount.editor.deleteBlock(0, 1);
+
+  assert.equal(editorState.value, "# Authors\n\nFooter");
+  secondMount.destroy();
 });

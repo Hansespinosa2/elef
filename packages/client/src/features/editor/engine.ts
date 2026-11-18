@@ -95,8 +95,11 @@ const theme = EditorView.theme({
   ".cm-content": {
     caretColor: "#9fc5a9",
     minHeight: "24rem",
-    padding: "0.75rem"
+    padding: "0.75rem 0"
   },
+  // CodeMirror positions multiline selection edges using line padding, not
+  // content padding. Keep the text inset on the lines so the edges coincide.
+  ".cm-line": { padding: "0 0.75rem" },
   ".cm-cursor, .cm-dropCursor": { borderLeftColor: "#9fc5a9" },
   ".cm-fat-cursor": { backgroundColor: "#9fc5a9", minWidth: "1ch" },
   ".cm-selectionBackground, ::selection": { backgroundColor: "#304047" },
@@ -840,8 +843,8 @@ export class EditorEngine {
   }
 
   setExternalValue(value: string): void {
-    this.inputTarget.value = value
-    this.handleExternalInputEvent()
+    this.replaceServerSource(value)
+    this.syncInput()
   }
 
   syncInput(): void {

@@ -115,10 +115,11 @@ bundle(join(here, "src", "features", "editor", "index.ts"), join(here, "dist", "
 bundle(join(here, "src", "features", "editor", "test_internals.ts"), join(here, "dist", "editor-test-internals.js"), {
   external: editorExternals,
 });
+bundle(join(here, "src", "features", "editor", "python_worker.ts"), join(here, "dist", "python-worker.js"));
 // The PPTX engine (model-to-blob orchestration) ships beside the builder:
 // the desktop import must not couple to the client boot barrel, whose bare
 // specifier the Stable profile forbids.
 bundle(join(here, "src", "features", "export", "pptx_engine.ts"), join(here, "dist", "pptx-engine.js"));
 console.log(
-  "packages/client built: dist/elef-client.js + dist/elef-client.stable.js + dist/sanitize.js + dist/presentation-chrome.js + dist/vim-preferences.js + dist/shortcuts.js + dist/port-session.js + dist/pptx-test-internals.js + dist/pptx-engine.js + dist/preview-core.js + dist/pptx-model.js + dist/editor.js + dist/editor-test-internals.js"
+  "packages/client built: dist/elef-client.js + dist/elef-client.stable.js + dist/sanitize.js + dist/presentation-chrome.js + dist/vim-preferences.js + dist/shortcuts.js + dist/port-session.js + dist/pptx-test-internals.js + dist/pptx-engine.js + dist/preview-core.js + dist/pptx-model.js + dist/editor.js + dist/editor-test-internals.js + dist/python-worker.js"
 );

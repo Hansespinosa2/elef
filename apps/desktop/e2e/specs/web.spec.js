@@ -1,3 +1,5 @@
+import { measureSourceSelectionAlignment, sourcePreviewScrollWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-scroll.js"
+import { sourcePreviewResizeWorkflow } from "../../../../apps/web/test/e2e/scenarios/source-preview-resize.js"
 import { expect, test } from "@playwright/test"
 import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../../apps/web/test/e2e/scenarios/edit-and-preview.js"
 import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
@@ -12,10 +14,12 @@ import { PIXEL_PNG_MARKDOWN } from "../../../../apps/web/test/e2e/scenarios/medi
 import { presentationModeWorkflow } from "../../../../apps/web/test/e2e/scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../../apps/web/test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-aspect-ratio.js"
+import { documentPageFlowWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-flow.js"
 import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.js"
 import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scenarios/slide-position-grammar.js"
 import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
 import { artRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/art-rendering.js"
+import { pythonRenderingWorkflow } from "../../../../apps/web/test/e2e/scenarios/python-rendering.js"
 import { richRenderingMediaWorkflow, RICH_RENDERING_SOURCE, RICH_RENDERING_TITLE } from "../../../../apps/web/test/e2e/scenarios/rich-rendering-media.js"
 import { execFileSync } from "node:child_process"
 import path from "node:path"
@@ -558,6 +562,46 @@ class WebEditorUi {
     await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
   }
 
+  async assertSourcePreviewResize() {
+    const splitter = this.page.getByRole("separator", { name: "Resize source and preview" })
+    const source = this.page.locator(".source-pane")
+    const preview = this.page.locator(".preview-pane")
+    await expect(splitter).toBeVisible()
+    await splitter.focus()
+    await this.page.keyboard.press("Home")
+    await expect(splitter).toHaveAttribute("aria-valuenow", "20")
+    const beforeSource = (await source.boundingBox()).width
+    const beforePreview = (await preview.boundingBox()).width
+    await splitter.scrollIntoViewIfNeeded()
+    const handle = await splitter.boundingBox()
+    const viewport = this.page.viewportSize()
+    const y = (Math.max(0, handle.y) + Math.min(viewport.height, handle.y + handle.height)) / 2
+    await this.page.mouse.move(handle.x + handle.width / 2, y)
+    await this.page.mouse.down()
+    await this.page.mouse.move(handle.x + handle.width / 2 + 150, y, { steps: 5 })
+    await this.page.mouse.up()
+    await expect.poll(async () => Number(await splitter.getAttribute("aria-valuenow"))).toBeGreaterThan(20)
+    expect((await source.boundingBox()).width).toBeGreaterThan(beforeSource + 50)
+    expect((await preview.boundingBox()).width).toBeLessThan(beforePreview - 50)
+    const frame = preview.locator(".document-page-frame, .slide-frame").first()
+    await expect(frame).toBeVisible()
+    await expect.poll(async () => frame.evaluate(element => {
+      const content = element.querySelector(".document-page, .slide")
+      if (!content) return false
+      const frameRect = element.getBoundingClientRect()
+      const contentRect = content.getBoundingClientRect()
+      return Math.abs(frameRect.width - contentRect.width) < 2 && Math.abs(frameRect.height - contentRect.height) < 2
+    })).toBe(true)
+    await splitter.focus()
+    await this.page.keyboard.press("End")
+    await expect(splitter).toHaveAttribute("aria-valuenow", "80")
+  }
+
+  async assertSourceSelectionAlignment() {
+    const { textLeft, selectionLeft } = await this.page.evaluate(measureSourceSelectionAlignment)
+    expect(Math.abs(textLeft - selectionLeft)).toBeLessThanOrEqual(1)
+  }
+
   async assertDocumentPageAspectRatio() {
     const originalViewport = this.page.viewportSize()
     const surface = this.page.locator(".visual-editor-form .document-surface").first()
@@ -705,6 +749,22 @@ class WebEditorUi {
     )).toBe(true)
   }
 
+  async waitForScrollPreview(text) {
+    await expect(this.page.locator(".document-surface[data-document-pages-settled='true']")).toContainText(text, { timeout: 30000 })
+  }
+
+  async pageFlowProbe(probe) {
+    return this.page.evaluate(probe, ".editor-projection.preview-pane .document-surface")
+  }
+
+  async scrollPreviewToBottom() {
+    return this.page.locator('[data-preview-target="container"]').evaluate(pane => { pane.scrollTop = pane.scrollHeight; return pane.scrollTop })
+  }
+
+  async previewScrollTop() {
+    return this.page.locator('[data-preview-target="container"]').evaluate(pane => pane.scrollTop)
+  }
+
   async waitForPreview(text) {
     await expect.poll(() => renderedTextWithoutEditorControls(
       this.page.locator(".editor-projection.preview-pane")
@@ -713,6 +773,38 @@ class WebEditorUi {
 
   async waitForArtRoots(count) {
     await expect.poll(() => this.page.locator(".editor-projection [data-elef-art-root]").count()).toBe(count)
+  }
+
+  async waitForPythonBlocks(count) {
+    await expect.poll(() => this.page.locator('.editor-projection .elef-python-block[data-processed="true"]').count(), {
+      timeout: 15_000
+    }).toBe(count)
+  }
+
+  async readPythonBlockSemantics() {
+    return this.page.locator(".editor-projection .elef-python-block").evaluateAll(blocks => blocks.map(block => {
+      const activeFrame = block.querySelector(".elef-python-frame:not([hidden])") || block
+      const sliderValue = block.querySelector(".elef-python-slider-value")
+      return {
+        mode: block.classList.contains("elef-python-show-code") ? "run-show-code" : "run",
+        processed: block.dataset.processed,
+        hasCode: Boolean(block.querySelector(":scope > pre.elef-python-code")),
+        svgCount: activeFrame.querySelectorAll(".elef-python-figures svg").length,
+        tableCount: activeFrame.querySelectorAll(".elef-python-dataframe-wrap table").length,
+        stdout: activeFrame.querySelector(".elef-python-stdout")?.textContent || "",
+        sliderValue: sliderValue?.textContent || null
+      }
+    }))
+  }
+
+  async scrubPythonSlider(value) {
+    const updated = await this.page.locator(".editor-projection .elef-python-slider").first().evaluate((slider, nextValue) => {
+      slider.value = String(nextValue)
+      slider.dispatchEvent(new Event("input", { bubbles: true }))
+      slider.dispatchEvent(new Event("change", { bubbles: true }))
+      return slider.value
+    }, value)
+    expect(updated).toBe(String(value))
   }
 
   async readArtSemantics() {
@@ -1101,6 +1193,15 @@ test("shared editing flow works in the web app", async ({ page }) => {
   expect(await page.locator(".source-field .cm-content").innerText()).toContain(SAVED_SOURCE.split("\n")[0])
 })
 
+test("source preview stays scrolled after saving a long document", async ({ page }) => {
+  await sourcePreviewScrollWorkflow(new WebEditorUi(page))
+})
+
+test("source and preview resize for documents and presentations in the web app", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 840 })
+  await sourcePreviewResizeWorkflow(new WebEditorUi(page))
+})
+
 test("shared presentation navigation works in the web app", async ({ page }) => {
   await presentationModeWorkflow(new WebEditorUi(page))
 })
@@ -1111,6 +1212,10 @@ test("Vim relative line numbers update from CodeMirror cursor positions", async 
 
 test("document pages keep their A4 aspect ratio when the web editor is resized", async ({ page }) => {
   await documentPageAspectRatioWorkflow(new WebEditorUi(page))
+})
+
+test("document content flows across pages in the web preview", async ({ page }) => {
+  await documentPageFlowWorkflow(new WebEditorUi(page))
 })
 
 test("shared library and document graph flow works in the web app", async ({ page }) => {
@@ -1237,7 +1342,7 @@ test("the source editor has matching styles in Rails and the desktop asset bundl
   const stylesheets = await readHostStylesheets()
   const measured = {}
   for (const [target, css] of Object.entries(stylesheets)) {
-    await page.setContent(`<!doctype html><html data-theme="dark"><head><style>${css}</style><style>${codeMirrorStyles}</style></head><body class="elef-app"><main class="app-shell mx-auto max-w-[1440px] p-[clamp(1rem,4vw,3rem)]"><form class="visual-editor-form" data-editor-mode="source">${editorHtml}</form></main></body></html>`)
+    await page.setContent(`<!doctype html><html data-theme="dark"><head><style>${css}</style><style>${codeMirrorStyles}</style></head><body class="elef-app"><main style="width:100%;box-sizing:border-box" class="app-shell mx-auto max-w-[1440px] p-[clamp(1rem,4vw,3rem)]"><form class="visual-editor-form" data-editor-mode="source">${editorHtml}</form></main></body></html>`)
     measured[target] = await page.evaluate(() => {
       const selectors = [".editor-shell", ".editor-layout", ".source-pane", ".source-field", ".editor-toolbar",
         ".editor-surface", ".cm-editor", ".cm-scroller", ".cm-content", ".editor-projection"]
@@ -1257,12 +1362,16 @@ test("the source editor has matching styles in Rails and the desktop asset bundl
     })
   }
   expect(measured.desktop).toEqual(measured.web)
-  expect(measured.web[".editor-layout"].gridTemplateColumns.split(" ")).toHaveLength(2)
+  expect(measured.web[".editor-layout"].gridTemplateColumns.split(" ")).toHaveLength(3)
   expect(measured.web[".cm-editor"].rectHeight).toBeGreaterThan(300)
 })
 
 test("shared Art semantics render consistently in the web app", async ({ page }) => {
   await artRenderingWorkflow(new WebEditorUi(page))
+})
+
+test("shared executable Python blocks render figures, tables, and sliders in the web app", async ({ page }) => {
+  await pythonRenderingWorkflow(new WebEditorUi(page))
 })
 
 test("the rich release fixture renders, presents, saves, and reopens in the web app", async ({ page }) => {

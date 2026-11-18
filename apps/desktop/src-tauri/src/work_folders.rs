@@ -1,6 +1,6 @@
 #[cfg(feature = "desktop-dev")]
 use local_store::DocumentGraphDocument;
-use local_store::diagnostics::EventCode;
+use local_store::diagnostics::{EventCode, EventResult};
 use local_store::{
     FileEvent, MergeOutcome, OpenWorkFolder, RestoreOutcome, SaveResult, SnapshotInfo,
     SourceSnapshot, WorkFolderPreview, WorkFolderSummary,
@@ -9,7 +9,7 @@ use serde::Serialize;
 use tauri::{AppHandle, State};
 use tauri_plugin_dialog::MessageDialogKind;
 
-use crate::diagnostics::record_command_result;
+use crate::diagnostics::{record_command_result, record_diagnostic};
 use crate::dialogs::confirm_native_action;
 use crate::error::CommandError;
 use crate::state::DesktopState;
@@ -145,14 +145,19 @@ pub(crate) fn poll_file_events(
 
 #[tauri::command]
 pub(crate) fn take_snapshot(
+    app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
     reason: String,
     source: Option<String>,
 ) -> Result<SnapshotInfo, CommandError> {
-    Ok(state
-        .current_library()?
-        .take_snapshot(&id, &reason, source.as_deref())?)
+    let result = state.current_library().and_then(|library| {
+        library
+            .take_snapshot(&id, &reason, source.as_deref())
+            .map_err(CommandError::from)
+    });
+    record_command_result(&app, EventCode::Snapshot, &result);
+    result
 }
 
 #[tauri::command]
@@ -165,22 +170,52 @@ pub(crate) fn list_snapshots(
 
 #[tauri::command]
 pub(crate) fn restore_snapshot(
+    app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
     snapshot_id: String,
 ) -> Result<RestoreOutcome, CommandError> {
-    Ok(state
-        .current_library()?
-        .restore_snapshot(&id, &snapshot_id)?)
+    let result = state.current_library().and_then(|library| {
+        library
+            .restore_snapshot(&id, &snapshot_id)
+            .map_err(CommandError::from)
+    });
+    record_command_result(&app, EventCode::SnapshotRestore, &result);
+    result
 }
 
 #[tauri::command]
 pub(crate) fn merge_external_change(
+    app: AppHandle,
     state: State<'_, DesktopState>,
     id: String,
     local_source: String,
 ) -> Result<MergeOutcome, CommandError> {
-    Ok(state
-        .current_library()?
-        .merge_external_change(&id, &local_source)?)
+    let result = state.current_library().and_then(|library| {
+        library
+            .merge_external_change(&id, &local_source)
+            .map_err(CommandError::from)
+    });
+    match &result {
+        Ok(MergeOutcome::Merged(_)) => {
+            record_diagnostic(&app, EventCode::ExternalMerge, EventResult::Success, None);
+        }
+        Ok(MergeOutcome::Overlap | MergeOutcome::Suspicious) => {
+            record_diagnostic(
+                &app,
+                EventCode::ExternalMerge,
+                EventResult::Failure,
+                Some("conflict"),
+            );
+        }
+        Err(error) => {
+            record_diagnostic(
+                &app,
+                EventCode::ExternalMerge,
+                EventResult::Failure,
+                Some(error.code),
+            );
+        }
+    }
+    result
 }

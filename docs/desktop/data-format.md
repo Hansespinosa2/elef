@@ -107,8 +107,8 @@ Works, Markdown, media, and .elef archives are untrusted input. The webview has 
 
 The shipped policy is configured in apps/desktop/src-tauri/tauri.conf.json and checked by apps/desktop/scripts/check_architecture.py:
 
-- Scripts are self-only. The policy does not allow inline scripts or eval.
-- Frames are disabled; network connections are limited to Tauri IPC.
+- Scripts are restricted to `'self'`, `'wasm-unsafe-eval'` (for in-worker WebAssembly Python compilation), and the read-only `elefpython:` protocol (whose artifacts are SHA-256-verified in Rust before caching in `app_cache_dir/python-runtime/<version>/`). The policy does not allow inline scripts or JavaScript `eval` (`'unsafe-eval'`).
+- Frames are disabled; network connections (`connect-src`) are limited to Tauri IPC and the local `elefpython:` runtime protocol.
 - Remote images are blocked. Local app, asset, and elefasset protocols supply packaged and work-local media.
 - CodeMirror 6's `style-mod` inserts its base and theme rules in a `<style>` element, so the CSP permits inline style elements. Inline style attributes are also used for CodeMirror geometry and KaTeX formula layout. This is why style-src allows unsafe-inline; script-src remains self-only.
 
