@@ -207,6 +207,13 @@ export function alignVisibleOffset(slice: string, blockText: string, domOffset: 
   let domIndex = 0
   while (domIndex < domOffset) {
     if (sourceIndex >= slice.length) return null
+    if ((sourceIndex === 0 || slice[sourceIndex - 1] === "\n") && /^[ \t]/.test(slice[sourceIndex] ?? "")) {
+      const prefix = slice.slice(sourceIndex).match(ALIGN_LINE_PREFIX)?.[0]
+      if (prefix && !blockText.startsWith(prefix, domIndex)) {
+        sourceIndex += prefix.length
+        continue
+      }
+    }
     if (slice[sourceIndex] === blockText[domIndex]) {
       sourceIndex += 1
       domIndex += 1

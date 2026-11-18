@@ -2684,6 +2684,497 @@ class DocumentsTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
+  test "flows ordinary paragraphs and ordered lists into the remaining page space" do
+    paragraph = ("Natural flow carries words across the page boundary. " * 18).strip
+    list = (3..12).map { |n| "#{n}. Ordered item #{n}" }.join("\n")
+    document = Document.create!(title: "Natural flow", source: "Opening paragraph.\n\n#{paragraph}\n\n#{list}")
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const reader = surface.closest('[data-controller~="document-pages"]');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(reader, 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        controller.paginate();
+        const lineCount = (element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          return new Set([...range.getClientRects()].filter(rect => rect.height > 0).map(rect => Math.round(rect.top))).size;
+        };
+        const inspect = () => [...surface.querySelectorAll('.document-page-content')].map(content => ({
+          paragraphs: [...content.querySelectorAll('p')].map(p => p.textContent),
+          flowedParagraphLines: [...content.querySelectorAll('p')]
+            .filter(p => p.textContent.startsWith('Natural flow'))
+            .map(lineCount),
+          lists: [...content.querySelectorAll('ol')].map(ol => ({ start: ol.start, items: [...ol.children].map(li => li.textContent.trim()) }))
+        }));
+        const first = inspect();
+        controller.paginate();
+        return { first, second: inspect() };
+      })()
+    JAVASCRIPT
+    assert_equal state.fetch("first"), state.fetch("second"), "repagination must preserve fragments"
+    pages = state.fetch("first")
+    paragraph_fragments = pages.flat_map { |entry| entry.fetch("paragraphs").select { |text| paragraph.include?(text) && text != "Opening paragraph." } }
+    assert_operator paragraph_fragments.length, :>, 1
+    assert_equal paragraph, paragraph_fragments.join
+    assert pages.first.fetch("paragraphs").any? { |text| text.start_with?("Natural flow") }, "paragraph should begin on the page with its predecessor"
+    assert pages.flat_map { |entry| entry.fetch("flowedParagraphLines") }.all? { |lines| lines >= 2 },
+      "continued paragraphs must keep at least two visual lines on each page"
+    list_fragments = pages.flat_map { |entry| entry.fetch("lists") }
+    assert_operator list_fragments.length, :>, 1
+    assert_equal (3..12).map { |n| "Ordered item #{n}" }, list_fragments.flat_map { |entry| entry.fetch("items") }
+    listNumber = 3
+    list_fragments.each do |fragment|
+      assert_equal listNumber, fragment.fetch("start")
+      listNumber += fragment.fetch("items").length
+    end
+  end
+
+  test "flows paragraph text in the read-only source preview" do
+    paragraph = ("Natural page flow continues this paragraph across pages. " * 18).strip
+    document = Document.create!(title: "Source preview flow", source: "Opening paragraph.\n\n#{paragraph}")
+    visit edit_document_path(document)
+    find('[data-editor-target="sourceButton"]').click
+    assert_selector '.editor-projection.preview-pane .document-surface[data-document-pages-settled="true"]', wait: 10
+    pages = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.editor-projection.preview-pane .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.editor-projection.preview-pane .document-surface .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        controller.paginate();
+        return [...surface.querySelectorAll('.document-page-content')].map(content => [...content.querySelectorAll('p')].map(p => p.textContent));
+      })()
+    JAVASCRIPT
+    fragments = pages.flatten.select { |text| text.start_with?("Natural page flow") || paragraph.include?(text) && text != "Opening paragraph." }
+    assert_operator fragments.length, :>, 1
+    assert pages.first.any? { |text| text.start_with?("Natural page flow") }
+    assert_equal paragraph, fragments.join
+  end
+
+  test "keeps inline math intact while repaginating the read-only source preview" do
+    paragraph = ("Text preceding an inline equation continues over the page. " * 12) + "$x+1$ " + ("Text following the equation keeps flowing. " * 20)
+    document = Document.create!(title: "Source preview math flow", source: "Opening paragraph.\n\n#{paragraph}")
+    visit edit_document_path(document)
+    find('[data-editor-target="sourceButton"]').click
+    assert_selector '.editor-projection.preview-pane .document-surface[data-document-pages-settled="true"] .katex', wait: 10
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.editor-projection.preview-pane .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.editor-projection.preview-pane .document-surface .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        controller.paginate();
+        controller.paginate();
+        return { pages: surface.querySelectorAll('.document-page').length, math: surface.querySelectorAll('.katex').length };
+      })()
+    JAVASCRIPT
+    assert_operator result.fetch("pages"), :>, 1
+    assert_equal 1, result.fetch("math")
+  end
+
+  test "reassembles a continued list item before editing or repagination" do
+    long_item = ("Long item text stays together in the Markdown source. " * 65).strip
+    source = "- First item\n- #{long_item}\n- Last item"
+    document = Document.create!(title: "Long list item", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const reader = surface.closest('[data-controller~="document-pages"]');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(reader, 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        controller.paginate();
+        controller.paginate();
+        const blocks = [...surface.querySelectorAll('.document-editor-block[data-editor-block-id]')];
+        const listBlocks = blocks.filter(block => block.querySelector('li'));
+        const item = listBlocks.flatMap(block => [...block.querySelectorAll('li')]).filter(li => li.textContent.includes('Long item text')).at(-1);
+        const last = item.closest('.document-editor-block');
+        const range = document.createRange();
+        range.selectNodeContents(item);
+        range.collapse(false);
+        last.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return listBlocks.map(block => [...block.querySelectorAll('li')].map(li => li.textContent));
+      })()
+    JAVASCRIPT
+    assert_operator state.length, :>, 1
+    assert_equal "First item#{long_item}Last item", state.flatten.join
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: source.sub(long_item, "#{long_item} updated"), wait: 5
+  end
+
+  test "restores the caret offset inside a list item split across pages" do
+    long_item = ("Caret restoration follows the selected text through page flow. " * 50).strip
+    document = Document.create!(title: "Caret in continued item", source: "- #{long_item}")
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+      })()
+    JAVASCRIPT
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    expected = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const itemFragments = () => [...surface.querySelectorAll('.document-page-content li')];
+        const before = itemFragments();
+        const focusItem = before.at(-1);
+        if (!focusItem) return null;
+        const walker = document.createTreeWalker(focusItem, NodeFilter.SHOW_TEXT);
+        let textNode = null;
+        while (walker.nextNode()) textNode = walker.currentNode;
+        if (!textNode) return null;
+        const localOffset = Math.max(0, textNode.textContent.length - 12);
+        focusItem.closest('[data-editor-block-id]').focus({ preventScroll: true });
+        const selection = window.getSelection();
+        selection.setPosition(textNode, localOffset);
+        const beforeRange = document.createRange();
+        beforeRange.selectNodeContents(focusItem);
+        beforeRange.setEnd(textNode, localOffset);
+        const offset = before.slice(0, -1).reduce((total, item) => total + item.textContent.length, 0) + beforeRange.toString().length;
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+        return { offset, fragments: before.length };
+      })()
+    JAVASCRIPT
+    assert expected, "expected a text caret in the final list-item fragment"
+    assert_operator expected.fetch("fragments"), :>, 1
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const fragments = [...surface.querySelectorAll('.document-page-content li')];
+        const selection = window.getSelection();
+        const node = selection?.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection?.focusNode?.parentElement;
+        const item = node?.closest('li');
+        if (!selection?.focusNode || !item) return null;
+        const index = fragments.indexOf(item);
+        const range = document.createRange();
+        range.selectNodeContents(item);
+        range.setEnd(selection.focusNode, selection.focusOffset);
+        return {
+          offset: fragments.slice(0, index).reduce((total, fragment) => total + fragment.textContent.length, 0) + range.toString().length,
+          page: [...surface.querySelectorAll('.document-page-frame')].indexOf(item.closest('.document-page-frame'))
+        };
+      })()
+    JAVASCRIPT
+    assert result, "expected the caret to remain inside the continued list item"
+    assert_equal expected.fetch("offset"), result.fetch("offset"), "caret should remain at the same list-item text offset after repagination"
+    assert_operator result.fetch("page"), :>, 0
+  end
+
+  test "keeps a caret at a continuation boundary on the following page" do
+    paragraph = ("Caret restoration follows the selected text through page flow. " * 50).strip
+    document = Document.create!(title: "Caret at continuation boundary", source: paragraph)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+
+    boundary = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+        return true;
+      })()
+    JAVASCRIPT
+    assert boundary
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    offset = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const fragments = [...surface.querySelectorAll('.document-page-content [data-editor-block-id][contenteditable="true"]')];
+        if (fragments.length < 2) return null;
+        const continuation = fragments[1];
+        const visibleText = (root) => {
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) => node.parentElement?.closest('.katex, .katex-mathml, [aria-hidden="true"], [contenteditable="false"]')
+              ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+          });
+          let text = '';
+          while (walker.nextNode()) text += walker.currentNode.textContent;
+          return text;
+        };
+        const walker = document.createTreeWalker(continuation, NodeFilter.SHOW_TEXT);
+        if (!walker.nextNode()) return null;
+        const textNode = walker.currentNode;
+        continuation.closest('[data-editor-block-id]').focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().setPosition(textNode, 0);
+        const sourceOffset = visibleText(fragments[0]).length;
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+        return sourceOffset;
+      })()
+    JAVASCRIPT
+    assert offset, "expected a caret at the start of the continued paragraph fragment"
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const selection = window.getSelection();
+        const node = selection?.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection?.focusNode?.parentElement;
+        const block = node?.closest('[data-editor-block-id][contenteditable="true"]');
+        if (!selection?.focusNode || !block) return null;
+        const fragments = [...surface.querySelectorAll('.document-page-content [data-editor-block-id][contenteditable="true"]')];
+        const index = fragments.indexOf(block);
+        const visibleText = (root) => {
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) => node.parentElement?.closest('.katex, .katex-mathml, [aria-hidden="true"], [contenteditable="false"]')
+              ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+          });
+          let text = '';
+          while (walker.nextNode()) text += walker.currentNode.textContent;
+          return text;
+        };
+        const range = document.createRange();
+        range.selectNodeContents(block);
+        range.setEnd(selection.focusNode, selection.focusOffset);
+        return {
+          offset: fragments.slice(0, index).reduce((total, fragment) => total + visibleText(fragment).length, 0) + range.toString().length,
+          page: [...surface.querySelectorAll('.document-page-frame')].indexOf(block.closest('.document-page-frame'))
+        };
+      })()
+    JAVASCRIPT
+    assert result, "expected the caret to remain in a continued paragraph fragment"
+    assert_equal offset, result.fetch("offset"), "caret should remain at the same source offset"
+    assert_operator result.fetch("page"), :>, 0, "caret at the continuation boundary should stay on the following page"
+  end
+
+  test "flows an oversized nested ordered list without changing its source" do
+    nested = (1..60).map { |n| "  #{n}. Nested item #{n} with explanatory text" }.join("\n")
+    source = "Opening paragraph.\n\n- Parent item\n#{nested}\n- Outer tail"
+    document = Document.create!(title: "Nested list flow", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const lists = [...surface.querySelectorAll('ol')];
+        const items = lists.flatMap(list => [...list.children].map(item => item.textContent.trim()));
+        const last = lists.at(-1).lastElementChild;
+        const block = last.closest('.document-editor-block');
+        const range = document.createRange();
+        range.selectNodeContents(last);
+        range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return { items, starts: lists.map(list => [list.start, list.children.length]), overflow: surface.querySelectorAll('.is-overflowing-content').length };
+      })()
+    JAVASCRIPT
+    assert_equal (1..60).map { |n| "Nested item #{n} with explanatory text" }, state.fetch("items")
+    assert_operator state.fetch("starts").length, :>, 1
+    next_number = 1
+    state.fetch("starts").each do |start, count|
+      assert_equal next_number, start
+      next_number += count
+    end
+    assert_equal 0, state.fetch("overflow")
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: source.sub("Nested item 60 with explanatory text", "Nested item 60 with explanatory text updated"), wait: 5
+  end
+
+  test "edits a nested list item that itself spans pages" do
+    long_item = ("Nested item content continues across pages. " * 100).strip
+    source = "- Parent\n  1. #{long_item}\n  2. Last nested item\n- Tail"
+    document = Document.create!(title: "Nested item flow", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    count = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const items = [...surface.querySelectorAll('ol > li')].filter(li => li.textContent.includes('Nested item content'));
+        const last = items.at(-1);
+        const block = last.closest('.document-editor-block');
+        const range = document.createRange();
+        range.selectNodeContents(last);
+        range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return items.length;
+      })()
+    JAVASCRIPT
+    assert_operator count, :>, 1
+    assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.document-page-content li[data-document-page-continuation]')).listStyleType")
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: source.sub(long_item, "#{long_item} updated"), wait: 5
+  end
+
+  test "flows nested lists around an atomic code block" do
+    document = Document.create!(title: "Nested code flow", source: "Initial content")
+    visit document_path(document)
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const outer = document.createElement('ul');
+        const parent = document.createElement('li');
+        const nested = document.createElement('ol');
+        for (let n = 1; n <= 100; n++) {
+          const item = document.createElement('li');
+          item.textContent = `Nested item ${n}`;
+          if (n === 50) { const code = document.createElement('pre'); code.textContent = 'atomic code'; item.append(code); }
+          nested.append(item);
+        }
+        parent.append('Parent', nested);
+        outer.append(parent);
+        surface.replaceChildren(outer);
+        controller.paginate(); controller.paginate();
+        return { pages: surface.querySelectorAll('.document-page').length,
+          items: [...surface.querySelectorAll('ol > li')].map(item => item.textContent),
+          code: surface.querySelectorAll('pre').length,
+          overflow: surface.querySelectorAll('.is-overflowing-content').length };
+      })()
+    JAVASCRIPT
+    assert_operator state.fetch("pages"), :>, 1
+    assert_equal 100, state.fetch("items").length
+    assert_equal 1, state.fetch("code")
+    assert_equal 0, state.fetch("overflow")
+  end
+
+  test "flows a long nested item before an atomic code block" do
+    document = Document.create!(title: "Long nested item with code", source: "Initial content")
+    visit document_path(document)
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const outer = document.createElement('ul');
+        const parent = document.createElement('li');
+        const nested = document.createElement('ol');
+        const first = document.createElement('li');
+        first.textContent = 'Long nested item '.repeat(400);
+        const second = document.createElement('li');
+        const code = document.createElement('pre');
+        code.textContent = 'atomic code';
+        second.append('Second item', code);
+        nested.append(first, second); parent.append('Parent', nested); outer.append(parent);
+        const expected = outer.textContent;
+        surface.replaceChildren(outer);
+        controller.paginate(); controller.paginate();
+        return { expected, actual: [...surface.querySelectorAll('.document-page-content')].map(page => page.textContent).join(''),
+          code: surface.querySelectorAll('pre').length, overflow: surface.querySelectorAll('.is-overflowing-content').length };
+      })()
+    JAVASCRIPT
+    assert_equal state.fetch("expected"), state.fetch("actual")
+    assert_equal 1, state.fetch("code")
+    assert_equal 0, state.fetch("overflow")
+  end
+
+  test "continues a loose list item without splitting its Markdown structure" do
+    long_item = ("Loose list item text flows over the page. " * 90).strip
+    source = "- #{long_item}\n\n- Final item"
+    document = Document.create!(title: "Loose item flow", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const blocks = [...surface.querySelectorAll('.document-editor-block[data-editor-block-id]')].filter(block => block.querySelector('li'));
+        const last = blocks.at(-1);
+        const item = last.querySelector('li:last-child');
+        const range = document.createRange();
+        range.selectNodeContents(item);
+        range.collapse(false);
+        last.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return blocks.map(block => [...block.querySelectorAll('li')].map(li => li.querySelector('p')?.textContent ?? li.textContent));
+      })()
+    JAVASCRIPT
+    assert_operator state.length, :>, 1
+    assert_equal "#{long_item}Final item", state.flatten.join
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: "#{source} updated", wait: 5
+  end
+
+  test "retains direct text around mixed quote children during repagination" do
+    document = Document.create!(title: "Mixed quote flow", source: "Initial content")
+    visit document_path(document)
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const quote = document.createElement('blockquote');
+        const paragraph = document.createElement('p');
+        paragraph.textContent = 'Long quoted content '.repeat(150);
+        quote.append('Before ', paragraph, ' After');
+        const expected = quote.textContent;
+        surface.replaceChildren(quote);
+        controller.paginate();
+        controller.paginate();
+        const content = () => [...surface.querySelectorAll('.document-page-content')].map(page => page.textContent).join('');
+        const direct = { expected, actual: content() };
+        const wrapper = document.createElement('div');
+        const list = document.createElement('ul');
+        for (let n = 0; n < 100; n++) {
+          const item = document.createElement('li');
+          item.textContent = `Item ${n}`;
+          list.append(item);
+        }
+        const before = document.createElement('p');
+        before.textContent = 'Before list';
+        const after = document.createElement('p');
+        after.textContent = 'After list';
+        wrapper.append(before, list, after);
+        const wrapperText = wrapper.textContent;
+        surface.replaceChildren(wrapper);
+        controller.paginate();
+        controller.paginate();
+        return [direct, { expected: wrapperText, actual: content() }];
+      })()
+    JAVASCRIPT
+    result.each { |entry| assert_equal entry.fetch("expected"), entry.fetch("actual") }
+  end
+
   test "paginates the visual editor and keeps oversized paragraph edits mapped to one source block" do
     paragraph = ("Flowing text stays at a fixed size and carries onto the next A4 page. " * 190).strip
     source = "# A4 flow\n\n#{paragraph}"
@@ -2735,6 +3226,37 @@ class DocumentsTest < ApplicationSystemTestCase
     active_document_block.send_keys(:backspace)
     wait_for_settled_document_projection
     assert_field "Markdown source", with: /Continued\z/, wait: 5
+  end
+
+  test "preserves formatting and math when editing a paragraph continued across pages" do
+    paragraph = ("A **strong idea** with $x+1$ and [a link](/notes) continues here. " * 100).strip
+    source = "#{paragraph}\n\nClosing paragraph."
+    document = Document.create!(title: "Formatted flow", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    count = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const blocks = [...surface.querySelectorAll('.document-editor-block[data-editor-block-id]')];
+        const paragraph = blocks.find(block => block.querySelector('strong'));
+        const fragments = blocks.filter(block => block.dataset.editorBlockId === paragraph.dataset.editorBlockId);
+        const last = fragments.at(-1);
+        const target = last.querySelector('p');
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        range.collapse(false);
+        last.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return fragments.length;
+      })()
+    JAVASCRIPT
+    assert_operator count, :>, 1
+    active_document_block.send_keys(" Added")
+    assert_field "Markdown source", with: source.sub(paragraph, "#{paragraph} Added"), wait: 5
   end
 
   test "repacks document and removes trailing page when content is shortened" do
@@ -2825,6 +3347,127 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
     active_document_block.send_keys(" noted")
     assert_field "Markdown source", with: /Paragraph 50 inside the blockquote.*noted/, wait: 5
+  end
+
+  test "replaces a selection across table fragments at the correct source offsets" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Table selection across pages", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    outcome = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const frames = [...surface.querySelectorAll('.document-page-frame')];
+        const first = frames[0]?.querySelector('tbody tr:last-child td:last-child');
+        const second = frames[1]?.querySelector('tbody tr:first-child td:first-child');
+        if (!first || !second) return null;
+        const firstText = first.firstChild, secondText = second.firstChild;
+        const selection = window.getSelection();
+        selection.setBaseAndExtent(firstText, 2, secondText, 3);
+        const block = first.closest('[data-editor-block-id]');
+        const firstValue = first.textContent, secondValue = second.textContent;
+        const event = new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: 'X' });
+        block.dispatchEvent(event);
+        return { firstValue, secondValue, cancelled: event.defaultPrevented };
+      })()
+    JAVASCRIPT
+    assert outcome, "expected the table to span two pages"
+    assert outcome.fetch("cancelled"), "expected the cross-fragment edit to use the source transaction"
+    from = source.index(outcome.fetch("firstValue")) + 2
+    to = source.index(outcome.fetch("secondValue")) + 3
+    assert_field "Markdown source", with: source[0...from] + "X" + source[to..], wait: 5
+  end
+
+  test "edits a table cell on a continuation page without changing other rows" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Continued table editing", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    value = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frames = [...document.querySelectorAll('.document-editor-projection .document-page-frame')];
+        const cell = frames[1]?.querySelector('tbody tr:first-child td:last-child');
+        if (!cell) return null;
+        const block = cell.closest('[data-editor-block-id]');
+        const range = document.createRange();
+        range.selectNodeContents(cell); range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+        return cell.textContent;
+      })()
+    JAVASCRIPT
+    assert value, "expected a table cell on the continuation page"
+    active_document_block.send_keys(" added")
+    assert_field "Markdown source", with: source.sub(value, "#{value} added"), wait: 5
+  end
+
+  test "edits a continued table cell when another cell contains a link with balanced destination parentheses" do
+    rows = (1..60).map do |n|
+      n == 1 ? "| [Row #{n}](https://example.com/path_(detail)) | Value #{n} |" : "| Row #{n} | Value #{n} |"
+    end.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Continued linked table editing", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+    value = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frames = [...document.querySelectorAll('.document-editor-projection .document-page-frame')];
+        const cell = frames[1]?.querySelector('tbody tr:first-child td:last-child');
+        if (!cell) return null;
+        const block = cell.closest('[data-editor-block-id]');
+        const range = document.createRange();
+        range.selectNodeContents(cell); range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+        return cell.textContent;
+      })()
+    JAVASCRIPT
+    assert value, "expected a table cell on the continuation page"
+    active_document_block.send_keys(" added")
+    assert_field "Markdown source", with: source.sub(value, "#{value} added"), wait: 5
+  end
+
+  test "repaginates a continued table without duplicating rows or breaking edits" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Repaginated continued table", source: source)
+    visit edit_document_path(document)
+    wait_for_settled_document_projection
+
+    outcome = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const surface = document.querySelector('.document-editor-projection .document-surface');
+      const owner = surface.closest('[data-controller~="document-pages"]');
+      const controller = window.Stimulus.getControllerForElementAndIdentifier(owner, 'document-pages');
+      const collectRows = () => [...surface.querySelectorAll('.document-page-content table tbody tr')]
+        .map((row) => row.cells[0]?.textContent.trim());
+      const before = collectRows();
+      surface.addEventListener('elef:document-pages-settled', () => done({ before, after: collectRows() }), { once: true });
+      surface.dataset.documentPagesSettled = 'false';
+      controller.paginate();
+    JAVASCRIPT
+    expected_rows = (1..60).map { |n| "Row #{n}" }
+    assert_equal expected_rows, outcome.fetch("before")
+    assert_equal expected_rows, outcome.fetch("after")
+
+    value = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frames = [...document.querySelectorAll('.document-editor-projection .document-page-frame')];
+        const cell = frames[1]?.querySelector('tbody tr:first-child td:last-child');
+        if (!cell) return null;
+        const block = cell.closest('[data-editor-block-id]');
+        const range = document.createRange();
+        range.selectNodeContents(cell); range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+        return cell.textContent;
+      })()
+    JAVASCRIPT
+    assert value, "expected an editable table cell after repagination"
+    active_document_block.send_keys(" edited")
+    assert_field "Markdown source", with: source.sub(value, "#{value} edited"), wait: 5
   end
 
   test "paginates oversized tables across pages" do

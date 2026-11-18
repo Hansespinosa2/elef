@@ -19,6 +19,7 @@ import { PIXEL_PNG_BYTES, PIXEL_PNG_DIGEST, PIXEL_PNG_MARKDOWN } from "../../../
 import { presentationModeWorkflow } from "../../../../apps/web/test/e2e/scenarios/presentation-mode.js"
 import { vimRelativeLineNumbersWorkflow } from "../../../../apps/web/test/e2e/scenarios/vim-relative-line-numbers.js"
 import { documentPageAspectRatioWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-aspect-ratio.js"
+import { documentPageFlowWorkflow } from "../../../../apps/web/test/e2e/scenarios/document-page-flow.js"
 import { exportWorkflow } from "../../../../apps/web/test/e2e/scenarios/export.js"
 import { slidePositionGrammarWorkflow } from "../../../../apps/web/test/e2e/scenarios/slide-position-grammar.js"
 import { displayMathEnterWorkflow } from "../../../../apps/web/test/e2e/scenarios/display-math-enter.js"
@@ -1627,6 +1628,10 @@ post(.leftMouseUp, CGPoint(x: start.x + 150, y: start.y))`
     }, text), { timeout: 30000, timeoutMsg: "The paginated preview did not settle with the edited source" })
   }
 
+  async pageFlowProbe(probe) {
+    return browser.execute(probe, "#desktop-preview .document-surface")
+  }
+
   async scrollPreviewToBottom() {
     return browser.execute(() => { const pane = document.querySelector("#desktop-preview"); pane.scrollTop = pane.scrollHeight; return pane.scrollTop })
   }
@@ -2718,6 +2723,10 @@ describe("desktop binary workflows and native boundaries", () => {
       await browser.setWindowSize(originalSize.width, originalSize.height)
       if (process.platform === "darwin") await browser.setWindowRect(originalPosition.x, originalPosition.y, null, null)
     }
+  })
+
+  it("flows document content across pages in the desktop preview", async () => {
+    await documentPageFlowWorkflow(new DesktopEditorUi())
   })
 
   it("accepts trusted keyboard input in CodeMirror and persists it", async () => {
