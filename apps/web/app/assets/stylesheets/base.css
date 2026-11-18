@@ -127,6 +127,10 @@ body.elef-app {
 .elef-app .math-shortcut-form select { background: var(--oradia-slate-950); border-color: var(--oradia-slate-700); color: var(--oradia-ink); }
 .elef-app .math-shortcut-form input:focus,
 .elef-app .math-shortcut-form select:focus { border-color: var(--oradia-green); box-shadow: 0 0 0 3px rgba(159, 197, 169, 0.18); }
-.elef-app .error-panel { background: #3a2428; border-color: #92565e; color: #f3c7c9; }
-.elef-app .flash { background: #263c31; border-color: #4f8b68; color: #d7eddb; }
+.elef-app .error-panel { background: #3a2428; border-color: #92565e; color: #f3c7c9; color-scheme: dark; }
+.elef-app .error-panel::selection,
+.elef-app .error-panel ::selection { background-color: var(--work-code-selection-background); color: #f3c7c9; }
+.elef-app .flash { background: #263c31; border-color: #4f8b68; color: #d7eddb; color-scheme: dark; }
+.elef-app .flash::selection,
+.elef-app .flash ::selection { background-color: var(--work-code-selection-background); color: #d7eddb; }
 .field-hint { color: var(--oradia-muted); font-size: 0.82rem; line-height: 1.45; margin: 0.5rem 0 0; }

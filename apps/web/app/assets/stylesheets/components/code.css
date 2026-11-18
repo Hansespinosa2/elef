@@ -342,7 +342,9 @@
 .slide-overview-thumbnail video { pointer-events: none; }
 .slide-overview-label { display: block; font-size: 0.72rem; margin-top: 0.3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .slide-overview-card .is-overflowing::after { background: #8c352b; border-radius: 0 0 0 0.35rem; color: white; content: "Overflow"; font: 700 10px/1.2 var(--oradia-sans); padding: 0.2rem 0.35rem; position: absolute; right: 0; top: 0; z-index: 2; }
-.slide-overflow-warnings { background: #493a18; border: 1px solid #94752d; border-radius: 0.65rem; color: #f5d982; margin-top: 0.75rem; padding: 0.65rem 0.8rem; }
+.slide-overflow-warnings { background: #493a18; border: 1px solid #94752d; border-radius: 0.65rem; color: #f5d982; color-scheme: dark; margin-top: 0.75rem; padding: 0.65rem 0.8rem; }
+.slide-overflow-warnings::selection,
+.slide-overflow-warnings ::selection { background-color: var(--work-code-selection-background); color: #f5d982; }
 .slide-overflow-warnings h4 { font-size: 0.85rem; margin: 0 0 0.25rem; }
 .slide-overflow-warnings ul { font-size: 0.78rem; margin: 0; padding-left: 1.2rem; }
 .slide-frame.is-overflowing > .slide { outline: 5px solid #c24738; outline-offset: -5px; }
@@ -357,8 +359,12 @@
 .preview-pane.is-media-drop-target { outline: 3px dashed var(--oradia-green); outline-offset: -0.5rem; }
 .source-field .editor-surface.is-media-drop-target { outline: 3px dashed var(--oradia-green); outline-offset: -0.5rem; }
 .media-upload-status[aria-busy="true"] { color: var(--oradia-green); }
-.presentation-print { background: #11161a; color: white; min-height: 100vh; }
-.presentation-print-toolbar { align-items: center; display: flex; gap: 0.75rem; justify-content: center; padding: 1rem; }
+.presentation-print { background: #11161a; color: white; color-scheme: dark; min-height: 100vh; }
+.presentation-print > :not(.slides)::selection,
+.presentation-print > :not(.slides) ::selection { background-color: var(--work-code-selection-background); color: #fff; }
+.presentation-print-toolbar { align-items: center; color-scheme: dark; display: flex; gap: 0.75rem; justify-content: center; padding: 1rem; }
+.presentation-print-toolbar::selection,
+.presentation-print-toolbar ::selection { background-color: var(--work-code-selection-background); color: #fff; }
 .presentation-print-toolbar .button { background: var(--oradia-slate-800); border: 1px solid var(--oradia-slate-700); border-radius: 0.55rem; color: var(--oradia-ink); cursor: pointer; font: inherit; font-weight: 700; min-height: 2.5rem; padding: 0.5rem 0.8rem; text-decoration: none; }
 .presentation-print-toolbar .button.primary { background: #6d4aff; border-color: #6d4aff; color: white; }
 
@@ -369,8 +375,15 @@
 }
 
 .presentation-mode {
+  color-scheme: dark;
   min-height: 100vh;
   padding: 1rem;
+}
+
+.presentation-mode > :not(.presentation-stage)::selection,
+.presentation-mode > :not(.presentation-stage) ::selection {
+  background-color: var(--work-code-selection-background);
+  color: #fff;
 }
 
 .presentation-toolbar {
