@@ -330,6 +330,17 @@ describe("settings route", () => {
       assert.equal(tabs.length, 3);
       await click(tabs[1]);
       assert.equal(tabs[1]?.getAttribute("aria-selected"), "true");
+      const tablist = document.querySelector('.settings-tabs[role="tablist"]')!;
+      const ev = document.createEvent("Event") as unknown as {
+        initEvent: (t: string, b: boolean, c: boolean) => void;
+        key: string;
+      };
+      ev.initEvent("keydown", true, true);
+      ev.key = "ArrowDown";
+      await act(async () => {
+        tablist.dispatchEvent(ev as unknown as Event);
+      });
+      assert.equal(tabs[2]?.getAttribute("aria-selected"), "true");
       const vimNavBox = document.querySelector("#library-vim-nav") as unknown as { checked: boolean };
       assert.equal(vimNavBox.checked, true);
       await setCheckbox(vimNavBox, false);

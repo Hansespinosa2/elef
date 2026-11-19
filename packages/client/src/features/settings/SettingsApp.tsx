@@ -83,6 +83,33 @@ export function SettingsApp({ host, options, storage, editorBridge, onSaved, reg
   }
 
   const showUpdater = host.capabilities.updater && options.updater !== undefined;
+  const visibleSections: readonly SettingsSection[] = showUpdater
+    ? ["appearance", "keyboard", "updates"]
+    : ["appearance", "keyboard"];
+
+  function selectSection(next: SettingsSection): void {
+    setSection(next);
+    document.getElementById(`settings-panel-${next}`)?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }
+
+  function onTabKeyDown(event: React.KeyboardEvent<HTMLElement>): void {
+    const idx = visibleSections.indexOf(section);
+    let nextIdx = -1;
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      nextIdx = (idx + 1) % visibleSections.length;
+    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      nextIdx = (idx - 1 + visibleSections.length) % visibleSections.length;
+    } else if (event.key === "Home") {
+      nextIdx = 0;
+    } else if (event.key === "End") {
+      nextIdx = visibleSections.length - 1;
+    }
+    if (nextIdx === -1) return;
+    event.preventDefault();
+    const next = visibleSections[nextIdx]!;
+    selectSection(next);
+    document.getElementById(`settings-tab-${next}`)?.focus();
+  }
 
   return (
     <div className="settings-page settings-arc-shell">
@@ -92,18 +119,16 @@ export function SettingsApp({ host, options, storage, editorBridge, onSaved, reg
           <h1 className="mb-1 text-3xl font-bold">Settings</h1>
           <p className="text-sm opacity-75">New and unstyled works use these values.</p>
         </section>
-        <nav className="settings-tabs" role="tablist" aria-label="Settings categories">
+        <nav className="settings-tabs" role="tablist" aria-label="Settings categories" onKeyDown={onTabKeyDown}>
           <button
             type="button"
             role="tab"
             id="settings-tab-appearance"
             aria-selected={section === "appearance"}
             aria-controls="settings-panel-appearance"
+            tabIndex={section === "appearance" ? 0 : -1}
             className={`settings-tab${section === "appearance" ? " is-active" : ""}`}
-            onClick={() => {
-              setSection("appearance");
-              document.getElementById("settings-panel-appearance")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
-            }}
+            onClick={() => selectSection("appearance")}
           >
             Appearance
           </button>
@@ -113,11 +138,9 @@ export function SettingsApp({ host, options, storage, editorBridge, onSaved, reg
             id="settings-tab-keyboard"
             aria-selected={section === "keyboard"}
             aria-controls="settings-panel-keyboard"
+            tabIndex={section === "keyboard" ? 0 : -1}
             className={`settings-tab${section === "keyboard" ? " is-active" : ""}`}
-            onClick={() => {
-              setSection("keyboard");
-              document.getElementById("settings-panel-keyboard")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
-            }}
+            onClick={() => selectSection("keyboard")}
           >
             Keyboard &amp; Vim
           </button>
@@ -128,11 +151,9 @@ export function SettingsApp({ host, options, storage, editorBridge, onSaved, reg
               id="settings-tab-updates"
               aria-selected={section === "updates"}
               aria-controls="settings-panel-updates"
+              tabIndex={section === "updates" ? 0 : -1}
               className={`settings-tab${section === "updates" ? " is-active" : ""}`}
-              onClick={() => {
-                setSection("updates");
-                document.getElementById("settings-panel-updates")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
-              }}
+              onClick={() => selectSection("updates")}
             >
               Updates
             </button>

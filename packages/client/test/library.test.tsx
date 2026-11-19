@@ -773,6 +773,15 @@ test("arc hover popover opens on keyboard navigation and toggles the rail with C
       element.querySelector(".library-arc-shell")?.classList.contains("is-rail-collapsed"),
       false,
     );
+    element.setAttribute("hidden", "");
+    await press("j");
+    assert.equal(element.querySelector(".library-hover-popover"), null, "hidden library ignores keydown");
+    await press("b", true);
+    assert.equal(
+      element.querySelector(".library-arc-shell")?.classList.contains("is-rail-collapsed"),
+      false,
+      "hidden library ignores Cmd+B",
+    );
   } finally {
     shell.unmount();
   }

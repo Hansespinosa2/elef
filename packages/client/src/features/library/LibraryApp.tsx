@@ -299,6 +299,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
     function onKeyDown(event: globalThis.KeyboardEvent): void {
       if (paletteOpen || dialogOpen) return;
       const root = rootRef.current;
+      if (root !== null && (!root.isConnected || root.closest("[hidden]") !== null)) return;
       const targetNode = event.target as Node | null;
       if (
         root !== null &&
@@ -314,8 +315,11 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
       const tag = target?.tagName?.toUpperCase() ?? "";
       const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable === true;
       const meta = event.metaKey || event.ctrlKey;
+      const inEditorSidebar =
+        root?.closest("#editor-library-drawer") !== null ||
+        ownerDoc.body?.dataset?.desktopView === "editor";
 
-      if (meta && (event.key === "\\" || event.key.toLowerCase() === "b") && !event.shiftKey && !event.altKey) {
+      if (!inEditorSidebar && meta && (event.key === "\\" || event.key.toLowerCase() === "b") && !event.shiftKey && !event.altKey) {
         event.preventDefault();
         setRailCollapsed((prev) => !prev);
         return;
