@@ -679,7 +679,6 @@ li.editor-reveal-marker { list-style: none; }
     font-size: 0.7rem;
     letter-spacing: 0.04em;
     padding: 0.1rem 0.2rem;
-    text-transform: uppercase;
   }
 
   /* Hairline 1px visual divider with 9px hit target for pointer dragging */

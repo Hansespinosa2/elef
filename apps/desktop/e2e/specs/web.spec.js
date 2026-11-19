@@ -283,7 +283,7 @@ class WebEditorUi {
 
   async returnToEditor() {
     if (this.activeWorkId && !this.page.url().includes(`/presentations/${this.activeWorkId}/edit`)) {
-      await this.page.goto(`/presentations/${this.activeWorkId}/edit`)
+      await this.page.goto(`/presentations/${this.activeWorkId}/edit?editor_mode=visual`)
       await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
       await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
     }

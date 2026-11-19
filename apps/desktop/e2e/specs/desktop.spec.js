@@ -2198,8 +2198,6 @@ class DesktopLibraryUi {
         timeoutMsg: `The ${title} card preview did not switch to visual mode`
       })
     }
-      timeoutMsg: `The ${title} card preview did not open its rendered Visual editor`
-    })
     await this.openLibrary()
   }
 

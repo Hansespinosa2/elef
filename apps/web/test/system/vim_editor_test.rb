@@ -6,7 +6,7 @@ class VimEditorTest < ApplicationSystemTestCase
     document = Document.create!(title: "Mobile editor", source: "# Mobile")
     page.driver.browser.execute_cdp("Emulation.clearDeviceMetricsOverride")
     page.driver.browser.manage.window.resize_to(1400, 1000)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     [500, 390, 320].each do |width|
       page.driver.browser.execute_cdp("Emulation.setDeviceMetricsOverride", width: width, height: 800, deviceScaleFactor: 1, mobile: false)
       metrics = page.evaluate_script(<<~JAVASCRIPT)
@@ -58,7 +58,7 @@ class VimEditorTest < ApplicationSystemTestCase
     document = Document.create!(title: "Vim notes", source: "# First\n# Second\n# Third")
     visit settings_path
     find("#vim-enabled").check
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
 
@@ -85,7 +85,7 @@ class VimEditorTest < ApplicationSystemTestCase
     visit settings_path
     find("#vim-enabled").check
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     focus_at_end = <<~JAVASCRIPT
@@ -151,7 +151,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim caret position survives visual source switches and its cursor stays out of the visual surface" do
     document = Document.create!(title: "Vim caret handoff", source: "# Vim handoff\n\nBody")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
 
@@ -193,7 +193,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim visual mode keeps the empty engine panels hidden and the projection in view" do
     document = Document.create!(title: "Vim panels", source: "A *warm* word.")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector ".editor-projection .document-editor-block", wait: 10
@@ -257,7 +257,7 @@ class VimEditorTest < ApplicationSystemTestCase
     document = Document.create!(title: "Visual selection", source: "abcdef\nsecond line")
     visit settings_path
     find("#vim-enabled").check
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     block = find(".document-editor-block", text: "abcdef")
     page.execute_script(<<~JAVASCRIPT, block)
@@ -297,7 +297,7 @@ class VimEditorTest < ApplicationSystemTestCase
     document = Document.create!(title: "Normal caret", source: "abcdef\nsecond line")
     visit settings_path
     find("#vim-enabled").check
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     block = find(".document-editor-block", text: "abcdef")
     page.execute_script(<<~JAVASCRIPT, block)
@@ -341,7 +341,7 @@ class VimEditorTest < ApplicationSystemTestCase
     visit settings_path
 
     find("#vim-enabled").check
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
 
@@ -352,7 +352,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "uses one configured Vim Escape remap and ignores legacy Normal mappings" do
     document = Document.create!(title: "Unified Vim Escape", source: "# One two")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     page.execute_script(<<~JAVASCRIPT)
       localStorage.clear();
       localStorage.setItem("elef.editor.vim.enabled", "true");
@@ -391,7 +391,7 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_equal "Shift+Space", escape_key.value
 
     select "Hidden", from: "Line numbers"
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.cm-lineNumbers')).display")
 
     visit settings_path
@@ -399,7 +399,7 @@ class VimEditorTest < ApplicationSystemTestCase
     check "Mode-aware cursor styling"
     check "Enable Vim mode"
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     select_option = page.evaluate_script("document.querySelector('.editor-surface').dataset.lineNumbers")
     assert_equal "relative", select_option
@@ -459,7 +459,7 @@ class VimEditorTest < ApplicationSystemTestCase
       :::not-metadata
       ```
     MARKDOWN
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     # Invisible directives collapse until entered (reveal-in-place), so each
     # marker line is entered in turn; revealed syntax keeps its active mark
@@ -507,7 +507,7 @@ class VimEditorTest < ApplicationSystemTestCase
     MARKDOWN
     document = Document.create!(title: "Literal code", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_field "Markdown source", with: source
     code_state = page.evaluate_script(<<~JAVASCRIPT)
@@ -534,7 +534,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "live preview reveals syntax around the active source range" do
     document = Document.create!(title: "Active syntax", source: "# Heading\n\n**Bold**")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -557,7 +557,7 @@ class VimEditorTest < ApplicationSystemTestCase
     visit settings_path
     find("#vim-enabled").check
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     editor = find(".cm-content")
     editor.click
@@ -577,7 +577,7 @@ class VimEditorTest < ApplicationSystemTestCase
     find("#vim-enabled").check
     find("#vim-enabled").uncheck
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector "[data-editor-target='mode'][data-mode='standard']", text: "Standard"
 
     editor = find(".cm-content")
@@ -768,7 +768,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim normal-mode keys edit the source through the visual projection" do
     document = Document.create!(title: "Vim visual editing", source: "# Vim visual\n\nFirst paragraph.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
 
@@ -811,7 +811,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim j traverses visual blocks from top to bottom" do
     Document.create!(title: "Vim traverse", source: "# One\n# Two\n# Three")
-    visit edit_document_path(Document.order(:id).last)
+    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -845,7 +845,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim j moves down table cells in the same column" do
     Document.create!(title: "Vim table", source: "| a | b |\n|---|---|\n| c | d |\n| e | f |")
-    visit edit_document_path(Document.order(:id).last)
+    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -883,7 +883,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim k traverses visual blocks from bottom to top" do
     Document.create!(title: "Vim traverse up", source: "# One\n# Two\n# Three")
-    visit edit_document_path(Document.order(:id).last)
+    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -920,7 +920,7 @@ class VimEditorTest < ApplicationSystemTestCase
     # four-character line keeps every step on unambiguous engine
     # positions (mid-line display offsets map one-to-one).
     Document.create!(title: "Vim horizontal", source: "# ABCD")
-    visit edit_document_path(Document.order(:id).last)
+    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -990,7 +990,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim word motions w b e move across visual blocks" do
     Document.create!(title: "Vim words", source: "# One two\n# Three four")
-    visit edit_document_path(Document.order(:id).last)
+    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -1042,7 +1042,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim dollar and zero reach rendered line ends" do
     Document.create!(title: "Vim line ends", source: "First paragraph here")
-    visit edit_document_path(Document.order(:id).last)
+    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -1073,7 +1073,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim gg and capital G jump between document top and bottom" do
     Document.create!(title: "Vim jumps", source: "# One\n# Two\n# Three\n# Four\n# Five")
-    visit edit_document_path(Document.order(:id).last)
+    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -1112,7 +1112,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim counts multiply motions across blocks" do
     Document.create!(title: "Vim counts", source: "# A\n# B\n# C\n# D\n# E\n# F")
-    visit edit_document_path(Document.order(:id).last)
+    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -1152,7 +1152,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim visual mode extends the selection across blocks with j and k" do
     Document.create!(title: "Vim visual range", source: "# One\n# Two\n# Three")
-    visit edit_document_path(Document.order(:id).last)
+    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -1215,7 +1215,7 @@ class VimEditorTest < ApplicationSystemTestCase
     delimiter = "|#{Array.new(8, "---").join("|")}|"
     rows = (1..8).map { |r| "| #{(1..8).map { |c| "r#{r}c#{c}" }.join(" | ")} |" }
     Document.create!(title: "Vim grid", source: ([header, delimiter] + rows).join("\n"))
-    visit edit_document_path(Document.order(:id).last)
+    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -1302,7 +1302,7 @@ class VimEditorTest < ApplicationSystemTestCase
     document = Document.create!(title: "Cursor guard", source: "abcdef\nsecond line")
     visit settings_path
     find("#vim-enabled").check
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
 
     # A bare Vim-enabled CodeMirror with no .editor-surface ancestor: the shape
