@@ -662,9 +662,9 @@ export function editorMathContextAt(editor: any, caret: number): "display_math" 
   }
   if (caret < 0 || caret > state.doc.length || editorInsideCode(editor, caret)) return null
 
-  const paragraph = syntaxAncestors(editor, caret).find((node: any) => node.name === "Paragraph")
+  const container = syntaxAncestors(editor, caret).find((node: any) => node.name === "Paragraph" || node.name === "BlockMath")
   const line = state.doc.lineAt(caret)
-  const from = paragraph?.from ?? line.from
+  const from = container?.from ?? line.from
   const prefix = state.doc.sliceString(from, caret, "\n")
   return mathContextAt(prefix, prefix.length)
 }
