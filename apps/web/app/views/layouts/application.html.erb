@@ -25,6 +25,9 @@
         <nav class="app-nav mr-auto flex items-center gap-1" aria-label="Primary">
           <%= link_to "Library", root_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[library presentations documents].include?(controller_name)}" %>
           <%= link_to "Settings", settings_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[workspace_settings snippets math_shortcuts].include?(controller_name)}" %>
+          <% if %w[presentations documents].include?(controller_name) && %w[edit update new create].include?(action_name) %>
+            <button type="button" id="toggle-editor-library-sidebar" class="app-nav-link rounded-lg px-3 py-2 text-sm font-bold text-[#aab7b1]" title="Toggle Library Sidebar (⌘B)">Sidebar <kbd>⌘B</kbd></button>
+          <% end %>
         </nav>
         <div class="bug-report-root" data-controller="bug-report" data-bug-report-endpoint-value="<%= bug_reports_path %>">
           <p id="bug-report-recording-disclosure" class="bug-report-disclosure">While you use Elef, recent clicks, typed text, keys, and page paths are automatically kept in memory for up to 60 seconds to prepare bug reports. If submitted, these may be included. Review and edit the generated steps first; recognized sensitive fields are redacted.</p>
@@ -127,5 +130,39 @@
       <% end %>
       <%= yield %>
     </main>
+    <% if %w[presentations documents].include?(controller_name) && %w[edit update new create].include?(action_name) %>
+      <aside id="editor-library-drawer" class="editor-library-drawer" hidden aria-label="Library sidebar" data-base-path="<%= client_base_path %>"></aside>
+      <script type="module">
+        (() => {
+          const drawer = document.getElementById("editor-library-drawer");
+          const btn = document.getElementById("toggle-editor-library-sidebar");
+          if (!drawer) return;
+          let mounted = false;
+          const toggle = () => {
+            drawer.hidden = !drawer.hidden;
+            document.body.classList.toggle("has-editor-library-drawer", !drawer.hidden);
+            if (!drawer.hidden && !mounted) {
+              mounted = true;
+              drawer.setAttribute("data-controller", "client-shell");
+              drawer.setAttribute("data-client-shell-initial-url-value", "/");
+              drawer.setAttribute("data-client-shell-base-path-value", drawer.dataset.basePath || "");
+            }
+          };
+          btn?.addEventListener("click", toggle);
+          window.addEventListener("keydown", (event) => {
+            if (
+              !document.querySelector("dialog[open]") &&
+              (event.metaKey || event.ctrlKey) &&
+              !event.shiftKey &&
+              !event.altKey &&
+              event.key.toLowerCase() === "b"
+            ) {
+              event.preventDefault();
+              toggle();
+            }
+          });
+        })();
+      </script>
+    <% end %>
   </body>
 </html>

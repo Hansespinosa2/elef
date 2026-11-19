@@ -16,6 +16,9 @@ export interface LibraryCardProps {
   readonly documentNodes: readonly unknown[];
   readonly options: ElefMountOptions;
   readonly onChanged: (notice: string | null, tone?: NoticeTone) => void;
+  readonly isSelected?: boolean;
+  readonly onSelect?: (work: WorkSummary) => void;
+  readonly onHover?: (work: WorkSummary | null) => void;
 }
 
 export function cardDomId(work: WorkSummary): string {
@@ -49,6 +52,19 @@ interface PreviewState {
   readonly theme?: string;
   readonly typography?: string;
   readonly message?: string;
+}
+
+const previewCache = new WeakMap<ElefHost, Map<string, PreviewState>>();
+const previewListeners = new WeakMap<ElefHost, Set<() => void>>();
+
+function cachePreview(host: ElefHost, key: string, state: PreviewState): void {
+  let map = previewCache.get(host);
+  if (map === undefined) {
+    map = new Map();
+    previewCache.set(host, map);
+  }
+  map.set(key, state);
+  previewListeners.get(host)?.forEach((listener) => listener());
 }
 
 function previewMessage(error: unknown): string {
@@ -85,7 +101,16 @@ function afterIdle(): Promise<void> {
   });
 }
 
-function LibraryCardView({ host, work, documentNodes, options, onChanged }: LibraryCardProps): JSX.Element {
+function LibraryCardView({
+  host,
+  work,
+  documentNodes,
+  options,
+  onChanged,
+  isSelected = false,
+  onSelect,
+  onHover,
+}: LibraryCardProps): JSX.Element {
   const navigate = options.navigate;
   const editUrl = localTarget(
     options.resolveWorkUrl?.(work) ?? `#${encodeURIComponent(work.id)}`,
@@ -93,13 +118,22 @@ function LibraryCardView({ host, work, documentNodes, options, onChanged }: Libr
   );
 
   function open(event: MouseEvent): void {
+    onSelect?.(work);
     if (navigate === undefined) return;
     event.preventDefault();
     navigate({ workId: work.id, kind: work.kind });
   }
 
   return (
-    <article id={cardDomId(work)} className="library-card rounded-2xl border border-[#ddd5c8] bg-[#fffdf8]" role="listitem">
+    <article
+      id={cardDomId(work)}
+      className={`library-card rounded-2xl border border-[#ddd5c8] bg-[#fffdf8]${isSelected ? " is-selected" : ""}`}
+      role="listitem"
+      data-selected={isSelected ? "true" : undefined}
+      onMouseEnter={() => onHover?.(work)}
+      onMouseLeave={() => onHover?.(null)}
+      onFocus={() => onSelect?.(work)}
+    >
       <div className="library-card-media">
         <CardPreview host={host} work={work} documentNodes={documentNodes} options={options} />
         <a className="library-card-open" href={editUrl} aria-label={`Edit ${work.title}`} onClick={open} />
@@ -342,7 +376,7 @@ function DeleteControl({
   );
 }
 
-function CardPreview({
+export function CardPreview({
   host,
   work,
   documentNodes,
@@ -435,9 +469,18 @@ function CardPreview({
           mediaBaseUrl: options.resolveMediaBaseUrl?.(work) ?? "",
           documentNodes,
         });
-        commit({ phase: "ready", html: rendered.html, theme: rendered.style.theme, typography: rendered.style.typography });
+        const readyState: PreviewState = {
+          phase: "ready",
+          html: rendered.html,
+          theme: rendered.style.theme,
+          typography: rendered.style.typography,
+        };
+        cachePreview(host, key, readyState);
+        commit(readyState);
       } catch (error) {
-        commit({ phase: "unavailable", message: previewMessage(error) });
+        const failedState: PreviewState = { phase: "unavailable", message: previewMessage(error) };
+        cachePreview(host, key, failedState);
+        commit(failedState);
       }
     }
     void load();
@@ -486,6 +529,86 @@ function CardPreview({
           // data-client-mount contract (a MutationObserver repaginates when
           // lazy content lands) while mount-less hosts render the same
           // content unpaginated.
+          <div className={stageClass} data-client-mount="document-pages mermaid">
+            <div className="document-surface" data-document-pages-target="surface">
+              {sanitized}
+            </div>
+          </div>
+        ) : (
+          sanitized
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function StagePreview({
+  host,
+  work,
+  options,
+}: {
+  readonly host: ElefHost;
+  readonly work: WorkSummary;
+  readonly options: ElefMountOptions;
+}): JSX.Element {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const key = `${work.id}:${work.updatedAt ?? ""}`;
+  const [, setVersion] = useState(0);
+
+  useSlideScale(containerRef as RefObject<HTMLElement | null>, work.kind === "document" ? { width: 794, height: 1123 } : {});
+
+  useEffect(() => {
+    let set = previewListeners.get(host);
+    if (set === undefined) {
+      set = new Set();
+      previewListeners.set(host, set);
+    }
+    const listener = () => setVersion((v) => v + 1);
+    set.add(listener);
+    return () => {
+      set?.delete(listener);
+    };
+  }, [host]);
+
+  const cached = previewCache.get(host)?.get(key);
+  if (cached?.phase !== "ready" || cached.html === undefined) {
+    return (
+      <div ref={containerRef} className="library-preview">
+        <div
+          className="library-stage-preview-frame"
+          data-preview-state={cached?.phase ?? "loading"}
+        >
+          {cached?.phase === "unavailable" ? (cached.message ?? "Preview unavailable.") : "Loading preview…"}
+        </div>
+      </div>
+    );
+  }
+
+  const theme = cached.theme ?? "match";
+  const typography = cached.typography ?? "book";
+  const stageClass =
+    work.kind === "presentation"
+      ? `library-preview-stage presentation-surface work-surface slides slides-theme-${theme} slides-typography-${typography} slides-presentation-${presentationTheme(theme, typography)} work-theme-${theme} work-typography-${typography}`
+      : `library-preview-page document-reader document-theme-${theme} document-typography-${typography} work-theme-${theme} work-typography-${typography}`;
+  const mediaBaseUrl = options.resolveMediaBaseUrl?.(work) ?? "";
+  const sanitized = (
+    <SafeHtml
+      key={key}
+      {...(work.kind === "document" ? {} : { className: stageClass })}
+      html={cached.html}
+      sanitize={(container, html) =>
+        sanitizePreview(container, html, {
+          interactive: false,
+          documentPagination: work.kind === "document",
+          mediaBaseUrl,
+        })
+      }
+    />
+  );
+  return (
+    <div ref={containerRef} className="library-preview">
+      <div className="library-stage-preview-frame" aria-hidden="true" inert data-preview-state="ready">
+        {work.kind === "document" ? (
           <div className={stageClass} data-client-mount="document-pages mermaid">
             <div className="document-surface" data-document-pages-target="surface">
               {sanitized}

@@ -946,6 +946,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     unfreezeEditorForPrint()
     elements.editorForm.previewController?.finishEditing()
     document.body.dataset.desktopView = "library"
+    delete document.body.dataset.desktopSidebar
     document.body.classList.remove("is-editing-source")
     elements.welcome.hidden = Boolean(library)
     elements.library.hidden = !library
@@ -1251,6 +1252,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       const notice = document.querySelector("#work-notice") as HTMLElement
       notice.textContent = work.notices.join(" ")
       notice.hidden = work.notices.length === 0
+      delete document.body.dataset.desktopSidebar
       elements.library.hidden = true
       elements.workView.hidden = false
       elements.presentationStart.hidden = isDocument
@@ -1872,6 +1874,22 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }))
 
   window.addEventListener("keydown", event => {
+    if (
+      document.body.dataset.desktopView === "editor" &&
+      !document.body.classList.contains("presenting-work") &&
+      !document.querySelector("dialog[open]") &&
+      (event.metaKey || event.ctrlKey) &&
+      !event.shiftKey &&
+      !event.altKey &&
+      event.key.toLowerCase() === "b"
+    ) {
+      event.preventDefault()
+      const nextOpen = document.body.dataset.desktopSidebar !== "open"
+      if (nextOpen) document.body.dataset.desktopSidebar = "open"
+      else delete document.body.dataset.desktopSidebar
+      elements.library.hidden = !nextOpen
+      return
+    }
     // Present chord (registry "present") rides the same menu action as the
     // native item, webview-level so macOS, Linux, and Windows behave
     // identically with no per-layout native accelerator. The menu action
