@@ -494,14 +494,14 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
   z-index: 45;
 }
 .editor-library-drawer .library-arc-shell,
-body[data-desktop-view="work"][data-desktop-sidebar="open"] #library-view .library-arc-shell {
+body[data-desktop-view="editor"][data-desktop-sidebar="open"] #library-view .library-arc-shell {
   display: block;
 }
 .editor-library-drawer .library-quickstart,
-body[data-desktop-view="work"][data-desktop-sidebar="open"] #library-view .library-quickstart {
+body[data-desktop-view="editor"][data-desktop-sidebar="open"] #library-view .library-quickstart {
   display: none;
 }
-body[data-desktop-view="work"][data-desktop-sidebar="open"] .desktop-app-shell {
+body[data-desktop-view="editor"][data-desktop-sidebar="open"] .desktop-app-shell {
   display: grid;
   gap: 1.25rem;
   grid-template-columns: 22rem minmax(0, 1fr);

@@ -1862,7 +1862,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
 
   window.addEventListener("keydown", event => {
     if (
-      document.body.dataset.desktopView === "work" &&
+      document.body.dataset.desktopView === "editor" &&
       (event.metaKey || event.ctrlKey) &&
       !event.shiftKey &&
       !event.altKey &&

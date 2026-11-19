@@ -453,8 +453,9 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
   }, []);
 
   const handleHoverWork = useCallback((work: WorkSummary | null) => {
-    setHoveredWorkId(work?.id ?? null);
-    if (work !== null) setKeyboardPreviewId(null);
+    if (work === null) return;
+    setHoveredWorkId(work.id);
+    setKeyboardPreviewId(null);
   }, []);
 
   const vimNavEnabled = readLibraryVimNav();
