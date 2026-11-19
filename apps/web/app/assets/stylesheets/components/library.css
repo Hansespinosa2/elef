@@ -298,6 +298,18 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
   gap: 0.65rem;
   grid-template-columns: 7.5rem minmax(0, 1fr);
   padding: 0.5rem 0.6rem;
+  position: relative;
+}
+.library-rail .library-card:hover {
+  transform: none;
+}
+.library-rail .library-card:has(.library-card-menu[open]),
+.library-rail .library-card:focus-within {
+  z-index: 20;
+}
+.library-rail .library-card-menu-options {
+  left: 0;
+  right: auto;
 }
 .library-rail .library-card.is-selected {
   border-color: var(--accent, var(--oradia-green));
