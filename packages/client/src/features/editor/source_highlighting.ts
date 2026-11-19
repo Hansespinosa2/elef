@@ -46,11 +46,6 @@ function findInlineDoubleDollarEnd(cx: LezerInlineContext, start: number): numbe
   for (let i = start; i < cx.end - 1; i++) {
     const ch = cx.char(i)
     if (ch === 92) {
-      const escaped = cx.char(i + 1)
-      if (escaped === 10 || escaped === 13) {
-        failedSingleDollarUntil.set(cx, i + 1)
-        return -1
-      }
       i++
       continue
     }

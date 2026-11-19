@@ -181,10 +181,15 @@ test("long line with many unclosed prose $ tokens parses without quadratic slowd
   assert.ok(elapsedMs < 200, `expected linear parse under 200ms, got ${elapsedMs.toFixed(1)}ms`);
 });
 
-test("escaped newline inside single-dollar text does not create multiline InlineMath", () => {
-  const doc = "$x\\\ny$";
-  const nodes = collectNodes(parsedState(doc));
-  assert.equal(nodes.filter((n) => n.name === "InlineMath").length, 0);
+test("escaped newline inside single-dollar text does not create multiline InlineMath, while double-dollar still allows multiline", () => {
+  const singleDoc = "$x\\\ny$";
+  assert.equal(collectNodes(parsedState(singleDoc)).filter((n) => n.name === "InlineMath").length, 0);
+
+  const doubleAndSingleDoc = "$$x\\\ny$$ and $z$";
+  assert.deepEqual(
+    collectNodes(parsedState(doubleAndSingleDoc)).filter((n) => n.name === "InlineMath").map((n) => n.text),
+    ["$$x\\\ny$$", "$z$"]
+  );
 });
 
 test("fenced code line decorations clip to the requested visible range", () => {
