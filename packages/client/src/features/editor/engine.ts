@@ -10,6 +10,7 @@ import { markdown } from "@codemirror/lang-markdown"
 import { tags } from "@lezer/highlight"
 import { Vim, getCM, vim } from "@replit/codemirror-vim"
 import { livePreviewField, livePreviewMode } from "./live_preview.js"
+import { elefMath, elefSourceHighlighting } from "./source_highlighting.js"
 import {
   ENABLED_STORAGE_KEY,
   ESCAPE_KEY_STORAGE_KEY,
@@ -106,7 +107,13 @@ const theme = EditorView.theme({
   ".cm-focused": { outline: "none" },
   ".cm-gutters": { backgroundColor: "#11161a", borderRight: "1px solid #304047" },
   ".cm-activeLine": { backgroundColor: "rgba(255, 255, 255, 0.035)" },
-  ".cm-activeLineGutter": { backgroundColor: "#182126" }
+  ".cm-activeLineGutter": { backgroundColor: "#182126" },
+  ".cm-source-code-mark, .cm-source-code-mark span": { color: "#6b7872" },
+  ".cm-source-code-info, .cm-source-code-info span": { color: "#d7c28e", fontWeight: "600" },
+  ".cm-source-code-text, .cm-source-code-text span": { color: "#aab7b1" },
+  ".cm-source-code-line": { backgroundColor: "rgba(255, 255, 255, 0.02)" },
+  ".cm-source-math-mark, .cm-source-math-mark span": { color: "#6b7872" },
+  ".cm-source-math-content, .cm-source-math-content span": { color: "#9fc5a9", fontStyle: "italic" }
 }, { dark: true })
 
 export const EDITOR_TARGETS = ["surface", "input", "mode", "command", "vimToggle", "escapeKey", "editingMode", "visualButton", "sourceButton", "lineNumbers", "modeAwareCursor", "metadataToggle"] as const
@@ -173,7 +180,8 @@ export class EditorEngine {
       ...basicSetup.slice(1),
       markdownSelectionWrapping,
       editorTabKeymap,
-      markdown({ extensions: elefMetadata }),
+      markdown({ extensions: [elefMetadata, elefMath] }),
+      elefSourceHighlighting,
       livePreviewField,
       snippetStopsField,
       theme,
