@@ -909,6 +909,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
 
   function setStatus(message: string): void {
     elements.status.textContent = message
+    elements.status.closest(".statusbar")?.classList.toggle("is-save-error", /\b(fail|failed|error|conflict|retrying)\b/i.test(message))
   }
 
   function showNotice(message: string, tone = "info"): void {

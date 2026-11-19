@@ -770,5 +770,8 @@ li.editor-reveal-marker { list-style: none; }
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
   }
+  .visual-editor-form[data-editor-mode="source"] .editor-layout.is-preview-hidden {
+    grid-template-rows: minmax(0, 1fr);
+  }
   .visual-editor-form[data-editor-mode="source"] .editor-splitter { display: none; }
 }

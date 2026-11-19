@@ -4,7 +4,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "Mod+K opens Elef actions without listing work" do
     document = Document.create!(title: "Palette target", source: "# Palette target")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     page.driver.browser.action.key_down(:control).send_keys("k").key_up(:control).perform
     assert_selector "dialog.command-palette[open]"
     assert_selector "#command-palette-heading", text: "Command palette"
@@ -94,7 +94,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Math palette", source: "# Math palette")
     MathShortcut.create!(name: "Array", aliases: ["array"], prefix: "@", expansion: "\\operatorname{array}")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length, editor.value.length); editor.focus();")
     editor = find(".cm-content")
@@ -153,7 +153,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "shows and accepts beta and theta shortcuts after an inline math opener" do
     document = Document.create!(title: "Greek math palette", source: "# Greek math palette")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.click
@@ -191,7 +191,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "shows compact math shortcut suggestions with their LaTeX expansion" do
     document = Document.create!(title: "Math shortcut previews", source: "# Math shortcut previews")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.click
@@ -228,7 +228,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "previews the full chained math expansion that the shortcut commits" do
     document = Document.create!(title: "Chained math previews", source: "# Chained math previews")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.click
@@ -251,7 +251,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "expands common TeX operators and walks fraction tab stops" do
     document = Document.create!(title: "TeX operators", source: "# TeX operators")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.click
@@ -284,7 +284,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "inserts structured math entries with ordered placeholder stops" do
     document = Document.create!(title: "Structured math", source: "# Math\n\n$$x$$")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -328,7 +328,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "uses the selected math transform without duplicating its base" do
     document = Document.create!(title: "Selected math transform", source: "# Math")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.click
@@ -344,7 +344,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "inserts an equation block from the source command palette" do
     document = Document.create!(title: "Authoring snippets", source: "# Authoring snippets")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.click
@@ -362,7 +362,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
       source: "---\ntheme: dark\ntypography: modern\n---\n# Metadata notes\n\nBody"
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".cm-foldPlaceholder", wait: 5
     assert_no_selector "button.editor-reveal-metadata", visible: true
     click_on "Source"
@@ -384,7 +384,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
       source: "---\ntheme: light\ntypography: book\n---\n# Appearance metadata\n\nBody"
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
     assert_no_selector "button.editor-reveal-metadata", text: "Reveal source metadata", visible: true
     assert_no_selector "select#document_theme", visible: true
@@ -409,7 +409,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
       source: "---\ntheme: light\ntypography: book\n---\n# Mode bound appearance\n\nBody"
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
     assert_no_selector "select#document_theme", visible: true
     assert_no_selector "select#document_typography", visible: true
@@ -447,7 +447,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
       source: "---\ntheme: light\ntypography: book\n---\n# Source mode metadata save\n\nBody"
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     type_source_text(document.source, "theme: light", "theme: dark")
     assert_selector ".document-reader.document-theme-dark", wait: 5
@@ -466,7 +466,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "keeps visual editing and the source-left preview-right layout usable at desktop and narrow widths" do
     document = Document.create!(title: "Responsive editor", source: "# Responsive editor\n\nBody")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".editor-shell"
     assert_selector ".editor-projection", visible: true
     assert_selector ".editor-mode-button.is-active", text: "Visual"

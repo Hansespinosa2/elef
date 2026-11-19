@@ -248,6 +248,9 @@ export function renderEditorView(container: Element | null, config: EditorViewCo
 
   get("title").setAttribute("value", config.title || "")
   get("microTitle").textContent = config.title || "Untitled"
+  ;(get("title") as HTMLInputElement).addEventListener("input", () => {
+    get("microTitle").textContent = (get("title") as HTMLInputElement).value.trim() || "Untitled"
+  })
   if (ids.title) get("title").id = ids.title
   if (config.titleName) (get("title") as HTMLInputElement).name = config.titleName
   get("titleLabel").setAttribute("for", ids.title || "elef-editor-title")
