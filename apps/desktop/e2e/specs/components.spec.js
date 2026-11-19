@@ -243,7 +243,7 @@ test("the source editor component has matching web and desktop layout styles", a
   expect(measured.desktop).toEqual(measured.web)
   expect(measured.web[".editor-layout"].gridTemplateColumns.split(" ")).toHaveLength(3)
   expect(measured.web[".cm-editor"].rectHeight).toBeGreaterThan(300)
-  expect(measured.web[".editor-shell"].backgroundColor).toBe("rgb(24, 33, 38)")
+  expect(measured.web[".editor-shell"].backgroundColor).toBe("rgb(17, 22, 26)")
 })
 
 test("desktop present mode pins every aligned slide to a fixed 16:9 aspect with letterboxing", async ({ page }) => {

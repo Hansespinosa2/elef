@@ -80,7 +80,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
 
   def test_source_edit_preserves_preview_scroll_after_save
     document = Document.create!(title: "Source preview scroll", source: SOURCE)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 15
     click_on "Source"
     assert_selector ".document-page-frame", minimum: 2
@@ -108,7 +108,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
 
   def test_delayed_pagination_preserves_position_and_respects_navigation
     document = Document.create!(title: "Delayed preview", source: SOURCE)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
     click_on "Source"
     before = page.evaluate_script(<<~JAVASCRIPT)
@@ -159,7 +159,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
 
   def test_switching_to_visual_mode_during_delayed_pagination_releases_snapshot
     document = Document.create!(title: "Delayed mode switch", source: SOURCE)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
@@ -178,7 +178,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
 
   def test_blur_released_pagination_preserves_scroll
     document = Document.create!(title: "Scroll preservation", source: SOURCE)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 15
     assert_selector ".document-page-frame", minimum: 2
     page.execute_script(<<~JAVASCRIPT)
@@ -212,5 +212,79 @@ class DocumentScrollTest < ApplicationSystemTestCase
     end
     assert_in_delta before["windowY"], after["windowY"], 120,
       "repagination reset the window scroll (#{before["windowY"]} -> #{after["windowY"]})"
+  end
+
+  def test_source_edit_autoscrolls_preview_and_navigation_preserves_scroll
+    long_source = "# Top Title\n\n" + (1..40).map { |i| "## Section #{i}\n\nParagraph #{i} with enough content to span multiple pages.\n\n" }.join
+    document = Document.create!(title: "Source autoscroll", source: long_source)
+    visit edit_document_path(document)
+    assert_selector ".visual-editor-form[data-editor-mode='source']", wait: 15
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
+    assert_selector ".document-page-frame", minimum: 3
+
+    # Scroll preview to bottom, then move caret without editing -> preview stays at bottom
+    bottom = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const pane = document.querySelector('[data-preview-target="container"]');
+        pane.scrollTop = pane.scrollHeight;
+        return pane.scrollTop;
+      })()
+    JAVASCRIPT
+    assert_operator bottom, :>, 400
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.setSelectionRange(0);
+    JAVASCRIPT
+    sleep 0.4
+    assert_in_delta bottom, page.evaluate_script("document.querySelector('[data-preview-target=container]').scrollTop"), 10
+
+    # Edit near the beginning -> preview autoscrolls to top
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      editor.replaceRange("!", 11, 11);
+    JAVASCRIPT
+    assert_selector ".document-editor-projection", text: "Top Title!", wait: 15
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
+    assert_in_delta 0, page.evaluate_script("document.querySelector('[data-preview-target=container]').scrollTop"), 10
+
+    # Edit in the middle (Section 20) -> preview autoscrolls to middle section
+    mid_offset = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const editor = document.querySelector('.source-field').editorController;
+        const pos = editor.sourceValue.indexOf("## Section 20") + 13;
+        editor.replaceRange("!", pos, pos);
+        return pos;
+      })()
+    JAVASCRIPT
+    assert_operator mid_offset, :>, 0
+    assert_selector ".document-editor-projection", text: "Section 20!", wait: 15
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
+    mid_visible = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const pane = document.querySelector('[data-preview-target="container"]');
+        const heading = [...pane.querySelectorAll('h2')].find(el => el.textContent.includes('Section 20!'));
+        if (!heading) return false;
+        const paneRect = pane.getBoundingClientRect();
+        const rect = heading.getBoundingClientRect();
+        return rect.top >= paneRect.top && rect.bottom <= paneRect.bottom;
+      })()
+    JAVASCRIPT
+    assert mid_visible, "expected Section 20! to be scrolled into the preview viewport"
+
+    # Edit at the end -> preview autoscrolls to bottom
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      const len = editor.sourceValue.length;
+      editor.replaceRange("Tail marker.", len, len);
+    JAVASCRIPT
+    assert_selector ".document-editor-projection", text: "Tail marker.", wait: 15
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
+    at_bottom = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const pane = document.querySelector('[data-preview-target="container"]');
+        return Math.abs(pane.scrollTop - (pane.scrollHeight - pane.clientHeight)) <= 20;
+      })()
+    JAVASCRIPT
+    assert at_bottom, "expected preview to scroll to the bottom on end-of-document edit"
   end
 end

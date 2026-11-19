@@ -64,7 +64,7 @@ class PythonRenderingTest < ApplicationSystemTestCase
   test "the editor projection and live preview execute python blocks and expose run controls" do
     document = Document.create!(title: "Python editor", source: "Intro paragraph.\n\n#{PYTHON_RUN_BLOCK}\n")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector '.document-editor-projection .elef-python-block[data-processed="true"] .elef-python-frame:not([hidden]) .elef-python-figures svg', wait: 30
 

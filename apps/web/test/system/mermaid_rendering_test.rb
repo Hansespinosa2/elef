@@ -21,7 +21,7 @@ class MermaidRenderingTest < ApplicationSystemTestCase
   test "the editor projection and live preview draw the diagram" do
     document = Document.create!(title: "Mermaid editor", source: "Intro paragraph.\n\n#{DIAGRAM}\n")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-projection pre.mermaid[data-processed] svg", wait: 30
 
@@ -36,7 +36,7 @@ class MermaidRenderingTest < ApplicationSystemTestCase
   test "editing around a diagram leaves the fence source intact" do
     document = Document.create!(title: "Mermaid round trip", source: "Intro paragraph.\n\n#{DIAGRAM}\n")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     block = find(".document-editor-projection [contenteditable='true']", match: :first)
     block.click
     block.send_keys(:home, "Edited. ")

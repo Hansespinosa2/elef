@@ -14,7 +14,7 @@
   source: work.source.to_s.gsub(/\r\n?/, "\n"),
   title: work.title.presence || work.default_title
 ) %>
-<% visual_mode = params[:editor_mode] != "source" %>
+<% visual_mode = params[:editor_mode] == "visual" %>
 <% controllers = %w[dirty preview autosave visual-editor media] %>
 <% controllers << "presentation-host" if work.presentation? %>
 <% controllers << "slide-overview" if work.presentation? %>

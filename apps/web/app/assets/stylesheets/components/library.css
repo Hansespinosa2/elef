@@ -611,3 +611,15 @@ body[data-desktop-view="editor"][data-desktop-sidebar="open"] .desktop-app-shell
 body[data-desktop-view="editor"][data-desktop-sidebar="open"] #library-view .library-rail {
   height: calc(100vh - 5rem);
 }
+body.is-editing-source .editor-library-drawer {
+  height: 100vh;
+  top: 0;
+}
+body.is-editing-source[data-desktop-view="editor"][data-desktop-sidebar="open"] .desktop-app-shell {
+  gap: 0;
+  min-height: 100vh;
+}
+body.is-editing-source[data-desktop-view="editor"][data-desktop-sidebar="open"] #library-view .library-rail {
+  height: 100vh;
+  top: 0;
+}

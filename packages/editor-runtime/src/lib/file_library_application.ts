@@ -495,7 +495,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     kind: "presentation",
     source: "",
     sourceName: "presentation[source]",
-    mode: desktopFeatures.visualEditing ? "visual" : "source",
+    mode: "source",
     visualDisabled: true,
     visualDisabledMessage: "Open a Work to render its preview",
     showTitle: true,
@@ -909,6 +909,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
 
   function setStatus(message: string): void {
     elements.status.textContent = message
+    elements.status.closest(".statusbar")?.classList.toggle("is-save-error", /\b(fail|failed|error|conflict|retrying)\b/i.test(message))
   }
 
   function showNotice(message: string, tone = "info"): void {
@@ -933,12 +934,20 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   let libraryShown = false
+  elements.editorForm.addEventListener("elef:navigate-library", (event) => {
+    event.preventDefault()
+    shellElement<HTMLButtonElement>("#back-to-library").click()
+  })
+  elements.editorForm.addEventListener("elef:editor-mode-change", () => {
+    document.body.classList.toggle("is-editing-source", (elements.editorForm.dataset.editorMode || "source") === "source")
+  })
   function showLibrary(): void {
     activeWorkSessionToken += 1
     unfreezeEditorForPrint()
     elements.editorForm.previewController?.finishEditing()
     document.body.dataset.desktopView = "library"
     delete document.body.dataset.desktopSidebar
+    document.body.classList.remove("is-editing-source")
     elements.welcome.hidden = Boolean(library)
     elements.library.hidden = !library
     elements.workView.hidden = true
@@ -1199,7 +1208,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
           : waitForEditorController(elements.editorField, editorFor))
         measureOpenStage("loadDocument", () => {
           editor.loadDocument(work.source)
-          editor.setEditingMode(desktopFeatures.visualEditing ? "visual" : "source", { restoreCaret: false })
+          editor.setEditingMode("source", { restoreCaret: false })
         })
       } catch (error) {
         elements.editorInput.disabled = true
@@ -1243,11 +1252,15 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       const notice = document.querySelector("#work-notice") as HTMLElement
       notice.textContent = work.notices.join(" ")
       notice.hidden = work.notices.length === 0
+      delete document.body.dataset.desktopSidebar
       elements.library.hidden = true
       elements.workView.hidden = false
       elements.presentationStart.hidden = isDocument
       document.body.dataset.desktopView = "editor"
+      document.body.classList.toggle("is-editing-source", (elements.editorForm.dataset.editorMode || "source") === "source")
       shellElement<HTMLElement>("#breadcrumb-current").textContent = work.name
+      const microTitle = elements.editorForm.querySelector<HTMLElement>('[data-editor-view-target="microTitle"]')
+      if (microTitle) microTitle.textContent = work.name
       setStatus("Work opened")
       if (viewSetupStartedAt !== null) recordOpenStage("workViewSetup", viewSetupStartedAt)
       elements.editorForm.previewController?.unfreezeForPrint?.({ replayPending: false })
@@ -1863,10 +1876,12 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   window.addEventListener("keydown", event => {
     if (
       document.body.dataset.desktopView === "editor" &&
+      !document.body.classList.contains("presenting-work") &&
+      !document.querySelector("dialog[open]") &&
       (event.metaKey || event.ctrlKey) &&
       !event.shiftKey &&
       !event.altKey &&
-      (event.key.toLowerCase() === "b" || event.key === "\\")
+      event.key.toLowerCase() === "b"
     ) {
       event.preventDefault()
       const nextOpen = document.body.dataset.desktopSidebar !== "open"

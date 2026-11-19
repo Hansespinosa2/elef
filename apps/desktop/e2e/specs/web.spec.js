@@ -142,7 +142,7 @@ class WebEditorUi {
     if (!id) throw new Error(`The shared web scenario requires an E2E ${isDocument ? "document" : "presentation"} fixture`)
     this.activeWorkId = id
     const path = isDocument ? "documents" : "presentations"
-    await this.page.goto(`/${path}/${id}/edit`)
+    await this.page.goto(`/${path}/${id}/edit?editor_mode=visual`)
     await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
     await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
   }
@@ -283,7 +283,7 @@ class WebEditorUi {
 
   async returnToEditor() {
     if (this.activeWorkId && !this.page.url().includes(`/presentations/${this.activeWorkId}/edit`)) {
-      await this.page.goto(`/presentations/${this.activeWorkId}/edit`)
+      await this.page.goto(`/presentations/${this.activeWorkId}/edit?editor_mode=visual`)
       await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
       await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
     }
@@ -1070,6 +1070,15 @@ class WebLibraryUi {
 
   async assertVisualMode() {
     await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
+  }
+
+  async showVisualMode() {
+    await this.page.locator('[data-editor-target="visualButton"]').click()
+    await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
+  }
+
+  async assertSourceMode() {
+    await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
   }
 
   async assertAllWorkKindsVisible(presentationTitle, documentTitle) {
