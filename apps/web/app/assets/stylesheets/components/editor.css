@@ -789,9 +789,8 @@ li.editor-reveal-marker { list-style: none; }
   }
   .visual-editor-form[data-editor-mode="source"] .dirty-state { font-size: 11.5px; }
   .visual-editor-form[data-editor-mode="source"] .dirty-state:empty { display: none; }
-  .visual-editor-form[data-editor-mode="source"] .dirty-state[data-autosave-target="status"] {
-    min-width: 105px;
-    text-align: right;
+  .visual-editor-form[data-editor-mode="source"] .editor-actions :is(.dirty-state, .autosave-retry, .preview-retry, .release-state) {
+    order: -1;
   }
   .visual-editor-form[data-editor-mode="source"] .editor-micro-btn {
     background: transparent;
