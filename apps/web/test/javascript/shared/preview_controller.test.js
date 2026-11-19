@@ -385,6 +385,11 @@ test("source edit autoscrolls preview on installProjection and preserves scroll 
     controller.installProjection(payload, { ok: true }, "# Slide 1\n\n---\n\n# Slide 2")
     assert.equal(container.scrollTop, 120)
 
+    // A stale source-edit from a different source string is discarded
+    form.dispatchEvent(Object.assign(new WinEvent("elef:source-edit", { bubbles: true }), { detail: { offset: 15 } }))
+    controller.installProjection(payload, { ok: true }, "# Different source")
+    assert.equal(container.scrollTop, 120)
+
     controller.disconnect()
   } finally {
     globalThis.document = originalDocument

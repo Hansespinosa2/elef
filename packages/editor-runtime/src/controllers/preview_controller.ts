@@ -17,7 +17,7 @@ export default class extends Controller<HTMLElement> {
 
   frozenForPrint = false
   pendingRefreshWhileFrozen = false
-  pendingSourceEditScroll: { offset: number; cancelled: boolean } | null = null
+  pendingSourceEditScroll: { offset: number; source: string; cancelled: boolean } | null = null
   private printUnfreezeCleanup: (() => void) | null = null
   private printInteractionRecoveryCleanup: (() => void) | null = null
 
@@ -69,7 +69,7 @@ export default class extends Controller<HTMLElement> {
       if (this.element.dataset.editorMode !== "source") return
       const offset = event.detail?.offset
       if (typeof offset !== "number" || !Number.isFinite(offset)) return
-      this.pendingSourceEditScroll = { offset, cancelled: false }
+      this.pendingSourceEditScroll = { offset, source: this.currentSource(), cancelled: false }
     }
     this.modeChangeScrollHandler = (event: any) => {
       if (event.detail?.mode !== "source") this.pendingSourceEditScroll = null
@@ -454,7 +454,10 @@ export default class extends Controller<HTMLElement> {
     const scrollTop = pending?.restore ? pending.top : this.containerTarget.scrollTop
     const sourceEditScroll = this.element.dataset?.editorMode === "source" ? this.pendingSourceEditScroll : null
     this.pendingSourceEditScroll = null
-    const autoscrollOffset = sourceEditScroll && !sourceEditScroll.cancelled && payload?.editor_map
+    const autoscrollOffset = sourceEditScroll &&
+      !sourceEditScroll.cancelled &&
+      this.sameSource(sourceEditScroll.source, source) &&
+      payload?.editor_map
       ? sourceEditScroll.offset
       : (pending?.autoscrollOffset ?? null)
     const oldRoot = this.containerTarget.querySelector(".document-editor-projection") as HTMLElement | null

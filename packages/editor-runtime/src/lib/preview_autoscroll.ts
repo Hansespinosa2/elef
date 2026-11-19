@@ -221,15 +221,10 @@ export function computeSourceEditScrollTop(
         : null
     if (!target) return null
 
-    if (isFirstSlide && target.top < viewportHeight * 0.5) return 0
-    if (isLastSlide && target.bottom > scrollHeight - viewportHeight * 0.35) return maxScrollTop
-
-    const comfortTop = container.scrollTop + viewportHeight * 0.15
-    const comfortBottom = container.scrollTop + viewportHeight * 0.8
-    if (target.targetY >= comfortTop && target.targetY <= comfortBottom) {
-      return container.scrollTop
-    }
-    return clamp(Math.round(target.targetY - viewportHeight * 0.33), 0, maxScrollTop)
+    return computeViewportScrollTop(container.scrollTop, viewportHeight, scrollHeight, target, {
+      isFirstBlock: isFirstSlide,
+      isLastBlock: isLastSlide
+    })
   }
 
   const blocks = editorMap.slides?.[0]?.blocks ?? []
