@@ -642,7 +642,12 @@ export class EditorEngine {
     if (!change) return
 
     const frontmatterWasFolded = this.frontmatterIsFolded()
-    this.view.dispatch({ changes: change })
+    this.suppressSourceEditScroll = true
+    try {
+      this.view.dispatch({ changes: change })
+    } finally {
+      this.suppressSourceEditScroll = false
+    }
 
     if (frontmatterWasFolded && this.frontmatterRange && !this.frontmatterIsFolded()) {
       this.view.dispatch({ effects: foldEffect.of(this.frontmatterRange) })
@@ -752,6 +757,16 @@ export class EditorEngine {
       this.refreshFrontmatterRange()
       this.syncFrontmatterVisibility()
       this.dispatchFieldEvent("input")
+      if (this.editingMode === "source" && !this.suppressSourceEditScroll) {
+        const head = update.state.selection.main.head
+        const offset = this.lineSeparator === "\n"
+          ? head
+          : update.state.doc.sliceString(0, head, "\n").length
+        this.element.dispatchEvent(new CustomEvent("elef:source-edit", {
+          bubbles: true,
+          detail: { offset }
+        }))
+      }
     }
     if (update.selectionSet || update.docChanged) this.updateMode()
     if (update.selectionSet || update.docChanged || update.viewportChanged) this.scheduleLineNumberUpdate()
