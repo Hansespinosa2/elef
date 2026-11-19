@@ -108,12 +108,12 @@ const theme = EditorView.theme({
   ".cm-gutters": { backgroundColor: "#11161a", borderRight: "1px solid #304047" },
   ".cm-activeLine": { backgroundColor: "rgba(255, 255, 255, 0.035)" },
   ".cm-activeLineGutter": { backgroundColor: "#182126" },
-  ".cm-source-code-mark": { color: "#6b7872" },
-  ".cm-source-code-info": { color: "#d7c28e", fontWeight: "600" },
-  ".cm-source-code-text": { color: "#aab7b1" },
+  ".cm-source-code-mark, .cm-source-code-mark span": { color: "#6b7872" },
+  ".cm-source-code-info, .cm-source-code-info span": { color: "#d7c28e", fontWeight: "600" },
+  ".cm-source-code-text, .cm-source-code-text span": { color: "#aab7b1" },
   ".cm-source-code-line": { backgroundColor: "rgba(255, 255, 255, 0.02)" },
-  ".cm-source-math-mark": { color: "#6b7872" },
-  ".cm-source-math-content": { color: "#9fc5a9", fontStyle: "italic" }
+  ".cm-source-math-mark, .cm-source-math-mark span": { color: "#6b7872" },
+  ".cm-source-math-content, .cm-source-math-content span": { color: "#9fc5a9", fontStyle: "italic" }
 }, { dark: true })
 
 export const EDITOR_TARGETS = ["surface", "input", "mode", "command", "vimToggle", "escapeKey", "editingMode", "visualButton", "sourceButton", "lineNumbers", "modeAwareCursor", "metadataToggle"] as const
