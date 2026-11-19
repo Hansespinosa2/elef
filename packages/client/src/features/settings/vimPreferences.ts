@@ -10,6 +10,7 @@ export const ESCAPE_KEY_STORAGE_KEY = "elef.editor.vim.escapeKey";
 const LEGACY_ESCAPE_ALIAS_STORAGE_KEY = "elef.editor.vim.escapeAlias";
 export const LINE_NUMBERS_STORAGE_KEY = "elef.editor.lineNumbers";
 export const MODE_AWARE_CURSOR_STORAGE_KEY = "elef.editor.vim.modeAwareCursor";
+export const LIBRARY_VIM_NAV_STORAGE_KEY = "elef.library.vimNav";
 // Global source-metadata visibility preference: one key for every Work on
 // this device, shared by both hosts through DOM localStorage. Stored as
 // "true"/"false"; absent means visible so new Works show metadata by default.
@@ -152,6 +153,15 @@ export function readMetadataVisible(storage?: DeviceStorage | null): boolean {
 
 export function writeMetadataVisible(value: boolean, storage?: DeviceStorage | null): void {
   writeBoolean(METADATA_VISIBLE_STORAGE_KEY, value, storage ?? defaultStorage());
+}
+
+export function readLibraryVimNav(storage?: DeviceStorage | null): boolean {
+  const saved = readValue(LIBRARY_VIM_NAV_STORAGE_KEY, storage ?? defaultStorage());
+  return saved !== "false";
+}
+
+export function writeLibraryVimNav(value: boolean, storage?: DeviceStorage | null): void {
+  writeBoolean(LIBRARY_VIM_NAV_STORAGE_KEY, value, storage ?? defaultStorage());
 }
 
 export interface VimPreferences {

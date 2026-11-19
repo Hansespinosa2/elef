@@ -720,3 +720,50 @@ test("card previews stand down while hidden and resume on return", async () => {
     delete scope["requestIdleCallback"];
   }
 });
+
+test("arc stage updates on keyboard navigation and toggles the rail", async () => {
+  const host = typedHost();
+  await seed(host);
+  const seen: unknown[] = [];
+  const { element, shell } = await mountInto(host, {
+    navigate: (target) => seen.push(target),
+  });
+  try {
+    assert.equal(element.querySelector(".library-stage-title")?.textContent, "Alpha doc");
+    const doc = element.ownerDocument;
+    const press = async (key: string, metaKey = false) => {
+      const ev = doc.createEvent("Event") as unknown as {
+        initEvent: (t: string, b: boolean, c: boolean) => void;
+        key: string;
+        metaKey: boolean;
+        ctrlKey: boolean;
+        altKey: boolean;
+      };
+      ev.initEvent("keydown", true, true);
+      ev.key = key;
+      ev.metaKey = metaKey;
+      ev.ctrlKey = false;
+      ev.altKey = false;
+      await act(async () => {
+        doc.dispatchEvent(ev as unknown as Event);
+      });
+      await settled();
+    };
+    await press("ArrowDown");
+    assert.equal(element.querySelector(".library-stage-title")?.textContent, "Beta work");
+    await press("k");
+    assert.equal(element.querySelector(".library-stage-title")?.textContent, "Alpha doc");
+    await press("j");
+    assert.equal(element.querySelector(".library-stage-title")?.textContent, "Beta work");
+    await press("Enter");
+    assert.equal(seen.length, 1);
+    assert.equal((seen[0] as { kind?: string }).kind, "presentation");
+    await click(element.querySelector(".library-rail-toggle"));
+    assert.equal(
+      element.querySelector(".library-arc-shell")?.classList.contains("is-rail-collapsed"),
+      true,
+    );
+  } finally {
+    shell.unmount();
+  }
+});

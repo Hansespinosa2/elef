@@ -201,3 +201,206 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
 .app-dialog label { display: block; margin: 15px 0 7px; color: var(--muted, var(--oradia-muted)); font-size: 11px; }
 .app-dialog input, .app-dialog select { width: 100%; height: 39px; padding: 0 11px; border: 1px solid var(--line, var(--oradia-line)); border-radius: 8px; outline-color: var(--accent, var(--oradia-green)); background: var(--canvas, var(--oradia-slate-950)); color: var(--ink, var(--oradia-ink)); font-size: 12px; }
 .app-dialog textarea { width: 100%; resize: vertical; padding: 10px 11px; border: 1px solid var(--line, var(--oradia-line)); border-radius: 8px; outline-color: var(--accent, var(--oradia-green)); background: var(--canvas, var(--oradia-slate-950)); color: var(--ink, var(--oradia-ink)); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+/* Arc-inspired collapsible rail + calm preview stage */
+.library-arc-shell {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: minmax(19rem, 23rem) minmax(0, 1fr);
+  align-items: start;
+}
+.library-arc-shell.is-rail-collapsed {
+  grid-template-columns: minmax(0, 1fr);
+}
+.library-arc-shell.is-rail-collapsed .library-rail {
+  display: none;
+}
+.library-rail {
+  background: var(--sidebar, var(--panel, var(--oradia-slate-900)));
+  border: 1px solid var(--line, var(--oradia-line));
+  border-radius: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-height: calc(100vh - 5rem);
+  padding: 0.9rem;
+  position: sticky;
+  top: 1rem;
+}
+.library-rail .library-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0;
+}
+.library-rail-top {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.library-rail-toggle,
+.library-stage-action {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--line, var(--oradia-slate-700));
+  border-radius: 0.5rem;
+  color: var(--muted, var(--oradia-muted));
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 0.75rem;
+  font-weight: 600;
+  gap: 0.35rem;
+  padding: 0.3rem 0.6rem;
+}
+.library-rail-toggle:hover,
+.library-stage-action:hover {
+  background: var(--canvas, var(--oradia-slate-800));
+  color: var(--ink, var(--oradia-ink));
+}
+.library-stage-action.is-primary {
+  background: var(--accent, var(--oradia-green));
+  border-color: transparent;
+  color: var(--canvas, #0f1713);
+}
+.library-rail .search-box {
+  width: 100%;
+}
+.library-rail .library-tabs {
+  border-bottom: 0;
+  display: grid;
+  gap: 0.25rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+}
+.library-rail .library-tab {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.5rem;
+  text-align: center;
+}
+.library-rail .library-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  min-height: 0;
+  overflow-y: auto;
+}
+.library-rail .library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 0;
+}
+.library-rail .library-card {
+  align-items: center;
+  display: grid;
+  gap: 0.65rem;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  padding: 0.5rem 0.6rem;
+}
+.library-rail .library-card.is-selected {
+  border-color: var(--accent, var(--oradia-green));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent, var(--oradia-green)) 45%, transparent);
+}
+.library-rail .library-card-body {
+  padding: 0;
+}
+.library-rail .library-card-eyebrow {
+  font-size: 0.625rem;
+  margin-bottom: 0.1rem;
+}
+.library-rail .library-card-title {
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  display: -webkit-box;
+  font-size: 0.875rem;
+  line-height: 1.3;
+  margin: 0 0 0.15rem;
+  overflow: hidden;
+}
+.library-rail .library-card-meta {
+  font-size: 0.6875rem;
+  margin: 0;
+}
+.library-rail .library-card-controls {
+  padding: 0.2rem;
+}
+.library-rail .library-card-preview-button,
+.library-rail .library-card-menu-trigger {
+  height: 1.4rem;
+  width: 1.4rem;
+}
+.library-stage {
+  background: var(--panel, var(--oradia-slate-900));
+  border: 1px solid var(--line, var(--oradia-line));
+  border-radius: 0.9rem;
+  display: flex;
+  flex-direction: column;
+  min-height: min(76vh, 46rem);
+  overflow: hidden;
+}
+.library-stage-bar {
+  align-items: center;
+  border-bottom: 1px solid var(--line, var(--oradia-line));
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: space-between;
+  padding: 0.75rem 1.25rem;
+}
+.library-stage-bar-left,
+.library-stage-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.5rem;
+}
+.library-stage-hint {
+  color: var(--muted, var(--oradia-muted));
+  font-size: 0.75rem;
+}
+.library-stage-content {
+  flex: 1;
+  padding: 1.75rem 2rem;
+}
+.library-stage-focus {
+  margin: 0 auto;
+  max-width: 44rem;
+}
+.library-stage-header {
+  margin-bottom: 1.25rem;
+}
+.library-stage-kind {
+  color: var(--accent, var(--oradia-green));
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.3rem;
+  text-transform: uppercase;
+}
+.library-stage-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.library-stage-preview .library-card-preview {
+  border: 1px solid var(--line, var(--oradia-line));
+  border-radius: 0.75rem;
+}
+.library-stage-empty {
+  color: var(--muted, var(--oradia-muted));
+  padding: 4rem 1rem;
+  text-align: center;
+}
+@media (max-width: 920px) {
+  .library-arc-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .library-rail {
+    max-height: none;
+    position: static;
+  }
+}

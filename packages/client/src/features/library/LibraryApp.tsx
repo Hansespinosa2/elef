@@ -6,10 +6,11 @@ import type { ElefMountOptions, LibraryFilter, NoticeTone } from "../../applicat
 import { parseLibraryRoute } from "../../application/router.js";
 import { filterWorks, sameWorks } from "./filtering.js";
 import { nextDefaultWorkTitle } from "./default_titles.js";
-import { LibraryCard } from "./LibraryCard.js";
+import { LibraryCard, StagePreview, cardDomId } from "./LibraryCard.js";
 import type { PaletteMode } from "../../application/types.js";
 import { CommandPalette } from "./CommandPalette.js";
 import { buildNewWorkSource } from "@elef/work-model/style-vocab";
+import { readLibraryVimNav } from "../../ui/libraryVimNav.js";
 
 export interface LibraryControl {
   reload(): Promise<void>;
@@ -64,6 +65,9 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
   const [dialogName, setDialogName] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [paletteMode, setPaletteMode] = useState<PaletteMode>("commands");
+  const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
+  const [hoveredWorkId, setHoveredWorkId] = useState<string | null>(null);
+  const [railCollapsed, setRailCollapsed] = useState(false);
   // Wherever ⌘K was pressed: restoring it on close returns the caret to the
   // editor when editing, the search box when browsing.
   const invokeRef = useRef<HTMLElement | null>(null);
@@ -257,6 +261,94 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
   const visible = filterWorks(works, filter, query);
   const shown = visible.slice(0, visibleCount);
   const hasMore = visible.length > shown.length;
+  const activeWork =
+    shown.find((work) => work.id === hoveredWorkId) ??
+    shown.find((work) => work.id === selectedWorkId) ??
+    shown[0] ??
+    null;
+  const activeSelectedId = activeWork?.id ?? null;
+
+  const moveSelection = useCallback(
+    (delta: number) => {
+      if (shown.length === 0) return;
+      const currentIndex = shown.findIndex((work) => work.id === (selectedWorkId ?? shown[0]?.id));
+      const baseIndex = currentIndex === -1 ? 0 : currentIndex;
+      const nextIndex = (baseIndex + delta + shown.length) % shown.length;
+      const nextWork = shown[nextIndex];
+      if (nextWork === undefined) return;
+      setHoveredWorkId(null);
+      setSelectedWorkId(nextWork.id);
+      const cardEl = rootRef.current?.querySelector(`#${cardDomId(nextWork)}`) as
+        | { scrollIntoView?: (opts: { block: string }) => void }
+        | null
+        | undefined;
+      cardEl?.scrollIntoView?.({ block: "nearest" });
+    },
+    [shown, selectedWorkId],
+  );
+
+  useEffect(() => {
+    const doc = rootRef.current?.ownerDocument;
+    if (doc === undefined || doc === null) return;
+    function onKeyDown(event: globalThis.KeyboardEvent): void {
+      if (paletteOpen || dialogOpen) return;
+      const target = event.target as { tagName?: string; isContentEditable?: boolean } | null;
+      const tag = target?.tagName?.toUpperCase() ?? "";
+      const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable === true;
+      const meta = event.metaKey || event.ctrlKey;
+
+      if (meta && event.key === "\\") {
+        event.preventDefault();
+        setRailCollapsed((prev) => !prev);
+        return;
+      }
+      if (event.key === "Escape" && inInput && (target as { id?: string } | null)?.id === "library-search") {
+        if (query !== "") {
+          setQuery("");
+          setVisibleCount(LIBRARY_RENDER_BATCH_SIZE);
+        }
+        (rootRef.current?.querySelector("#library-search") as HTMLElement | null)?.blur?.();
+        return;
+      }
+      if (inInput || meta || event.altKey) return;
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        moveSelection(1);
+        return;
+      }
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        moveSelection(-1);
+        return;
+      }
+      if (event.key === "Enter" && activeWork !== null && tag !== "A" && tag !== "BUTTON" && tag !== "SUMMARY") {
+        event.preventDefault();
+        options.navigate?.({ workId: activeWork.id, kind: activeWork.kind });
+        return;
+      }
+
+      if (!readLibraryVimNav()) return;
+      if (event.key === "j") {
+        event.preventDefault();
+        moveSelection(1);
+      } else if (event.key === "k") {
+        event.preventDefault();
+        moveSelection(-1);
+      } else if (event.key === "/") {
+        event.preventDefault();
+        (rootRef.current?.querySelector("#library-search") as HTMLElement | null)?.focus?.();
+      } else if (event.key === "e" && activeWork !== null) {
+        event.preventDefault();
+        options.navigate?.({ workId: activeWork.id, kind: activeWork.kind });
+      } else if (event.key === "p" && activeWork?.kind === "presentation" && options.presentWork !== undefined) {
+        event.preventDefault();
+        options.presentWork(activeWork);
+      }
+    }
+    doc.addEventListener("keydown", onKeyDown);
+    return () => doc.removeEventListener("keydown", onKeyDown);
+  }, [paletteOpen, dialogOpen, query, moveSelection, activeWork, options]);
   const kindLabel = KIND_LABELS[filter];
   const countLabel = `${filtered.length} ${filtered.length === 1 ? kindLabel : `${kindLabel}s`}${
     query.trim() !== "" ? ` · ${visible.length} shown` : ""
@@ -333,138 +425,222 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
 
   const emptyKindLabel = filter === "all" ? "work" : filter === "documents" ? "document" : "presentation";
 
+  const handleSelectWork = useCallback((work: WorkSummary) => {
+    setSelectedWorkId(work.id);
+    setHoveredWorkId(null);
+  }, []);
+
+  const handleHoverWork = useCallback((work: WorkSummary | null) => {
+    setHoveredWorkId(work?.id ?? null);
+  }, []);
+
+  const vimNavEnabled = readLibraryVimNav();
+
   return (
-    <div ref={rootRef} className="library-shared-view">
-      <header className="library-hero mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
-        <div>
-          <div className="library-kicker flex items-center gap-3">
-            <p className="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">
-              Your workspace
-            </p>
-            <span
-              id="library-count"
-              className="library-count rounded-full border border-[#304047] bg-[#202c32] px-2 py-1 text-xs font-bold text-[#aab7b1]"
+    <div ref={rootRef} className={`library-shared-view library-arc-shell${railCollapsed ? " is-rail-collapsed" : ""}`}>
+      <aside className="library-rail" aria-label="Works directory">
+        <header className="library-hero">
+          <div className="library-rail-top">
+            <div className="library-kicker flex items-center gap-2">
+              <p className="eyebrow m-0 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">
+                Workspace
+              </p>
+              <span
+                id="library-count"
+                className="library-count rounded-full border border-[#304047] bg-[#202c32] px-2 py-0.5 text-xs font-bold text-[#aab7b1]"
+              >
+                {ready ? countLabel : "…"}
+              </span>
+            </div>
+            <button
+              type="button"
+              className="library-rail-toggle"
+              aria-label={railCollapsed ? "Show sidebar" : "Hide sidebar"}
+              title="Toggle sidebar (⌘\)"
+              onClick={() => setRailCollapsed((prev) => !prev)}
             >
-              {ready ? countLabel : "…"}
-            </span>
+              {railCollapsed ? "»" : "«"}
+            </button>
           </div>
-          <h1 id="library-title" className="mb-0 text-4xl font-bold">
+          <h1 id="library-title" className="mb-0 text-2xl font-bold">
             Library
           </h1>
-          <p id="library-description" className="subheading mt-2 text-[#6f675c]">
+          <p id="library-description" className="subheading mt-1 text-[#6f675c]">
             {FILTER_DESCRIPTIONS[filter]}
           </p>
-        </div>
-        <div className="library-actions" data-client-slot-target="actions" />
-        <label className="search-box" htmlFor="library-search">
-          <span aria-hidden="true">⌕</span>
-          <input
-            id="library-search"
-            type="search"
-            placeholder="Search Works"
-            autoComplete="off"
-            aria-label="Search Works"
-            value={query}
-            onInput={(event) => {
-              setQuery(event.currentTarget.value);
-              setVisibleCount(LIBRARY_RENDER_BATCH_SIZE);
-            }}
-          />
-          <kbd>⌘ K</kbd>
-        </label>
-      </header>
-
-      <section className="library-browser" aria-label="Browse your library">
-        <nav className="library-tabs mb-6 flex flex-wrap gap-2" aria-label="Library views">
-          {(Object.keys(KIND_LABELS) as LibraryFilter[]).map((name) => (
-            <a
-              key={name}
-              id={name === "all" ? "show-work-list" : name === "documents" ? "show-documents" : "show-presentations"}
-              className={`library-tab${name === filter ? " is-active" : ""}`}
-              data-library-tab={name}
-              href={libraryHref(name)}
-              aria-current={name === filter ? "page" : undefined}
-              onClick={(event) => selectFilter(name, event)}
-            >
-              {name === "all" ? "All" : name === "documents" ? "Documents" : "Presentations"}
-            </a>
-          ))}
-        </nav>
-        <div
-          id="notice"
-          className="notice"
-          role="status"
-          aria-live="polite"
-          data-tone={noticeTone}
-          hidden={notice === ""}
-        >
-          {notice}
-        </div>
-        {options.graphEnabled !== false && (
-          <section
-            id="document-graph-view"
-            className="document-graph-panel mt-8 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5"
-            data-client-slot-target="graph"
-            hidden
-            aria-labelledby="document-graph-heading"
-          />
-        )}
-        <div data-client-slot-target="lineage" />
-        <section
-          id="work-list"
-          className="library-list mt-8 grid gap-4"
-          role="list"
-          aria-label={`Saved ${filter}`}
-          hidden={visible.length === 0 && !isEmptyState}
-        >
-          {shown.map((work) => (
-            <LibraryCard
-              key={`${work.id}:${work.updatedAt ?? ""}`}
-              host={host}
-              work={work}
-              documentNodes={nodes}
-              options={options}
-              onChanged={handleChanged}
+          <div className="library-actions" data-client-slot-target="actions" />
+          <label className="search-box" htmlFor="library-search">
+            <span aria-hidden="true">⌕</span>
+            <input
+              id="library-search"
+              type="search"
+              placeholder="Search Works"
+              autoComplete="off"
+              aria-label="Search Works"
+              value={query}
+              onInput={(event) => {
+                setQuery(event.currentTarget.value);
+                setVisibleCount(LIBRARY_RENDER_BATCH_SIZE);
+              }}
             />
-          ))}
-        </section>
-        <button
-          ref={loadMoreRef}
-          id="library-load-more"
-          className="button secondary library-load-more mt-6"
-          type="button"
-          aria-controls="work-list"
-          hidden={!hasMore}
-          onClick={() => setVisibleCount((count) => count + LIBRARY_RENDER_BATCH_SIZE)}
-        >
-          Load more Works
-        </button>
-        <div
-          id="empty-library"
-          className="empty-state flex items-center justify-between rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5 max-[920px]:flex-col max-[920px]:items-stretch"
-          hidden={!isEmptyState}
-        >
-          <div>
-            <h2 className="mb-2 text-2xl font-bold" data-library-empty-title>
-              {`No ${emptyKindLabel}${filter === "all" ? "" : "s"} yet.`}
-            </h2>
-            <p className="text-[#6f675c]" data-library-empty-copy>
-              Start with Markdown. Elef keeps your source and assets in your library.
-            </p>
-          </div>
-          <button
-            className="button primary inline-flex min-h-10 cursor-pointer items-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95"
-            type="button"
-            data-kind={filter === "documents" ? "document" : "presentation"}
-            onClick={() => openCreate(filter === "documents" ? "document" : "presentation")}
+            <kbd>⌘ K</kbd>
+          </label>
+        </header>
+
+        <section className="library-browser" aria-label="Browse your library">
+          <nav className="library-tabs" aria-label="Library views">
+            {(Object.keys(KIND_LABELS) as LibraryFilter[]).map((name) => (
+              <a
+                key={name}
+                id={name === "all" ? "show-work-list" : name === "documents" ? "show-documents" : "show-presentations"}
+                className={`library-tab${name === filter ? " is-active" : ""}`}
+                data-library-tab={name}
+                href={libraryHref(name)}
+                aria-current={name === filter ? "page" : undefined}
+                onClick={(event) => selectFilter(name, event)}
+              >
+                {name === "all" ? "All" : name === "documents" ? "Documents" : "Presentations"}
+              </a>
+            ))}
+          </nav>
+          <div
+            id="notice"
+            className="notice"
+            role="status"
+            aria-live="polite"
+            data-tone={noticeTone}
+            hidden={notice === ""}
           >
-            {filter === "documents" ? "Create a document" : "Create a presentation"}
+            {notice}
+          </div>
+          <section
+            id="work-list"
+            className="library-list"
+            role="list"
+            aria-label={`Saved ${filter}`}
+            hidden={visible.length === 0 && !isEmptyState}
+          >
+            {shown.map((work) => (
+              <LibraryCard
+                key={`${work.id}:${work.updatedAt ?? ""}`}
+                host={host}
+                work={work}
+                documentNodes={nodes}
+                options={options}
+                onChanged={handleChanged}
+                isSelected={work.id === activeSelectedId}
+                onSelect={handleSelectWork}
+                onHover={handleHoverWork}
+              />
+            ))}
+          </section>
+          <button
+            ref={loadMoreRef}
+            id="library-load-more"
+            className="button secondary library-load-more mt-4"
+            type="button"
+            aria-controls="work-list"
+            hidden={!hasMore}
+            onClick={() => setVisibleCount((count) => count + LIBRARY_RENDER_BATCH_SIZE)}
+          >
+            Load more Works
           </button>
+          <div
+            id="empty-library"
+            className="empty-state flex flex-col gap-3 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4"
+            hidden={!isEmptyState}
+          >
+            <div>
+              <h2 className="mb-1 text-lg font-bold" data-library-empty-title>
+                {`No ${emptyKindLabel}${filter === "all" ? "" : "s"} yet.`}
+              </h2>
+              <p className="text-sm text-[#6f675c]" data-library-empty-copy>
+                Start with Markdown. Elef keeps your source and assets in your library.
+              </p>
+            </div>
+            <button
+              className="button primary inline-flex min-h-10 cursor-pointer items-center justify-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95"
+              type="button"
+              data-kind={filter === "documents" ? "document" : "presentation"}
+              onClick={() => openCreate(filter === "documents" ? "document" : "presentation")}
+            >
+              {filter === "documents" ? "Create a document" : "Create a presentation"}
+            </button>
+          </div>
+          <p id="library-no-results" className="library-no-results" role="status" hidden={query.trim() === "" || visible.length > 0}>
+            No Works match this search.
+          </p>
+        </section>
+      </aside>
+
+      <main className="library-stage" aria-label="Work preview stage">
+        <div className="library-stage-bar">
+          <div className="library-stage-bar-left">
+            {railCollapsed ? (
+              <button
+                type="button"
+                className="library-stage-action"
+                onClick={() => setRailCollapsed(false)}
+              >
+                Show sidebar <kbd>⌘\</kbd>
+              </button>
+            ) : null}
+            <span className="library-stage-hint">
+              {vimNavEnabled ? "j/k or ↑/↓ to preview · / to search" : "↑/↓ to preview · ⌘K commands"}
+            </span>
+          </div>
+          {activeWork !== null ? (
+            <div className="library-stage-actions">
+              {activeWork.kind === "presentation" && options.presentWork !== undefined ? (
+                <button
+                  type="button"
+                  className="library-stage-action"
+                  onClick={() => options.presentWork?.(activeWork)}
+                >
+                  Present {vimNavEnabled ? <kbd>p</kbd> : null}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                className="library-stage-action is-primary"
+                onClick={() => options.navigate?.({ workId: activeWork.id, kind: activeWork.kind })}
+              >
+                Edit <kbd>↵</kbd>
+              </button>
+            </div>
+          ) : null}
         </div>
-        <p id="library-no-results" className="library-no-results" role="status" hidden={query.trim() === "" || visible.length > 0}>
-          No Works match this search.
-        </p>
-      </section>
+
+        <div className="library-stage-content">
+          {options.graphEnabled !== false && (
+            <section
+              id="document-graph-view"
+              className="document-graph-panel mb-6 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-5"
+              data-client-slot-target="graph"
+              hidden
+              aria-labelledby="document-graph-heading"
+            />
+          )}
+          <div data-client-slot-target="lineage" />
+          {activeWork !== null ? (
+            <div className="library-stage-focus">
+              <div className="library-stage-header">
+                <span className="library-stage-kind">
+                  {activeWork.kind === "presentation" ? "Presentation" : "Document"}
+                </span>
+                <h2 className="library-stage-title">{activeWork.title}</h2>
+              </div>
+              <div className="library-stage-preview">
+                <StagePreview host={host} work={activeWork} />
+              </div>
+            </div>
+          ) : (
+            <div className="library-stage-empty">
+              <p>Select or hover a work to preview its first page.</p>
+            </div>
+          )}
+        </div>
+      </main>
 
       {options.palette !== undefined &&
         typeof document !== "undefined" &&

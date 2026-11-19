@@ -317,4 +317,25 @@ describe("settings route", () => {
     const { document } = await mountInto(host, { initialUrl: "/settings" });
     assert.equal(document.querySelector('section[aria-label="Updates"]'), null);
   });
+
+  it("switches settings tabs and persists the library vim navigation toggle", async () => {
+    const scope = globalThis as Record<string, unknown>;
+    const previous = scope["localStorage"];
+    const storage = memoryStorage();
+    scope["localStorage"] = storage;
+    try {
+      const { host, seam } = updaterHost(false);
+      const { document } = await mountInto(host, { initialUrl: "/settings", updater: seam });
+      const tabs = [...document.querySelectorAll(".settings-tab")];
+      assert.equal(tabs.length, 3);
+      await click(tabs[1]);
+      assert.equal(tabs[1]?.getAttribute("aria-pressed"), "true");
+      const vimNavBox = document.querySelector("#library-vim-nav") as unknown as { checked: boolean };
+      assert.equal(vimNavBox.checked, true);
+      await setCheckbox(vimNavBox, false);
+      assert.equal(storage.getItem("elef.library.vimNav"), "false");
+    } finally {
+      scope["localStorage"] = previous;
+    }
+  });
 });

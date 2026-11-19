@@ -14,6 +14,7 @@ import {
   writeBoolean,
   writeValue,
 } from "./vimPreferences.js";
+import { readLibraryVimNav, writeLibraryVimNav } from "../../ui/libraryVimNav.js";
 
 // Live-sync bridge to an open editor on hosts that embed one beside the
 // settings UI (desktop). The pre-migration settings controller reached the
@@ -52,6 +53,7 @@ export function VimSettings({ storage, editorBridge }: VimSettingsProps): JSX.El
   const [escapeKey, setEscapeKey] = useState("");
   const [lineNumberMode, setLineNumberMode] = useState<LineNumberMode>("absolute");
   const [modeAwareCursor, setModeAwareCursor] = useState(false);
+  const [libraryVimNav, setLibraryVimNav] = useState(true);
 
   useEffect(() => {
     const vim = readVimPreferences(storage);
@@ -59,6 +61,7 @@ export function VimSettings({ storage, editorBridge }: VimSettingsProps): JSX.El
     setEscapeKey(vim.escapeKey);
     setLineNumberMode(vim.lineNumberMode);
     setModeAwareCursor(vim.modeAwareCursor);
+    setLibraryVimNav(readLibraryVimNav(storage));
   }, [storage]);
 
   function toggleVim(enabled: boolean): void {
@@ -153,7 +156,7 @@ export function VimSettings({ storage, editorBridge }: VimSettingsProps): JSX.El
           <option value="off">Hidden</option>
         </select>
       </div>
-      <div className="field">
+      <div className="field mb-5">
         <label htmlFor="vim-mode-aware-cursor" className="flex items-center gap-3 font-extrabold cursor-pointer">
           <input
             id="vim-mode-aware-cursor"
@@ -163,6 +166,22 @@ export function VimSettings({ storage, editorBridge }: VimSettingsProps): JSX.El
             className="rounded"
           />
           <span>Mode-aware cursor styling</span>
+        </label>
+      </div>
+      <div className="field">
+        <label htmlFor="library-vim-nav" className="flex items-center gap-3 font-extrabold cursor-pointer">
+          <input
+            id="library-vim-nav"
+            type="checkbox"
+            checked={libraryVimNav}
+            onChange={(event) => {
+              const checked = event.target.checked;
+              setLibraryVimNav(checked);
+              writeLibraryVimNav(checked, storage);
+            }}
+            className="rounded"
+          />
+          <span>Vim-style Library navigation (j/k, /, e, p)</span>
         </label>
       </div>
     </section>
