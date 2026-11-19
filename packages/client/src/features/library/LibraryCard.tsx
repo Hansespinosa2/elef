@@ -593,6 +593,7 @@ export function StagePreview({
   const mediaBaseUrl = options.resolveMediaBaseUrl?.(work) ?? "";
   const sanitized = (
     <SafeHtml
+      key={key}
       {...(work.kind === "document" ? {} : { className: stageClass })}
       html={cached.html}
       sanitize={(container, html) =>
