@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { installPreviewHtml } from "../lib/editor_view.js"
 import { buildPreviewRequestBody } from "../lib/preview_request_body.js"
+import { scrollPreviewToSourceOffset } from "../lib/preview_autoscroll.js"
 import { markStage } from "../lib/stage_marks.js"
 import { attachCanvasScaling } from "@elef/client"
 
@@ -16,6 +17,7 @@ export default class extends Controller<HTMLElement> {
 
   frozenForPrint = false
   pendingRefreshWhileFrozen = false
+  pendingSourceEditScroll: { offset: number; source: string; cancelled: boolean } | null = null
   private printUnfreezeCleanup: (() => void) | null = null
   private printInteractionRecoveryCleanup: (() => void) | null = null
 
@@ -63,15 +65,35 @@ export default class extends Controller<HTMLElement> {
     this.localPreviewError = (event: any) => this.handleLocalPreviewError(event)
     this.localPreviewRecovered = () => this.handleLocalPreviewRecovered()
     this.artDiagnostic = (event: any) => this.handleArtDiagnostic(event)
+    this.sourceEditHandler = (event: any) => {
+      if (this.element.dataset.editorMode !== "source") return
+      const offset = event.detail?.offset
+      if (typeof offset !== "number" || !Number.isFinite(offset)) return
+      this.pendingSourceEditScroll = { offset, source: this.currentSource(), cancelled: false }
+    }
+    this.modeChangeScrollHandler = (event: any) => {
+      if (event.detail?.mode !== "source") this.pendingSourceEditScroll = null
+    }
+    this.previewUserScrollHandler = () => {
+      if (this.pendingSourceEditScroll) this.pendingSourceEditScroll.cancelled = true
+    }
     // The boot projection is installed by the editor view before this
     // controller connects, and no fetch has run yet to re-sync: scale the
     // installed frames now so full-size slides never render unscaled
     // (clipped by the projection container) until the first edit.
-    if (this.hasContainerTarget) this.syncSlideScaling()
+    if (this.hasContainerTarget) {
+      this.syncSlideScaling()
+      this.containerTarget.addEventListener("wheel", this.previewUserScrollHandler, { passive: true })
+      this.containerTarget.addEventListener("touchstart", this.previewUserScrollHandler, { passive: true })
+      this.containerTarget.addEventListener("pointerdown", this.previewUserScrollHandler, { passive: true })
+      this.containerTarget.addEventListener("keydown", this.previewUserScrollHandler)
+    }
     this.element.addEventListener("focusout", this.focusoutHandler)
     this.element.addEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
     this.element.addEventListener("elef:art-diagnostic", this.artDiagnostic)
+    this.element.addEventListener("elef:source-edit", this.sourceEditHandler)
+    this.element.addEventListener("elef:editor-mode-change", this.modeChangeScrollHandler)
   }
 
   // Slide frames carry no Stimulus hooks since the presentation canvas
@@ -96,10 +118,19 @@ export default class extends Controller<HTMLElement> {
     this.clearSlideScaling()
     this.queuedRequestId = null
     this.pendingProjection = null
+    this.pendingSourceEditScroll = null
     this.element.removeEventListener("focusout", this.focusoutHandler)
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
     this.element.removeEventListener("elef:art-diagnostic", this.artDiagnostic)
+    this.element.removeEventListener("elef:source-edit", this.sourceEditHandler)
+    this.element.removeEventListener("elef:editor-mode-change", this.modeChangeScrollHandler)
+    if (this.hasContainerTarget && this.previewUserScrollHandler) {
+      this.containerTarget.removeEventListener("wheel", this.previewUserScrollHandler)
+      this.containerTarget.removeEventListener("touchstart", this.previewUserScrollHandler)
+      this.containerTarget.removeEventListener("pointerdown", this.previewUserScrollHandler)
+      this.containerTarget.removeEventListener("keydown", this.previewUserScrollHandler)
+    }
     this.artWarningObserver?.disconnect()
     if (this.element.previewController === this) delete this.element.previewController
   }
@@ -421,6 +452,14 @@ export default class extends Controller<HTMLElement> {
     const pending = this.pendingPreviewScroll
     const scrollLeft = pending?.restore ? pending.left : this.containerTarget.scrollLeft
     const scrollTop = pending?.restore ? pending.top : this.containerTarget.scrollTop
+    const sourceEditScroll = this.element.dataset?.editorMode === "source" ? this.pendingSourceEditScroll : null
+    this.pendingSourceEditScroll = null
+    const autoscrollOffset = sourceEditScroll &&
+      !sourceEditScroll.cancelled &&
+      this.sameSource(sourceEditScroll.source, source) &&
+      payload?.editor_map
+      ? sourceEditScroll.offset
+      : (pending?.autoscrollOffset ?? null)
     const oldRoot = this.containerTarget.querySelector(".document-editor-projection") as HTMLElement | null
     const visibleRoot = oldRoot?.querySelector(":scope > [data-preview-scroll-snapshot]") ?? oldRoot
     const oldView = visibleRoot?.cloneNode(true) as HTMLElement | undefined
@@ -452,7 +491,7 @@ export default class extends Controller<HTMLElement> {
         surface.setAttribute("aria-hidden", "true")
         root.append(oldView)
       }
-      const pending = { left: scrollLeft, top: scrollTop, restore: true }
+      const pending = { left: scrollLeft, top: scrollTop, restore: true, autoscrollOffset }
       this.pendingPreviewScroll = pending
       const cancel = () => {
         this.containerTarget.removeEventListener("elef:document-pages-settled", settled)
@@ -472,11 +511,17 @@ export default class extends Controller<HTMLElement> {
         if (this.pendingPreviewScroll === pending) this.pendingPreviewScroll = null
         if (this.cancelPendingPreviewScroll === cancel) this.cancelPendingPreviewScroll = null
       }
-      const userMoved = () => { pending.restore = false }
+      const userMoved = () => {
+        pending.restore = false
+        pending.autoscrollOffset = null
+      }
       const settled = (event: Event) => {
         if (event.target !== surface) return
         cancel()
-        if (pending.restore) {
+        const autoscrolled = pending.autoscrollOffset !== null && payload?.editor_map
+          ? scrollPreviewToSourceOffset(this.containerTarget, payload.editor_map, pending.autoscrollOffset)
+          : false
+        if (!autoscrolled && pending.restore) {
           this.containerTarget.scrollLeft = pending.left
           this.containerTarget.scrollTop = pending.top
         }
@@ -490,7 +535,12 @@ export default class extends Controller<HTMLElement> {
       this.element.addEventListener("elef:editor-mode-change", cancel)
     }
     this.containerTarget.scrollLeft = scrollLeft
-    this.containerTarget.scrollTop = scrollTop
+    const autoscrolled = !surface && autoscrollOffset !== null && this.element.dataset?.editorMode === "source" && payload?.editor_map
+      ? scrollPreviewToSourceOffset(this.containerTarget, payload.editor_map, autoscrollOffset)
+      : false
+    if (!autoscrolled) {
+      this.containerTarget.scrollTop = scrollTop
+    }
     this.projectionFresh = true
     delete this.element.dataset.previewProjectionStale
     this.containerTarget.removeAttribute("aria-busy")

@@ -170,3 +170,84 @@ test("setExternalValue applies minimal diffs, preserves folded frontmatter, and 
   );
   assert.deepEqual(foldedRanges, [[0, frontmatter.length - 1]]);
 });
+
+test("handleUpdate dispatches elef:source-edit only on non-server edits in source mode", () => {
+  const events: Array<{ type: string; offset?: number | undefined }> = [];
+  const docText = "Line 1\r\nLine 2\r\nLine 3";
+  let state = EditorState.create({
+    doc: docText,
+    selection: EditorSelection.cursor(0),
+  });
+  const inputTarget = {
+    value: docText.replace(/\r\n/g, "\n"),
+    setSelectionRange() {},
+    dispatchEvent() {},
+  };
+  const element = {
+    dataset: {},
+    dispatchEvent(event: Event) {
+      events.push({
+        type: event.type,
+        offset: (event as CustomEvent<{ offset?: number }>).detail?.offset,
+      });
+    },
+    querySelector: (selector: string) => (selector.includes("input") ? inputTarget : null),
+  } as unknown as HTMLElement;
+  const engine = new EditorEngine(element);
+  Object.assign(engine, {
+    editingMode: "source",
+    lineSeparator: "\r\n",
+    frontmatterRange: null,
+    pendingMediaRanges: new Map(),
+    view: {
+      get state() {
+        return state;
+      },
+      dispatch(spec: TransactionSpec) {
+        const update = state.update(spec);
+        state = update.state;
+        engine.handleUpdate({
+          state: update.state,
+          changes: update.changes,
+          docChanged: update.docChanged,
+          selectionSet: Boolean(update.selection),
+          viewportChanged: false,
+        } as never);
+      },
+    },
+    updateMode() {},
+    scheduleLineNumberUpdate() {},
+    syncMetadataToggle() {},
+  });
+
+  // Pure cursor movement in source mode must not emit elef:source-edit.
+  engine.view.dispatch({ selection: { anchor: 8 } });
+  assert.deepEqual(
+    events.filter((e) => e.type === "elef:source-edit"),
+    []
+  );
+
+  // User edit in source mode emits elef:source-edit with \n-normalized offset.
+  engine.replaceRange("X", 8, 8);
+  assert.deepEqual(
+    events.filter((e) => e.type === "elef:source-edit"),
+    [{ type: "elef:source-edit", offset: 9 }]
+  );
+
+  // Server sync in source mode must not emit elef:source-edit.
+  events.length = 0;
+  engine.replaceServerSource("Line 1\nXLine 2\nLine 3!");
+  assert.deepEqual(
+    events.filter((e) => e.type === "elef:source-edit"),
+    []
+  );
+
+  // Visual mode edit must not emit elef:source-edit.
+  events.length = 0;
+  engine.editingMode = "visual";
+  engine.replaceRange("Y", 0, 0);
+  assert.deepEqual(
+    events.filter((e) => e.type === "elef:source-edit"),
+    []
+  );
+});
