@@ -444,6 +444,8 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
     display: flex;
     flex-direction: column;
     height: 100vh;
+    max-width: 100%;
+    min-width: 0;
     width: 100%;
   }
   body.is-editing-source #start-presentation {

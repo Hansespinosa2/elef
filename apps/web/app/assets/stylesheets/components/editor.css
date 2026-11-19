@@ -468,10 +468,11 @@ li.editor-reveal-marker { list-style: none; }
   }
   body.is-editing-source .app-shell {
     margin: 0;
-    max-width: none;
+    max-width: 100%;
     padding: 0;
+    width: 100%;
   }
-  .visual-editor-form[data-editor-mode="source"] { gap: 0; height: calc(100vh - 36px); width: 100%; }
+  .visual-editor-form[data-editor-mode="source"] { gap: 0; grid-template-columns: minmax(0, 1fr); height: calc(100vh - 36px); max-width: 100%; min-width: 0; width: 100%; }
   .visual-editor-form[data-editor-mode="source"] .editor-shell {
     background: var(--oradia-slate-950);
     border: 0;
@@ -480,6 +481,8 @@ li.editor-reveal-marker { list-style: none; }
     display: flex;
     flex-direction: column;
     height: calc(100vh - 36px);
+    max-width: 100%;
+    min-width: 0;
     overflow: hidden;
     padding: 0;
     width: 100%;
@@ -551,6 +554,8 @@ li.editor-reveal-marker { list-style: none; }
     gap: 0.75rem;
     height: 34px;
     margin: 0;
+    max-width: 100%;
+    min-width: 0;
     overflow-x: auto;
     padding: 0 16px;
   }

@@ -577,6 +577,7 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
   body.has-editor-library-drawer main.app-shell {
     margin-left: 22rem;
     max-width: calc(100vw - 22rem);
+    width: calc(100vw - 22rem);
   }
 }
 .editor-library-drawer .library-rail {
