@@ -599,40 +599,61 @@ li.editor-reveal-marker { list-style: none; }
   .visual-editor-form[data-editor-mode="source"] .source-pane,
   .visual-editor-form[data-editor-mode="source"] .source-field {
     display: flex;
+    flex: 1 1 auto;
     flex-direction: column;
     height: 100%;
     margin: 0;
     min-height: 0;
   }
   .visual-editor-form[data-editor-mode="source"] .editor-surface {
+    display: flex;
     flex: 1 1 auto;
+    flex-direction: column;
+    height: 100%;
+    max-height: none;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
+    resize: none;
   }
   .visual-editor-form[data-editor-mode="source"] .editor-surface .cm-editor {
     border: 0;
     border-radius: 0;
+    flex: 1 1 auto;
     height: 100%;
+    max-height: none;
+    min-height: 0;
   }
   .visual-editor-form[data-editor-mode="source"] .editor-surface .cm-scroller {
+    flex: 1 1 auto;
+    height: 100%;
+    overflow: auto;
     padding: 1.5rem 2rem;
   }
 
-  /* Floating Vim / mode whisper inside source pane */
+  /* Dock Vim / mode controls cleanly inside the 28px bottom micro-rail */
   .visual-editor-form[data-editor-mode="source"] .editor-toolbar {
-    backdrop-filter: blur(8px);
-    background: rgba(24, 33, 38, 0.88);
-    border: 1px solid var(--oradia-line);
-    border-radius: 999px;
-    bottom: 0.85rem;
-    gap: 0.35rem;
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    bottom: 0;
+    display: flex;
+    gap: 0.45rem;
+    height: 28px;
+    left: 50%;
+    margin: 0;
     min-height: 0;
-    padding: 0.15rem 0.55rem;
-    position: absolute;
-    right: 1rem;
-    z-index: 6;
+    padding: 0;
+    position: fixed;
+    transform: translateX(-50%);
+    z-index: 15;
   }
   .visual-editor-form[data-editor-mode="source"] .editor-mode-button {
+    border: 0;
+    font-size: 0.68rem;
+    padding: 0.1rem 0.4rem;
+  }
+  .visual-editor-form[data-editor-mode="source"] .edit-actions-button {
     border: 0;
     font-size: 0.68rem;
     padding: 0.1rem 0.4rem;
