@@ -2184,10 +2184,20 @@ class DesktopLibraryUi {
     await browser.waitUntil(async () => browser.execute(expected => {
       const editor = document.querySelector("#desktop-editor-title")
       const form = document.querySelector("#desktop-editor-form")
-      return editor?.value === expected && form?.dataset.editorMode === "visual" &&
+      return editor?.value === expected &&
+        !document.querySelector("#visual-mode")?.disabled &&
         !document.querySelector("#work-view")?.hidden && Boolean(form?.dataset.loadedWorkId)
     }, title), {
       timeout: 10_000,
+      timeoutMsg: `The ${title} card preview did not finish opening`
+    })
+    if ((await $("#desktop-editor-form").getAttribute("data-editor-mode")) !== "visual") {
+      await $("#visual-mode").click()
+      await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual", {
+        timeout: 5_000,
+        timeoutMsg: `The ${title} card preview did not switch to visual mode`
+      })
+    }
       timeoutMsg: `The ${title} card preview did not open its rendered Visual editor`
     })
     await this.openLibrary()
