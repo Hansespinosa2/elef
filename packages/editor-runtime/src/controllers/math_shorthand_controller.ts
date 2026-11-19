@@ -660,11 +660,21 @@ export function editorMathContextAt(editor: any, caret: number): "display_math" 
     const text = editor?.value || ""
     return mathContextAt(text, caret)
   }
-  if (caret < 0 || caret > state.doc.length || editorInsideCode(editor, caret)) return null
+  if (caret < 0 || caret > state.doc.length) return null
 
-  const container = syntaxAncestors(editor, caret).find((node: any) => node.name === "Paragraph" || node.name === "BlockMath")
+  const ancestors = syntaxAncestors(editor, caret)
+  const blockMath = ancestors.find((node: any) => node.name === "BlockMath")
+  if (blockMath && caret >= blockMath.from + 2) {
+    const hasClosingFence = blockMath.to - blockMath.from >= 4
+      && state.doc.sliceString(blockMath.to - 2, blockMath.to) === "$$"
+    if (!hasClosingFence || caret <= blockMath.to - 2) return "display_math"
+  }
+
+  if (editorInsideCode(editor, caret)) return null
+
+  const paragraph = ancestors.find((node: any) => node.name === "Paragraph")
   const line = state.doc.lineAt(caret)
-  const from = container?.from ?? line.from
+  const from = paragraph?.from ?? line.from
   const prefix = state.doc.sliceString(from, caret, "\n")
   return mathContextAt(prefix, prefix.length)
 }
