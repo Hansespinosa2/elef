@@ -326,10 +326,10 @@ describe("settings route", () => {
     try {
       const { host, seam } = updaterHost(false);
       const { document } = await mountInto(host, { initialUrl: "/settings", updater: seam });
-      const tabs = [...document.querySelectorAll(".settings-tab")];
+      const tabs = [...document.querySelectorAll('.settings-tabs [role="tab"]')];
       assert.equal(tabs.length, 3);
       await click(tabs[1]);
-      assert.equal(tabs[1]?.getAttribute("aria-pressed"), "true");
+      assert.equal(tabs[1]?.getAttribute("aria-selected"), "true");
       const vimNavBox = document.querySelector("#library-vim-nav") as unknown as { checked: boolean };
       assert.equal(vimNavBox.checked, true);
       await setCheckbox(vimNavBox, false);

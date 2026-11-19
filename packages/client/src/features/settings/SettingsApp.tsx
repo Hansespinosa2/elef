@@ -92,43 +92,61 @@ export function SettingsApp({ host, options, storage, editorBridge, onSaved, reg
           <h1 className="mb-1 text-3xl font-bold">Settings</h1>
           <p className="text-sm opacity-75">New and unstyled works use these values.</p>
         </section>
-        <nav className="settings-tabs" aria-label="Settings categories">
+        <nav className="settings-tabs" role="tablist" aria-label="Settings categories">
           <button
             type="button"
+            role="tab"
+            id="settings-tab-appearance"
+            aria-selected={section === "appearance"}
+            aria-controls="settings-panel-appearance"
             className={`settings-tab${section === "appearance" ? " is-active" : ""}`}
-            aria-pressed={section === "appearance"}
-            onClick={() => setSection("appearance")}
+            onClick={() => {
+              setSection("appearance");
+              document.getElementById("settings-panel-appearance")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+            }}
           >
             Appearance
           </button>
           <button
             type="button"
+            role="tab"
+            id="settings-tab-keyboard"
+            aria-selected={section === "keyboard"}
+            aria-controls="settings-panel-keyboard"
             className={`settings-tab${section === "keyboard" ? " is-active" : ""}`}
-            aria-pressed={section === "keyboard"}
-            onClick={() => setSection("keyboard")}
+            onClick={() => {
+              setSection("keyboard");
+              document.getElementById("settings-panel-keyboard")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+            }}
           >
             Keyboard &amp; Vim
           </button>
-          {options.navigate !== undefined ? (
-            <button
-              type="button"
-              className="settings-tab"
-              onClick={() => options.navigate?.({ url: "/snippets" })}
-            >
-              Snippets &amp; Math
-            </button>
-          ) : null}
           {showUpdater ? (
             <button
               type="button"
+              role="tab"
+              id="settings-tab-updates"
+              aria-selected={section === "updates"}
+              aria-controls="settings-panel-updates"
               className={`settings-tab${section === "updates" ? " is-active" : ""}`}
-              aria-pressed={section === "updates"}
-              onClick={() => setSection("updates")}
+              onClick={() => {
+                setSection("updates");
+                document.getElementById("settings-panel-updates")?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+              }}
             >
               Updates
             </button>
           ) : null}
         </nav>
+        {options.navigate !== undefined ? (
+          <button
+            type="button"
+            className="settings-tab settings-snippets-link mt-3"
+            onClick={() => options.navigate?.({ url: "/snippets" })}
+          >
+            Snippets &amp; Math →
+          </button>
+        ) : null}
       </aside>
 
       <div className="settings-stage">
@@ -141,7 +159,12 @@ export function SettingsApp({ host, options, storage, editorBridge, onSaved, reg
           <p>Loading settings…</p>
         ) : (
           <>
-            <div hidden={section !== "appearance"}>
+            <div
+              id="settings-panel-appearance"
+              role="tabpanel"
+              aria-labelledby="settings-tab-appearance"
+              className={section === "appearance" ? "is-focused-section" : undefined}
+            >
               <form
                 onSubmit={(event) => void saveDefaults(event)}
                 className="settings-card max-w-2xl rounded-2xl border p-6 mb-8"
@@ -186,7 +209,12 @@ export function SettingsApp({ host, options, storage, editorBridge, onSaved, reg
               </form>
             </div>
 
-            <div hidden={section !== "keyboard"}>
+            <div
+              id="settings-panel-keyboard"
+              role="tabpanel"
+              aria-labelledby="settings-tab-keyboard"
+              className={section === "keyboard" ? "is-focused-section" : undefined}
+            >
               <VimSettings
                 {...(storage === undefined ? {} : { storage })}
                 {...(editorBridge === undefined || editorBridge === null ? {} : { editorBridge })}
@@ -194,7 +222,12 @@ export function SettingsApp({ host, options, storage, editorBridge, onSaved, reg
             </div>
 
             {showUpdater && options.updater ? (
-              <div hidden={section !== "updates"}>
+              <div
+                id="settings-panel-updates"
+                role="tabpanel"
+                aria-labelledby="settings-tab-updates"
+                className={section === "updates" ? "is-focused-section" : undefined}
+              >
                 <UpdaterSection seam={options.updater} />
               </div>
             ) : null}

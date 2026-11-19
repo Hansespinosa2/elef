@@ -545,9 +545,11 @@ export function CardPreview({
 export function StagePreview({
   host,
   work,
+  options,
 }: {
   readonly host: ElefHost;
   readonly work: WorkSummary;
+  readonly options: ElefMountOptions;
 }): JSX.Element {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const key = `${work.id}:${work.updatedAt ?? ""}`;
@@ -582,18 +584,22 @@ export function StagePreview({
     );
   }
 
+  const theme = cached.theme ?? "match";
+  const typography = cached.typography ?? "book";
   const stageClass =
-    work.kind === "document"
-      ? "library-preview-page"
-      : `presentation-surface ${presentationTheme(cached.theme, cached.typography)} typography-${cached.typography ?? "book"}`;
+    work.kind === "presentation"
+      ? `library-preview-stage presentation-surface work-surface slides slides-theme-${theme} slides-typography-${typography} slides-presentation-${presentationTheme(theme, typography)} work-theme-${theme} work-typography-${typography}`
+      : `library-preview-page document-reader document-theme-${theme} document-typography-${typography} work-theme-${theme} work-typography-${typography}`;
+  const mediaBaseUrl = options.resolveMediaBaseUrl?.(work) ?? "";
   const sanitized = (
     <SafeHtml
+      {...(work.kind === "document" ? {} : { className: stageClass })}
       html={cached.html}
-      className={work.kind === "document" ? "library-preview-doc" : stageClass}
       sanitize={(container, html) =>
         sanitizePreview(container, html, {
           interactive: false,
           documentPagination: work.kind === "document",
+          mediaBaseUrl,
         })
       }
     />

@@ -296,7 +296,7 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
   align-items: center;
   display: grid;
   gap: 0.65rem;
-  grid-template-columns: 4.5rem minmax(0, 1fr);
+  grid-template-columns: 7.5rem minmax(0, 1fr);
   padding: 0.5rem 0.6rem;
 }
 .library-rail .library-card.is-selected {

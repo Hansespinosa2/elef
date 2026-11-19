@@ -279,10 +279,11 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
       setHoveredWorkId(null);
       setSelectedWorkId(nextWork.id);
       const cardEl = rootRef.current?.querySelector(`#${cardDomId(nextWork)}`) as
-        | { scrollIntoView?: (opts: { block: string }) => void }
+        | (HTMLElement & { scrollIntoView?: (opts: { block: string }) => void })
         | null
         | undefined;
       cardEl?.scrollIntoView?.({ block: "nearest" });
+      (cardEl?.querySelector(".library-card-title a") as HTMLElement | null)?.focus?.();
     },
     [shown, selectedWorkId],
   );
@@ -290,8 +291,21 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
   useEffect(() => {
     const doc = rootRef.current?.ownerDocument;
     if (doc === undefined || doc === null) return;
+    const ownerDoc = doc;
     function onKeyDown(event: globalThis.KeyboardEvent): void {
       if (paletteOpen || dialogOpen) return;
+      const root = rootRef.current;
+      const targetNode = event.target as Node | null;
+      if (
+        root !== null &&
+        targetNode !== null &&
+        targetNode !== ownerDoc &&
+        targetNode !== ownerDoc.body &&
+        targetNode !== ownerDoc.documentElement &&
+        !root.contains(targetNode)
+      ) {
+        return;
+      }
       const target = event.target as { tagName?: string; isContentEditable?: boolean } | null;
       const tag = target?.tagName?.toUpperCase() ?? "";
       const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable === true;
@@ -628,10 +642,10 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
                 <span className="library-stage-kind">
                   {activeWork.kind === "presentation" ? "Presentation" : "Document"}
                 </span>
-                <h2 className="library-stage-title">{activeWork.title}</h2>
+                <p className="library-stage-title">{activeWork.title}</p>
               </div>
               <div className="library-stage-preview">
-                <StagePreview host={host} work={activeWork} />
+                <StagePreview host={host} work={activeWork} options={options} />
               </div>
             </div>
           ) : (
