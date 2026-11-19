@@ -2268,6 +2268,23 @@ class DesktopLibraryUi {
     })
   }
 
+  async showVisualMode() {
+    const visualMode = $("#visual-mode")
+    await visualMode.waitForEnabled()
+    await visualMode.click()
+    await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual", {
+      timeout: 5_000,
+      timeoutMsg: "Switching to Visual mode did not complete"
+    })
+  }
+
+  async assertSourceMode() {
+    await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
+      timeout: 5_000,
+      timeoutMsg: "Opening a work from the library did not return to default Source mode"
+    })
+  }
+
   async renameWork(title, newTitle) {
     let card
     for (const candidate of await $$(".library-card")) {

@@ -94,8 +94,8 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Math palette", source: "# Math palette")
     MathShortcut.create!(name: "Array", aliases: ["array"], prefix: "@", expansion: "\\operatorname{array}")
 
-    visit edit_document_path(document, editor_mode: "visual")
-    click_on "Source"
+    visit edit_document_path(document)
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length, editor.value.length); editor.focus();")
     editor = find(".cm-content")
     editor.send_keys("\n$x.b")
@@ -153,8 +153,8 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "shows and accepts beta and theta shortcuts after an inline math opener" do
     document = Document.create!(title: "Greek math palette", source: "# Greek math palette")
 
-    visit edit_document_path(document, editor_mode: "visual")
-    click_on "Source"
+    visit edit_document_path(document)
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$ @b")
@@ -191,8 +191,8 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "shows compact math shortcut suggestions with their LaTeX expansion" do
     document = Document.create!(title: "Math shortcut previews", source: "# Math shortcut previews")
 
-    visit edit_document_path(document, editor_mode: "visual")
-    click_on "Source"
+    visit edit_document_path(document)
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$@g")
@@ -228,8 +228,8 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "previews the full chained math expansion that the shortcut commits" do
     document = Document.create!(title: "Chained math previews", source: "# Chained math previews")
 
-    visit edit_document_path(document, editor_mode: "visual")
-    click_on "Source"
+    visit edit_document_path(document)
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$$x.bar.b.t.inv")
@@ -251,8 +251,8 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "expands common TeX operators and walks fraction tab stops" do
     document = Document.create!(title: "TeX operators", source: "# TeX operators")
 
-    visit edit_document_path(document, editor_mode: "visual")
-    click_on "Source"
+    visit edit_document_path(document)
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$@nabla")
@@ -284,8 +284,8 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "inserts structured math entries with ordered placeholder stops" do
     document = Document.create!(title: "Structured math", source: "# Math\n\n$$x$$")
 
-    visit edit_document_path(document, editor_mode: "visual")
-    click_on "Source"
+    visit edit_document_path(document)
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector(".source-field").editorController;
@@ -328,8 +328,8 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "uses the selected math transform without duplicating its base" do
     document = Document.create!(title: "Selected math transform", source: "# Math")
 
-    visit edit_document_path(document, editor_mode: "visual")
-    click_on "Source"
+    visit edit_document_path(document)
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$x.bo")
@@ -344,8 +344,8 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "inserts an equation block from the source command palette" do
     document = Document.create!(title: "Authoring snippets", source: "# Authoring snippets")
 
-    visit edit_document_path(document, editor_mode: "visual")
-    click_on "Source"
+    visit edit_document_path(document)
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n/equation")
@@ -447,8 +447,8 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
       source: "---\ntheme: light\ntypography: book\n---\n# Source mode metadata save\n\nBody"
     )
 
-    visit edit_document_path(document, editor_mode: "visual")
-    click_on "Source"
+    visit edit_document_path(document)
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     type_source_text(document.source, "theme: light", "theme: dark")
     assert_selector ".document-reader.document-theme-dark", wait: 5
     assert_equal "source", page.evaluate_script("document.querySelector('[name=editor_mode]').value")

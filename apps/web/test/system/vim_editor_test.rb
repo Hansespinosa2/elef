@@ -811,7 +811,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim j traverses visual blocks from top to bottom" do
     Document.create!(title: "Vim traverse", source: "# One\n# Two\n# Three")
-    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
+    visit edit_document_path(Document.order(:id).last, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -845,7 +845,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim j moves down table cells in the same column" do
     Document.create!(title: "Vim table", source: "| a | b |\n|---|---|\n| c | d |\n| e | f |")
-    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
+    visit edit_document_path(Document.order(:id).last, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -883,7 +883,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim k traverses visual blocks from bottom to top" do
     Document.create!(title: "Vim traverse up", source: "# One\n# Two\n# Three")
-    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
+    visit edit_document_path(Document.order(:id).last, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -920,7 +920,7 @@ class VimEditorTest < ApplicationSystemTestCase
     # four-character line keeps every step on unambiguous engine
     # positions (mid-line display offsets map one-to-one).
     Document.create!(title: "Vim horizontal", source: "# ABCD")
-    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
+    visit edit_document_path(Document.order(:id).last, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -990,7 +990,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim word motions w b e move across visual blocks" do
     Document.create!(title: "Vim words", source: "# One two\n# Three four")
-    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
+    visit edit_document_path(Document.order(:id).last, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -1042,7 +1042,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim dollar and zero reach rendered line ends" do
     Document.create!(title: "Vim line ends", source: "First paragraph here")
-    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
+    visit edit_document_path(Document.order(:id).last, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -1073,7 +1073,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim gg and capital G jump between document top and bottom" do
     Document.create!(title: "Vim jumps", source: "# One\n# Two\n# Three\n# Four\n# Five")
-    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
+    visit edit_document_path(Document.order(:id).last, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -1112,7 +1112,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim counts multiply motions across blocks" do
     Document.create!(title: "Vim counts", source: "# A\n# B\n# C\n# D\n# E\n# F")
-    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
+    visit edit_document_path(Document.order(:id).last, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -1152,7 +1152,7 @@ class VimEditorTest < ApplicationSystemTestCase
 
   test "Vim visual mode extends the selection across blocks with j and k" do
     Document.create!(title: "Vim visual range", source: "# One\n# Two\n# Three")
-    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
+    visit edit_document_path(Document.order(:id).last, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10
@@ -1215,7 +1215,7 @@ class VimEditorTest < ApplicationSystemTestCase
     delimiter = "|#{Array.new(8, "---").join("|")}|"
     rows = (1..8).map { |r| "| #{(1..8).map { |c| "r#{r}c#{c}" }.join(" | ")} |" }
     Document.create!(title: "Vim grid", source: ([header, delimiter] + rows).join("\n"))
-    visit edit_document_path(Document.order(:id, editor_mode: "visual").last)
+    visit edit_document_path(Document.order(:id).last, editor_mode: "visual")
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
     page.refresh
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal", wait: 10

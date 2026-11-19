@@ -1072,6 +1072,15 @@ class WebLibraryUi {
     await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
   }
 
+  async showVisualMode() {
+    await this.page.locator('[data-editor-target="visualButton"]').click()
+    await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
+  }
+
+  async assertSourceMode() {
+    await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "source")
+  }
+
   async assertAllWorkKindsVisible(presentationTitle, documentTitle) {
     await expect(this.page.getByRole("heading", { name: presentationTitle, exact: true })).toBeVisible()
     await expect(this.page.getByRole("heading", { name: documentTitle, exact: true })).toBeVisible()
