@@ -218,8 +218,8 @@ class DocumentScrollTest < ApplicationSystemTestCase
     long_source = "# Top Title\n\n" + (1..40).map { |i| "## Section #{i}\n\nParagraph #{i} with enough content to span multiple pages.\n\n" }.join
     document = Document.create!(title: "Source autoscroll", source: long_source)
     visit edit_document_path(document)
+    assert_selector ".visual-editor-form[data-editor-mode='source']", wait: 15
     assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
-    click_on "Source"
     assert_selector ".document-page-frame", minimum: 3
 
     # Scroll preview to bottom, then move caret without editing -> preview stays at bottom
