@@ -787,8 +787,9 @@ li.editor-reveal-marker { list-style: none; }
     min-height: 0;
     padding: 0 4px;
   }
-  .visual-editor-form[data-editor-mode="source"] .dirty-state {
-    font-size: 11.5px;
+  .visual-editor-form[data-editor-mode="source"] .dirty-state { font-size: 11.5px; }
+  .visual-editor-form[data-editor-mode="source"] .dirty-state:empty { display: none; }
+  .visual-editor-form[data-editor-mode="source"] .dirty-state[data-autosave-target="status"] {
     min-width: 105px;
     text-align: right;
   }
