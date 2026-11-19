@@ -482,7 +482,7 @@ class PresentationsTest < ApplicationSystemTestCase
     click_on "Library"
     assert_current_path root_path
     find("#presentation_#{presentation.id} .library-card-open").click
-    assert_current_path edit_presentation_path(presentation, editor_mode: "visual")
+    assert_current_path edit_presentation_path(presentation)
 
     click_on "Library"
     assert_current_path root_path
