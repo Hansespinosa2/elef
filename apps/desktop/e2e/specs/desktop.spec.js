@@ -372,10 +372,12 @@ class DesktopEditorUi {
 
   async openWork(title = "E2E seed") {
     if (!(await $("#library-view").isDisplayed())) {
-      if ((await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual") {
-        await this.showSourceMode()
+      const libraryLink = $('[data-editor-view-target="libraryLink"]')
+      if (await libraryLink.isDisplayed()) {
+        await libraryLink.click()
+      } else {
+        await $("#back-to-library").click()
       }
-      await $("#back-to-library").click()
       await $("#library-view").waitForDisplayed()
     }
     await $("#show-work-list").click()
@@ -387,13 +389,19 @@ class DesktopEditorUi {
         const form = document.querySelector("#desktop-editor-form")
         return document.querySelector("#work-title")?.textContent === expected
           && form?.dataset.loadedWorkId === document.querySelector("#work-id")?.textContent
-          && form?.dataset.editorMode === "visual"
           && !document.querySelector("#visual-mode")?.disabled
           && !document.querySelector("#work-view")?.hidden
       }, title), {
         timeout: 10_000,
-        timeoutMsg: `The ${title} work did not finish opening in visual mode`
+        timeoutMsg: `The ${title} work did not finish opening`
       })
+      if ((await $("#desktop-editor-form").getAttribute("data-editor-mode")) !== "visual") {
+        await $("#visual-mode").click()
+        await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual", {
+          timeout: 5_000,
+          timeoutMsg: `The ${title} work did not switch to visual mode`
+        })
+      }
     } catch (error) {
       const diagnostic = await browser.execute(expected => {
         const form = document.querySelector("#desktop-editor-form")
@@ -2176,12 +2184,20 @@ class DesktopLibraryUi {
     await browser.waitUntil(async () => browser.execute(expected => {
       const editor = document.querySelector("#desktop-editor-title")
       const form = document.querySelector("#desktop-editor-form")
-      return editor?.value === expected && form?.dataset.editorMode === "visual" &&
+      return editor?.value === expected &&
+        !document.querySelector("#visual-mode")?.disabled &&
         !document.querySelector("#work-view")?.hidden && Boolean(form?.dataset.loadedWorkId)
     }, title), {
       timeout: 10_000,
-      timeoutMsg: `The ${title} card preview did not open its rendered Visual editor`
+      timeoutMsg: `The ${title} card preview did not finish opening`
     })
+    if ((await $("#desktop-editor-form").getAttribute("data-editor-mode")) !== "visual") {
+      await $("#visual-mode").click()
+      await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual", {
+        timeout: 5_000,
+        timeoutMsg: `The ${title} card preview did not switch to visual mode`
+      })
+    }
     await this.openLibrary()
   }
 
@@ -2249,6 +2265,23 @@ class DesktopLibraryUi {
     await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual", {
       timeout: 5_000,
       timeoutMsg: "Opening a work from the library did not return to Rails' default Visual mode"
+    })
+  }
+
+  async showVisualMode() {
+    const visualMode = $("#visual-mode")
+    await visualMode.waitForEnabled()
+    await visualMode.click()
+    await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "visual", {
+      timeout: 5_000,
+      timeoutMsg: "Switching to Visual mode did not complete"
+    })
+  }
+
+  async assertSourceMode() {
+    await browser.waitUntil(async () => (await $("#desktop-editor-form").getAttribute("data-editor-mode")) === "source", {
+      timeout: 5_000,
+      timeoutMsg: "Opening a work from the library did not return to default Source mode"
     })
   }
 

@@ -12,6 +12,21 @@ const EDITOR_VIEW = `
       <div class="editor-kind-badge" data-editor-view-target="kindBadge"></div>
     </header>
 
+    <section class="slide-overview" aria-labelledby="slide-overview-heading" data-editor-view-target="slideOverview">
+      <div class="slide-overview-heading-row">
+        <div><h3 data-editor-view-target="slideHeading">Slide overview</h3><p data-slide-overview-target="count" aria-live="polite">0 slides</p></div>
+        <div class="slide-overview-actions" aria-label="Slide actions">
+          <button type="button" data-action="slide-overview#add" aria-label="Add slide after selected">Add</button>
+          <button type="button" data-action="slide-overview#duplicate" aria-label="Duplicate selected slide">Duplicate</button>
+          <button type="button" data-action="slide-overview#delete" aria-label="Delete selected slide">Delete</button>
+          <button type="button" data-action="slide-overview#moveUp" aria-label="Move selected slide earlier">↑</button>
+          <button type="button" data-action="slide-overview#moveDown" aria-label="Move selected slide later">↓</button>
+        </div>
+      </div>
+      <div class="slide-overview-grid" data-slide-overview-target="grid" role="group" aria-label="Slides"></div>
+      <section class="slide-overflow-warnings" data-slide-overview-target="warnings" aria-label="Slide overflow warnings" role="status" hidden><h4>Overflow warnings</h4><ul></ul></section>
+    </section>
+
     <div class="editor-layout">
       <div class="source-pane">
         <div class="field source-field relative mb-4" data-editor-view-target="sourceField">
@@ -66,20 +81,6 @@ const EDITOR_VIEW = `
 
         <div class="presentation-editor-tools" aria-label="Presentation editing tools" data-editor-view-target="presentationTools">
         </div>
-        <section class="slide-overview" aria-labelledby="slide-overview-heading" data-editor-view-target="slideOverview">
-          <div class="slide-overview-heading-row">
-            <div><h3 data-editor-view-target="slideHeading">Slide overview</h3><p data-slide-overview-target="count" aria-live="polite">0 slides</p></div>
-            <div class="slide-overview-actions" aria-label="Slide actions">
-              <button type="button" data-action="slide-overview#add" aria-label="Add slide after selected">Add</button>
-              <button type="button" data-action="slide-overview#duplicate" aria-label="Duplicate selected slide">Duplicate</button>
-              <button type="button" data-action="slide-overview#delete" aria-label="Delete selected slide">Delete</button>
-              <button type="button" data-action="slide-overview#moveUp" aria-label="Move selected slide earlier">↑</button>
-              <button type="button" data-action="slide-overview#moveDown" aria-label="Move selected slide later">↓</button>
-            </div>
-          </div>
-          <div class="slide-overview-grid" data-slide-overview-target="grid" role="group" aria-label="Slides"></div>
-          <section class="slide-overflow-warnings" data-slide-overview-target="warnings" aria-label="Slide overflow warnings" role="status" hidden><h4>Overflow warnings</h4><ul></ul></section>
-        </section>
       </div>
 
       <div class="editor-splitter" role="separator" aria-label="Resize source and preview" aria-orientation="vertical" aria-valuemin="20" aria-valuemax="80" aria-valuenow="46" tabindex="0" data-controller="editor-splitter" data-action="pointerdown->editor-splitter#start pointermove->editor-splitter#move pointerup->editor-splitter#end pointercancel->editor-splitter#end lostpointercapture->editor-splitter#end keydown->editor-splitter#keydown"></div>
@@ -89,6 +90,11 @@ const EDITOR_VIEW = `
 
     <section class="preview-warnings rounded-xl border border-[#e7c56d] bg-[#fff8df] p-3 text-[#765700]" data-preview-target="warnings" aria-label="Preview warnings" hidden><h3 class="mb-1 text-sm font-bold">Preview warnings</h3><ul class="list-disc pl-5 text-sm"></ul></section>
     <div class="editor-footer">
+      <div class="editor-micro-rail-left">
+        <a class="editor-micro-back" href="/" data-editor-view-target="libraryLink" data-dirty-navigation="true">← Library</a>
+        <span class="editor-micro-sep" aria-hidden="true">·</span>
+        <span class="editor-micro-title" data-editor-view-target="microTitle"></span>
+      </div>
       <div class="editor-actions">
         <button type="submit" class="button primary" data-dirty-target="saveButton" data-editor-view-target="saveButton">Save</button>
         <a class="button" data-editor-view-target="previewLink" data-dirty-navigation="true" hidden>Preview</a>
@@ -97,6 +103,8 @@ const EDITOR_VIEW = `
         <span class="release-state" data-editor-view-target="releaseState" hidden></span>
         <span class="dirty-state" data-preview-target="status" aria-live="polite"></span>
         <button type="button" class="preview-retry" data-preview-target="retry" data-action="preview#retry" hidden>Retry preview</button>
+        <button type="button" class="editor-micro-btn" data-editor-view-target="togglePreviewButton" title="Toggle preview (⌘\\)">Split ⌘\\</button>
+        <button type="button" class="editor-micro-btn" data-editor-view-target="commandPaletteButton" title="Command palette (⌘K)">⌘K</button>
       </div>
       <span class="presentation-editor-status" data-presentation-editor-target="status" aria-live="polite"></span>
     </div>
@@ -171,6 +179,7 @@ export interface DesktopFeatures {
 // Share in-flight fetches across installs without retaining completed media
 // or failed URLs for the lifetime of a desktop session.
 const pendingImagePreloads = new WeakMap<Document, Map<string, HTMLLinkElement>>()
+const boundPreviewShortcutDocs = new WeakSet<Document>()
 
 export function installPreviewHtml(container: Element, html: string): void {
   const mediaBaseUrl = container.closest("form")?.dataset.mediaAssetBaseUrlValue || ""
@@ -238,6 +247,10 @@ export function renderEditorView(container: Element | null, config: EditorViewCo
   const ids: EditorViewIds = config.ids || {}
 
   get("title").setAttribute("value", config.title || "")
+  get("microTitle").textContent = config.title || "Untitled"
+  ;(get("title") as HTMLInputElement).addEventListener("input", () => {
+    get("microTitle").textContent = (get("title") as HTMLInputElement).value.trim() || "Untitled"
+  })
   if (ids.title) get("title").id = ids.title
   if (config.titleName) (get("title") as HTMLInputElement).name = config.titleName
   get("titleLabel").setAttribute("for", ids.title || "elef-editor-title")
@@ -342,6 +355,41 @@ export function renderEditorView(container: Element | null, config: EditorViewCo
     get("releaseState").dataset.releaseStatus = config.releaseStatus || ""
     get("releaseState").textContent = config.releaseState
   }
+  const libraryLink = get("libraryLink") as HTMLAnchorElement
+  libraryLink.addEventListener("click", (event) => {
+    const navEvent = new CustomEvent("elef:navigate-library", { bubbles: true, cancelable: true })
+    if (!libraryLink.dispatchEvent(navEvent)) {
+      event.preventDefault()
+    }
+  })
+  const togglePreviewBtn = get("togglePreviewButton") as HTMLButtonElement
+  const togglePreview = () => {
+    const activeForm = root.closest("form")
+    if (activeForm && activeForm.dataset.editorMode !== "source") return
+    const layout = root.querySelector(".editor-layout")
+    if (!layout) return
+    const hidden = layout.classList.toggle("is-preview-hidden")
+    togglePreviewBtn.textContent = hidden ? "Source ⌘\\" : "Split ⌘\\"
+  }
+  togglePreviewBtn.addEventListener("click", togglePreview)
+  if (!boundPreviewShortcutDocs.has(doc)) {
+    boundPreviewShortcutDocs.add(doc)
+    doc.addEventListener("keydown", (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key === "\\") {
+        const activeForm = doc.querySelector<HTMLFormElement>("form[data-editor-mode='source']")
+        const btn = activeForm?.querySelector<HTMLButtonElement>("[data-editor-view-target='togglePreviewButton']")
+        if (!btn) return
+        event.preventDefault()
+        btn.click()
+      }
+    })
+  }
+  const commandPaletteBtn = get("commandPaletteButton") as HTMLButtonElement
+  const paletteTrigger = doc.querySelector<HTMLButtonElement>(".command-palette-trigger")
+  commandPaletteBtn.hidden = !paletteTrigger
+  commandPaletteBtn.addEventListener("click", () => {
+    doc.querySelector<HTMLButtonElement>(".command-palette-trigger")?.click()
+  })
   container.replaceChildren(template.content)
   const mountedRoot = container.querySelector(".editor-shell")
   const desktopFeatures: DesktopFeatures = config.desktopFeatures || {}

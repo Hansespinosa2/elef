@@ -80,7 +80,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
 
   def test_source_edit_preserves_preview_scroll_after_save
     document = Document.create!(title: "Source preview scroll", source: SOURCE)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 15
     click_on "Source"
     assert_selector ".document-page-frame", minimum: 2
@@ -108,7 +108,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
 
   def test_delayed_pagination_preserves_position_and_respects_navigation
     document = Document.create!(title: "Delayed preview", source: SOURCE)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
     click_on "Source"
     before = page.evaluate_script(<<~JAVASCRIPT)
@@ -159,7 +159,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
 
   def test_switching_to_visual_mode_during_delayed_pagination_releases_snapshot
     document = Document.create!(title: "Delayed mode switch", source: SOURCE)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
@@ -178,7 +178,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
 
   def test_blur_released_pagination_preserves_scroll
     document = Document.create!(title: "Scroll preservation", source: SOURCE)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 15
     assert_selector ".document-page-frame", minimum: 2
     page.execute_script(<<~JAVASCRIPT)
@@ -218,8 +218,8 @@ class DocumentScrollTest < ApplicationSystemTestCase
     long_source = "# Top Title\n\n" + (1..40).map { |i| "## Section #{i}\n\nParagraph #{i} with enough content to span multiple pages.\n\n" }.join
     document = Document.create!(title: "Source autoscroll", source: long_source)
     visit edit_document_path(document)
+    assert_selector ".visual-editor-form[data-editor-mode='source']", wait: 15
     assert_selector ".document-surface[data-document-pages-settled='true']", wait: 15
-    click_on "Source"
     assert_selector ".document-page-frame", minimum: 3
 
     # Scroll preview to bottom, then move caret without editing -> preview stays at bottom

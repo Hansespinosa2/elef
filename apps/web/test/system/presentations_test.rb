@@ -230,7 +230,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "appearance controls are collapsed in the presentation editor" do
     presentation = Presentation.create!(title: "Appearance popup", source: "# Appearance popup")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
     assert_no_selector "select#presentation_theme", visible: true
@@ -256,7 +256,7 @@ class PresentationsTest < ApplicationSystemTestCase
       Start writing Markdown here.
     MARKDOWN
 
-    visit new_presentation_path
+    visit new_presentation_path(editor_mode: "visual")
 
     assert_field "Markdown source", with: expected_source
     assert_selector ".slide-statement .slide-block.position-center.position-middle", text: "Untitled Document", wait: 5
@@ -301,7 +301,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "layouts and themes sample preserves positions while adding and deleting blocks" do
     Presentations::SampleData.load!
     sample = Presentation.find_by!(sample_id: "layouts-and-themes")
-    visit edit_presentation_path(sample)
+    visit edit_presentation_path(sample, editor_mode: "visual")
     wait_for_fresh_projection
 
     assert_selector ".slide-statement .slide-block.position-center.position-middle", text: "Designing a visual system"
@@ -406,7 +406,7 @@ class PresentationsTest < ApplicationSystemTestCase
     Presentations::SampleData.load!
     sample = Presentation.find_by!(sample_id: "tables-and-media")
 
-    visit edit_presentation_path(sample)
+    visit edit_presentation_path(sample, editor_mode: "visual")
     wait_for_fresh_projection
 
     # The boot projection arrives with the page (no preview fetch has run
@@ -494,7 +494,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "autosave persists newer edits after an outstanding request and keeps them dirty until saved" do
     presentation = Presentation.create!(title: "Autosave order", source: "# Original")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     hold_autosaves
     fill_in "Markdown source", with: "# First edit"
     assert_selector '[data-autosave-target="status"]', text: "Saving…"
@@ -532,10 +532,10 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "two editor tabs preserve a stale local draft as a recovery revision" do
     presentation = Presentation.create!(title: "Two tabs", source: "# Initial")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     using_session(:server_tab) do
-      visit edit_presentation_path(presentation)
+      visit edit_presentation_path(presentation, editor_mode: "visual")
       fill_in "Markdown source", with: "# Server tab"
       assert_selector '[data-autosave-target="status"]', text: "Saved", wait: 5
     end
@@ -551,7 +551,7 @@ class PresentationsTest < ApplicationSystemTestCase
     presentation = Presentation.create!(title: "Discard conflict", source: "# Initial")
     external_source = "# External version\n\nKeep the disk bytes.\n"
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     hold_autosaves
     fill_in "Markdown source", with: "# Local draft"
     wait_for_autosave_request(0)
@@ -571,7 +571,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "refresh recovers an unsent draft from browser persistence" do
     presentation = Presentation.create!(title: "Refresh recovery", source: "# Initial")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     hold_autosaves
     fill_in "Markdown source", with: "# Unsent after refresh"
     assert_selector '[data-autosave-target="status"]', text: "Saving…", wait: 5
@@ -586,7 +586,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "explicit save waits for autosave and refreshes the latest preview" do
     presentation = Presentation.create!(title: "Manual save order", source: "# Original")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     hold_autosaves
     fill_in "Markdown source", with: "# Earlier edit"
     assert_selector '[data-autosave-target="status"]', text: "Saving…"
@@ -603,7 +603,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "presents from the edit screen without submitting the editor form" do
     presentation = Presentation.create!(title: "Edit presentation", source: "# Original")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     hold_autosaves
     fill_in "Markdown source", with: "# Unsaved editor change"
     wait_for_autosave_request(0)
@@ -625,7 +625,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "keeps the presentation editor usable at desktop and narrow widths" do
     presentation = Presentation.create!(title: "Responsive work", source: "# Responsive work\n\nBody")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     [1400, 700, 390].each do |width|
       page.driver.browser.manage.window.resize_to(width, 900)
@@ -687,7 +687,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "visual presentation editing updates source and known slide operations" do
     presentation = Presentation.create!(title: "Visual work", source: "# First\n\nBody\n---\n# Second\n\nOther")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     find(".editor-projection .slide-block", text: "Body").click
     page.execute_script("const block = [...document.querySelectorAll('.editor-projection .slide-block')].find((candidate) => candidate.innerText === 'Body'); block.innerText = 'Changed'; block.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: 'Changed' }));")
@@ -723,7 +723,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     click_on "Save presentation"
     assert_text "Presentation saved."
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_field "Markdown source", with: /Changed/
     assert_selector ".presentation-editor-projection .slide", count: 2
   end
@@ -764,7 +764,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "positions blocks in a new presentation through the visual control" do
-    visit new_presentation_path
+    visit new_presentation_path(editor_mode: "visual")
     wait_for_fresh_projection
 
     select_block_alignment(0, 1, "Left")
@@ -778,7 +778,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "presentation caret follows source switches and arrow keys move between blocks" do
     source = "# First slide\n\nA paragraph\n\nNext paragraph"
     presentation = Presentation.create!(title: "Presentation caret", source: source)
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     block = find(".editor-projection .slide-block", text: "A paragraph")
     page.execute_script(<<~JAVASCRIPT, block)
@@ -821,7 +821,7 @@ class PresentationsTest < ApplicationSystemTestCase
     updated = "# New A\n\nFresh first block\n\nFresh second block\n---\n# New B\n\nFresh third block\n---\n# New C"
     presentation = Presentation.create!(title: "Stale map recovery", source: original)
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT, updated)
       const form = document.querySelector('form.visual-editor-form');
@@ -902,7 +902,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     click_on "Save presentation"
     assert_text "Presentation saved."
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_field "Markdown source", with: updated
     refute_includes presentation.reload.source, "Stale-map injection"
   end
@@ -911,7 +911,7 @@ class PresentationsTest < ApplicationSystemTestCase
     source = "# Code example\n\n```ruby\nputs 1"
     presentation = Presentation.create!(title: "Unterminated slide code", source: source)
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     assert_selector '.slide-block[data-editor-source-editable="false"][aria-readonly="true"] pre code', text: "puts 1"
     assert_no_selector '.slide-block[contenteditable="true"] pre'
@@ -924,7 +924,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: source
     click_on "Save presentation"
     assert_text "Presentation saved."
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     assert_field "Markdown source", with: source
     assert_selector '.slide-block[data-editor-source-editable="false"][aria-readonly="true"] pre code', text: "puts 1"
@@ -933,7 +933,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "presentation controls re-enable after repeated visual typing" do
     presentation = Presentation.create!(title: "Typing controls", source: "# Slide\n\nAlpha")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     block = find(".editor-projection .slide-block", text: "Alpha")
     block.click
     block.send_keys(:end, " with several characters")
@@ -966,7 +966,7 @@ class PresentationsTest < ApplicationSystemTestCase
       source: "# Slide\n\n:::align{middle center}\n\nPositioned\n\nPlain"
     )
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_selector ".slide-block.position-center.position-middle", text: "Positioned"
     refute_selector ".slide-block.position-center", text: "Plain"
 
@@ -991,7 +991,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     click_on "Save presentation"
     assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_field "Markdown source", with: /# Slide\n\nPlain\n\nNew block/
     refute_includes find_field("Markdown source").value, ":::align{middle center}"
   end
@@ -1002,7 +1002,7 @@ class PresentationsTest < ApplicationSystemTestCase
       source: "# Slide\n\n:::align{center}\n\nFirst\n\nSecond\n\nOutside"
     )
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     visual_block_menu_action("First", "Move block down")
     assert_field "Markdown source", with: "# Slide\n\nSecond\n\n:::align{center}\n\nFirst\n\nOutside", wait: 5
@@ -1022,7 +1022,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "keeps rendered presentation blocks and source mappings atomic while editing structure" do
     presentation = Presentation.create!(title: "Live block structure", source: "# Live structure\n\nAlpha")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       const block = [...document.querySelectorAll('.editor-projection .slide-block[contenteditable="true"]')]
@@ -1098,14 +1098,14 @@ class PresentationsTest < ApplicationSystemTestCase
 
     click_on "Save presentation"
     assert_text "Presentation saved."
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_field "Markdown source", with: "# Live structure\n\nBeta"
     assert_selector ".presentation-editor-projection [data-editor-block-id]", count: 2
   end
 
   test "keeps the last-good presentation map paired with its projection after render failure" do
     presentation = Presentation.create!(title: "Failed map", source: "# Original\n\nOne")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     original_state = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const form = document.querySelector('.visual-editor-form');
@@ -1160,7 +1160,7 @@ class PresentationsTest < ApplicationSystemTestCase
       source: "# **Styled** work\n\nBefore $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after."
     )
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     type_visual_text(".slide-block", "Styled", "Visual")
     assert_field "Markdown source", with: "# **Visual** work\n\nBefore $\\frac{x}{y}$ and $$\\sum_{i=1}^{n} i$$ after.", wait: 5
     page.execute_script("document.activeElement.blur()")
@@ -1184,7 +1184,7 @@ class PresentationsTest < ApplicationSystemTestCase
       source: "# Slide\n\nInitial text"
     )
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     block = find(".editor-projection .slide-block", text: "Initial text")
     block.click
 
@@ -1223,7 +1223,7 @@ class PresentationsTest < ApplicationSystemTestCase
       source: "# Slide\n\nFirst\n\nSecond\n"
     )
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     block = find(".editor-projection .slide-block", text: "First")
     block.click
 
@@ -1270,7 +1270,7 @@ class PresentationsTest < ApplicationSystemTestCase
       source: "# Slide\n\nFirst\n\nSecond\n"
     )
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     find(".editor-projection .slide-block", text: "First").click
     open_edit_menu
     click_on "Add block below"
@@ -1314,7 +1314,7 @@ class PresentationsTest < ApplicationSystemTestCase
     MARKDOWN
     presentation = Presentation.create!(title: "Keystroke parity", source: source)
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     title = find(".editor-projection .slide-block", match: :first)
     page.execute_script(<<~JAVASCRIPT)
       const title = document.querySelector('.editor-projection .slide-block');
@@ -1336,7 +1336,7 @@ class PresentationsTest < ApplicationSystemTestCase
     presentation = Presentation.create!(title: "Heading keystrokes", source: "# Existing slide")
     source_presentation = Presentation.create!(title: "Source heading keystrokes", source: "# Existing slide")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     visual_block_menu_action("Existing slide", "Add block below")
     block = find(".editor-projection .slide-block", text: "New block", wait: 5)
     block.click
@@ -1350,10 +1350,10 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_selector ".presentation-editor-projection h2", text: "Test", wait: 5
     click_on "Save presentation"
     assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_field "Markdown source", with: "# Existing slide\n\n## Test"
 
-    visit edit_presentation_path(source_presentation)
+    visit edit_presentation_path(source_presentation, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -1364,7 +1364,7 @@ class PresentationsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: "# Existing slide\n\n## Test", wait: 5
     click_on "Save presentation"
     assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
-    visit edit_presentation_path(source_presentation)
+    visit edit_presentation_path(source_presentation, editor_mode: "visual")
     assert_field "Markdown source", with: "# Existing slide\n\n## Test"
     assert_equal presentation.reload.source, source_presentation.reload.source
   end
@@ -1386,7 +1386,7 @@ class PresentationsTest < ApplicationSystemTestCase
     visual_expected = baseline.dup
     source_expected = baseline.dup
 
-    visit edit_presentation_path(visual)
+    visit edit_presentation_path(visual, editor_mode: "visual")
     operations.each do |selector, visible_text, source_text, replacement|
       type_visual_text(selector, visible_text, replacement)
       visual_expected.sub!(source_text, replacement)
@@ -1397,10 +1397,10 @@ class PresentationsTest < ApplicationSystemTestCase
 
     click_on "Save presentation"
     assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
-    visit edit_presentation_path(visual)
+    visit edit_presentation_path(visual, editor_mode: "visual")
     assert_field "Markdown source", with: visual_expected
 
-    visit edit_presentation_path(source)
+    visit edit_presentation_path(source, editor_mode: "visual")
     click_on "Source"
     operations.each do |_selector, _visible_text, source_text, replacement|
       type_source_text(source_expected, source_text, replacement)
@@ -1410,7 +1410,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     click_on "Save presentation"
     assert_selector ".flash.notice", text: "Presentation saved.", wait: 10
-    visit edit_presentation_path(source)
+    visit edit_presentation_path(source, editor_mode: "visual")
     assert_field "Markdown source", with: source_expected
     assert_equal visual_expected, source_expected
     assert_equal visual.reload.source, source.reload.source
@@ -1423,7 +1423,7 @@ class PresentationsTest < ApplicationSystemTestCase
     )
     canonical_source = presentation.source.sub("First paragraph.", "Server-saved paragraph.")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     page.execute_script(<<~JAVASCRIPT, canonical_source.gsub("\n", "\r\n"))
       const editor = document.querySelector(".source-field").editorController;
       editor.replaceServerSource(arguments[0]);
@@ -1451,7 +1451,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "new inline math renders before a visual block loses focus" do
     presentation = Presentation.create!(title: "Inline math typing", source: "# Math\n\nAn equation")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     block = find(".editor-projection .slide-block", text: "An equation")
     block.click
     page.execute_script(<<~JAVASCRIPT, block)
@@ -1481,7 +1481,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
     click_on "Save presentation"
     assert_text "Presentation saved."
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$ and $$x^2$$ after"
     assert_selector ".presentation-editor-projection .katex[data-editor-math-source='test']"
     assert_selector ".presentation-editor-projection .katex[data-editor-math-source='test'] annotation", text: "test", visible: :all
@@ -1493,7 +1493,7 @@ class PresentationsTest < ApplicationSystemTestCase
       source: "# Rich\n\nA **message**.\n\n| Name | Value |\n| --- | --- |\n| One | Two |\n\n![Old alt](/icon.svg)"
     )
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       const block = [...document.querySelectorAll('.editor-projection .slide-block')]
@@ -1534,7 +1534,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "source mode keeps unsupported presentation directives available" do
     presentation = Presentation.create!(title: "Source fallback", source: "# Visible\n\n:::custom-directive{value}\n\nContent")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     assert_equal "visual", page.evaluate_script("document.querySelector('form.visual-editor-form').dataset.editorMode")
     click_on "Source"
@@ -1551,7 +1551,7 @@ class PresentationsTest < ApplicationSystemTestCase
       source: "# First\n\nFirst block\n\nSecond block\n---\n# Second\n\nOther block"
     )
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     dismiss_confirm do
       visual_block_menu_action("First block", "Delete block", slide_index: 0)
     end
@@ -1581,7 +1581,7 @@ class PresentationsTest < ApplicationSystemTestCase
     original = "# Keep\n\nBefore\n\n:::art\n- Alpha\n- Beta\n\nAfter\n\nTail"
     presentation = Presentation.create!(title: "Art block ownership", source: original)
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 2
     visual_block_menu_action("Alpha", "Move block up")
     assert_field "Markdown source", with: "# Keep\n\n:::art\n- Alpha\n- Beta\n\nBefore\n\nAfter\n\nTail", wait: 5
@@ -1606,7 +1606,7 @@ class PresentationsTest < ApplicationSystemTestCase
       source: "# Slide\n\n:::art\n:::align{center}\n- Alpha\n\nNext paragraph"
     )
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     wait_for_fresh_projection
     assert_selector ".presentation-editor-projection [data-elef-art-root] .elef-art-list > li", count: 1
 
@@ -1624,7 +1624,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "keeps the last good presentation projection when preview is unavailable and offers retry" do
     presentation = Presentation.create!(title: "Stable work", source: "# Stable\n\nLast good slide")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_selector ".presentation-editor-projection .slide", text: "Last good slide"
 
     page.execute_script(<<~JAVASCRIPT)
@@ -1658,7 +1658,7 @@ class PresentationsTest < ApplicationSystemTestCase
     original = "---\r\ntitle: Work\r\n---\r\n# Café 😀\r\n\r\n```md\r\n---\r\n```\r\n---\r\n# Second\r\n---\r\n# Third"
     presentation = Presentation.create!(title: "Overview operations", source: original)
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_selector ".slide-overview-card", count: 3
     assert_no_selector ".slide-overview-card [contenteditable='true']"
     assert_no_selector ".slide-overview-card .presentation-editor-block-controls"
@@ -1692,7 +1692,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "overflow warnings update after editing and media picker insertion uses canonical asset references" do
     dense = "# Dense slide\n\n" + ("A sentence with enough detail to occupy space. " * 280)
     presentation = Presentation.create!(title: "Overflow and media", source: dense)
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_selector ".slide-overflow-warnings", visible: true, wait: 8
     assert_text "Slide 1 extends beyond its 16:9 frame."
     assert_selector ".slide-overview-card .is-overflowing"
@@ -1721,7 +1721,7 @@ class PresentationsTest < ApplicationSystemTestCase
   end
 
   test "a new presentation uploads and saves an image through Add image" do
-    visit new_presentation_path
+    visit new_presentation_path(editor_mode: "visual")
     media_file = Tempfile.new(["new-presentation-pixel", ".png"])
     media_file.binmode
     media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
@@ -1919,7 +1919,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "media can be pasted or dropped onto the preview" do
     presentation = Presentation.create!(title: "Media gestures", source: "# Media gestures")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="
     page.execute_script(<<~JAVASCRIPT)
       const transfer = new DataTransfer();
@@ -1958,7 +1958,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "failed autosave can be retried and validation errors preserve saved source" do
     presentation = Presentation.create!(title: "Retry work", source: "# Original")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     page.execute_script(<<~JAVASCRIPT)
       const originalFetch = window.fetch.bind(window);
       window.fetchForSaveRetry = originalFetch;
@@ -1987,7 +1987,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "recovers the browser draft after an autosave outage and reload" do
     presentation = Presentation.create!(title: "Offline recovery", source: "# Original")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     page.execute_script(<<~JAVASCRIPT)
       const originalFetch = window.fetch.bind(window);
       window.restoreSaveFetch = () => { window.fetch = originalFetch; };
@@ -2017,7 +2017,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "warns when autosave and both browser draft stores are unavailable" do
     presentation = Presentation.create!(title: "No browser storage", source: "# Original")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       const controller = window.Stimulus.getControllerForElementAndIdentifier(
@@ -2051,7 +2051,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "times out a stalled autosave and lets the user retry the latest edit" do
     presentation = Presentation.create!(title: "Stalled save", source: "# Original")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     page.execute_script(<<~JAVASCRIPT)
       const form = document.querySelector('form[data-controller~="autosave"]');
       form.setAttribute("data-autosave-timeout-value", "5000");
@@ -2353,6 +2353,7 @@ class PresentationsTest < ApplicationSystemTestCase
     within ".new-work-panel" do
       click_on "Presentation"
     end
+    click_on "Visual"
 
     fill_in "Title", with: "System Work"
     source = "# First\n\nBody\n---\n# Second"
@@ -2375,12 +2376,12 @@ class PresentationsTest < ApplicationSystemTestCase
   test "presenting warns before leaving unsaved edits" do
     presentation = Presentation.create!(title: "Guarded presentation", source: "# Saved source")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     hold_autosaves
     fill_in "Markdown source", with: "# Unsaved source"
     dismiss_confirm { click_on "Present" }
 
-    assert_current_path edit_presentation_path(presentation)
+    assert_current_path edit_presentation_path(presentation, editor_mode: "visual")
     assert_field "Markdown source", with: "# Unsaved source"
 
     accept_confirm { click_on "Present" }
@@ -2392,7 +2393,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "dirty source warns before navigation and cancel preserves edits" do
     presentation = Presentation.create!(title: "Dirty Work", source: "# Saved")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     hold_autosaves
     fill_in "Markdown source", with: "# Unsaved"
 
@@ -2400,7 +2401,7 @@ class PresentationsTest < ApplicationSystemTestCase
       click_on "Library"
     end
 
-    assert_current_path edit_presentation_path(presentation)
+    assert_current_path edit_presentation_path(presentation, editor_mode: "visual")
     assert_field "Markdown source", with: "# Unsaved"
   end
 
@@ -2539,7 +2540,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "source mode inserts a Mermaid sequence starter and continues with existing participants" do
     presentation = Presentation.create!(title: "Mermaid sequence", source: "# Existing slide")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -2588,7 +2589,7 @@ class PresentationsTest < ApplicationSystemTestCase
     Snippet.create!(name: "Block equation", trigger: "beq", description: "A block LaTeX equation", category: "LaTeX", body: "$$\n${1:equation}\n$$")
     presentation = Presentation.create!(title: "Snippet work", source: "# Math\n\n/")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
@@ -2614,7 +2615,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "uses the math palette inside math and keeps document commands in their namespace" do
     presentation = Presentation.create!(title: "Math authoring namespaces", source: "# Math")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.send_keys("\n$@a")
@@ -2631,7 +2632,7 @@ class PresentationsTest < ApplicationSystemTestCase
     Snippet.create!(name: "Two fields", trigger: "twice", description: "Two tab stops", category: "Markdown", body: "A ${1:first} B ${2:second}")
     presentation = Presentation.create!(title: "Multiple stops", source: "# Snippets\n\n/")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
@@ -2652,7 +2653,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "marks every pending snippet tab stop and walks the active mark with Tab" do
     document = Document.create!(title: "Tab stop marks", source: "# Tab stop marks")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.click
@@ -2683,7 +2684,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "escape clears the snippet tab stop marks and returns Tab to indent" do
     document = Document.create!(title: "Escape tab stops", source: "# Escape tab stops")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.click
@@ -2708,7 +2709,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "keeps the remaining snippet tab stop marks aligned while typing" do
     document = Document.create!(title: "Typing tab stops", source: "# Typing tab stops")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.click
@@ -2730,7 +2731,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "marks math shortcut tab stops and clears them on Escape" do
     document = Document.create!(title: "Fraction tab stops", source: "# Fraction tab stops")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.click
@@ -2765,7 +2766,7 @@ class PresentationsTest < ApplicationSystemTestCase
   test "marks math shortcut tab stops across multiple lines" do
     document = Document.create!(title: "Matrix tab stops", source: "# Matrix tab stops")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.click
@@ -2792,7 +2793,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "positions the palette when only the slash trigger is typed" do
     Snippet.create!(name: "Equation", trigger: "beq", category: "LaTeX", body: "$$\n${1:equation}\n$$")
-    visit new_presentation_path
+    visit new_presentation_path(editor_mode: "visual")
     click_on "Source"
     source = find_field("Markdown source")
     source.fill_in with: "# Math\n\n"
@@ -2816,7 +2817,7 @@ class PresentationsTest < ApplicationSystemTestCase
     Snippet.create!(name: '<img src=x onerror="alert(1)">', trigger: "unsafe", description: "Untrusted", category: "Markdown", body: "text")
     presentation = Presentation.create!(title: "Safe snippets", source: "# Safe\n\n/")
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector(".source-field").editorController;
@@ -2899,7 +2900,7 @@ class PresentationsTest < ApplicationSystemTestCase
     image_two_file.write(generate_test_png.call(160, 90))
     image_two_file.flush
 
-    visit new_presentation_path
+    visit new_presentation_path(editor_mode: "visual")
     assert_selector ".editor-shell", wait: 8
 
     # Switch to Source (Markdown) mode
@@ -2979,7 +2980,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "changes alignment immediately after visual edits and reflects it visually in the slide block" do
     presentation = Presentation.create!(title: "Visual edit alignment", source: "# Slide\n\nInitial block")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     wait_for_fresh_projection
 
     # Scope to the editable projection: slide overview thumbnails intentionally
