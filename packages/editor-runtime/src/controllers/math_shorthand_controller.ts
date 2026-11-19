@@ -667,7 +667,8 @@ export function editorMathContextAt(editor: any, caret: number): "display_math" 
   if (blockMath && caret >= blockMath.from + 2) {
     const hasClosingFence = blockMath.to - blockMath.from >= 4
       && state.doc.sliceString(blockMath.to - 2, blockMath.to) === "$$"
-    if (!hasClosingFence || caret <= blockMath.to - 2) return "display_math"
+    if (hasClosingFence && caret > blockMath.to - 2) return null
+    return "display_math"
   }
 
   if (editorInsideCode(editor, caret)) return null
