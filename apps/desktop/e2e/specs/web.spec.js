@@ -142,7 +142,7 @@ class WebEditorUi {
     if (!id) throw new Error(`The shared web scenario requires an E2E ${isDocument ? "document" : "presentation"} fixture`)
     this.activeWorkId = id
     const path = isDocument ? "documents" : "presentations"
-    await this.page.goto(`/${path}/${id}/edit`)
+    await this.page.goto(`/${path}/${id}/edit?editor_mode=visual`)
     await expect(this.page.locator(".visual-editor-form")).toHaveAttribute("data-editor-mode", "visual")
     await expect(this.page.locator(".source-field .cm-content")).toBeVisible()
   }

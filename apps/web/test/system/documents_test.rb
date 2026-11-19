@@ -3,7 +3,7 @@ require "application_system_test_case"
 class DocumentsTest < ApplicationSystemTestCase
   test "visual wrapping across a paragraph and heading preserves both blocks" do
     document = Document.create!(title: "Wrap across blocks", source: "first\n\n# second")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     blocks = all(".document-editor-block[contenteditable='true']")
     first = blocks.find { |block| block.text.include?("first") }
@@ -33,7 +33,7 @@ class DocumentsTest < ApplicationSystemTestCase
     find(".cm-content").send_keys("*")
     assert_field "Markdown source", with: "Alpha **beta** gamma"
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     block = find(".document-editor-block[contenteditable='true']", text: "Alpha")
     page.execute_script(<<~JAVASCRIPT, block)
@@ -54,7 +54,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "visual selection stays selected when a second asterisk makes bold" do
     document = Document.create!(title: "Visual emphasis", source: "Alpha beta gamma")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     block = find(".document-editor-block[contenteditable='true']", text: "Alpha")
     page.execute_script(<<~JAVASCRIPT, block)
@@ -79,7 +79,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "visual wrapping preserves a selection that fills the block" do
     document = Document.create!(title: "Whole block emphasis", source: "beta")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     block = find(".document-editor-block[contenteditable='true']", text: "beta")
     page.execute_script(<<~JAVASCRIPT, block)
@@ -268,7 +268,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "source mode inserts and continues Mermaid flowcharts with Enter and branching keys" do
     document = Document.create!(title: "Mermaid process", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -320,7 +320,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "source mode keeps /diagram keyboard navigation open through selection" do
     document = Document.create!(title: "Mermaid keyboard command", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -350,7 +350,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "source mode accepts a Mermaid diagram type with Tab" do
     document = Document.create!(title: "Mermaid keyboard Tab", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -372,7 +372,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "source mode dismisses Mermaid suggestions when the caret leaves their context" do
     document = Document.create!(title: "Mermaid stale suggestion", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -393,7 +393,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "Mermaid source assist restores keyboard listeners after Stimulus reconnects" do
     document = Document.create!(title: "Mermaid reconnect", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.evaluate_async_script(<<~JAVASCRIPT)
       const done = arguments[arguments.length - 1];
@@ -425,7 +425,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "```mermaid\nflowchart LR\n    A[]\n```"
     document = Document.create!(title: "Mermaid palette context", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -443,7 +443,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "```mermaid\nflowchart LR\n    A[Research]\n```"
     document = Document.create!(title: "Mermaid IME composition", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -464,7 +464,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "Mermaid suggestions stay dismissed during IME composition and refresh afterward" do
     document = Document.create!(title: "Mermaid IME suggestions", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -495,7 +495,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "# Existing text\r\n\r\n```mermaid\r\nflowchart LR\r\n    A[Research]\r\n```"
     document = Document.create!(title: "Mermaid CRLF", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -512,7 +512,7 @@ class DocumentsTest < ApplicationSystemTestCase
     document = Document.create!(title: "Snippet line endings", source: source)
     expected = "#{source.gsub(/\r\n?/, "\n")}| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |"
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -594,7 +594,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual shortcuts execute shared engine commands" do
     source = "# Shortcuts\n\nFirst paragraph.\n"
     document = Document.create!(title: "Visual shortcuts", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     # Undo a scripted engine edit: native undo has no stack here (nothing was
     # typed), so only the shared history command can revert the source.
@@ -625,7 +625,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "visual Alt-Up moves the selected line through the shared keymap" do
     document = Document.create!(title: "Visual line move", source: "# Lines\n\n- one\n- two\n- three\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     block = find(".document-editor-block", text: "two")
     page.execute_script(<<~JAVASCRIPT, block)
@@ -650,7 +650,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "```mermaid\nflowchart LR\n    A[Research] --> B[Design]\n```"
     document = Document.create!(title: "Mermaid middle edit", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -669,7 +669,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "```mermaid\nflowchart LR\n    A[Research]\n    A --> \n```"
     document = Document.create!(title: "Mermaid node completion", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -688,7 +688,7 @@ class DocumentsTest < ApplicationSystemTestCase
     Snippet.create!(name: "Two text fields", trigger: "pair", category: "Markdown", body: "${1:first} ${2:second}")
     document = Document.create!(title: "Ordinary source", source: "# Existing")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -716,7 +716,7 @@ class DocumentsTest < ApplicationSystemTestCase
     Document.create!(title: "Research target", source: "# Target")
     document = Document.create!(title: "Research source", source: "")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     editor = find_field("Markdown source")
     fill_in "Markdown source", with: "[[Research ta"
 
@@ -731,7 +731,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     visit settings_path
     find("#vim-enabled").check
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     editor = find(".cm-content")
     editor.click
@@ -750,7 +750,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     visit settings_path
     find("#vim-enabled").check
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     editor = find(".cm-content")
     editor.click
@@ -765,7 +765,7 @@ class DocumentsTest < ApplicationSystemTestCase
     Document.create!(title: "Editable target", source: "# Target")
     source = Document.create!(title: "Editable source", source: "See [[Editable target]]")
 
-    visit edit_document_path(source)
+    visit edit_document_path(source, editor_mode: "visual")
     within ".editor-projection" do
       click_on "Editable target"
     end
@@ -845,7 +845,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "creates a document and updates its continuous live preview" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
     assert_no_selector "#document_title"
     fill_in "Markdown source", with: "# Research notes\n\nFirst section\n\n---\n\nSecond section"
     assert_selector ".document-surface", text: "Second section", wait: 5
@@ -945,7 +945,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal "This is my First Document", document.title
     assert_equal new_document_prefix + expected_source, document.source
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_no_selector "#document_title"
     assert_selector ".document-editor-block h1", text: "This is my First Document"
     assert_field "Markdown source", with: new_document_prefix + expected_source
@@ -963,7 +963,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual document editing preserves untouched Markdown and survives reopening" do
     document = Document.create!(title: "Visual notes", source: "# Original\n\n**Keep formatting**\n\nUnchanged")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_equal "visual", page.evaluate_script("document.querySelector('form.visual-editor-form').dataset.editorMode")
     find(".document-editor-block", text: "Original").click
@@ -978,7 +978,7 @@ class DocumentsTest < ApplicationSystemTestCase
     click_on "Save document"
 
     assert_text "Document saved."
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_field "Markdown source", with: "# Renamed\n\n**Keep formatting**\n\nUnchanged"
     assert_selector ".document-editor-block", text: "Renamed"
     assert_selector ".document-editor-block strong", text: "Keep formatting"
@@ -986,7 +986,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "enter splits a document block at the visible caret" do
     document = Document.create!(title: "Caret split", source: "# Notes\n\nAlpha beta gamma")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Alpha beta gamma")
@@ -1020,7 +1020,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "trailing whitespace does not break a visual document block" do
     document = Document.create!(title: "Trailing spaces", source: "# Notes\n\nHe drives a small car.  \nHe can now buy his medicine.")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     # NOTE: assert on the real DOM, not a Capybara visibility match: <br>
@@ -1033,7 +1033,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual document blocks accept direct keyboard edits" do
     document = Document.create!(title: "Typing notes", source: "# Typing notes\n\nBody")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     block = find(".document-editor-block", text: "Body")
     block.click
     block.send_keys(:end, " changed")
@@ -1043,7 +1043,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "visual text edits coalesce source updates within a frame" do
     document = Document.create!(title: "Batched visual edits", source: "# Batch\n\nOriginal")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     block = find(".document-editor-block", text: "Original")
 
     result = page.evaluate_async_script(<<~JAVASCRIPT, block)
@@ -1068,7 +1068,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual and source modes carry the caret position in both directions" do
     source = "# Notes\n\nFirst paragraph\n\nSecond paragraph"
     document = Document.create!(title: "Caret handoff", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     first = find(".document-editor-block", text: "First paragraph")
     page.execute_script(<<~JAVASCRIPT, first)
@@ -1120,7 +1120,7 @@ class DocumentsTest < ApplicationSystemTestCase
       title: "Block navigation",
       source: "# Navigation\n\nFirst block\n\nSecond block\n\nThird block"
     )
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     first = find(".document-editor-block", text: "First block")
     navigation = page.execute_script(<<~JAVASCRIPT, first)
@@ -1156,7 +1156,7 @@ class DocumentsTest < ApplicationSystemTestCase
     %w[Delete Backspace].each do |key|
       sample = Documents::SampleData::SAMPLES.find { |s| s[:id] == "document-full-report" }
       document = Document.create!(title: "#{sample[:title]} #{key}", source: sample[:source])
-      visit edit_document_path(document)
+      visit edit_document_path(document, editor_mode: "visual")
       wait_for_fresh_projection
 
       first_block = find(".document-editor-block", text: /This report examines a simple proposition/)
@@ -1206,7 +1206,7 @@ class DocumentsTest < ApplicationSystemTestCase
     MARKDOWN
     document = Document.create!(title: "Soft breaks with math", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     rendered_text = page.execute_script(<<~JAVASCRIPT)
       const block = [...document.querySelectorAll(".document-editor-block")]
         .find((element) => element.textContent.includes("The relationship"));
@@ -1251,7 +1251,7 @@ class DocumentsTest < ApplicationSystemTestCase
       visual = Document.create!(title: "Visual #{fixture[:id]}", source: baseline)
       expected = baseline.dup
 
-      visit edit_document_path(visual)
+      visit edit_document_path(visual, editor_mode: "visual")
       fixture[:operations].each do |selector, visible_text, source_text, replacement|
         type_visual_text(selector, visible_text, replacement)
         expected.sub!(source_text, replacement)
@@ -1268,7 +1268,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
       source = Document.create!(title: "Source #{fixture[:id]}", source: baseline)
       source_expected = baseline.dup
-      visit edit_document_path(source)
+      visit edit_document_path(source, editor_mode: "visual")
       click_on "Source"
       fixture[:operations].each do |_selector, _visible_text, source_text, replacement|
         type_source_text(source_expected, source_text, replacement)
@@ -1291,7 +1291,7 @@ class DocumentsTest < ApplicationSystemTestCase
       source: "# Rich notes\n\n| Name | Value |\n| --- | --- |\n| **One** | Two |\n\n![Old alt](/icon.svg)"
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-block table"
     assert_selector ".document-editor-block .editor-media-caption", text: "Old alt"
@@ -1327,7 +1327,7 @@ class DocumentsTest < ApplicationSystemTestCase
       source: "# Inline notes\n\nA **bold** and *italic* link [target](/path)."
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       const block = [...document.querySelectorAll('.document-editor-block')]
@@ -1342,7 +1342,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual heading edits preserve inline formatting" do
     document = Document.create!(title: "Styled heading", source: "# **Styled** and *clear*")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     page.execute_script(<<~JAVASCRIPT)
       const heading = document.querySelector('.document-editor-block strong');
       heading.textContent = 'Updated';
@@ -1356,7 +1356,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = 'Before $\\frac{a}{b}$ between $$\\sum_{i=1}^{n} i$$ after.'
     document = Document.create!(title: "Math preservation", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector '.document-editor-block [data-editor-math-source][contenteditable="false"]', count: 2
 
     page.execute_script(<<~JAVASCRIPT)
@@ -1387,7 +1387,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "new inline math renders while the visual document block stays focused" do
     document = Document.create!(title: "Inline math typing", source: "# Math\n\nAn equation")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     block = find(".document-editor-block", text: "An equation")
     block.click
     page.execute_script(<<~JAVASCRIPT, block)
@@ -1409,14 +1409,14 @@ class DocumentsTest < ApplicationSystemTestCase
 
     click_on "Save document"
     assert_text "Document saved."
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$ after"
     assert_selector ".document-editor-block .katex[data-editor-math-source='test']"
     assert_selector ".document-editor-block .katex[data-editor-math-source='test'] annotation", text: "test", visible: :all
   end
 
   test "latex visual mode enter and exit flow allows inline editing" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = active_document_block
@@ -1465,7 +1465,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "typing after clearing inline math stays inside the expression" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = active_document_block
@@ -1483,7 +1483,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "typing after navigating into empty inline math stays inside the expression" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = active_document_block
@@ -1501,7 +1501,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "display latex visual mode enter and exit and click to edit" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = active_document_block
@@ -1534,7 +1534,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "visual display math keystrokes keep the caret on the empty body line" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
 
     find(".document-editor-block[data-editor-block-id]:focus").send_keys("$")
@@ -1591,7 +1591,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "new document renders inline and display math before its first save" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = find(".document-editor-block[data-editor-empty-block='true']")
@@ -1618,7 +1618,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "new document source mode renders inline and display math before its first save" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
     click_on "Source"
 
     page.execute_script(<<~JAVASCRIPT)
@@ -1635,7 +1635,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "source mode fits the first document page inside the side preview" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
     click_on "Source"
     wait_for_settled_document_projection
 
@@ -1682,7 +1682,7 @@ class DocumentsTest < ApplicationSystemTestCase
       $$
     MARKDOWN
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-block .katex", count: 2
     assert_selector ".document-editor-block .katex-display", count: 1
@@ -1692,7 +1692,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual paragraph edits preserve inline media source" do
     document = Document.create!(title: "Inline image", source: "Before ![diagram](/diagram.svg) after.")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector '.document-editor-block [data-editor-image-source][contenteditable="false"]'
     page.execute_script(<<~JAVASCRIPT)
       const block = document.querySelector('.document-editor-block');
@@ -1707,7 +1707,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "a new document uploads and displays an attached image before its first manual save" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
     media_file = Tempfile.new(["document-pixel", ".png"])
     media_file.binmode
     media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
@@ -2028,7 +2028,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "- [ ] Keep **this**\n  - Nested [link](/path)\n- [x] Already done"
     document = Document.create!(title: "List preservation", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     page.execute_script(<<~JAVASCRIPT)
       const strong = document.querySelector('.document-editor-block strong');
       strong.textContent = 'that';
@@ -2040,7 +2040,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "enter after a code fence opener inserts a matching closing fence" do
     [["```sql", "```"], ["~~~sql", "~~~"]].each do |opening, closing|
-      visit new_document_path
+      visit new_document_path(editor_mode: "visual")
 
       find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
       active_document_block.send_keys(opening, :enter)
@@ -2057,7 +2057,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "enter after a display math opener inserts its matching closing fence" do
     [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
-      visit new_document_path
+      visit new_document_path(editor_mode: "visual")
       find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
       active_document_block.send_keys(opening, :enter)
 
@@ -2078,7 +2078,7 @@ class DocumentsTest < ApplicationSystemTestCase
       source: "# Code\n\n```ruby\n  records.each do |record|\n    process(record)\n  end\n````"
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       const codeBlock = [...document.querySelectorAll('.document-editor-block')]
@@ -2094,7 +2094,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "# Code notes\n\n```ruby\nputs 1"
     document = Document.create!(title: "Unterminated code", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector '.document-editor-block[aria-readonly="true"] pre code', text: "puts 1"
     assert_no_selector '.document-editor-block[contenteditable="true"] pre'
@@ -2107,7 +2107,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: source
     click_on "Save document"
     assert_text "Document saved."
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_field "Markdown source", with: source
     assert_selector '.document-editor-block[aria-readonly="true"] pre code', text: "puts 1"
@@ -2117,7 +2117,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "[Guide][guide]\n\n[guide]: /guide\n\n<https://example.test>\n\n<kbd>Shift</kbd>\n\nfoo*bar*baz and value_name_value\n\n> outer\n> > nested quote\n\n| A |\n| --- |\n\n---"
     document = Document.create!(title: "Unsupported Markdown", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector '.document-editor-block[aria-readonly="true"]', minimum: 8, visible: false
     assert_selector '.document-editor-block[aria-readonly="true"] blockquote', text: "nested quote"
@@ -2132,7 +2132,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: source
     click_on "Save document"
     assert_text "Document saved."
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_field "Markdown source", with: source
     assert_selector '.document-editor-block[aria-readonly="true"]', minimum: 8, visible: false
@@ -2140,7 +2140,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "keeps an active math chain literal until commit and supports one-step undo" do
     document = Document.create!(title: "Math notes", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
@@ -2157,7 +2157,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "backspace deletes empty dollar pairs and keeps other edits single-character" do
     document = Document.create!(title: "Math pair deletion", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
@@ -2209,7 +2209,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "supports editing an active math chain before committing it" do
     document = Document.create!(title: "Editable math chain", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     source_field = find_field("Markdown source")
     editor = find(".cm-content")
@@ -2238,7 +2238,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "autosave preserves an active math chain verbatim" do
     document = Document.create!(title: "Autosaved math chain", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2254,7 +2254,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "explicitly saving commits an active math chain" do
     document = Document.create!(title: "Explicitly saved math chain", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2271,7 +2271,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "typing a colon directive inserts canonical source and guides align arguments" do
     document = Document.create!(title: "Directive palette", source: "# Notes")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.send_keys(:end)
@@ -2293,7 +2293,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "colon in prose never opens the snippet palette" do
     document = Document.create!(title: "Colon prose", source: "# Notes\n\nSome prose")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2315,7 +2315,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "colon before prose on the same line never opens the snippet palette" do
     document = Document.create!(title: "Colon line start", source: "# Notes\n\nSecond line")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -2332,7 +2332,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "colon on a blank line still opens the directive palette" do
     document = Document.create!(title: "Colon blank line", source: "# Notes")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.send_keys(:end)
@@ -2348,7 +2348,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "slash palette inserts canonical image source" do
     document = Document.create!(title: "Source palette", source: "# Notes")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
@@ -2371,7 +2371,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "supports only the v1 math transforms and preserves invalid chains" do
     document = Document.create!(title: "Math transforms", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2399,7 +2399,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "commits local hat and tilde transforms while keeping each active chain literal" do
     document = Document.create!(title: "Math accents", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2420,7 +2420,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "applies transpose and inverse to existing canonical LaTeX atoms after reload" do
     source_text = ["# Math", "", "$x$", "$\\mathbf{x}$", "$\\vec{x}$", "$y$", "$\\mathbf{y}$", "$\\vec{y}$", "$\\mathbf{z}$"].join("\n")
     document = Document.create!(title: "Canonical math atoms", source: source_text)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2453,7 +2453,7 @@ class DocumentsTest < ApplicationSystemTestCase
     persisted_source = source.value
     assert_equal persisted_source.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
 
-    visit edit_document_path(document.reload)
+    visit edit_document_path(document.reload, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2475,7 +2475,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "Enter in an empty display-math pair creates a blank line between delimiters" do
     document = Document.create!(title: "Empty display math", source: "# Math\n\n$$$$")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2495,7 +2495,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "slash palette hides raw LaTeX outside math and keeps equation blocks available" do
     document = Document.create!(title: "Slash context", source: "# Notes")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.send_keys(:end)
@@ -2512,7 +2512,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "leaves dot syntax literal outside math and inside code" do
     document = Document.create!(title: "Math contexts", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.send_keys(:end)
@@ -2527,7 +2527,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "keeps the last good preview when a live preview fails" do
     document = Document.create!(title: "Stable notes", source: "# Stable notes\n\nLast good content")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-surface", text: "Last good content"
 
     page.execute_script(<<~JAVASCRIPT)
@@ -2563,7 +2563,7 @@ class DocumentsTest < ApplicationSystemTestCase
     updated = "# Rebuilt\n\nNew first block\n\nNew second block"
     document = Document.create!(title: "Stale projection", source: original)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT, updated)
       const form = document.querySelector('form.visual-editor-form');
@@ -2604,14 +2604,14 @@ class DocumentsTest < ApplicationSystemTestCase
 
     click_on "Save document"
     assert_text "Document saved."
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_field "Markdown source", with: updated
     assert_selector ".document-editor-block", text: "New first block"
   end
 
   test "keeps typing enabled when the local projection reports a failure" do
     document = Document.create!(title: "Projection notes", source: "# Stable")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       document.querySelector('.source-field').dispatchEvent(new CustomEvent('elef:live-preview-error', {
@@ -2627,7 +2627,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "keeps typing responsive while preview is stalled and preserves the last good result" do
     document = Document.create!(title: "Slow notes", source: "# Stable content")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       const form = document.querySelector('form.visual-editor-form');
@@ -2667,7 +2667,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "debounces rapid preview requests and renders the latest source" do
     document = Document.create!(title: "Latency notes", source: "# Initial")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       window.previewRequests = 0;
@@ -2687,7 +2687,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "serializes slow preview responses and renders the latest edit" do
     document = Document.create!(title: "Race notes", source: "# Initial")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       window.previewResponses = [];
@@ -2785,7 +2785,7 @@ class DocumentsTest < ApplicationSystemTestCase
     paragraph = ("Natural flow carries words across the page boundary. " * 18).strip
     list = (3..12).map { |n| "#{n}. Ordered item #{n}" }.join("\n")
     document = Document.create!(title: "Natural flow", source: "Opening paragraph.\n\n#{paragraph}\n\n#{list}")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
 
     state = page.evaluate_script(<<~JAVASCRIPT)
@@ -2835,7 +2835,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "flows paragraph text in the read-only source preview" do
     paragraph = ("Natural page flow continues this paragraph across pages. " * 18).strip
     document = Document.create!(title: "Source preview flow", source: "Opening paragraph.\n\n#{paragraph}")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     find('[data-editor-target="sourceButton"]').click
     assert_selector '.editor-projection.preview-pane .document-surface[data-document-pages-settled="true"]', wait: 10
     pages = page.evaluate_script(<<~JAVASCRIPT)
@@ -2858,7 +2858,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "keeps inline math intact while repaginating the read-only source preview" do
     paragraph = ("Text preceding an inline equation continues over the page. " * 12) + "$x+1$ " + ("Text following the equation keeps flowing. " * 20)
     document = Document.create!(title: "Source preview math flow", source: "Opening paragraph.\n\n#{paragraph}")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     find('[data-editor-target="sourceButton"]').click
     assert_selector '.editor-projection.preview-pane .document-surface[data-document-pages-settled="true"] .katex', wait: 10
     result = page.evaluate_script(<<~JAVASCRIPT)
@@ -2881,7 +2881,7 @@ class DocumentsTest < ApplicationSystemTestCase
     long_item = ("Long item text stays together in the Markdown source. " * 65).strip
     source = "- First item\n- #{long_item}\n- Last item"
     document = Document.create!(title: "Long list item", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
 
     state = page.evaluate_script(<<~JAVASCRIPT)
@@ -2916,7 +2916,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "restores the caret offset inside a list item split across pages" do
     long_item = ("Caret restoration follows the selected text through page flow. " * 50).strip
     document = Document.create!(title: "Caret in continued item", source: "- #{long_item}")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
 
     page.evaluate_script(<<~JAVASCRIPT)
@@ -2989,7 +2989,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "keeps a caret at a continuation boundary on the following page" do
     paragraph = ("Caret restoration follows the selected text through page flow. " * 50).strip
     document = Document.create!(title: "Caret at continuation boundary", source: paragraph)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
 
     boundary = page.evaluate_script(<<~JAVASCRIPT)
@@ -3076,7 +3076,7 @@ class DocumentsTest < ApplicationSystemTestCase
     nested = (1..60).map { |n| "  #{n}. Nested item #{n} with explanatory text" }.join("\n")
     source = "Opening paragraph.\n\n- Parent item\n#{nested}\n- Outer tail"
     document = Document.create!(title: "Nested list flow", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
     state = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -3113,7 +3113,7 @@ class DocumentsTest < ApplicationSystemTestCase
     long_item = ("Nested item content continues across pages. " * 100).strip
     source = "- Parent\n  1. #{long_item}\n  2. Last nested item\n- Tail"
     document = Document.create!(title: "Nested item flow", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
     count = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -3206,7 +3206,7 @@ class DocumentsTest < ApplicationSystemTestCase
     long_item = ("Loose list item text flows over the page. " * 90).strip
     source = "- #{long_item}\n\n- Final item"
     document = Document.create!(title: "Loose item flow", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
     state = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -3277,7 +3277,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "# A4 flow\n\n#{paragraph}"
     document = Document.create!(title: "Flowing editor", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-projection .document-surface.is-paginated"
     assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
@@ -3329,7 +3329,7 @@ class DocumentsTest < ApplicationSystemTestCase
     paragraph = ("A **strong idea** with $x+1$ and [a link](/notes) continues here. " * 100).strip
     source = "#{paragraph}\n\nClosing paragraph."
     document = Document.create!(title: "Formatted flow", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
     count = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -3361,7 +3361,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "# A4 flow\n\n#{paragraph}"
     document = Document.create!(title: "Flowing editor", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-projection .document-surface.is-paginated"
     assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
@@ -3392,7 +3392,7 @@ class DocumentsTest < ApplicationSystemTestCase
     items = (1..60).map { |n| "- List item #{n} with explanatory text" }.join("\n")
     document = Document.create!(title: "List pagination", source: items)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-projection .document-surface.is-paginated"
     assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
@@ -3421,7 +3421,7 @@ class DocumentsTest < ApplicationSystemTestCase
     quotes = (1..50).map { |n| "> Paragraph #{n} inside the blockquote explaining something at length." }.join("\n>\n")
     document = Document.create!(title: "Quote pagination", source: quotes)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-projection .document-surface.is-paginated"
     assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
@@ -3450,7 +3450,7 @@ class DocumentsTest < ApplicationSystemTestCase
     rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
     source = "| Item | Description |\n| --- | --- |\n#{rows}"
     document = Document.create!(title: "Table selection across pages", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
     outcome = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -3480,7 +3480,7 @@ class DocumentsTest < ApplicationSystemTestCase
     rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
     source = "| Item | Description |\n| --- | --- |\n#{rows}"
     document = Document.create!(title: "Continued table editing", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
     value = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -3506,7 +3506,7 @@ class DocumentsTest < ApplicationSystemTestCase
     end.join("\n")
     source = "| Item | Description |\n| --- | --- |\n#{rows}"
     document = Document.create!(title: "Continued linked table editing", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
     value = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -3530,7 +3530,7 @@ class DocumentsTest < ApplicationSystemTestCase
     rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
     source = "| Item | Description |\n| --- | --- |\n#{rows}"
     document = Document.create!(title: "Repaginated continued table", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_settled_document_projection
 
     outcome = page.evaluate_async_script(<<~JAVASCRIPT)
@@ -3664,7 +3664,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "removes an empty visual block at the beginning without shifting the following page content" do
     document = Document.create!(title: "Leading empty block", source: "# First page\n\nBody text")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     body = find(".document-editor-block", text: "Body text")
     page.execute_script(<<~JAVASCRIPT, body)
@@ -3711,7 +3711,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "positions document blocks visually and preserves directives across source mode" do
     source = "# Alignment\n\nLeft block\n\n:::align{middle center}\n\nCentered block"
     document = Document.create!(title: "Block alignment", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     left = find(".document-editor-block", text: "Left block")
@@ -3768,7 +3768,7 @@ class DocumentsTest < ApplicationSystemTestCase
     wait_for_autosave_idle
     assert_equal expected_source, normalize_source.call(document.reload.source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_equal expected_source, normalize_source.call(find_field("Markdown source").value)
     click_on "Source"
     click_on "Visual"
@@ -3780,7 +3780,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "positions the first document block when no source content precedes it" do
     document = Document.create!(title: "First block alignment", source: "Test")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Test")
@@ -3852,7 +3852,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "changes a position directive on the first document block" do
     document = Document.create!(title: "Change first block alignment", source: ":::align{right}\n\nTest")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Test")
@@ -3865,7 +3865,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "changes a position directive added in source mode" do
     document = Document.create!(title: "Source mode alignment", source: "Test")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     click_on "Source"
@@ -3890,7 +3890,7 @@ class DocumentsTest < ApplicationSystemTestCase
       title: "Delete positioned block",
       source: "# Keep\n\n:::align{center}\n\nDelete me\n\nTail"
     )
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     block = find(".document-editor-block", text: "Delete me")
     removed = page.execute_script(<<~JAVASCRIPT, block)
@@ -3915,7 +3915,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal "center", positioned[:position][:horizontal]
 
     document = Document.create!(title: "Delete positioned block", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     block = find(".document-editor-block", text: "Delete me")
     removed = page.execute_script(<<~JAVASCRIPT, block)
@@ -4037,7 +4037,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "changes alignment immediately after visual edits and reflects it visually in the block" do
     document = Document.create!(title: "Visual edit alignment", source: "Initial block")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Initial block")
