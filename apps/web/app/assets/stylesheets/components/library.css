@@ -212,8 +212,71 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
 .library-arc-shell.is-rail-collapsed {
   grid-template-columns: minmax(0, 1fr);
 }
+.library-arc-shell.is-rail-collapsed .library-rail-wrap,
 .library-arc-shell.is-rail-collapsed .library-rail {
   display: none;
+}
+.library-rail-wrap {
+  position: relative;
+}
+.library-hover-popover {
+  background: var(--panel, var(--oradia-slate-900));
+  border: 1px solid var(--line, var(--oradia-line));
+  border-radius: 0.9rem;
+  box-shadow: 0 24px 64px rgb(0 0 0 / 36%);
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  left: calc(100% + 0.75rem);
+  max-height: calc(100vh - 6rem);
+  overflow: auto;
+  padding: 1.1rem 1.25rem;
+  position: absolute;
+  top: 2.5rem;
+  width: min(28rem, 44vw);
+  z-index: 40;
+}
+.library-hover-popover-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+}
+.library-quickstart-canvas {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin: 0 auto;
+  max-width: 32rem;
+  min-height: 24rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+.library-quickstart-eyebrow {
+  color: var(--accent, var(--oradia-green));
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  margin: 0 0 0.5rem;
+  text-transform: uppercase;
+}
+.library-quickstart-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.5rem;
+}
+.library-quickstart-copy {
+  color: var(--muted, var(--oradia-muted));
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem;
+}
+.library-quickstart-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  justify-content: center;
 }
 .library-rail {
   background: var(--sidebar, var(--panel, var(--oradia-slate-900)));
@@ -415,4 +478,32 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
     max-height: none;
     position: static;
   }
+}
+
+/* Docked Library sidebar beside the Editor (Web drawer + Desktop work-view) */
+.editor-library-drawer {
+  background: var(--canvas, var(--oradia-slate-950));
+  border-right: 1px solid var(--line, var(--oradia-line));
+  bottom: 0;
+  left: 0;
+  overflow: visible;
+  padding: 0.75rem;
+  position: fixed;
+  top: 4.25rem;
+  width: 23rem;
+  z-index: 45;
+}
+.editor-library-drawer .library-arc-shell,
+body[data-desktop-view="work"][data-desktop-sidebar="open"] #library-view .library-arc-shell {
+  display: block;
+}
+.editor-library-drawer .library-quickstart,
+body[data-desktop-view="work"][data-desktop-sidebar="open"] #library-view .library-quickstart {
+  display: none;
+}
+body[data-desktop-view="work"][data-desktop-sidebar="open"] .desktop-app-shell {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: 22rem minmax(0, 1fr);
+  align-items: start;
 }

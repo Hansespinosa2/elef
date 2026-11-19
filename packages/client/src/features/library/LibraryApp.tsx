@@ -67,6 +67,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
   const [paletteMode, setPaletteMode] = useState<PaletteMode>("commands");
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   const [hoveredWorkId, setHoveredWorkId] = useState<string | null>(null);
+  const [keyboardPreviewId, setKeyboardPreviewId] = useState<string | null>(null);
   const [railCollapsed, setRailCollapsed] = useState(false);
   // Wherever ⌘K was pressed: restoring it on close returns the caret to the
   // editor when editing, the search box when browsing.
@@ -266,6 +267,8 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
     shown.find((work) => work.id === selectedWorkId) ??
     shown[0] ??
     null;
+  const popoverWork =
+    shown.find((work) => work.id === (hoveredWorkId ?? keyboardPreviewId)) ?? null;
   const activeSelectedId = activeWork?.id ?? null;
 
   const moveSelection = useCallback(
@@ -278,6 +281,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
       if (nextWork === undefined) return;
       setHoveredWorkId(null);
       setSelectedWorkId(nextWork.id);
+      setKeyboardPreviewId(nextWork.id);
       const cardEl = rootRef.current?.querySelector(`#${cardDomId(nextWork)}`) as
         | (HTMLElement & { scrollIntoView?: (opts: { block: string }) => void })
         | null
@@ -311,10 +315,14 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
       const inInput = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target?.isContentEditable === true;
       const meta = event.metaKey || event.ctrlKey;
 
-      if (meta && event.key === "\\") {
+      if (meta && (event.key === "\\" || event.key.toLowerCase() === "b") && !event.shiftKey && !event.altKey) {
         event.preventDefault();
         setRailCollapsed((prev) => !prev);
         return;
+      }
+      if (event.key === "Escape") {
+        setKeyboardPreviewId(null);
+        setHoveredWorkId(null);
       }
       if (event.key === "Escape" && inInput && (target as { id?: string } | null)?.id === "library-search") {
         if (query !== "") {
@@ -446,148 +454,190 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
 
   const handleHoverWork = useCallback((work: WorkSummary | null) => {
     setHoveredWorkId(work?.id ?? null);
+    if (work !== null) setKeyboardPreviewId(null);
   }, []);
 
   const vimNavEnabled = readLibraryVimNav();
 
   return (
     <div ref={rootRef} className={`library-shared-view library-arc-shell${railCollapsed ? " is-rail-collapsed" : ""}`}>
-      <aside className="library-rail" aria-label="Works directory">
-        <header className="library-hero">
-          <div className="library-rail-top">
-            <div className="library-kicker flex items-center gap-2">
-              <p className="eyebrow m-0 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">
-                Workspace
-              </p>
-              <span
-                id="library-count"
-                className="library-count rounded-full border border-[#304047] bg-[#202c32] px-2 py-0.5 text-xs font-bold text-[#aab7b1]"
+      <div
+        className="library-rail-wrap"
+        onMouseLeave={() => {
+          setHoveredWorkId(null);
+        }}
+      >
+        <aside className="library-rail" aria-label="Works directory">
+          <header className="library-hero">
+            <div className="library-rail-top">
+              <div className="library-kicker flex items-center gap-2">
+                <p className="eyebrow m-0 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]">
+                  Workspace
+                </p>
+                <span
+                  id="library-count"
+                  className="library-count rounded-full border border-[#304047] bg-[#202c32] px-2 py-0.5 text-xs font-bold text-[#aab7b1]"
+                >
+                  {ready ? countLabel : "…"}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="library-rail-toggle"
+                aria-label={railCollapsed ? "Show sidebar" : "Hide sidebar"}
+                title="Toggle sidebar (⌘B)"
+                onClick={() => setRailCollapsed((prev) => !prev)}
               >
-                {ready ? countLabel : "…"}
-              </span>
+                {railCollapsed ? "»" : "«"}
+              </button>
             </div>
-            <button
-              type="button"
-              className="library-rail-toggle"
-              aria-label={railCollapsed ? "Show sidebar" : "Hide sidebar"}
-              title="Toggle sidebar (⌘\)"
-              onClick={() => setRailCollapsed((prev) => !prev)}
-            >
-              {railCollapsed ? "»" : "«"}
-            </button>
-          </div>
-          <h1 id="library-title" className="mb-0 text-2xl font-bold">
-            Library
-          </h1>
-          <p id="library-description" className="subheading mt-1 text-[#6f675c]">
-            {FILTER_DESCRIPTIONS[filter]}
-          </p>
-          <div className="library-actions" data-client-slot-target="actions" />
-          <label className="search-box" htmlFor="library-search">
-            <span aria-hidden="true">⌕</span>
-            <input
-              id="library-search"
-              type="search"
-              placeholder="Search Works"
-              autoComplete="off"
-              aria-label="Search Works"
-              value={query}
-              onInput={(event) => {
-                setQuery(event.currentTarget.value);
-                setVisibleCount(LIBRARY_RENDER_BATCH_SIZE);
-              }}
-            />
-            <kbd>⌘ K</kbd>
-          </label>
-        </header>
-
-        <section className="library-browser" aria-label="Browse your library">
-          <nav className="library-tabs" aria-label="Library views">
-            {(Object.keys(KIND_LABELS) as LibraryFilter[]).map((name) => (
-              <a
-                key={name}
-                id={name === "all" ? "show-work-list" : name === "documents" ? "show-documents" : "show-presentations"}
-                className={`library-tab${name === filter ? " is-active" : ""}`}
-                data-library-tab={name}
-                href={libraryHref(name)}
-                aria-current={name === filter ? "page" : undefined}
-                onClick={(event) => selectFilter(name, event)}
-              >
-                {name === "all" ? "All" : name === "documents" ? "Documents" : "Presentations"}
-              </a>
-            ))}
-          </nav>
-          <div
-            id="notice"
-            className="notice"
-            role="status"
-            aria-live="polite"
-            data-tone={noticeTone}
-            hidden={notice === ""}
-          >
-            {notice}
-          </div>
-          <section
-            id="work-list"
-            className="library-list"
-            role="list"
-            aria-label={`Saved ${filter}`}
-            hidden={visible.length === 0 && !isEmptyState}
-          >
-            {shown.map((work) => (
-              <LibraryCard
-                key={`${work.id}:${work.updatedAt ?? ""}`}
-                host={host}
-                work={work}
-                documentNodes={nodes}
-                options={options}
-                onChanged={handleChanged}
-                isSelected={work.id === activeSelectedId}
-                onSelect={handleSelectWork}
-                onHover={handleHoverWork}
+            <h1 id="library-title" className="mb-0 text-2xl font-bold">
+              Library
+            </h1>
+            <p id="library-description" className="subheading mt-1 text-[#6f675c]">
+              {FILTER_DESCRIPTIONS[filter]}
+            </p>
+            <div className="library-actions" data-client-slot-target="actions" />
+            <label className="search-box" htmlFor="library-search">
+              <span aria-hidden="true">⌕</span>
+              <input
+                id="library-search"
+                type="search"
+                placeholder="Search Works"
+                autoComplete="off"
+                aria-label="Search Works"
+                value={query}
+                onInput={(event) => {
+                  setQuery(event.currentTarget.value);
+                  setVisibleCount(LIBRARY_RENDER_BATCH_SIZE);
+                }}
               />
-            ))}
-          </section>
-          <button
-            ref={loadMoreRef}
-            id="library-load-more"
-            className="button secondary library-load-more mt-4"
-            type="button"
-            aria-controls="work-list"
-            hidden={!hasMore}
-            onClick={() => setVisibleCount((count) => count + LIBRARY_RENDER_BATCH_SIZE)}
-          >
-            Load more Works
-          </button>
-          <div
-            id="empty-library"
-            className="empty-state flex flex-col gap-3 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4"
-            hidden={!isEmptyState}
-          >
-            <div>
-              <h2 className="mb-1 text-lg font-bold" data-library-empty-title>
-                {`No ${emptyKindLabel}${filter === "all" ? "" : "s"} yet.`}
-              </h2>
-              <p className="text-sm text-[#6f675c]" data-library-empty-copy>
-                Start with Markdown. Elef keeps your source and assets in your library.
-              </p>
-            </div>
-            <button
-              className="button primary inline-flex min-h-10 cursor-pointer items-center justify-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95"
-              type="button"
-              data-kind={filter === "documents" ? "document" : "presentation"}
-              onClick={() => openCreate(filter === "documents" ? "document" : "presentation")}
-            >
-              {filter === "documents" ? "Create a document" : "Create a presentation"}
-            </button>
-          </div>
-          <p id="library-no-results" className="library-no-results" role="status" hidden={query.trim() === "" || visible.length > 0}>
-            No Works match this search.
-          </p>
-        </section>
-      </aside>
+              <kbd>⌘ K</kbd>
+            </label>
+          </header>
 
-      <main className="library-stage" aria-label="Work preview stage">
+          <section className="library-browser" aria-label="Browse your library">
+            <nav className="library-tabs" aria-label="Library views">
+              {(Object.keys(KIND_LABELS) as LibraryFilter[]).map((name) => (
+                <a
+                  key={name}
+                  id={name === "all" ? "show-work-list" : name === "documents" ? "show-documents" : "show-presentations"}
+                  className={`library-tab${name === filter ? " is-active" : ""}`}
+                  data-library-tab={name}
+                  href={libraryHref(name)}
+                  aria-current={name === filter ? "page" : undefined}
+                  onClick={(event) => selectFilter(name, event)}
+                >
+                  {name === "all" ? "All" : name === "documents" ? "Documents" : "Presentations"}
+                </a>
+              ))}
+            </nav>
+            <div
+              id="notice"
+              className="notice"
+              role="status"
+              aria-live="polite"
+              data-tone={noticeTone}
+              hidden={notice === ""}
+            >
+              {notice}
+            </div>
+            <section
+              id="work-list"
+              className="library-list"
+              role="list"
+              aria-label={`Saved ${filter}`}
+              hidden={visible.length === 0 && !isEmptyState}
+            >
+              {shown.map((work) => (
+                <LibraryCard
+                  key={`${work.id}:${work.updatedAt ?? ""}`}
+                  host={host}
+                  work={work}
+                  documentNodes={nodes}
+                  options={options}
+                  onChanged={handleChanged}
+                  isSelected={work.id === activeSelectedId}
+                  onSelect={handleSelectWork}
+                  onHover={handleHoverWork}
+                />
+              ))}
+            </section>
+            <button
+              ref={loadMoreRef}
+              id="library-load-more"
+              className="button secondary library-load-more mt-4"
+              type="button"
+              aria-controls="work-list"
+              hidden={!hasMore}
+              onClick={() => setVisibleCount((count) => count + LIBRARY_RENDER_BATCH_SIZE)}
+            >
+              Load more Works
+            </button>
+            <div
+              id="empty-library"
+              className="empty-state flex flex-col gap-3 rounded-2xl border border-[#ddd5c8] bg-[#fffdf8] p-4"
+              hidden={!isEmptyState}
+            >
+              <div>
+                <h2 className="mb-1 text-lg font-bold" data-library-empty-title>
+                  {`No ${emptyKindLabel}${filter === "all" ? "" : "s"} yet.`}
+                </h2>
+                <p className="text-sm text-[#6f675c]" data-library-empty-copy>
+                  Start with Markdown. Elef keeps your source and assets in your library.
+                </p>
+              </div>
+              <button
+                className="button primary inline-flex min-h-10 cursor-pointer items-center justify-center gap-1 rounded-full border border-[#6d4aff] bg-[#6d4aff] px-4 py-2 font-bold text-white no-underline hover:brightness-95"
+                type="button"
+                data-kind={filter === "documents" ? "document" : "presentation"}
+                onClick={() => openCreate(filter === "documents" ? "document" : "presentation")}
+              >
+                {filter === "documents" ? "Create a document" : "Create a presentation"}
+              </button>
+            </div>
+            <p id="library-no-results" className="library-no-results" role="status" hidden={query.trim() === "" || visible.length > 0}>
+              No Works match this search.
+            </p>
+          </section>
+        </aside>
+
+        {popoverWork !== null && !railCollapsed ? (
+          <div className="library-hover-popover" role="region" aria-label="First-page preview">
+            <div className="library-hover-popover-head">
+              <div>
+                <span className="library-stage-kind">
+                  {popoverWork.kind === "presentation" ? "Presentation" : "Document"}
+                </span>
+                <p className="library-stage-title">{popoverWork.title}</p>
+              </div>
+              <div className="library-stage-actions">
+                {popoverWork.kind === "presentation" && options.presentWork !== undefined ? (
+                  <button
+                    type="button"
+                    className="library-stage-action"
+                    onClick={() => options.presentWork?.(popoverWork)}
+                  >
+                    Present {vimNavEnabled ? <kbd>p</kbd> : null}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="library-stage-action is-primary"
+                  onClick={() => options.navigate?.({ workId: popoverWork.id, kind: popoverWork.kind })}
+                >
+                  Edit <kbd>↵</kbd>
+                </button>
+              </div>
+            </div>
+            <div className="library-stage-preview">
+              <StagePreview host={host} work={popoverWork} options={options} />
+            </div>
+          </div>
+        ) : null}
+      </div>
+
+      <main className="library-stage library-quickstart" aria-label="Quick start canvas">
         <div className="library-stage-bar">
           <div className="library-stage-bar-left">
             {railCollapsed ? (
@@ -596,33 +646,14 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
                 className="library-stage-action"
                 onClick={() => setRailCollapsed(false)}
               >
-                Show sidebar <kbd>⌘\</kbd>
+                Show sidebar <kbd>⌘B</kbd>
               </button>
-            ) : null}
-            <span className="library-stage-hint">
-              {vimNavEnabled ? "j/k or ↑/↓ to preview · / to search" : "↑/↓ to preview · ⌘K commands"}
-            </span>
+            ) : (
+              <span className="library-stage-hint">
+                <kbd>⌘B</kbd> toggle sidebar · {vimNavEnabled ? "j/k or ↑/↓ preview · / search" : "↑/↓ preview · ⌘K commands"}
+              </span>
+            )}
           </div>
-          {activeWork !== null ? (
-            <div className="library-stage-actions">
-              {activeWork.kind === "presentation" && options.presentWork !== undefined ? (
-                <button
-                  type="button"
-                  className="library-stage-action"
-                  onClick={() => options.presentWork?.(activeWork)}
-                >
-                  Present {vimNavEnabled ? <kbd>p</kbd> : null}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="library-stage-action is-primary"
-                onClick={() => options.navigate?.({ workId: activeWork.id, kind: activeWork.kind })}
-              >
-                Edit <kbd>↵</kbd>
-              </button>
-            </div>
-          ) : null}
         </div>
 
         <div className="library-stage-content">
@@ -636,23 +667,29 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
             />
           )}
           <div data-client-slot-target="lineage" />
-          {activeWork !== null ? (
-            <div className="library-stage-focus">
-              <div className="library-stage-header">
-                <span className="library-stage-kind">
-                  {activeWork.kind === "presentation" ? "Presentation" : "Document"}
-                </span>
-                <p className="library-stage-title">{activeWork.title}</p>
-              </div>
-              <div className="library-stage-preview">
-                <StagePreview host={host} work={activeWork} options={options} />
-              </div>
+          <div className="library-quickstart-canvas">
+            <p className="library-quickstart-eyebrow">Elef</p>
+            <h2 className="library-quickstart-title">A calm place for your ideas.</h2>
+            <p className="library-quickstart-copy">
+              Hover any work in the sidebar to peek at its first page, or start something new.
+            </p>
+            <div className="library-quickstart-actions">
+              <button
+                type="button"
+                className="library-stage-action is-primary"
+                onClick={() => openCreate("document")}
+              >
+                + New Document
+              </button>
+              <button
+                type="button"
+                className="library-stage-action"
+                onClick={() => openCreate("presentation")}
+              >
+                + New Presentation
+              </button>
             </div>
-          ) : (
-            <div className="library-stage-empty">
-              <p>Select or hover a work to preview its first page.</p>
-            </div>
-          )}
+          </div>
         </div>
       </main>
 

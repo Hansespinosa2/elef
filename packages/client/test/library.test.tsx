@@ -721,7 +721,7 @@ test("card previews stand down while hidden and resume on return", async () => {
   }
 });
 
-test("arc stage updates on keyboard navigation and toggles the rail", async () => {
+test("arc hover popover opens on keyboard navigation and toggles the rail with Cmd+B", async () => {
   const host = typedHost();
   await seed(host);
   const seen: unknown[] = [];
@@ -729,7 +729,8 @@ test("arc stage updates on keyboard navigation and toggles the rail", async () =
     navigate: (target) => seen.push(target),
   });
   try {
-    assert.equal(element.querySelector(".library-stage-title")?.textContent, "Alpha doc");
+    assert.equal(element.querySelector(".library-hover-popover"), null);
+    assert.ok(element.querySelector(".library-quickstart-canvas"));
     const doc = element.ownerDocument;
     const press = async (key: string, metaKey = false) => {
       const ev = doc.createEvent("Event") as unknown as {
@@ -737,12 +738,14 @@ test("arc stage updates on keyboard navigation and toggles the rail", async () =
         key: string;
         metaKey: boolean;
         ctrlKey: boolean;
+        shiftKey: boolean;
         altKey: boolean;
       };
       ev.initEvent("keydown", true, true);
       ev.key = key;
       ev.metaKey = metaKey;
       ev.ctrlKey = false;
+      ev.shiftKey = false;
       ev.altKey = false;
       await act(async () => {
         doc.dispatchEvent(ev as unknown as Event);
@@ -750,18 +753,25 @@ test("arc stage updates on keyboard navigation and toggles the rail", async () =
       await settled();
     };
     await press("ArrowDown");
-    assert.equal(element.querySelector(".library-stage-title")?.textContent, "Beta work");
+    assert.equal(element.querySelector(".library-hover-popover .library-stage-title")?.textContent, "Beta work");
     await press("k");
-    assert.equal(element.querySelector(".library-stage-title")?.textContent, "Alpha doc");
+    assert.equal(element.querySelector(".library-hover-popover .library-stage-title")?.textContent, "Alpha doc");
     await press("j");
-    assert.equal(element.querySelector(".library-stage-title")?.textContent, "Beta work");
+    assert.equal(element.querySelector(".library-hover-popover .library-stage-title")?.textContent, "Beta work");
     await press("Enter");
     assert.equal(seen.length, 1);
     assert.equal((seen[0] as { kind?: string }).kind, "presentation");
-    await click(element.querySelector(".library-rail-toggle"));
+    await press("Escape");
+    assert.equal(element.querySelector(".library-hover-popover"), null);
+    await press("b", true);
     assert.equal(
       element.querySelector(".library-arc-shell")?.classList.contains("is-rail-collapsed"),
       true,
+    );
+    await press("b", true);
+    assert.equal(
+      element.querySelector(".library-arc-shell")?.classList.contains("is-rail-collapsed"),
+      false,
     );
   } finally {
     shell.unmount();
