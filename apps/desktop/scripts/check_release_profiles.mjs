@@ -192,7 +192,7 @@ if (process.platform === "darwin") {
 assert.ok(devInputs.has("apps/desktop/frontend/src/update-runtime-disabled.js"), "repository Dev must resolve the disabled runtime")
 assert.ok(!devInputs.has("apps/desktop/frontend/src/update-runtime-macos.js"), "repository Dev must not resolve the updater-capable runtime")
 
-// The Stable shell opens works in source mode; Dev keeps the visual default.
+// Both Dev and Stable shells now default to source mode.
 assert.ok(
   readText(verification.stable_frontend).includes('data-editor-mode="source"'),
   "the Stable shell must default to source mode"
@@ -202,8 +202,8 @@ assert.ok(
   "the Stable shell must not carry the visual default"
 )
 assert.ok(
-  readText(verification.dev_frontend).includes('data-editor-mode="visual"'),
-  "the Dev shell must keep the visual default"
+  readText(verification.dev_frontend).includes('data-editor-mode="source"'),
+  "the Dev shell must default to source mode"
 )
 
 // IPC denial: the Stable production capability never grants the graph

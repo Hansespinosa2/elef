@@ -366,6 +366,18 @@ export default class extends Controller {
       const editor = document.querySelector(".source-field")?.editorController
       editor?.toggleMetadataVisibility()
       this.close()
+    } else if (id === "toggle-preview") {
+      document.querySelector("[data-editor-view-target='togglePreviewButton']")?.click()
+      this.close()
+    } else if (id === "insert-image") {
+      document.querySelector("[data-editor-view-target='mediaButton']")?.click()
+      this.close()
+    } else if (id === "toggle-editor-mode") {
+      const form = document.querySelector("form[data-editor-mode]")
+      const isSource = (form?.dataset.editorMode || "source") === "source"
+      const target = document.querySelector(isSource ? "[data-editor-target='visualButton']" : "[data-editor-target='sourceButton']")
+      target?.click()
+      this.close()
     } else if (id === "keyboard-shortcuts") {
       // Like the slide actions riding the overview buttons, the reference
       // rides the shared Edit-actions menu row (programmatic click works on

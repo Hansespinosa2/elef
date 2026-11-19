@@ -407,3 +407,320 @@ li.editor-reveal-marker { list-style: none; }
 .visual-engine-panels .cm-panel { padding: 0.65rem; }
 .visual-engine-panels input { background: var(--oradia-slate-800); border: 1px solid var(--oradia-line); border-radius: 0.3rem; color: inherit; padding: 0.25rem 0.4rem; }
 .visual-engine-panels button { color: inherit; margin-inline: 0.2rem; }
+
+/* ==========================================================================
+   Source-First Full-Bleed Workspace (Folio + Command-First Studio)
+   ========================================================================== */
+.editor-micro-rail-left { display: none; }
+.editor-micro-btn { display: none; }
+
+@media screen {
+  body.is-editing-source .app-header,
+  body.is-editing-source .page-title > div:first-child {
+    display: none;
+  }
+  body.is-editing-source .page-title {
+    align-items: center;
+    background: var(--oradia-slate-900);
+    border-bottom: 1px solid var(--oradia-line);
+    display: flex;
+    height: 36px;
+    justify-content: flex-end;
+    margin: 0;
+    padding: 0 14px;
+  }
+  body.is-editing-source .work-actions {
+    align-items: center;
+    background: var(--oradia-slate-900);
+    border-bottom: 1px solid var(--oradia-line);
+    display: flex;
+    height: 36px;
+    justify-content: flex-end;
+    margin: 0;
+    padding: 0 14px;
+  }
+  body.is-editing-source .app-shell {
+    margin: 0;
+    max-width: none;
+    padding: 0;
+  }
+  .visual-editor-form[data-editor-mode="source"] { gap: 0; height: calc(100vh - 36px); width: 100vw; }
+  .visual-editor-form[data-editor-mode="source"] .editor-shell {
+    background: var(--oradia-slate-950);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 36px);
+    overflow: hidden;
+    padding: 0;
+    width: 100vw;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-shell-header {
+    background: var(--oradia-slate-950);
+    border-bottom: 1px solid var(--oradia-line);
+    margin: 0;
+    padding: 6px 16px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-shell-header:has(.editor-title-field[hidden]) {
+    display: none;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-title-label,
+  .visual-editor-form[data-editor-mode="source"] .editor-kind-badge,
+  .visual-editor-form[data-editor-mode="source"] .media-editor-controls,
+  .visual-editor-form[data-editor-mode="source"] .editor-mode-hint,
+  .visual-editor-form[data-editor-mode="source"] .editor-editing-mode,
+  .visual-editor-form[data-editor-mode="source"] .editor-settings,
+  .visual-editor-form[data-editor-mode="source"] .editor-reveal-metadata {
+    display: none;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-title-input {
+    border-bottom: 0;
+    font-size: 1.05rem;
+    padding: 0.1rem 0;
+  }
+
+  /* Slim 34px top slide scrubber strip (Mockup 3: Folio) */
+  .visual-editor-form[data-editor-mode="source"] .slide-overview {
+    align-items: center;
+    background: var(--oradia-slate-900);
+    border-bottom: 1px solid var(--oradia-line);
+    border-top: 0;
+    display: flex;
+    flex: 0 0 34px;
+    gap: 0.75rem;
+    height: 34px;
+    margin: 0;
+    overflow-x: auto;
+    padding: 0 16px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview[hidden] { display: none; }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-heading-row {
+    align-items: center;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    order: 2;
+    margin-left: auto;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-heading-row h3 { display: none; }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-heading-row p {
+    font-family: var(--oradia-mono);
+    font-size: 0.7rem;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-actions button {
+    font-size: 0.7rem;
+    min-height: 22px;
+    padding: 0.1rem 0.45rem;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-grid {
+    align-items: center;
+    display: flex;
+    flex: 1 1 auto;
+    gap: 0.35rem;
+    margin: 0;
+    max-height: none;
+    min-width: 0;
+    order: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-card {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--oradia-muted);
+    flex: 0 0 auto;
+    padding: 0.2rem 0.6rem;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-card:hover {
+    background: var(--oradia-slate-800);
+    color: var(--oradia-ink);
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-card[aria-current="true"] {
+    background: var(--oradia-slate-800);
+    border-color: rgba(159, 197, 169, 0.35);
+    box-shadow: none;
+    color: var(--oradia-ink);
+    font-weight: 600;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-thumbnail { display: none; }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-label {
+    font-size: 0.75rem;
+    margin: 0;
+    max-width: 14rem;
+  }
+
+  /* Full-bleed Source | Preview split */
+  .visual-editor-form[data-editor-mode="source"] .editor-layout {
+    align-items: stretch;
+    flex: 1 1 auto;
+    grid-template-columns: minmax(0, calc((100% - 1px) * var(--source-split, 0.48))) 1px minmax(0, 1fr);
+    min-height: 0;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-layout.is-preview-hidden {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-layout.is-preview-hidden .editor-splitter,
+  .visual-editor-form[data-editor-mode="source"] .editor-layout.is-preview-hidden .editor-projection {
+    display: none;
+  }
+  .visual-editor-form[data-editor-mode="source"] .source-pane,
+  .visual-editor-form[data-editor-mode="source"] .source-field {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    margin: 0;
+    min-height: 0;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-surface {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: auto;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-surface .cm-editor {
+    border: 0;
+    border-radius: 0;
+    height: 100%;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-surface .cm-scroller {
+    padding: 1.5rem 2rem;
+  }
+
+  /* Floating Vim / mode whisper inside source pane */
+  .visual-editor-form[data-editor-mode="source"] .editor-toolbar {
+    backdrop-filter: blur(8px);
+    background: rgba(24, 33, 38, 0.88);
+    border: 1px solid var(--oradia-line);
+    border-radius: 999px;
+    bottom: 0.85rem;
+    gap: 0.35rem;
+    min-height: 0;
+    padding: 0.15rem 0.55rem;
+    position: absolute;
+    right: 1rem;
+    z-index: 6;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-mode-button {
+    border: 0;
+    font-size: 0.68rem;
+    padding: 0.1rem 0.4rem;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-mode {
+    border: 0;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.2rem;
+    text-transform: uppercase;
+  }
+
+  /* Hairline 1px splitter */
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter {
+    background: var(--oradia-line);
+    min-height: 0;
+    width: 1px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter::before { display: none; }
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter:hover,
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter:focus-visible {
+    background: var(--oradia-green);
+  }
+
+  /* Full-height Preview Pane */
+  .visual-editor-form[data-editor-mode="source"] .editor-projection {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+    overflow: auto;
+  }
+  .visual-editor-form[data-editor-mode="source"][data-visual-editor-kind-value="presentation"] .editor-projection.preview-pane {
+    background: #0d1114;
+  }
+
+  /* 28px Bottom Micro-Rail (Mockup 4: Command-First Studio) */
+  .visual-editor-form[data-editor-mode="source"] .editor-footer {
+    align-items: center;
+    background: var(--oradia-slate-900);
+    border-top: 1px solid var(--oradia-line);
+    color: var(--oradia-muted);
+    display: flex;
+    flex: 0 0 28px;
+    font-size: 11.5px;
+    gap: 1rem;
+    height: 28px;
+    justify-content: space-between;
+    padding: 0 14px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-rail-left {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-back {
+    color: var(--oradia-muted);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-back:hover { color: var(--oradia-ink); }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-sep { color: var(--oradia-slate-700); }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-title {
+    color: var(--oradia-ink);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-actions {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-actions .button.primary {
+    background: transparent;
+    border: 0;
+    color: var(--oradia-green);
+    font-size: 11.5px;
+    font-weight: 600;
+    min-height: 0;
+    padding: 0 4px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-actions .button {
+    font-size: 11.5px;
+    min-height: 0;
+    padding: 0 4px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .dirty-state { font-size: 11.5px; }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-btn {
+    background: transparent;
+    border: 1px solid var(--oradia-line);
+    border-radius: 4px;
+    color: var(--oradia-muted);
+    cursor: pointer;
+    display: inline-flex;
+    font-family: var(--oradia-mono);
+    font-size: 10.5px;
+    padding: 1px 6px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-btn:hover {
+    border-color: var(--oradia-green);
+    color: var(--oradia-ink);
+  }
+}
+
+@media screen and (max-width: 900px) {
+  .visual-editor-form[data-editor-mode="source"] .editor-layout {
+    gap: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter { display: none; }
+}

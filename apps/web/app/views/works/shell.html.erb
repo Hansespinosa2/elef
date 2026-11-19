@@ -2,6 +2,7 @@
 <% new_record = work.new_record? %>
 <% heading = new_record ? "New #{work.presentation? ? "presentation" : "document"}" : "Edit #{work.title}" %>
 <% content_for :title, heading %>
+<% content_for :body_class, "is-editing-source" if params[:editor_mode] != "visual" %>
 <div id="work-shell" data-work-shell data-work-kind="<%= work.presentation? ? "presentation" : "document" %>" data-work-id="<%= work.id %>" data-work-view="<%= new_record ? "new" : "edit" %>">
   <div class="page-title mb-8 flex items-end justify-between gap-4 max-[920px]:flex-col max-[920px]:items-stretch">
     <div>
