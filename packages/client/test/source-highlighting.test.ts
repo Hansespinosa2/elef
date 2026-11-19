@@ -180,3 +180,23 @@ test("long line with many unclosed prose $ tokens parses without quadratic slowd
   assert.equal(nodes.filter((n) => n.name === "InlineMath").length, 0);
   assert.ok(elapsedMs < 200, `expected linear parse under 200ms, got ${elapsedMs.toFixed(1)}ms`);
 });
+
+test("escaped newline inside single-dollar text does not create multiline InlineMath", () => {
+  const doc = "$x\\\ny$";
+  const nodes = collectNodes(parsedState(doc));
+  assert.equal(nodes.filter((n) => n.name === "InlineMath").length, 0);
+});
+
+test("fenced code line decorations clip to the requested visible range", () => {
+  const doc = "```python\nline1\nline2\nline3\n```\n";
+  const sourceState = parsedState(doc, true).update({ effects: livePreviewMode.of(false) }).state;
+  const line2Start = doc.indexOf("line2");
+  const line2End = line2Start + "line2".length;
+  const decos = buildSourceCodeDecorationsFromState(sourceState, [{ from: line2Start, to: line2End }]);
+  const lines: number[] = [];
+  decos.between(0, doc.length, (from, _to, value) => {
+    const spec = value.spec as { class?: string };
+    if (spec.class === "cm-source-code-line") lines.push(from);
+  });
+  assert.deepEqual(lines, [line2Start]);
+});

@@ -46,6 +46,11 @@ function findInlineDoubleDollarEnd(cx: LezerInlineContext, start: number): numbe
   for (let i = start; i < cx.end - 1; i++) {
     const ch = cx.char(i)
     if (ch === 92) {
+      const escaped = cx.char(i + 1)
+      if (escaped === 10 || escaped === 13) {
+        failedSingleDollarUntil.set(cx, i + 1)
+        return -1
+      }
       i++
       continue
     }
@@ -72,6 +77,11 @@ function findInlineSingleDollarEnd(cx: LezerInlineContext, start: number): numbe
       return -1
     }
     if (ch === 92) {
+      const escaped = cx.char(i + 1)
+      if (escaped === 10 || escaped === 13) {
+        failedSingleDollarUntil.set(cx, i + 1)
+        return -1
+      }
       i++
       continue
     }
@@ -229,14 +239,16 @@ export function buildSourceCodeDecorationsFromState(
               addMark(child.from, child.to, sourceCodeInfoDecoration, "cm-source-code-info")
             } else if (child.name === "CodeText") {
               addMark(child.from, child.to, sourceCodeTextDecoration, "cm-source-code-text")
-              let pos = child.from
-              while (pos <= child.to) {
+              const clippedStart = Math.max(child.from, from)
+              const clippedEnd = Math.min(child.to, to)
+              let pos = clippedStart
+              while (pos <= clippedEnd) {
                 const line = state.doc.lineAt(pos)
                 if (!decoratedLines.has(line.from)) {
                   decoratedLines.add(line.from)
                   decorations.push(sourceCodeLineDecoration.range(line.from))
                 }
-                if (line.to >= child.to || line.to >= state.doc.length) break
+                if (line.to >= clippedEnd || line.to >= state.doc.length) break
                 pos = line.to + 1
               }
             }
