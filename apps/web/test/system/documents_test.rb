@@ -770,7 +770,7 @@ class DocumentsTest < ApplicationSystemTestCase
       click_on "Editable target"
     end
 
-    assert_current_path edit_document_path(source)
+    assert_current_path edit_document_path(source, editor_mode: "visual")
     assert page.evaluate_script("Boolean(document.activeElement.closest('[contenteditable=\\\"true\\\"]'))")
   end
 
@@ -867,6 +867,7 @@ class DocumentsTest < ApplicationSystemTestCase
     visit root_path
     find(".new-work-menu summary").click
     find(".new-work-option", text: "Document").click
+    click_on "Visual"
     wait_for_fresh_projection
 
     assert_no_selector "#document_title"
@@ -3805,6 +3806,7 @@ class DocumentsTest < ApplicationSystemTestCase
     visit root_path
     find(".new-work-menu summary").click
     find(".new-work-option", text: "Document").click
+    click_on "Visual"
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Untitled document")

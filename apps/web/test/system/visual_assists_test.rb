@@ -14,7 +14,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
 
   test "visual snippet palette opens on slash and accepts with Enter" do
     document = Document.create!(title: "Visual snippet", source: "# Notes\n\nBody")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Body")
@@ -33,7 +33,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
     keys = [:end, " /table", :enter]
 
     visual = Document.create!(title: "Visual parity", source: source)
-    visit edit_document_path(visual)
+    visit edit_document_path(visual, editor_mode: "visual")
     wait_for_fresh_projection
     block = find(".document-editor-block", text: "Body")
     block.click
@@ -42,7 +42,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
     visual_source = engine_source
 
     sourced = Document.create!(title: "Source parity", source: source)
-    visit edit_document_path(sourced)
+    visit edit_document_path(sourced, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -58,7 +58,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
 
   test "visual typing preserves a trailing space before the caret" do
     document = Document.create!(title: "Trailing space", source: "# Notes\n\nSee ")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "See")
@@ -71,7 +71,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
   test "visual document link palette accepts with Tab" do
     Document.create!(title: "Research target", source: "# Target")
     document = Document.create!(title: "Research source", source: "# Notes\n\nSee ")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "See")
@@ -86,7 +86,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
 
   test "visual math shortcut palette opens inside math" do
     document = Document.create!(title: "Visual math", source: "# Notes\n\nBody")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Body")
@@ -101,7 +101,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
 
   test "visual mermaid /diagram chains to types and inserts the template" do
     document = Document.create!(title: "Visual diagram", source: "# Existing text")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Existing text")
@@ -121,7 +121,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
 
   test "visual math shorthand commits with Space" do
     document = Document.create!(title: "Visual shorthand", source: "# Notes\n\nBody")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Body")
@@ -134,7 +134,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
   test "math script tab shortcuts work in source and visual editors" do
     %w[visual source].each do |mode|
       document = Document.create!(title: "Scripts #{mode}", source: "# Notes\n\nBody")
-      visit edit_document_path(document)
+      visit edit_document_path(document, editor_mode: "visual")
       wait_for_fresh_projection
       if mode == "source"
         click_on "Source"
@@ -152,7 +152,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
 
   test "math script tab shortcuts leave prose and code literal" do
     document = Document.create!(title: "Literal scripts", source: "# Notes\n\nBody")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script("const e = document.querySelector('.source-field').editorController; e.setSelectionRange(e.value.length); e.focus()")
@@ -165,7 +165,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
 
   test "Edit-actions menu inserts a snippet trigger in visual mode" do
     document = Document.create!(title: "Visual menu", source: "# Notes\n\nBody")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Body")
@@ -180,7 +180,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
 
   test "keyboard reference opens from the menu and the command palette" do
     document = Document.create!(title: "Visual reference", source: "# Notes\n\nBody")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     click_on "Edit"
@@ -197,7 +197,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
 
   test "visual presentation snippet palette accepts in a slide block" do
     presentation = Presentation.create!(title: "Visual slides", source: "# Title\n\nBody")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".presentation-editor-projection [contenteditable='true']", text: "Body")
@@ -212,7 +212,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
 
   test "presentation Edit menu omits the document-link row" do
     presentation = Presentation.create!(title: "Slide menu", source: "# Title\n\nBody")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     wait_for_fresh_projection
 
     find(".presentation-editor-projection [contenteditable='true']", text: "Body").click

@@ -2353,6 +2353,7 @@ class PresentationsTest < ApplicationSystemTestCase
     within ".new-work-panel" do
       click_on "Presentation"
     end
+    click_on "Visual"
 
     fill_in "Title", with: "System Work"
     source = "# First\n\nBody\n---\n# Second"

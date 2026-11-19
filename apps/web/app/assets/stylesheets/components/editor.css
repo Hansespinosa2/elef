@@ -503,11 +503,27 @@ li.editor-reveal-marker { list-style: none; }
   }
   .visual-editor-form[data-editor-mode="source"] .editor-title-label,
   .visual-editor-form[data-editor-mode="source"] .editor-kind-badge,
-  .visual-editor-form[data-editor-mode="source"] .media-editor-controls,
+  .visual-editor-form[data-editor-mode="source"] .media-editor-controls > :not(.media-upload-status),
   .visual-editor-form[data-editor-mode="source"] .editor-mode-hint,
   .visual-editor-form[data-editor-mode="source"] .editor-editing-mode,
   .visual-editor-form[data-editor-mode="source"] .editor-settings {
     display: none;
+  }
+  .visual-editor-form[data-editor-mode="source"] .media-editor-controls {
+    bottom: 36px;
+    margin: 0;
+    pointer-events: none;
+    position: fixed;
+    right: 16px;
+    z-index: 25;
+  }
+  .visual-editor-form[data-editor-mode="source"] .media-upload-status:not(:empty) {
+    background: rgba(24, 33, 38, 0.94);
+    border: 1px solid var(--oradia-line);
+    border-radius: 6px;
+    color: var(--oradia-ink);
+    font-size: 12px;
+    padding: 4px 10px;
   }
   .visual-editor-form[data-editor-mode="source"] .editor-reveal-metadata {
     border: 0;
