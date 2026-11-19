@@ -428,7 +428,6 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
 .file-library-editor-form { margin: 0; }
 
 @media screen {
-  body.is-editing-source .app-header,
   body.is-editing-source .statusbar {
     display: none;
   }

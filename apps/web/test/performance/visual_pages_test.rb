@@ -177,7 +177,7 @@ class VisualPagesTest < ApplicationSystemTestCase
   # with fonts and images ready, or raises with the last observed state.
   def measure_open(document, gate_images: true)
     t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     state = nil
     deadline = t0 + SETTLE_TIMEOUT
     loop do
@@ -734,7 +734,7 @@ class VisualPagesTest < ApplicationSystemTestCase
 
   def benchmark_typing(name, source, count, stalls, overlaps)
     document = create_perf_document("Perf #{name} typing", source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_full_settle
     # Freeze the timeline buffer for the typing window: open-phase marks
     # would otherwise evict typing entries, and Event Timing needs an
@@ -826,7 +826,7 @@ class VisualPagesTest < ApplicationSystemTestCase
 
   def benchmark_motion(name, source, count, stalls, overlaps)
     document = create_perf_document("Perf #{name} motion", source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_full_settle
     caret = bridge_caret_ready(0, :start)
     raise "motion caret placement failed: #{caret}" unless caret == "caret:true"
@@ -844,7 +844,7 @@ class VisualPagesTest < ApplicationSystemTestCase
 
   def benchmark_revelation(name, source, count, stalls, overlaps)
     document = create_perf_document("Perf #{name} reveal", source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_full_settle
     total = page.evaluate_script("document.querySelectorAll('.document-surface .katex').length")
     samples = []
@@ -900,7 +900,7 @@ class VisualPagesTest < ApplicationSystemTestCase
     # switching blocks blurs (installing the pending projection and
     # repaginating), so settle after every switch like typing does.
     document = create_perf_document("Perf #{name} suggest", source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_full_settle
     targets = page.evaluate_script(
       "(() => { const blocks = [...document.querySelectorAll('.document-surface [data-editor-block-id]')];" \
