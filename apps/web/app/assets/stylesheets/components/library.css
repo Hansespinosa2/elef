@@ -303,7 +303,7 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
   height: calc(100vh - 6.5rem);
   padding: 0.25rem 0.9rem 0.75rem 0;
   position: sticky;
-  top: 0.5rem;
+  top: 5rem;
 }
 .library-rail .library-hero {
   display: flex;
@@ -397,7 +397,7 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
   box-shadow: none;
   display: grid;
   gap: 0.6rem;
-  grid-template-columns: 3.5rem minmax(0, 1fr);
+  grid-template-columns: 5.5rem minmax(0, 1fr);
   padding: 0.4rem 0.5rem;
   position: relative;
 }
@@ -407,9 +407,11 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
   box-shadow: none;
   transform: none;
 }
-.library-rail .library-card:has(.library-card-menu[open]),
 .library-rail .library-card:focus-within {
   z-index: 20;
+}
+.library-rail .library-card:has(.library-card-menu[open]) {
+  z-index: 30;
 }
 .library-rail .library-card-menu-options {
   left: 0;
@@ -443,14 +445,8 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
 .library-rail .library-card-controls {
   gap: 0.2rem;
   inset: 0.2rem;
-  opacity: 0;
-  padding: 0;
-  transition: opacity 120ms ease;
-}
-.library-rail .library-card-media:hover .library-card-controls,
-.library-rail .library-card-controls:focus-within,
-.library-rail .library-card:has(.library-card-menu[open]) .library-card-controls {
   opacity: 1;
+  padding: 0;
 }
 .library-rail .library-card-preview-button,
 .library-rail .library-card-menu-trigger {
@@ -534,6 +530,9 @@ p.release-state ::selection { background-color: var(--oradia-vim-selection); col
     max-height: none;
     padding-right: 0;
     position: static;
+  }
+  .library-rail .library-browser {
+    overflow: visible;
   }
   .library-arc-shell .library-quickstart {
     min-height: 22rem;
