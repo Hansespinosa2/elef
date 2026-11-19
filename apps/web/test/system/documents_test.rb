@@ -864,10 +864,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "new document typing keeps Markdown blocks, title, lists, quotes, and math in sync" do
     expected_source = File.read(Rails.root.join("test/fixtures/files/visual_editor_document_flow.md")).chomp
 
-    visit root_path
-    find(".new-work-menu summary").click
-    find(".new-work-option", text: "Document").click
-    click_on "Visual"
+    visit new_document_path(editor_mode: "visual")
     wait_for_fresh_projection
 
     assert_no_selector "#document_title"
@@ -3803,10 +3800,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "pins the block alignment control until selection is dismissed" do
-    visit root_path
-    find(".new-work-menu summary").click
-    find(".new-work-option", text: "Document").click
-    click_on "Visual"
+    visit new_document_path(editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Untitled document")

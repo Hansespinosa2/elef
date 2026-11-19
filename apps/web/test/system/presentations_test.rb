@@ -482,7 +482,7 @@ class PresentationsTest < ApplicationSystemTestCase
     click_on "Library"
     assert_current_path root_path
     find("#presentation_#{presentation.id} .library-card-open").click
-    assert_current_path edit_presentation_path(presentation)
+    assert_current_path edit_presentation_path(presentation, editor_mode: "visual")
 
     click_on "Library"
     assert_current_path root_path
@@ -2381,7 +2381,7 @@ class PresentationsTest < ApplicationSystemTestCase
     fill_in "Markdown source", with: "# Unsaved source"
     dismiss_confirm { click_on "Present" }
 
-    assert_current_path edit_presentation_path(presentation)
+    assert_current_path edit_presentation_path(presentation, editor_mode: "visual")
     assert_field "Markdown source", with: "# Unsaved source"
 
     accept_confirm { click_on "Present" }
@@ -2401,7 +2401,7 @@ class PresentationsTest < ApplicationSystemTestCase
       click_on "Library"
     end
 
-    assert_current_path edit_presentation_path(presentation)
+    assert_current_path edit_presentation_path(presentation, editor_mode: "visual")
     assert_field "Markdown source", with: "# Unsaved"
   end
 

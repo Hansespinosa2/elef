@@ -503,7 +503,7 @@ li.editor-reveal-marker { list-style: none; }
   }
   .visual-editor-form[data-editor-mode="source"] .editor-title-label,
   .visual-editor-form[data-editor-mode="source"] .editor-kind-badge,
-  .visual-editor-form[data-editor-mode="source"] .media-editor-controls > :not(.media-upload-status),
+  .visual-editor-form[data-editor-mode="source"] .media-editor-controls > :not(.media-upload-status):not([data-media-target="input"]),
   .visual-editor-form[data-editor-mode="source"] .editor-mode-hint,
   .visual-editor-form[data-editor-mode="source"] .editor-editing-mode,
   .visual-editor-form[data-editor-mode="source"] .editor-settings {
@@ -772,6 +772,8 @@ li.editor-reveal-marker { list-style: none; }
     display: flex;
     gap: 10px;
     margin-left: auto;
+    position: relative;
+    z-index: 20;
   }
   .visual-editor-form[data-editor-mode="source"] .editor-actions .button.primary {
     background: transparent;

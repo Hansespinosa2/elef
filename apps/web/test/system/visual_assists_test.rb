@@ -226,7 +226,7 @@ class VisualAssistsTest < ApplicationSystemTestCase
     [Document, Presentation].each do |model|
       source = "# Search\n\nA *warm* word.\n\nAnother warm word."
       work = model.create!(title: "Search", source: source)
-      visit model == Document ? edit_document_path(work) : edit_presentation_path(work)
+      visit model == Document ? edit_document_path(work, editor_mode: "visual") : edit_presentation_path(work, editor_mode: "visual")
       assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
       block = find(".editor-projection [contenteditable='true']", text: "Another warm word.")
       block.click
