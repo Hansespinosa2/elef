@@ -579,6 +579,12 @@ body[data-desktop-view="editor"][data-desktop-sidebar="open"] #library-view .lib
   display: block;
   min-height: 0;
 }
+.editor-library-drawer .library-arc-shell.is-rail-collapsed .library-rail-wrap,
+.editor-library-drawer .library-arc-shell.is-rail-collapsed .library-rail,
+body[data-desktop-view="editor"][data-desktop-sidebar="open"] #library-view .library-arc-shell.is-rail-collapsed .library-rail-wrap,
+body[data-desktop-view="editor"][data-desktop-sidebar="open"] #library-view .library-arc-shell.is-rail-collapsed .library-rail {
+  display: flex;
+}
 .editor-library-drawer .library-quickstart,
 body[data-desktop-view="editor"][data-desktop-sidebar="open"] #library-view .library-quickstart {
   display: none;
