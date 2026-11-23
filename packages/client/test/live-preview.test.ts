@@ -84,6 +84,27 @@ test("ordinary typing away from math reuses its existing equation widget", () =>
   assert.deepEqual(decorationsOf(changed), decorationsOf(previewState(changed.doc.toString(), changed.selection.main)))
 })
 
+test("distant math and emphasis reveal correctly after repeated earlier edits", () => {
+  const source = "Opening paragraph.\n\n" + Array.from({ length: 80 }, (_, index) =>
+    `Section ${index}: **strong** and $x_${index}$.`).join("\n\n")
+  let state = previewState(source, EditorSelection.cursor(3))
+  const compare = () => assert.deepEqual(decorationsOf(state), decorationsOf(previewState(state.doc.toString(), state.selection.main)))
+  for (const insert of [" text", " more", " again"]) {
+    state = state.update({ changes: { from: 3, insert }, selection: EditorSelection.cursor(3 + insert.length) }).state
+    compare()
+    for (const marker of ["$x_79$", "**strong**", "Opening"]) {
+      const position = state.doc.toString().lastIndexOf(marker) + 2
+      state = state.update({ selection: EditorSelection.cursor(position) }).state
+      compare()
+    }
+  }
+  state = state.update({ changes: { from: 3, to: 8 }, selection: EditorSelection.cursor(3) }).state
+  compare()
+  const equation = state.doc.toString().lastIndexOf("$x_79$") + 3
+  state = state.update({ selection: EditorSelection.cursor(equation) }).state
+  compare()
+})
+
 test("paragraph breaks preserve distant math while rejecting code and actual joins", () => {
   const source = "Before $x^2$.\n\nPlain paragraph.\n\nAfter $y^2$.\n"
   const position = source.indexOf("Plain paragraph.") + "Plain paragraph.".length

@@ -176,11 +176,30 @@ const replaceDecoration = (widget: WidgetType | null = null) => Decoration.repla
 const markDecoration = (className: string) => Decoration.mark({ class: className })
 const lineDecoration = (className: string) => Decoration.line({ class: className })
 
-interface DynamicPreviewRange {
-  readonly from: number
-  readonly to: number
-  readonly active: readonly Range<Decoration>[]
-  readonly inactive: readonly Range<Decoration>[]
+class DynamicPreviewRange {
+  private shiftedActive?: readonly Range<Decoration>[]
+  private shiftedInactive?: readonly Range<Decoration>[]
+
+  constructor(readonly from: number, readonly to: number,
+    private readonly originalActive: readonly Range<Decoration>[],
+    private readonly originalInactive: readonly Range<Decoration>[], private readonly offset = 0) {}
+
+  private shifted(ranges: readonly Range<Decoration>[]): readonly Range<Decoration>[] {
+    return this.offset === 0 ? ranges : ranges.map(range => range.value.range(range.from + this.offset, range.to + this.offset))
+  }
+
+  get active(): readonly Range<Decoration>[] {
+    return this.shiftedActive ??= this.shifted(this.originalActive)
+  }
+
+  get inactive(): readonly Range<Decoration>[] {
+    return this.shiftedInactive ??= this.shifted(this.originalInactive)
+  }
+
+  move(from: number, to: number, delta: number): DynamicPreviewRange {
+    if (delta === 0 && from === this.from && to === this.to) return this
+    return new DynamicPreviewRange(from, to, this.originalActive, this.originalInactive, this.offset + delta)
+  }
 }
 
 // Compile source-dependent decorations once. Caret movement only swaps the
@@ -191,7 +210,7 @@ class DecorationPlan {
   push(...ranges: Range<Decoration>[]): void { this.ranges.push(...ranges) }
   conditional(state: EditorState, from: number, to: number,
     active: readonly Range<Decoration>[], inactive: readonly Range<Decoration>[]): void {
-    this.dynamic.push({ from, to, active, inactive })
+    this.dynamic.push(new DynamicPreviewRange(from, to, active, inactive))
     this.push(...(activeRange(state, from, to) ? active : inactive))
   }
 }
@@ -646,14 +665,21 @@ function mapPlainEdit(value: LivePreviewValue, transaction: Transaction, math?: 
   const mapped = value.dynamic.map(context => {
     if (context.to < firstChange) return context
     shifted = true
-    const next = { from: changes.mapPos(context.from, 1), to: changes.mapPos(context.to, 1),
-      active: mapRanges(context.active), inactive: mapRanges(context.inactive) }
-    if (math && context.from === math.from && context.to === math.to) {
-      next.inactive = next.inactive.map(range => range.value.spec.widget instanceof PreviewWidget
+    const from = changes.mapPos(context.from, 1), to = changes.mapPos(context.to, 1)
+    const editedMath = math && context.from === math.from && context.to === math.to
+    // A context wholly after an edit moves as a unit. Keep its existing
+    // decorations and materialize shifted ranges only if the caret later
+    // enters it, instead of recreating every distant range on every key.
+    const delta = from - context.from
+    if (!editedMath && delta === to - context.to) return context.move(from, to, delta)
+    const active = mapRanges(context.active)
+    let inactive = mapRanges(context.inactive)
+    if (editedMath) {
+      inactive = inactive.map(range => range.value.spec.widget instanceof PreviewWidget
         ? replaceDecoration(new PreviewWidget(math.display ? "math-display" : "math", math.interior)).range(range.from, range.to)
         : range)
     }
-    return next
+    return new DynamicPreviewRange(from, to, active, inactive)
   })
   const dynamic = shifted ? mapped : value.dynamic
   const maxDynamicEnd = shifted ? changes.mapPos(value.maxDynamicEnd, 1) : value.maxDynamicEnd
