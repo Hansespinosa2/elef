@@ -1,3 +1,15 @@
+export function createPreviewTrace(traceEnabled = false) {
+  const events = []
+  if (traceEnabled) globalThis.__elefPreviewTrace = events
+  return {
+    onEvent: traceEnabled ? event => {
+      events.push(event)
+      if (events.length > 512) events.shift()
+    } : undefined,
+    snapshot: () => events.slice()
+  }
+}
+
 export function createPreviewFetch({ renderer, getContext = () => ({}), fetchImpl = globalThis.fetch.bind(globalThis), onEvent = () => {}, onFailure = () => {} }) {
   const trace = (event) => {
     try {

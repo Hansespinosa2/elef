@@ -112,6 +112,9 @@ const editorExternals = [
 bundle(join(here, "src", "features", "editor", "index.ts"), join(here, "dist", "editor.js"), {
   external: editorExternals,
 });
+bundle(join(here, "src", "application", "continuous_authoring.ts"), join(here, "dist", "continuous-editor.js"), {
+  external: [...editorExternals, "@elef/client", "@elef/client/editor", "@elef/client/sanitize", previewCoreSpecifier],
+});
 bundle(join(here, "src", "features", "editor", "test_internals.ts"), join(here, "dist", "editor-test-internals.js"), {
   external: editorExternals,
 });

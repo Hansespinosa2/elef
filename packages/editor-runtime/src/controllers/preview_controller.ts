@@ -4,6 +4,7 @@ import { buildPreviewRequestBody } from "../lib/preview_request_body.js"
 import { scrollPreviewToSourceOffset } from "../lib/preview_autoscroll.js"
 import { markStage } from "../lib/stage_marks.js"
 import { attachCanvasScaling } from "@elef/client"
+import { preserveSurfaceScroll } from "../lib/scroll_preservation.js"
 
 const ART_WARNING_MESSAGES: Record<string, string> = Object.freeze({
   ART_NO_FIT: "Art does not fit the fixed slide. All authored content remains available.",
@@ -37,6 +38,11 @@ export default class extends Controller<HTMLElement> {
     this.active = true
     this.pendingProjection = null
     this.projectionFresh = true
+    if (this.element.dataset?.editorSurface === "continuous-pending") {
+      this.projectionFresh = false
+      this.deferredForContinuous = true
+      this.element.dataset.previewProjectionStale = "true"
+    }
     this.serverWarnings = [...this.warningsTarget.querySelectorAll("li")].map((item: any) => item.textContent)
     this.localWarnings = []
     this.artWarnings = new Map()
@@ -92,6 +98,21 @@ export default class extends Controller<HTMLElement> {
     this.element.addEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
     this.element.addEventListener("elef:art-diagnostic", this.artDiagnostic)
+    this.continuousModeChanged = () => {
+      if (this.continuousEditing()) {
+        // A source-mode change may already have queued a full preview.
+        // Entering the continuous surface cancels that pending work before
+        // it can compete with the active authoring session.
+        if (this.timer || this.requestController || this.pendingProjection) this.schedule()
+        return
+      }
+      if (this.deferredForContinuous) {
+        this.deferredForContinuous = false
+        this.refreshNow()
+      }
+    }
+    this.element.addEventListener("elef:editor-mode-change", this.continuousModeChanged)
+    this.element.addEventListener("elef:editor-surface-change", this.continuousModeChanged)
     this.element.addEventListener("elef:source-edit", this.sourceEditHandler)
     this.element.addEventListener("elef:editor-mode-change", this.modeChangeScrollHandler)
   }
@@ -123,6 +144,8 @@ export default class extends Controller<HTMLElement> {
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
     this.element.removeEventListener("elef:art-diagnostic", this.artDiagnostic)
+    this.element.removeEventListener("elef:editor-mode-change", this.continuousModeChanged)
+    this.element.removeEventListener("elef:editor-surface-change", this.continuousModeChanged)
     this.element.removeEventListener("elef:source-edit", this.sourceEditHandler)
     this.element.removeEventListener("elef:editor-mode-change", this.modeChangeScrollHandler)
     if (this.hasContainerTarget && this.previewUserScrollHandler) {
@@ -193,6 +216,13 @@ export default class extends Controller<HTMLElement> {
     this.timer = null
     this.pendingProjection = null
     const revision = ++this.requestId
+    if (this.continuousEditing()) {
+      this.abortActiveRequest()
+      this.projectionFresh = false
+      this.element.dataset.previewProjectionStale = "true"
+      this.deferredForContinuous = true
+      return
+    }
     this.markProjectionStale(this.isEditingProjection())
     this.hideRetry()
     this.setStatus("Updating preview…")
@@ -291,6 +321,10 @@ export default class extends Controller<HTMLElement> {
         return
       }
 
+      if (this.continuousEditing()) {
+        this.deferredForContinuous = true
+        return false
+      }
       if (this.isEditingProjection()) {
         this.pendingProjection = { payload, response, source: requestedSource }
         this.hideRetry()
@@ -364,6 +398,10 @@ export default class extends Controller<HTMLElement> {
     const active = typeof document === "undefined" ? null : document.activeElement
     const activeEditable = active?.closest?.("[contenteditable='true']")
     return Boolean(activeEditable && this.containerTarget.contains(activeEditable))
+  }
+
+  continuousEditing(): boolean {
+    return ["continuous", "continuous-pending"].includes(this.element.dataset?.editorSurface ?? "") && this.element.dataset?.editorMode === "visual"
   }
 
   finishEditing() {
@@ -447,6 +485,9 @@ export default class extends Controller<HTMLElement> {
       return
     }
 
+    const previousSurface = this.containerTarget.querySelector(".document-editor-projection .document-surface.is-paginated") as HTMLElement | null
+    const preservedScroll = previousSurface ? preserveSurfaceScroll(previousSurface) : null
+    const previousHeight = previousSurface?.getBoundingClientRect().height ?? 0
     // A prior install may still be waiting for its first pagination. Its
     // intended offset can exceed the temporary unpaginated scroll range.
     const pending = this.pendingPreviewScroll
@@ -468,6 +509,18 @@ export default class extends Controller<HTMLElement> {
     recordPreviewTrace("preview-install-start")
     this.clearSlideScaling()
     installPreviewHtml(this.containerTarget, payload.html)
+    const nextSurface = this.containerTarget.querySelector(".document-editor-projection .document-surface") as HTMLElement | null
+    if (preservedScroll && nextSurface && previousHeight > 0) {
+      // The new surface waits for pagination and may briefly have no height.
+      // Keep the previous scroll extent until the new pages are ready, so
+      // the browser cannot clamp the viewport to the top during the swap.
+      const previousMinHeight = nextSurface.style.minHeight
+      nextSurface.style.minHeight = `${previousHeight}px`
+      nextSurface.addEventListener("elef:document-pages-settled", () => {
+        nextSurface.style.minHeight = previousMinHeight
+      }, { once: true })
+      preservedScroll.restore(nextSurface)
+    }
     this.syncSlideScaling()
     recordPreviewTrace("preview-install-ready")
     const surface = this.containerTarget.querySelector(".document-editor-projection [data-document-pages-target='surface']")

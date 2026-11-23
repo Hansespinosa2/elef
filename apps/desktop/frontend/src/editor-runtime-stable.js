@@ -4,3 +4,4 @@
 export { registerEditorRuntime } from "@elef/editor-runtime"
 
 export const presentationEditorRuntime = null
+export const continuousEditorRuntime = null

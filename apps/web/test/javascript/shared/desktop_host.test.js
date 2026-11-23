@@ -4,6 +4,7 @@ import path from "node:path"
 import { fileURLToPath } from "node:url"
 import test from "node:test"
 import { parseHTML } from "linkedom"
+import { loadPackageSource } from "./package_source.mjs"
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../../..")
 const read = relative => readFile(path.join(root, relative), "utf8")
@@ -34,6 +35,11 @@ const autosaveController = await read("apps/web/app/javascript/controllers/autos
 const workSession = await read("packages/client/src/session/work_session.ts")
 const quietSavePolicy = await read("apps/desktop/frontend/src/quiet-save-policy.js")
 const { document } = parseHTML(page)
+const navigationModule = await loadPackageSource("packages/client/src/application/app_navigation.ts")
+const { mountAppNavigation } = await import(`data:text/javascript,${encodeURIComponent(navigationModule)}`)
+mountAppNavigation(document.querySelector("[data-app-navigation]"), {
+  libraryHref: "#library", settingsHref: "#settings", active: "library"
+})
 // The empty-library call to action is client-owned now; the host template
 // carries no empty-action slot. Assert the shared button classes in the
 // client source that renders them.
@@ -46,7 +52,8 @@ test("the desktop packages Rails-owned host markup and styles", () => {
   )
   assert.match(document.querySelector(".desktop-app-header").className, /border-b/)
   assert.match(document.querySelector(".brand").className, /no-underline/)
-  assert.match(shellStyles, /\.desktop-app-header \.app-header-inner\s*\{/)
+  assert.doesNotMatch(shellStyles, /\.desktop-app-header \.app-header-inner\s*\{[^}]*gap:/)
+  assert.match(applicationStyles, /\.app-navigation\s*\{/)
   assert.match(shellStyles, /\.file-library-editor-form\s*\{/)
   assert.match(shellStyles, /\.desktop-app-shell\s*\{[^}]*max-width: 1440px/)
   assert.doesNotMatch(shellStyles, /^h1\s*\{/m)

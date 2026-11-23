@@ -9,7 +9,7 @@
 // A deleted visible block lands at the top too (status quo for that rare
 // case); same-document edits, the common path, restore exactly.
 export interface PreservedSurfaceScroll {
-  restore(): void;
+  restore(surface?: Element): void;
 }
 
 interface ScrollerEntry {
@@ -38,13 +38,13 @@ export function preserveSurfaceScroll(surface: Element): PreservedSurfaceScroll 
   const windowTop = hasWindow ? window.scrollY : 0;
   const windowLeft = hasWindow ? window.scrollX : 0;
   return {
-    restore() {
+    restore(currentSurface = surface) {
       // Compare by attribute instead of interpolating into a selector so
       // an unexpected id can never throw mid-paginate (after the wipe but
       // before the finalize bookkeeping below).
       if (anchorBlockId !== null) {
         let present = false;
-        const blocks = surface.querySelectorAll("[data-editor-block-id]");
+        const blocks = currentSurface.querySelectorAll("[data-editor-block-id]");
         for (const block of blocks) {
           if (block.getAttribute("data-editor-block-id") === anchorBlockId) {
             present = true;
@@ -54,8 +54,9 @@ export function preserveSurfaceScroll(surface: Element): PreservedSurfaceScroll 
         if (!present) return;
       }
       for (const entry of chain) {
-        entry.node.scrollLeft = entry.left;
-        entry.node.scrollTop = entry.top;
+        const node = entry.node === surface ? currentSurface : entry.node;
+        node.scrollLeft = entry.left;
+        node.scrollTop = entry.top;
       }
       if (hasWindow && (window.scrollY !== windowTop || window.scrollX !== windowLeft)) {
         window.scrollTo(windowLeft, windowTop);

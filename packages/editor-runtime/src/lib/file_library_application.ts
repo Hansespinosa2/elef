@@ -12,7 +12,7 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, clearPrintPageSizeStyle, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById, syncPrintPageSizeStyle } from "@elef/client"
+import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, clearPrintPageSizeStyle, exportMenuOptionsFor, mountAppNavigation, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById, syncPrintPageSizeStyle } from "@elef/client"
 import type { ExportMenuHandle, ExportMenuProps, GraphController, LibraryPaletteCommand } from "@elef/client"
 
 interface OpenedEditor {
@@ -436,6 +436,7 @@ export interface DesktopPlatform {
   featureFlags?: any;
   documentGraphRuntime?: any;
   presentationEditorRuntime?: any;
+  continuousEditorRuntime?: { mount(editor: unknown, options?: { signal?: AbortSignal }): Promise<{ dispose(): void }> } | null;
   updateEnabled?: any;
 }
 
@@ -453,13 +454,16 @@ function shellElement<T extends Element>(selector: string): T {
 }
 
 export function startFileLibraryApplication(platform: DesktopPlatform): void {
+  mountAppNavigation(shellElement<HTMLElement>("[data-app-navigation]"), {
+    libraryHref: "#library", settingsHref: "#settings", active: "library",
+  })
   const {
     fileLibrary, createLibraryHost, listen, getCurrentWindow, getAppVersion,
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
     mediaUrlsForWorkFolder, checkForUpdate, createIdleUpdateCheck, installPendingUpdate,
     desktopAuthoringRegistry, loadDesktopAuthoringRegistry, quietSavePolicy,
     registerEditorRuntime, recordBootstrapFailure,
-    features, featureFlags, documentGraphRuntime, presentationEditorRuntime,
+    features, featureFlags, documentGraphRuntime, presentationEditorRuntime, continuousEditorRuntime,
     updateEnabled = true, updateRuntime = null
   } = platform
 
@@ -477,6 +481,9 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     "media"
   ].join(" ")
   applyDesktopFeatureFlags(document, featureFlags)
+  let continuousAuthoring: { dispose(): void } | null = null
+  let continuousMountAbort: AbortController | null = null
+  let continuousNextDocument = false
   if (!updateEnabled) document.querySelector("#check-for-updates")?.remove()
 
   const renderer = createRendererClient()
@@ -803,6 +810,24 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     let typingSave: { expected: string; saving: Promise<boolean> } | null = null
     Object.defineProperty(window, "__elefPerformanceTestHooks", {
       value: Object.freeze({
+        enableContinuousForNextDocument() {
+          if (!desktopFeatures.visualEditing || !continuousEditorRuntime) throw new Error("Continuous authoring is unavailable in this desktop profile")
+          continuousNextDocument = true
+          return true
+        },
+        async enableContinuousAuthoring() {
+          if (!desktopFeatures.visualEditing || !continuousEditorRuntime) throw new Error("Continuous authoring is unavailable in this desktop profile")
+          const editor = await waitForEditorController(elements.editorField, editorFor)
+          continuousAuthoring ??= await continuousEditorRuntime.mount(editor)
+          return true
+        },
+        disableContinuousAuthoring() {
+          continuousMountAbort?.abort()
+          continuousMountAbort = null
+          continuousAuthoring?.dispose()
+          continuousAuthoring = null
+          return true
+        },
         get interactiveAt() { return interactiveAt },
         get nativeReadyAt() { return nativeReadyAt },
         get previousInstallationsRemoved() { return previousInstallationsRemoved },
@@ -942,6 +967,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     document.body.classList.toggle("is-editing-source", (elements.editorForm.dataset.editorMode || "source") === "source")
   })
   function showLibrary(): void {
+    continuousMountAbort?.abort()
+    continuousMountAbort = null
     activeWorkSessionToken += 1
     unfreezeEditorForPrint()
     elements.editorForm.previewController?.finishEditing()
@@ -1182,6 +1209,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
         setBreadcrumb: name => { shellElement<HTMLElement>("#breadcrumb-current").textContent = name },
         setTitleInput: name => { elements.titleInput.value = name }
       })
+      const openContinuous = isDocument && continuousNextDocument && Boolean(continuousEditorRuntime)
+      if (isDocument) continuousNextDocument = false
       if (work.id !== id) {
         workFolders = workFolders.map(item => item.id === id ? { ...item, id: work.id } : item)
         documentGraphCache?.invalidate()
@@ -1190,6 +1219,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       // All asynchronous work is finished. Installing the buffer and changing
       // save ownership occur in one synchronous turn, with no stale A buffer
       // able to schedule a write for B during graph/controller preparation.
+      continuousMountAbort?.abort()
+      continuousMountAbort = null
+      continuousAuthoring?.dispose()
+      continuousAuthoring = null
       closeSession()
       setActiveWorkFolder(null)
       try {
@@ -1240,6 +1273,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       elements.editorForm.dataset.mediaWorkKindValue = work.source_file === "document.md" ? "document" : "presentation"
       elements.editorForm.dataset.mediaUploadUrlValue = mediaUrls.uploadUrl
       elements.editorForm.dataset.mediaAssetBaseUrlValue = mediaUrls.assetBaseUrl
+      elements.editorForm.dataset.continuousDefaultTheme = libraryConfig.theme
+      elements.editorForm.dataset.continuousDefaultTypography = libraryConfig.typography
       if (desktopFeatures.documentLinks) elements.editorField.dataset.documentLinkPaletteTitlesValue = JSON.stringify(documentTitles)
       const visualButton = document.querySelector("#visual-mode") as HTMLButtonElement | null
       if (visualButton && desktopFeatures.visualEditing) {
@@ -1264,6 +1299,24 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       setStatus("Work opened")
       if (viewSetupStartedAt !== null) recordOpenStage("workViewSetup", viewSetupStartedAt)
       elements.editorForm.previewController?.unfreezeForPrint?.({ replayPending: false })
+      if (openContinuous && continuousEditorRuntime) {
+        const abort = new AbortController()
+        continuousMountAbort = abort
+        let handle: { dispose(): void }
+        try {
+          handle = await measureOpenStage("continuousMount", () => continuousEditorRuntime.mount(editorFor(elements.editorField), { signal: abort.signal }))
+        } catch (error) {
+          if (!abort.signal.aborted) editorFor(elements.editorField)?.setEditingMode("source")
+          throw error
+        }
+        if (abort.signal.aborted || activeWorkFolder !== work) { handle.dispose(); return false }
+        continuousMountAbort = null
+        continuousAuthoring = handle
+        elements.editorForm.previewController?.schedule()
+        if (visualButton) { visualButton.disabled = false; visualButton.title = "Edit the rendered Work visually" }
+        editorFor(elements.editorField)?.focus()
+        return true
+      }
       await measureOpenStage("previewRefresh", () => elements.editorForm.previewController?.refresh())
       // The refresh skips its enable event while projection editing is
       // active, and the deferred install waits on a focusout that may never
@@ -1277,6 +1330,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       focusOpenedEditor(editorFor(elements.editorField), elements.editorForm.dataset.editorMode || "source")
       return true
     } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return false
       showError(error)
       return false
     }
@@ -1392,6 +1446,11 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     const result = await saveFlow.flush(options)
     return result.kind === "clean" || result.kind === "saved"
   }
+
+  elements.editorForm.addEventListener("elef:save-request", (event: Event) => {
+    event.preventDefault()
+    void flushSave({ force: true })
+  })
 
   async function flushForClose(): Promise<string> {
     hasUnsavedChanges()
@@ -1805,7 +1864,10 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     event.preventDefault()
     shellElement<HTMLElement>("#back-to-library").click()
   })
-  shellElement<HTMLElement>("#open-settings").addEventListener("click", () => void showSettings())
+  shellElement<HTMLElement>("#open-settings").addEventListener("click", event => {
+    event.preventDefault()
+    void showSettings()
+  })
   shellElement<HTMLElement>("#refresh-library").addEventListener("click", () => void refreshLibrary())
   shellElement<HTMLElement>("#import-elef").addEventListener("click", () => void importWork())
   // The work-view Export menu is the shared client component: one trigger
@@ -1814,7 +1876,8 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   // native print pipeline (the same File → Print… command) and the PPTX
   // option the native save seam.
   exportMenu = mountExportMenu(shellElement<HTMLElement>("#export-menu-mount"), exportMenuProps())
-  shellElement<HTMLElement>("#back-to-library").addEventListener("click", () => {
+  shellElement<HTMLElement>("#back-to-library").addEventListener("click", event => {
+    event.preventDefault()
     if (hasUnsavedChanges()) {
       void flushSave().then(saved => {
         if (!saved) return

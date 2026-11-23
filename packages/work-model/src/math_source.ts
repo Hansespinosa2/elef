@@ -38,8 +38,20 @@ export function mathSourceAt(source: string, start = 0): MathSource | null {
   return { start, end: end + close.length, interior, open, close, display }
 }
 
+function startsDisplayBlock(source: string, math: MathSource): boolean {
+  if (!math.display) return false
+  const start = source.lastIndexOf("\n", math.start - 1) + 1
+  const end = source.indexOf("\n", math.start)
+  return source.slice(start, math.start).trim() === "" &&
+    source.slice(math.start, end < 0 ? source.length : end).trim() === math.open
+}
+
 export function scanMathSource(source: string): MathSource[] {
   const matches: MathSource[] = []
+  // Only these characters can start a delimiter, code span, link/image, or
+  // a new line whose indentation and fences need inspection. Skip runs of
+  // ordinary prose without changing how any of those cases are parsed.
+  const interesting = /[\\$`!\]\n]/g
   let index = 0
   while (index < source.length) {
     if (index === 0 || source[index - 1] === "\n") {
@@ -62,6 +74,11 @@ export function scanMathSource(source: string): MathSource[] {
         index = lineEnd < 0 ? source.length : lineEnd + 1
         continue
       }
+    }
+    if (!"\\$`!]\n".includes(source[index]!)) {
+      interesting.lastIndex = index + 1
+      index = interesting.exec(source)?.index ?? source.length
+      continue
     }
     if (source[index] === "`") {
       const run = /^`+/.exec(source.slice(index))?.[0] ?? "`"
@@ -88,7 +105,12 @@ export function scanMathSource(source: string): MathSource[] {
       continue
     }
     const math = mathSourceAt(source, index)
-    if (math) { matches.push(math); index = math.end; continue }
+    // Inline rules run within a Markdown paragraph in the renderer. An
+    // unfinished pair must not consume a later paragraph's equation. A
+    // standalone display opener is the block rule and may span blank lines.
+    if (math && (!/\n[ \t\r]*\n/.test(source.slice(math.start, math.end)) || startsDisplayBlock(source, math))) {
+      matches.push(math); index = math.end; continue
+    }
     index += source[index] === "\\" ? 2 : 1
   }
   return matches
