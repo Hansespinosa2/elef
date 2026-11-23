@@ -50,6 +50,18 @@ test("unclosed code fences consume the remaining source, unmatched inline backti
   assert.deepEqual(scanMathSource("`plain $x$").map((math) => math.interior), ["x"]);
 });
 
+test("prose between math and Markdown controls preserves offsets and line context", () => {
+  const source = [
+    "A long ordinary sentence before $first$ and \\$escaped$.",
+    "```tex", "$hidden$", "```",
+    "[label](destination-$hidden$) then `code $hidden$` and \\(second\\)",
+    "    $indented$", "The last equation is $third$.",
+  ].join("\n");
+  const spans = scanMathSource(source);
+  assert.deepEqual(spans.map((math) => math.interior), ["first", "second", "third"]);
+  for (const span of spans) assert.equal(source.slice(span.start, span.end), span.open + span.interior + span.close);
+});
+
 test("unclosed inline math does not consume equations in later paragraphs", () => {
   for (const source of ["Writing $$\n\nLater $$x$$", "Writing $\\$\n\nLater $x$"]) {
     assert.deepEqual(scanMathSource(source).map(math => math.interior), ["x"])

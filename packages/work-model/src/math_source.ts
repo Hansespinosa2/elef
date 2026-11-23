@@ -48,6 +48,10 @@ function startsDisplayBlock(source: string, math: MathSource): boolean {
 
 export function scanMathSource(source: string): MathSource[] {
   const matches: MathSource[] = []
+  // Only these characters can start a delimiter, code span, link/image, or
+  // a new line whose indentation and fences need inspection. Skip runs of
+  // ordinary prose without changing how any of those cases are parsed.
+  const interesting = /[\\$`!\]\n]/g
   let index = 0
   while (index < source.length) {
     if (index === 0 || source[index - 1] === "\n") {
@@ -70,6 +74,11 @@ export function scanMathSource(source: string): MathSource[] {
         index = lineEnd < 0 ? source.length : lineEnd + 1
         continue
       }
+    }
+    if (!"\\$`!]\n".includes(source[index]!)) {
+      interesting.lastIndex = index + 1
+      index = interesting.exec(source)?.index ?? source.length
+      continue
     }
     if (source[index] === "`") {
       const run = /^`+/.exec(source.slice(index))?.[0] ?? "`"
