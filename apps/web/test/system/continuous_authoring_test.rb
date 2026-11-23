@@ -6,6 +6,7 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
   SOURCE = "# Authoring\n\nalpha beta gamma\n\nSecond paragraph.\n\nFinal paragraph.\n".freeze
 
   def mount_continuous_surface
+    click_on "Visual" if page.has_selector?('form[data-editor-mode="source"]')
     result = page.evaluate_async_script(<<~JAVASCRIPT)
       const done = arguments[arguments.length - 1];
       import('@elef/client/continuous-editor').then(async ({ mountContinuousDocument }) => {
@@ -17,6 +18,7 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
   end
 
   def mount_focused_authoring
+    click_on "Visual" if page.has_selector?('form[data-editor-mode="source"]')
     result = page.evaluate_async_script(<<~JAVASCRIPT)
       const done = arguments[arguments.length - 1];
       import('@elef/client/continuous-editor').then(async ({ mountContinuousAuthoring }) => {
@@ -73,6 +75,7 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     source = "# Tables\n\n| A | B |\n| - | - |\n| | alpha |\n"
     document = Document.create!(title: "Tables", source: source)
     visit edit_document_path(document, editor_surface: "continuous")
+    assert_no_selector "body.is-editing-source", visible: :all
     find(".continuous-document .cm-continuous-cell", text: "alpha").click
     page.driver.browser.action.send_keys(:end, :left, :left, "x").perform
     assert_field "Markdown source", with: source.sub("alpha", "alphax")

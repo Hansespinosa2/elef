@@ -65,7 +65,7 @@ class ArtTest < ApplicationSystemTestCase
       source: "# Launch workflow\n\n:::art\n1. Discover\n2. Design\n3. Build\n4. Launch"
     )
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     wait_for_art_settled
     data = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -120,7 +120,7 @@ class ArtTest < ApplicationSystemTestCase
     ].each do |start, count, expected_start|
       markers = (start...(start + count)).map { |number| "#{number}. Item #{number}" }
       document = Document.create!(title: "Art pagination #{start}", source: ":::art\n#{markers.join("\n")}")
-      visit edit_document_path(document)
+      visit edit_document_path(document, editor_mode: "visual")
       assert_selector ".document-editor-projection [data-elef-art-root]", wait: 10
       initial = paginate_with_item_limit(2)
 
@@ -149,7 +149,7 @@ class ArtTest < ApplicationSystemTestCase
 
   test "a one-item Sequence has no connector" do
     document = Document.create!(title: "Single Art item", source: ":::art\n1. One step")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-editor-projection [data-elef-art-root]", wait: 10
 
     connector = page.evaluate_script(<<~JAVASCRIPT)
@@ -165,7 +165,7 @@ class ArtTest < ApplicationSystemTestCase
     lead = "This one authored item must stay intact. " * 700
     document = Document.create!(title: "Oversized Art item", source: ":::art\n1. #{lead}")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-editor-projection [data-elef-art-root]", wait: 10
     page.evaluate_script("window.Stimulus.getControllerForElementAndIdentifier(document.querySelector('.document-editor-projection'), 'document-pages').paginate()")
     assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
@@ -181,7 +181,7 @@ class ArtTest < ApplicationSystemTestCase
       title: "Art rich Sequence",
       source: "# Implementation roadmap\n\n:::art\n1. Discovery\n   - Interview users\n   - Map the current process\n2. Design\n   - Prioritize constraints\n   - Produce a prototype\n3. Delivery\n   - Build the system\n   - Validate with teams\n4. Adoption\n   - Train users\n   - Measure outcomes"
     )
-    visit edit_presentation_path(rich)
+    visit edit_presentation_path(rich, editor_mode: "visual")
     wait_for_art_settled
     assert_selector "[data-elef-art-root][data-art-mode='sequence'][data-art-density='rich']", wait: 10
     rich_state = page.evaluate_script("(() => { const root = document.querySelector('.presentation-surface[data-controller~=\"art-layout\"] [data-elef-art-root]'); const host = root.closest('[data-art-host=\"fixed\"]'); const items = [...root.querySelector('.elef-art-list').children]; let top = 0, left = 0, node = root; while (node && node !== host) { top += node.offsetTop; left += node.offsetLeft; node = node.offsetParent; } const contains = element => element.scrollWidth <= element.clientWidth + 1 && element.scrollHeight <= element.clientHeight + 1; return {layout: root.dataset.artLayout, status: root.dataset.artStatus, diagnostic: root.dataset.artDiagnostic || null, offset: [left, top], root: [root.scrollWidth, root.clientWidth, root.scrollHeight, root.clientHeight], host: [host.scrollWidth, host.clientWidth, host.scrollHeight, host.clientHeight], hostChildren: [...host.children].map(child => [child.className, child.offsetTop, child.offsetHeight]), items: items.map((item) => [item.scrollWidth, item.clientWidth, item.scrollHeight, item.clientHeight]), containment: contains(host) && contains(root) && items.every(contains) && node === host && left + root.offsetWidth <= host.clientWidth + 1 && top + root.offsetHeight <= host.clientHeight + 1} })()")
@@ -195,7 +195,7 @@ class ArtTest < ApplicationSystemTestCase
     # Ten items overflow the fixed slide host now that block controls float
     # outside the content flow (eight fit once the in-flow button bar left).
     many = Presentation.create!(title: "Art no-fit", source: "# Hiring pipeline\n\n:::art\n#{(1..10).map { |index| "#{index}. Step #{index}" }.join("\n")}")
-    visit edit_presentation_path(many)
+    visit edit_presentation_path(many, editor_mode: "visual")
     wait_for_art_settled
     art = find(".presentation-surface[data-controller~='art-layout'] [data-elef-art-root]")
     many_geometry = page.evaluate_script("(() => { const root = document.querySelector('.presentation-surface[data-controller~=\"art-layout\"] [data-elef-art-root]'); const host = root.closest('[data-art-host=\"fixed\"]'); let top = 0, node = root; while (node && node !== host) { top += node.offsetTop; node = node.offsetParent; } return {status: root.dataset.artStatus, layout: root.dataset.artLayout, root: [root.scrollHeight, root.clientHeight, root.offsetHeight], host: [host.scrollHeight, host.clientHeight], top, children: [...host.children].map(child => [child.offsetTop, child.offsetHeight])} })()")
@@ -220,7 +220,7 @@ class ArtTest < ApplicationSystemTestCase
     MARKDOWN
     document = Document.create!(title: "Rich Art peers", source: rich_source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     rich = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const root = document.querySelector(".document-surface [data-elef-art-root]");
@@ -260,7 +260,7 @@ class ArtTest < ApplicationSystemTestCase
       - Offline-first desktop
     MARKDOWN
     peer_document = Document.create!(title: "Compact Art peers", source: peer_source)
-    visit edit_document_path(peer_document)
+    visit edit_document_path(peer_document, editor_mode: "visual")
     compact = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const root = document.querySelector(".document-surface [data-elef-art-root]");
@@ -316,7 +316,7 @@ class ArtTest < ApplicationSystemTestCase
     MARKDOWN
     two_column = Presentation.create!(title: "Two column Art", source: two_column_source)
 
-    visit edit_presentation_path(two_column)
+    visit edit_presentation_path(two_column, editor_mode: "visual")
     wait_for_art_settled
     two = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -365,7 +365,7 @@ class ArtTest < ApplicationSystemTestCase
       5. Audit
     MARKDOWN
     three_column = Presentation.create!(title: "Three column Art", source: three_column_source)
-    visit edit_presentation_path(three_column)
+    visit edit_presentation_path(three_column, editor_mode: "visual")
     wait_for_art_settled
     three = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -405,7 +405,7 @@ class ArtTest < ApplicationSystemTestCase
     end].join("\n\n")
     presentation = Presentation.create!(title: "Grouped Art controls", source: source)
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
     wait_for_art_settled
 
@@ -481,7 +481,7 @@ class ArtTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /:::align\{bottom center\}/, wait: 5
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
     assert_field "Markdown source", with: /:::align\{middle right\}/
     assert_field "Markdown source", with: /:::align\{bottom center\}/
@@ -502,7 +502,7 @@ class ArtTest < ApplicationSystemTestCase
     ].join("\n\n")
     presentation = Presentation.create!(title: "Titleless grouped Art", source: source)
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
     wait_for_art_settled
 
@@ -598,7 +598,7 @@ class ArtTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /:::align\{middle right\}/, wait: 5
     assert_selector '[data-autosave-target="status"]', exact_text: "Saved", wait: 10
 
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_selector "form.visual-editor-form:not([data-preview-projection-stale='true'])", wait: 10
     assert_field "Markdown source", with: /:::align\{middle right\}/
     assert_equal "middle right", first("select[data-presentation-editor-align][data-block-index='#{middle_index}']", visible: :all)["value"]
@@ -710,7 +710,7 @@ class ArtTest < ApplicationSystemTestCase
 
   test "a hidden fixed Art host stays pending until it becomes measurable" do
     presentation = Presentation.create!(title: "Hidden Art host", source: ":::art\n- Alpha\n- Beta")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     wait_for_art_settled
 
     page.execute_script(<<~JAVASCRIPT)
@@ -729,7 +729,7 @@ class ArtTest < ApplicationSystemTestCase
   test "compact horizontal Sequence with an unbreakable lead falls back to wrapped vertical Sequence" do
     long_word = "ElefArtUnbreakable" + ("x" * 600)
     presentation = Presentation.create!(title: "Art long token", source: ":::art\n1. #{long_word}\n2. Continue")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     wait_for_art_settled
 
     art = find(".presentation-surface[data-controller~='art-layout'] [data-elef-art-root]")
@@ -770,7 +770,7 @@ class ArtTest < ApplicationSystemTestCase
   test "document Sequence preserves order and reflows at 320, 640, and 320 CSS pixels in RTL" do
     source = ":::art\n1. Reliability and availability\n2. Simplicity and clarity\n3. Performance under load\n4. Portability across platforms\n5. Long authored content remains complete"
     document = Document.create!(title: "Art reflow", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     measurements = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
@@ -819,7 +819,7 @@ class ArtTest < ApplicationSystemTestCase
       "# Slide #{index + 1}\n\n:::art\n- Alpha #{index + 1}\n- Beta #{index + 1}"
     end
     presentation = Presentation.create!(title: "Many Art roots", source: slides.join("\n---\n"))
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     assert_selector ".presentation-surface[data-controller~='art-layout'] [data-elef-art-root][data-art-settled='true']", count: 100, wait: 20
     page.evaluate_async_script("const done = arguments[0]; document.fonts.ready.then(() => requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(done, 250))));")
 

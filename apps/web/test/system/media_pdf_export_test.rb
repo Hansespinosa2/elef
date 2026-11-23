@@ -16,7 +16,7 @@ class MediaPdfExportTest < ApplicationSystemTestCase
 
     [Document, Presentation].each do |model|
       work = model.create!(source: "# #{model.name} PDF probe")
-      visit model == Document ? edit_document_path(work) : edit_presentation_path(work)
+      visit model == Document ? edit_document_path(work, editor_mode: "visual") : edit_presentation_path(work, editor_mode: "visual")
       page.execute_script("document.querySelector('[data-media-target=input]').hidden = false")
       find('[data-media-target="input"]').set(screenshot_path.to_s)
       assert_selector ".media-upload-status", text: /added to the Markdown source/i, wait: 10

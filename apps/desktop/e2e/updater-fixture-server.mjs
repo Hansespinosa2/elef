@@ -32,8 +32,28 @@ const stablePackageSignature = stablePackageBytes ? signArtifact(stablePackageBy
 
 const modes = new Set(["none", "older", "valid", "bad-signature", "truncated", "version-mismatch", "package", "stable-package"])
 let mode = "none"
+let holdArtifact = false
+let heldArtifact = null
 const server = createServer((request, response) => {
   const url = new URL(request.url, "http://127.0.0.1:8888")
+  // Hold the real signed package mid-download so the packaged UI test can
+  // issue another quit before installation completes, without timed sleeps.
+  if (url.pathname === "/hold-artifact") {
+    holdArtifact = true
+    response.writeHead(200); response.end(); return
+  }
+  if (url.pathname === "/artifact-status") {
+    response.writeHead(200, { "Content-Type": "application/json" })
+    response.end(JSON.stringify({ held: heldArtifact !== null })); return
+  }
+  if (url.pathname === "/release-artifact") {
+    holdArtifact = false
+    if (heldArtifact) {
+      heldArtifact.response.end(heldArtifact.bytes)
+      heldArtifact = null
+    }
+    response.writeHead(200); response.end(); return
+  }
   if (url.pathname === "/mode") {
     const selected = url.searchParams.get("value")
     if (!modes.has(selected) || selected === "package" && !packageBytes || selected === "stable-package" && !stablePackageBytes) { response.writeHead(400); response.end(); return }
@@ -54,7 +74,10 @@ const server = createServer((request, response) => {
   if (url.pathname === "/artifact") {
     const bytes = mode === "package" ? packageBytes : mode === "stable-package" ? stablePackageBytes : artifact
     response.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Length": bytes.length })
-    if (mode === "truncated") {
+    if (holdArtifact) {
+      response.flushHeaders()
+      heldArtifact = { response, bytes }
+    } else if (mode === "truncated") {
       response.write(artifact.subarray(0, artifact.length / 2))
       response.flushHeaders()
       setTimeout(() => response.destroy(), 20)

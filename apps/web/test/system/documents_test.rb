@@ -1,6 +1,103 @@
 require "application_system_test_case"
 
 class DocumentsTest < ApplicationSystemTestCase
+  test "visual wrapping across a paragraph and heading preserves both blocks" do
+    document = Document.create!(title: "Wrap across blocks", source: "first\n\n# second")
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_fresh_projection
+    blocks = all(".document-editor-block[contenteditable='true']")
+    first = blocks.find { |block| block.text.include?("first") }
+    second = blocks.find { |block| block.text.include?("second") }
+    assert first && second
+    page.execute_script(<<~JAVASCRIPT, first, second)
+      const [first, second] = arguments;
+      const start = document.createTreeWalker(first, NodeFilter.SHOW_TEXT);
+      const end = document.createTreeWalker(second, NodeFilter.SHOW_TEXT);
+      start.nextNode(); end.nextNode();
+      first.focus();
+      window.getSelection().setBaseAndExtent(start.currentNode, 0, end.currentNode, end.currentNode.textContent.length);
+    JAVASCRIPT
+    first.send_keys("*")
+    assert_field "Markdown source", with: "*first*\n\n# *second*", wait: 5
+    wait_for_fresh_projection
+    find(".document-editor-block[contenteditable='true']", text: "first").send_keys("*")
+    assert_field "Markdown source", with: "**first**\n\n# **second**", wait: 5
+  end
+
+  test "markdown delimiters wrap selections in source and visual editors" do
+    document = Document.create!(title: "Wrap selections", source: "Alpha beta gamma")
+    visit edit_document_path(document, editor_mode: "source")
+    assert_selector ".cm-content"
+    type_source_text("Alpha beta gamma", "beta", "*")
+    assert_field "Markdown source", with: "Alpha *beta* gamma"
+    find(".cm-content").send_keys("*")
+    assert_field "Markdown source", with: "Alpha **beta** gamma"
+
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_fresh_projection
+    block = find(".document-editor-block[contenteditable='true']", text: "Alpha")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus();
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode, start = node.textContent.indexOf("gamma");
+        if (start >= 0) {
+          window.getSelection().setBaseAndExtent(node, start, node, start + 5);
+          break;
+        }
+      }
+    JAVASCRIPT
+    block.send_keys("`")
+    assert_field "Markdown source", with: /`gamma`/, wait: 5
+  end
+
+  test "visual selection stays selected when a second asterisk makes bold" do
+    document = Document.create!(title: "Visual emphasis", source: "Alpha beta gamma")
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_fresh_projection
+    block = find(".document-editor-block[contenteditable='true']", text: "Alpha")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus();
+      const walker = document.createTreeWalker(block, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) {
+        const node = walker.currentNode, start = node.textContent.indexOf("beta");
+        if (start >= 0) {
+          window.getSelection().setBaseAndExtent(node, start, node, start + 4);
+          break;
+        }
+      }
+    JAVASCRIPT
+    block.send_keys("*")
+    assert_field "Markdown source", with: "Alpha *beta* gamma", wait: 5
+    wait_for_fresh_projection
+    assert_equal "beta", page.evaluate_script("window.getSelection().toString()")
+    find(".document-editor-block[contenteditable='true']", text: "Alpha").send_keys("*")
+    assert_field "Markdown source", with: "Alpha **beta** gamma", wait: 5
+  end
+
+  test "visual wrapping preserves a selection that fills the block" do
+    document = Document.create!(title: "Whole block emphasis", source: "beta")
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_fresh_projection
+    block = find(".document-editor-block[contenteditable='true']", text: "beta")
+    page.execute_script(<<~JAVASCRIPT, block)
+      const block = arguments[0];
+      block.focus();
+      const range = document.createRange();
+      range.selectNodeContents(block);
+      window.getSelection().removeAllRanges();
+      window.getSelection().addRange(range);
+    JAVASCRIPT
+    block.send_keys("*")
+    assert_field "Markdown source", with: "*beta*", wait: 5
+    wait_for_fresh_projection
+    assert_equal "beta", page.evaluate_script("window.getSelection().toString()")
+    find(".document-editor-block[contenteditable='true']", text: "beta").send_keys("*")
+    assert_field "Markdown source", with: "**beta**", wait: 5
+  end
+
   def wait_for_fresh_projection
     selector = "form.visual-editor-form:not([data-preview-projection-stale='true'])"
     return if has_selector?(selector, wait: 2)
@@ -171,7 +268,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "source mode inserts and continues Mermaid flowcharts with Enter and branching keys" do
     document = Document.create!(title: "Mermaid process", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -223,7 +320,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "source mode keeps /diagram keyboard navigation open through selection" do
     document = Document.create!(title: "Mermaid keyboard command", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -253,7 +350,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "source mode accepts a Mermaid diagram type with Tab" do
     document = Document.create!(title: "Mermaid keyboard Tab", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -275,7 +372,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "source mode dismisses Mermaid suggestions when the caret leaves their context" do
     document = Document.create!(title: "Mermaid stale suggestion", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -296,7 +393,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "Mermaid source assist restores keyboard listeners after Stimulus reconnects" do
     document = Document.create!(title: "Mermaid reconnect", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.evaluate_async_script(<<~JAVASCRIPT)
       const done = arguments[arguments.length - 1];
@@ -328,7 +425,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "```mermaid\nflowchart LR\n    A[]\n```"
     document = Document.create!(title: "Mermaid palette context", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -346,7 +443,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "```mermaid\nflowchart LR\n    A[Research]\n```"
     document = Document.create!(title: "Mermaid IME composition", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -367,7 +464,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "Mermaid suggestions stay dismissed during IME composition and refresh afterward" do
     document = Document.create!(title: "Mermaid IME suggestions", source: "# Existing text")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -398,7 +495,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "# Existing text\r\n\r\n```mermaid\r\nflowchart LR\r\n    A[Research]\r\n```"
     document = Document.create!(title: "Mermaid CRLF", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -415,7 +512,7 @@ class DocumentsTest < ApplicationSystemTestCase
     document = Document.create!(title: "Snippet line endings", source: source)
     expected = "#{source.gsub(/\r\n?/, "\n")}| Column 1 | Column 2 |\n| --- | --- |\n| Value 1 | Value 2 |"
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -497,7 +594,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual shortcuts execute shared engine commands" do
     source = "# Shortcuts\n\nFirst paragraph.\n"
     document = Document.create!(title: "Visual shortcuts", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     # Undo a scripted engine edit: native undo has no stack here (nothing was
     # typed), so only the shared history command can revert the source.
@@ -528,7 +625,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "visual Alt-Up moves the selected line through the shared keymap" do
     document = Document.create!(title: "Visual line move", source: "# Lines\n\n- one\n- two\n- three\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     block = find(".document-editor-block", text: "two")
     page.execute_script(<<~JAVASCRIPT, block)
@@ -553,7 +650,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "```mermaid\nflowchart LR\n    A[Research] --> B[Design]\n```"
     document = Document.create!(title: "Mermaid middle edit", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -572,7 +669,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "```mermaid\nflowchart LR\n    A[Research]\n    A --> \n```"
     document = Document.create!(title: "Mermaid node completion", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector('.source-field').editorController;
@@ -591,7 +688,7 @@ class DocumentsTest < ApplicationSystemTestCase
     Snippet.create!(name: "Two text fields", trigger: "pair", category: "Markdown", body: "${1:first} ${2:second}")
     document = Document.create!(title: "Ordinary source", source: "# Existing")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -619,7 +716,7 @@ class DocumentsTest < ApplicationSystemTestCase
     Document.create!(title: "Research target", source: "# Target")
     document = Document.create!(title: "Research source", source: "")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     editor = find_field("Markdown source")
     fill_in "Markdown source", with: "[[Research ta"
 
@@ -634,7 +731,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     visit settings_path
     find("#vim-enabled").check
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     editor = find(".cm-content")
     editor.click
@@ -653,7 +750,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
     visit settings_path
     find("#vim-enabled").check
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     editor = find(".cm-content")
     editor.click
@@ -668,12 +765,12 @@ class DocumentsTest < ApplicationSystemTestCase
     Document.create!(title: "Editable target", source: "# Target")
     source = Document.create!(title: "Editable source", source: "See [[Editable target]]")
 
-    visit edit_document_path(source)
+    visit edit_document_path(source, editor_mode: "visual")
     within ".editor-projection" do
       click_on "Editable target"
     end
 
-    assert_current_path edit_document_path(source)
+    assert_current_path edit_document_path(source, editor_mode: "visual")
     assert page.evaluate_script("Boolean(document.activeElement.closest('[contenteditable=\\\"true\\\"]'))")
   end
 
@@ -748,7 +845,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "creates a document and updates its continuous live preview" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
     assert_no_selector "#document_title"
     fill_in "Markdown source", with: "# Research notes\n\nFirst section\n\n---\n\nSecond section"
     assert_selector ".document-surface", text: "Second section", wait: 5
@@ -767,9 +864,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "new document typing keeps Markdown blocks, title, lists, quotes, and math in sync" do
     expected_source = File.read(Rails.root.join("test/fixtures/files/visual_editor_document_flow.md")).chomp
 
-    visit root_path
-    find(".new-work-menu summary").click
-    find(".new-work-option", text: "Document").click
+    visit new_document_path(editor_mode: "visual")
     wait_for_fresh_projection
 
     assert_no_selector "#document_title"
@@ -848,7 +943,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal "This is my First Document", document.title
     assert_equal new_document_prefix + expected_source, document.source
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_no_selector "#document_title"
     assert_selector ".document-editor-block h1", text: "This is my First Document"
     assert_field "Markdown source", with: new_document_prefix + expected_source
@@ -866,7 +961,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual document editing preserves untouched Markdown and survives reopening" do
     document = Document.create!(title: "Visual notes", source: "# Original\n\n**Keep formatting**\n\nUnchanged")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_equal "visual", page.evaluate_script("document.querySelector('form.visual-editor-form').dataset.editorMode")
     find(".document-editor-block", text: "Original").click
@@ -881,7 +976,7 @@ class DocumentsTest < ApplicationSystemTestCase
     click_on "Save document"
 
     assert_text "Document saved."
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_field "Markdown source", with: "# Renamed\n\n**Keep formatting**\n\nUnchanged"
     assert_selector ".document-editor-block", text: "Renamed"
     assert_selector ".document-editor-block strong", text: "Keep formatting"
@@ -889,7 +984,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "enter splits a document block at the visible caret" do
     document = Document.create!(title: "Caret split", source: "# Notes\n\nAlpha beta gamma")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Alpha beta gamma")
@@ -923,7 +1018,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "trailing whitespace does not break a visual document block" do
     document = Document.create!(title: "Trailing spaces", source: "# Notes\n\nHe drives a small car.  \nHe can now buy his medicine.")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     # NOTE: assert on the real DOM, not a Capybara visibility match: <br>
@@ -936,7 +1031,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual document blocks accept direct keyboard edits" do
     document = Document.create!(title: "Typing notes", source: "# Typing notes\n\nBody")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     block = find(".document-editor-block", text: "Body")
     block.click
     block.send_keys(:end, " changed")
@@ -946,7 +1041,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "visual text edits coalesce source updates within a frame" do
     document = Document.create!(title: "Batched visual edits", source: "# Batch\n\nOriginal")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     block = find(".document-editor-block", text: "Original")
 
     result = page.evaluate_async_script(<<~JAVASCRIPT, block)
@@ -971,7 +1066,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual and source modes carry the caret position in both directions" do
     source = "# Notes\n\nFirst paragraph\n\nSecond paragraph"
     document = Document.create!(title: "Caret handoff", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     first = find(".document-editor-block", text: "First paragraph")
     page.execute_script(<<~JAVASCRIPT, first)
@@ -1023,7 +1118,7 @@ class DocumentsTest < ApplicationSystemTestCase
       title: "Block navigation",
       source: "# Navigation\n\nFirst block\n\nSecond block\n\nThird block"
     )
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     first = find(".document-editor-block", text: "First block")
     navigation = page.execute_script(<<~JAVASCRIPT, first)
@@ -1059,7 +1154,7 @@ class DocumentsTest < ApplicationSystemTestCase
     %w[Delete Backspace].each do |key|
       sample = Documents::SampleData::SAMPLES.find { |s| s[:id] == "document-full-report" }
       document = Document.create!(title: "#{sample[:title]} #{key}", source: sample[:source])
-      visit edit_document_path(document)
+      visit edit_document_path(document, editor_mode: "visual")
       wait_for_fresh_projection
 
       first_block = find(".document-editor-block", text: /This report examines a simple proposition/)
@@ -1109,7 +1204,7 @@ class DocumentsTest < ApplicationSystemTestCase
     MARKDOWN
     document = Document.create!(title: "Soft breaks with math", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     rendered_text = page.execute_script(<<~JAVASCRIPT)
       const block = [...document.querySelectorAll(".document-editor-block")]
         .find((element) => element.textContent.includes("The relationship"));
@@ -1154,7 +1249,7 @@ class DocumentsTest < ApplicationSystemTestCase
       visual = Document.create!(title: "Visual #{fixture[:id]}", source: baseline)
       expected = baseline.dup
 
-      visit edit_document_path(visual)
+      visit edit_document_path(visual, editor_mode: "visual")
       fixture[:operations].each do |selector, visible_text, source_text, replacement|
         type_visual_text(selector, visible_text, replacement)
         expected.sub!(source_text, replacement)
@@ -1171,7 +1266,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
       source = Document.create!(title: "Source #{fixture[:id]}", source: baseline)
       source_expected = baseline.dup
-      visit edit_document_path(source)
+      visit edit_document_path(source, editor_mode: "visual")
       click_on "Source"
       fixture[:operations].each do |_selector, _visible_text, source_text, replacement|
         type_source_text(source_expected, source_text, replacement)
@@ -1194,7 +1289,7 @@ class DocumentsTest < ApplicationSystemTestCase
       source: "# Rich notes\n\n| Name | Value |\n| --- | --- |\n| **One** | Two |\n\n![Old alt](/icon.svg)"
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-block table"
     assert_selector ".document-editor-block .editor-media-caption", text: "Old alt"
@@ -1230,7 +1325,7 @@ class DocumentsTest < ApplicationSystemTestCase
       source: "# Inline notes\n\nA **bold** and *italic* link [target](/path)."
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       const block = [...document.querySelectorAll('.document-editor-block')]
@@ -1245,7 +1340,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual heading edits preserve inline formatting" do
     document = Document.create!(title: "Styled heading", source: "# **Styled** and *clear*")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     page.execute_script(<<~JAVASCRIPT)
       const heading = document.querySelector('.document-editor-block strong');
       heading.textContent = 'Updated';
@@ -1259,7 +1354,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = 'Before $\\frac{a}{b}$ between $$\\sum_{i=1}^{n} i$$ after.'
     document = Document.create!(title: "Math preservation", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector '.document-editor-block [data-editor-math-source][contenteditable="false"]', count: 2
 
     page.execute_script(<<~JAVASCRIPT)
@@ -1290,7 +1385,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "new inline math renders while the visual document block stays focused" do
     document = Document.create!(title: "Inline math typing", source: "# Math\n\nAn equation")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     block = find(".document-editor-block", text: "An equation")
     block.click
     page.execute_script(<<~JAVASCRIPT, block)
@@ -1312,14 +1407,14 @@ class DocumentsTest < ApplicationSystemTestCase
 
     click_on "Save document"
     assert_text "Document saved."
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_field "Markdown source", with: "# Math\n\nAn equation $test$ after"
     assert_selector ".document-editor-block .katex[data-editor-math-source='test']"
     assert_selector ".document-editor-block .katex[data-editor-math-source='test'] annotation", text: "test", visible: :all
   end
 
   test "latex visual mode enter and exit flow allows inline editing" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = active_document_block
@@ -1368,7 +1463,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "typing after clearing inline math stays inside the expression" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = active_document_block
@@ -1386,7 +1481,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "typing after navigating into empty inline math stays inside the expression" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = active_document_block
@@ -1404,7 +1499,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "display latex visual mode enter and exit and click to edit" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = active_document_block
@@ -1437,7 +1532,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "visual display math keystrokes keep the caret on the empty body line" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
 
     find(".document-editor-block[data-editor-block-id]:focus").send_keys("$")
@@ -1494,7 +1589,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "new document renders inline and display math before its first save" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
 
     find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
     block = find(".document-editor-block[data-editor-empty-block='true']")
@@ -1521,7 +1616,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "new document source mode renders inline and display math before its first save" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
     click_on "Source"
 
     page.execute_script(<<~JAVASCRIPT)
@@ -1538,7 +1633,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "source mode fits the first document page inside the side preview" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
     click_on "Source"
     wait_for_settled_document_projection
 
@@ -1585,7 +1680,7 @@ class DocumentsTest < ApplicationSystemTestCase
       $$
     MARKDOWN
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-block .katex", count: 2
     assert_selector ".document-editor-block .katex-display", count: 1
@@ -1595,7 +1690,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "visual paragraph edits preserve inline media source" do
     document = Document.create!(title: "Inline image", source: "Before ![diagram](/diagram.svg) after.")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector '.document-editor-block [data-editor-image-source][contenteditable="false"]'
     page.execute_script(<<~JAVASCRIPT)
       const block = document.querySelector('.document-editor-block');
@@ -1610,7 +1705,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "a new document uploads and displays an attached image before its first manual save" do
-    visit new_document_path
+    visit new_document_path(editor_mode: "visual")
     media_file = Tempfile.new(["document-pixel", ".png"])
     media_file.binmode
     media_file.write(Base64.decode64("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+i9MwAAAAASUVORK5CYII="))
@@ -1931,7 +2026,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "- [ ] Keep **this**\n  - Nested [link](/path)\n- [x] Already done"
     document = Document.create!(title: "List preservation", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     page.execute_script(<<~JAVASCRIPT)
       const strong = document.querySelector('.document-editor-block strong');
       strong.textContent = 'that';
@@ -1943,7 +2038,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "enter after a code fence opener inserts a matching closing fence" do
     [["```sql", "```"], ["~~~sql", "~~~"]].each do |opening, closing|
-      visit new_document_path
+      visit new_document_path(editor_mode: "visual")
 
       find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
       active_document_block.send_keys(opening, :enter)
@@ -1960,7 +2055,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "enter after a display math opener inserts its matching closing fence" do
     [["$$", "$$"], ["\\[", "\\]"]].each do |opening, closing|
-      visit new_document_path
+      visit new_document_path(editor_mode: "visual")
       find(".document-editor-block h1", text: "Untitled document").send_keys(:enter)
       active_document_block.send_keys(opening, :enter)
 
@@ -1981,7 +2076,7 @@ class DocumentsTest < ApplicationSystemTestCase
       source: "# Code\n\n```ruby\n  records.each do |record|\n    process(record)\n  end\n````"
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       const codeBlock = [...document.querySelectorAll('.document-editor-block')]
@@ -1997,7 +2092,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "# Code notes\n\n```ruby\nputs 1"
     document = Document.create!(title: "Unterminated code", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector '.document-editor-block[aria-readonly="true"] pre code', text: "puts 1"
     assert_no_selector '.document-editor-block[contenteditable="true"] pre'
@@ -2010,7 +2105,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: source
     click_on "Save document"
     assert_text "Document saved."
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_field "Markdown source", with: source
     assert_selector '.document-editor-block[aria-readonly="true"] pre code', text: "puts 1"
@@ -2020,7 +2115,7 @@ class DocumentsTest < ApplicationSystemTestCase
     source = "[Guide][guide]\n\n[guide]: /guide\n\n<https://example.test>\n\n<kbd>Shift</kbd>\n\nfoo*bar*baz and value_name_value\n\n> outer\n> > nested quote\n\n| A |\n| --- |\n\n---"
     document = Document.create!(title: "Unsupported Markdown", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector '.document-editor-block[aria-readonly="true"]', minimum: 8, visible: false
     assert_selector '.document-editor-block[aria-readonly="true"] blockquote', text: "nested quote"
@@ -2035,7 +2130,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: source
     click_on "Save document"
     assert_text "Document saved."
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_field "Markdown source", with: source
     assert_selector '.document-editor-block[aria-readonly="true"]', minimum: 8, visible: false
@@ -2043,7 +2138,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "keeps an active math chain literal until commit and supports one-step undo" do
     document = Document.create!(title: "Math notes", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
@@ -2060,7 +2155,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "backspace deletes empty dollar pairs and keeps other edits single-character" do
     document = Document.create!(title: "Math pair deletion", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
@@ -2112,7 +2207,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "supports editing an active math chain before committing it" do
     document = Document.create!(title: "Editable math chain", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     source_field = find_field("Markdown source")
     editor = find(".cm-content")
@@ -2141,7 +2236,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "autosave preserves an active math chain verbatim" do
     document = Document.create!(title: "Autosaved math chain", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2157,7 +2252,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "explicitly saving commits an active math chain" do
     document = Document.create!(title: "Explicitly saved math chain", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2174,7 +2269,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "typing a colon directive inserts canonical source and guides align arguments" do
     document = Document.create!(title: "Directive palette", source: "# Notes")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.send_keys(:end)
@@ -2196,7 +2291,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "colon in prose never opens the snippet palette" do
     document = Document.create!(title: "Colon prose", source: "# Notes\n\nSome prose")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2218,7 +2313,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "colon before prose on the same line never opens the snippet palette" do
     document = Document.create!(title: "Colon line start", source: "# Notes\n\nSecond line")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
@@ -2235,7 +2330,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "colon on a blank line still opens the directive palette" do
     document = Document.create!(title: "Colon blank line", source: "# Notes")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.send_keys(:end)
@@ -2251,7 +2346,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "slash palette inserts canonical image source" do
     document = Document.create!(title: "Source palette", source: "# Notes")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     source = find_field("Markdown source")
     editor = find(".cm-content")
@@ -2274,7 +2369,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "supports only the v1 math transforms and preserves invalid chains" do
     document = Document.create!(title: "Math transforms", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2302,7 +2397,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "commits local hat and tilde transforms while keeping each active chain literal" do
     document = Document.create!(title: "Math accents", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2323,7 +2418,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "applies transpose and inverse to existing canonical LaTeX atoms after reload" do
     source_text = ["# Math", "", "$x$", "$\\mathbf{x}$", "$\\vec{x}$", "$y$", "$\\mathbf{y}$", "$\\vec{y}$", "$\\mathbf{z}$"].join("\n")
     document = Document.create!(title: "Canonical math atoms", source: source_text)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2356,7 +2451,7 @@ class DocumentsTest < ApplicationSystemTestCase
     persisted_source = source.value
     assert_equal persisted_source.gsub(/\r\n?/, "\n"), document.reload.source.gsub(/\r\n?/, "\n")
 
-    visit edit_document_path(document.reload)
+    visit edit_document_path(document.reload, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2378,7 +2473,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "Enter in an empty display-math pair creates a blank line between delimiters" do
     document = Document.create!(title: "Empty display math", source: "# Math\n\n$$$$")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     source = find_field("Markdown source")
@@ -2398,7 +2493,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "slash palette hides raw LaTeX outside math and keeps equation blocks available" do
     document = Document.create!(title: "Slash context", source: "# Notes")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.send_keys(:end)
@@ -2415,7 +2510,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "leaves dot syntax literal outside math and inside code" do
     document = Document.create!(title: "Math contexts", source: "# Math")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     editor = find(".cm-content")
     editor.send_keys(:end)
@@ -2430,7 +2525,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "keeps the last good preview when a live preview fails" do
     document = Document.create!(title: "Stable notes", source: "# Stable notes\n\nLast good content")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-surface", text: "Last good content"
 
     page.execute_script(<<~JAVASCRIPT)
@@ -2466,7 +2561,7 @@ class DocumentsTest < ApplicationSystemTestCase
     updated = "# Rebuilt\n\nNew first block\n\nNew second block"
     document = Document.create!(title: "Stale projection", source: original)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     click_on "Source"
     page.execute_script(<<~JAVASCRIPT, updated)
       const form = document.querySelector('form.visual-editor-form');
@@ -2507,14 +2602,14 @@ class DocumentsTest < ApplicationSystemTestCase
 
     click_on "Save document"
     assert_text "Document saved."
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_field "Markdown source", with: updated
     assert_selector ".document-editor-block", text: "New first block"
   end
 
   test "keeps typing enabled when the local projection reports a failure" do
     document = Document.create!(title: "Projection notes", source: "# Stable")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       document.querySelector('.source-field').dispatchEvent(new CustomEvent('elef:live-preview-error', {
@@ -2530,7 +2625,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "keeps typing responsive while preview is stalled and preserves the last good result" do
     document = Document.create!(title: "Slow notes", source: "# Stable content")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       const form = document.querySelector('form.visual-editor-form');
@@ -2570,7 +2665,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "debounces rapid preview requests and renders the latest source" do
     document = Document.create!(title: "Latency notes", source: "# Initial")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       window.previewRequests = 0;
@@ -2590,7 +2685,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "serializes slow preview responses and renders the latest edit" do
     document = Document.create!(title: "Race notes", source: "# Initial")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     page.execute_script(<<~JAVASCRIPT)
       window.previewResponses = [];
@@ -2684,12 +2779,503 @@ class DocumentsTest < ApplicationSystemTestCase
     page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
+  test "flows ordinary paragraphs and ordered lists into the remaining page space" do
+    paragraph = ("Natural flow carries words across the page boundary. " * 18).strip
+    list = (3..12).map { |n| "#{n}. Ordered item #{n}" }.join("\n")
+    document = Document.create!(title: "Natural flow", source: "Opening paragraph.\n\n#{paragraph}\n\n#{list}")
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const reader = surface.closest('[data-controller~="document-pages"]');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(reader, 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        controller.paginate();
+        const lineCount = (element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          return new Set([...range.getClientRects()].filter(rect => rect.height > 0).map(rect => Math.round(rect.top))).size;
+        };
+        const inspect = () => [...surface.querySelectorAll('.document-page-content')].map(content => ({
+          paragraphs: [...content.querySelectorAll('p')].map(p => p.textContent),
+          flowedParagraphLines: [...content.querySelectorAll('p')]
+            .filter(p => p.textContent.startsWith('Natural flow'))
+            .map(lineCount),
+          lists: [...content.querySelectorAll('ol')].map(ol => ({ start: ol.start, items: [...ol.children].map(li => li.textContent.trim()) }))
+        }));
+        const first = inspect();
+        controller.paginate();
+        return { first, second: inspect() };
+      })()
+    JAVASCRIPT
+    assert_equal state.fetch("first"), state.fetch("second"), "repagination must preserve fragments"
+    pages = state.fetch("first")
+    paragraph_fragments = pages.flat_map { |entry| entry.fetch("paragraphs").select { |text| paragraph.include?(text) && text != "Opening paragraph." } }
+    assert_operator paragraph_fragments.length, :>, 1
+    assert_equal paragraph, paragraph_fragments.join
+    assert pages.first.fetch("paragraphs").any? { |text| text.start_with?("Natural flow") }, "paragraph should begin on the page with its predecessor"
+    assert pages.flat_map { |entry| entry.fetch("flowedParagraphLines") }.all? { |lines| lines >= 2 },
+      "continued paragraphs must keep at least two visual lines on each page"
+    list_fragments = pages.flat_map { |entry| entry.fetch("lists") }
+    assert_operator list_fragments.length, :>, 1
+    assert_equal (3..12).map { |n| "Ordered item #{n}" }, list_fragments.flat_map { |entry| entry.fetch("items") }
+    listNumber = 3
+    list_fragments.each do |fragment|
+      assert_equal listNumber, fragment.fetch("start")
+      listNumber += fragment.fetch("items").length
+    end
+  end
+
+  test "flows paragraph text in the read-only source preview" do
+    paragraph = ("Natural page flow continues this paragraph across pages. " * 18).strip
+    document = Document.create!(title: "Source preview flow", source: "Opening paragraph.\n\n#{paragraph}")
+    visit edit_document_path(document, editor_mode: "visual")
+    find('[data-editor-target="sourceButton"]').click
+    assert_selector '.editor-projection.preview-pane .document-surface[data-document-pages-settled="true"]', wait: 10
+    pages = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.editor-projection.preview-pane .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.editor-projection.preview-pane .document-surface .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        controller.paginate();
+        return [...surface.querySelectorAll('.document-page-content')].map(content => [...content.querySelectorAll('p')].map(p => p.textContent));
+      })()
+    JAVASCRIPT
+    fragments = pages.flatten.select { |text| text.start_with?("Natural page flow") || paragraph.include?(text) && text != "Opening paragraph." }
+    assert_operator fragments.length, :>, 1
+    assert pages.first.any? { |text| text.start_with?("Natural page flow") }
+    assert_equal paragraph, fragments.join
+  end
+
+  test "keeps inline math intact while repaginating the read-only source preview" do
+    paragraph = ("Text preceding an inline equation continues over the page. " * 12) + "$x+1$ " + ("Text following the equation keeps flowing. " * 20)
+    document = Document.create!(title: "Source preview math flow", source: "Opening paragraph.\n\n#{paragraph}")
+    visit edit_document_path(document, editor_mode: "visual")
+    find('[data-editor-target="sourceButton"]').click
+    assert_selector '.editor-projection.preview-pane .document-surface[data-document-pages-settled="true"] .katex', wait: 10
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.editor-projection.preview-pane .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.editor-projection.preview-pane .document-surface .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        controller.paginate();
+        controller.paginate();
+        return { pages: surface.querySelectorAll('.document-page').length, math: surface.querySelectorAll('.katex').length };
+      })()
+    JAVASCRIPT
+    assert_operator result.fetch("pages"), :>, 1
+    assert_equal 1, result.fetch("math")
+  end
+
+  test "reassembles a continued list item before editing or repagination" do
+    long_item = ("Long item text stays together in the Markdown source. " * 65).strip
+    source = "- First item\n- #{long_item}\n- Last item"
+    document = Document.create!(title: "Long list item", source: source)
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const reader = surface.closest('[data-controller~="document-pages"]');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(reader, 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        controller.paginate();
+        controller.paginate();
+        const blocks = [...surface.querySelectorAll('.document-editor-block[data-editor-block-id]')];
+        const listBlocks = blocks.filter(block => block.querySelector('li'));
+        const item = listBlocks.flatMap(block => [...block.querySelectorAll('li')]).filter(li => li.textContent.includes('Long item text')).at(-1);
+        const last = item.closest('.document-editor-block');
+        const range = document.createRange();
+        range.selectNodeContents(item);
+        range.collapse(false);
+        last.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return listBlocks.map(block => [...block.querySelectorAll('li')].map(li => li.textContent));
+      })()
+    JAVASCRIPT
+    assert_operator state.length, :>, 1
+    assert_equal "First item#{long_item}Last item", state.flatten.join
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: source.sub(long_item, "#{long_item} updated"), wait: 5
+  end
+
+  test "restores the caret offset inside a list item split across pages" do
+    long_item = ("Caret restoration follows the selected text through page flow. " * 50).strip
+    document = Document.create!(title: "Caret in continued item", source: "- #{long_item}")
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+
+    page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+      })()
+    JAVASCRIPT
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    expected = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const itemFragments = () => [...surface.querySelectorAll('.document-page-content li')];
+        const before = itemFragments();
+        const focusItem = before.at(-1);
+        if (!focusItem) return null;
+        const walker = document.createTreeWalker(focusItem, NodeFilter.SHOW_TEXT);
+        let textNode = null;
+        while (walker.nextNode()) textNode = walker.currentNode;
+        if (!textNode) return null;
+        const localOffset = Math.max(0, textNode.textContent.length - 12);
+        focusItem.closest('[data-editor-block-id]').focus({ preventScroll: true });
+        const selection = window.getSelection();
+        selection.setPosition(textNode, localOffset);
+        const beforeRange = document.createRange();
+        beforeRange.selectNodeContents(focusItem);
+        beforeRange.setEnd(textNode, localOffset);
+        const offset = before.slice(0, -1).reduce((total, item) => total + item.textContent.length, 0) + beforeRange.toString().length;
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+        return { offset, fragments: before.length };
+      })()
+    JAVASCRIPT
+    assert expected, "expected a text caret in the final list-item fragment"
+    assert_operator expected.fetch("fragments"), :>, 1
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const fragments = [...surface.querySelectorAll('.document-page-content li')];
+        const selection = window.getSelection();
+        const node = selection?.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection?.focusNode?.parentElement;
+        const item = node?.closest('li');
+        if (!selection?.focusNode || !item) return null;
+        const index = fragments.indexOf(item);
+        const range = document.createRange();
+        range.selectNodeContents(item);
+        range.setEnd(selection.focusNode, selection.focusOffset);
+        return {
+          offset: fragments.slice(0, index).reduce((total, fragment) => total + fragment.textContent.length, 0) + range.toString().length,
+          page: [...surface.querySelectorAll('.document-page-frame')].indexOf(item.closest('.document-page-frame'))
+        };
+      })()
+    JAVASCRIPT
+    assert result, "expected the caret to remain inside the continued list item"
+    assert_equal expected.fetch("offset"), result.fetch("offset"), "caret should remain at the same list-item text offset after repagination"
+    assert_operator result.fetch("page"), :>, 0
+  end
+
+  test "keeps a caret at a continuation boundary on the following page" do
+    paragraph = ("Caret restoration follows the selected text through page flow. " * 50).strip
+    document = Document.create!(title: "Caret at continuation boundary", source: paragraph)
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+
+    boundary = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const style = document.createElement('style');
+        style.textContent = '.document-editor-projection .document-page-content { flex: 0 0 220px !important; height: 220px !important; }';
+        document.head.append(style);
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+        return true;
+      })()
+    JAVASCRIPT
+    assert boundary
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    offset = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(
+          surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const fragments = [...surface.querySelectorAll('.document-page-content [data-editor-block-id][contenteditable="true"]')];
+        if (fragments.length < 2) return null;
+        const continuation = fragments[1];
+        const visibleText = (root) => {
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) => node.parentElement?.closest('.katex, .katex-mathml, [aria-hidden="true"], [contenteditable="false"]')
+              ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+          });
+          let text = '';
+          while (walker.nextNode()) text += walker.currentNode.textContent;
+          return text;
+        };
+        const walker = document.createTreeWalker(continuation, NodeFilter.SHOW_TEXT);
+        if (!walker.nextNode()) return null;
+        const textNode = walker.currentNode;
+        continuation.closest('[data-editor-block-id]').focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().setPosition(textNode, 0);
+        const sourceOffset = visibleText(fragments[0]).length;
+        surface.dataset.documentPagesSettled = 'false';
+        controller.paginate();
+        return sourceOffset;
+      })()
+    JAVASCRIPT
+    assert offset, "expected a caret at the start of the continued paragraph fragment"
+    assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 10
+
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const selection = window.getSelection();
+        const node = selection?.focusNode?.nodeType === Node.ELEMENT_NODE ? selection.focusNode : selection?.focusNode?.parentElement;
+        const block = node?.closest('[data-editor-block-id][contenteditable="true"]');
+        if (!selection?.focusNode || !block) return null;
+        const fragments = [...surface.querySelectorAll('.document-page-content [data-editor-block-id][contenteditable="true"]')];
+        const index = fragments.indexOf(block);
+        const visibleText = (root) => {
+          const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: (node) => node.parentElement?.closest('.katex, .katex-mathml, [aria-hidden="true"], [contenteditable="false"]')
+              ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT
+          });
+          let text = '';
+          while (walker.nextNode()) text += walker.currentNode.textContent;
+          return text;
+        };
+        const range = document.createRange();
+        range.selectNodeContents(block);
+        range.setEnd(selection.focusNode, selection.focusOffset);
+        return {
+          offset: fragments.slice(0, index).reduce((total, fragment) => total + visibleText(fragment).length, 0) + range.toString().length,
+          page: [...surface.querySelectorAll('.document-page-frame')].indexOf(block.closest('.document-page-frame'))
+        };
+      })()
+    JAVASCRIPT
+    assert result, "expected the caret to remain in a continued paragraph fragment"
+    assert_equal offset, result.fetch("offset"), "caret should remain at the same source offset"
+    assert_operator result.fetch("page"), :>, 0, "caret at the continuation boundary should stay on the following page"
+  end
+
+  test "flows an oversized nested ordered list without changing its source" do
+    nested = (1..60).map { |n| "  #{n}. Nested item #{n} with explanatory text" }.join("\n")
+    source = "Opening paragraph.\n\n- Parent item\n#{nested}\n- Outer tail"
+    document = Document.create!(title: "Nested list flow", source: source)
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const lists = [...surface.querySelectorAll('ol')];
+        const items = lists.flatMap(list => [...list.children].map(item => item.textContent.trim()));
+        const last = lists.at(-1).lastElementChild;
+        const block = last.closest('.document-editor-block');
+        const range = document.createRange();
+        range.selectNodeContents(last);
+        range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return { items, starts: lists.map(list => [list.start, list.children.length]), overflow: surface.querySelectorAll('.is-overflowing-content').length };
+      })()
+    JAVASCRIPT
+    assert_equal (1..60).map { |n| "Nested item #{n} with explanatory text" }, state.fetch("items")
+    assert_operator state.fetch("starts").length, :>, 1
+    next_number = 1
+    state.fetch("starts").each do |start, count|
+      assert_equal next_number, start
+      next_number += count
+    end
+    assert_equal 0, state.fetch("overflow")
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: source.sub("Nested item 60 with explanatory text", "Nested item 60 with explanatory text updated"), wait: 5
+  end
+
+  test "edits a nested list item that itself spans pages" do
+    long_item = ("Nested item content continues across pages. " * 100).strip
+    source = "- Parent\n  1. #{long_item}\n  2. Last nested item\n- Tail"
+    document = Document.create!(title: "Nested item flow", source: source)
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+    count = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const items = [...surface.querySelectorAll('ol > li')].filter(li => li.textContent.includes('Nested item content'));
+        const last = items.at(-1);
+        const block = last.closest('.document-editor-block');
+        const range = document.createRange();
+        range.selectNodeContents(last);
+        range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return items.length;
+      })()
+    JAVASCRIPT
+    assert_operator count, :>, 1
+    assert_equal "none", page.evaluate_script("getComputedStyle(document.querySelector('.document-page-content li[data-document-page-continuation]')).listStyleType")
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: source.sub(long_item, "#{long_item} updated"), wait: 5
+  end
+
+  test "flows nested lists around an atomic code block" do
+    document = Document.create!(title: "Nested code flow", source: "Initial content")
+    visit document_path(document)
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const outer = document.createElement('ul');
+        const parent = document.createElement('li');
+        const nested = document.createElement('ol');
+        for (let n = 1; n <= 100; n++) {
+          const item = document.createElement('li');
+          item.textContent = `Nested item ${n}`;
+          if (n === 50) { const code = document.createElement('pre'); code.textContent = 'atomic code'; item.append(code); }
+          nested.append(item);
+        }
+        parent.append('Parent', nested);
+        outer.append(parent);
+        surface.replaceChildren(outer);
+        controller.paginate(); controller.paginate();
+        return { pages: surface.querySelectorAll('.document-page').length,
+          items: [...surface.querySelectorAll('ol > li')].map(item => item.textContent),
+          code: surface.querySelectorAll('pre').length,
+          overflow: surface.querySelectorAll('.is-overflowing-content').length };
+      })()
+    JAVASCRIPT
+    assert_operator state.fetch("pages"), :>, 1
+    assert_equal 100, state.fetch("items").length
+    assert_equal 1, state.fetch("code")
+    assert_equal 0, state.fetch("overflow")
+  end
+
+  test "flows a long nested item before an atomic code block" do
+    document = Document.create!(title: "Long nested item with code", source: "Initial content")
+    visit document_path(document)
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const outer = document.createElement('ul');
+        const parent = document.createElement('li');
+        const nested = document.createElement('ol');
+        const first = document.createElement('li');
+        first.textContent = 'Long nested item '.repeat(400);
+        const second = document.createElement('li');
+        const code = document.createElement('pre');
+        code.textContent = 'atomic code';
+        second.append('Second item', code);
+        nested.append(first, second); parent.append('Parent', nested); outer.append(parent);
+        const expected = outer.textContent;
+        surface.replaceChildren(outer);
+        controller.paginate(); controller.paginate();
+        return { expected, actual: [...surface.querySelectorAll('.document-page-content')].map(page => page.textContent).join(''),
+          code: surface.querySelectorAll('pre').length, overflow: surface.querySelectorAll('.is-overflowing-content').length };
+      })()
+    JAVASCRIPT
+    assert_equal state.fetch("expected"), state.fetch("actual")
+    assert_equal 1, state.fetch("code")
+    assert_equal 0, state.fetch("overflow")
+  end
+
+  test "continues a loose list item without splitting its Markdown structure" do
+    long_item = ("Loose list item text flows over the page. " * 90).strip
+    source = "- #{long_item}\n\n- Final item"
+    document = Document.create!(title: "Loose item flow", source: source)
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+    state = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const blocks = [...surface.querySelectorAll('.document-editor-block[data-editor-block-id]')].filter(block => block.querySelector('li'));
+        const last = blocks.at(-1);
+        const item = last.querySelector('li:last-child');
+        const range = document.createRange();
+        range.selectNodeContents(item);
+        range.collapse(false);
+        last.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return blocks.map(block => [...block.querySelectorAll('li')].map(li => li.querySelector('p')?.textContent ?? li.textContent));
+      })()
+    JAVASCRIPT
+    assert_operator state.length, :>, 1
+    assert_equal "#{long_item}Final item", state.flatten.join
+    active_document_block.send_keys(" updated")
+    assert_field "Markdown source", with: "#{source} updated", wait: 5
+  end
+
+  test "retains direct text around mixed quote children during repagination" do
+    document = Document.create!(title: "Mixed quote flow", source: "Initial content")
+    visit document_path(document)
+    assert_selector ".document-surface[data-document-pages-settled='true']", wait: 10
+    result = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        const quote = document.createElement('blockquote');
+        const paragraph = document.createElement('p');
+        paragraph.textContent = 'Long quoted content '.repeat(150);
+        quote.append('Before ', paragraph, ' After');
+        const expected = quote.textContent;
+        surface.replaceChildren(quote);
+        controller.paginate();
+        controller.paginate();
+        const content = () => [...surface.querySelectorAll('.document-page-content')].map(page => page.textContent).join('');
+        const direct = { expected, actual: content() };
+        const wrapper = document.createElement('div');
+        const list = document.createElement('ul');
+        for (let n = 0; n < 100; n++) {
+          const item = document.createElement('li');
+          item.textContent = `Item ${n}`;
+          list.append(item);
+        }
+        const before = document.createElement('p');
+        before.textContent = 'Before list';
+        const after = document.createElement('p');
+        after.textContent = 'After list';
+        wrapper.append(before, list, after);
+        const wrapperText = wrapper.textContent;
+        surface.replaceChildren(wrapper);
+        controller.paginate();
+        controller.paginate();
+        return [direct, { expected: wrapperText, actual: content() }];
+      })()
+    JAVASCRIPT
+    result.each { |entry| assert_equal entry.fetch("expected"), entry.fetch("actual") }
+  end
+
   test "paginates the visual editor and keeps oversized paragraph edits mapped to one source block" do
     paragraph = ("Flowing text stays at a fixed size and carries onto the next A4 page. " * 190).strip
     source = "# A4 flow\n\n#{paragraph}"
     document = Document.create!(title: "Flowing editor", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-projection .document-surface.is-paginated"
     assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
@@ -2737,12 +3323,43 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_field "Markdown source", with: /Continued\z/, wait: 5
   end
 
+  test "preserves formatting and math when editing a paragraph continued across pages" do
+    paragraph = ("A **strong idea** with $x+1$ and [a link](/notes) continues here. " * 100).strip
+    source = "#{paragraph}\n\nClosing paragraph."
+    document = Document.create!(title: "Formatted flow", source: source)
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+    count = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const controller = window.Stimulus.getControllerForElementAndIdentifier(surface.closest('[data-controller~="document-pages"]'), 'document-pages');
+        controller.paginate();
+        controller.paginate();
+        const blocks = [...surface.querySelectorAll('.document-editor-block[data-editor-block-id]')];
+        const paragraph = blocks.find(block => block.querySelector('strong'));
+        const fragments = blocks.filter(block => block.dataset.editorBlockId === paragraph.dataset.editorBlockId);
+        const last = fragments.at(-1);
+        const target = last.querySelector('p');
+        const range = document.createRange();
+        range.selectNodeContents(target);
+        range.collapse(false);
+        last.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+        return fragments.length;
+      })()
+    JAVASCRIPT
+    assert_operator count, :>, 1
+    active_document_block.send_keys(" Added")
+    assert_field "Markdown source", with: source.sub(paragraph, "#{paragraph} Added"), wait: 5
+  end
+
   test "repacks document and removes trailing page when content is shortened" do
     paragraph = ("Flowing text stays at a fixed size and carries onto the next A4 page. " * 60).strip
     source = "# A4 flow\n\n#{paragraph}"
     document = Document.create!(title: "Flowing editor", source: source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-projection .document-surface.is-paginated"
     assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
@@ -2773,7 +3390,7 @@ class DocumentsTest < ApplicationSystemTestCase
     items = (1..60).map { |n| "- List item #{n} with explanatory text" }.join("\n")
     document = Document.create!(title: "List pagination", source: items)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-projection .document-surface.is-paginated"
     assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
@@ -2802,7 +3419,7 @@ class DocumentsTest < ApplicationSystemTestCase
     quotes = (1..50).map { |n| "> Paragraph #{n} inside the blockquote explaining something at length." }.join("\n>\n")
     document = Document.create!(title: "Quote pagination", source: quotes)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     assert_selector ".document-editor-projection .document-surface.is-paginated"
     assert_selector ".document-editor-projection .document-page", minimum: 2, wait: 5
@@ -2825,6 +3442,127 @@ class DocumentsTest < ApplicationSystemTestCase
     JAVASCRIPT
     active_document_block.send_keys(" noted")
     assert_field "Markdown source", with: /Paragraph 50 inside the blockquote.*noted/, wait: 5
+  end
+
+  test "replaces a selection across table fragments at the correct source offsets" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Table selection across pages", source: source)
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+    outcome = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const surface = document.querySelector('.document-editor-projection .document-surface');
+        const frames = [...surface.querySelectorAll('.document-page-frame')];
+        const first = frames[0]?.querySelector('tbody tr:last-child td:last-child');
+        const second = frames[1]?.querySelector('tbody tr:first-child td:first-child');
+        if (!first || !second) return null;
+        const firstText = first.firstChild, secondText = second.firstChild;
+        const selection = window.getSelection();
+        selection.setBaseAndExtent(firstText, 2, secondText, 3);
+        const block = first.closest('[data-editor-block-id]');
+        const firstValue = first.textContent, secondValue = second.textContent;
+        const event = new InputEvent('beforeinput', { bubbles: true, cancelable: true, inputType: 'insertText', data: 'X' });
+        block.dispatchEvent(event);
+        return { firstValue, secondValue, cancelled: event.defaultPrevented };
+      })()
+    JAVASCRIPT
+    assert outcome, "expected the table to span two pages"
+    assert outcome.fetch("cancelled"), "expected the cross-fragment edit to use the source transaction"
+    from = source.index(outcome.fetch("firstValue")) + 2
+    to = source.index(outcome.fetch("secondValue")) + 3
+    assert_field "Markdown source", with: source[0...from] + "X" + source[to..], wait: 5
+  end
+
+  test "edits a table cell on a continuation page without changing other rows" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Continued table editing", source: source)
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+    value = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frames = [...document.querySelectorAll('.document-editor-projection .document-page-frame')];
+        const cell = frames[1]?.querySelector('tbody tr:first-child td:last-child');
+        if (!cell) return null;
+        const block = cell.closest('[data-editor-block-id]');
+        const range = document.createRange();
+        range.selectNodeContents(cell); range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+        return cell.textContent;
+      })()
+    JAVASCRIPT
+    assert value, "expected a table cell on the continuation page"
+    active_document_block.send_keys(" added")
+    assert_field "Markdown source", with: source.sub(value, "#{value} added"), wait: 5
+  end
+
+  test "edits a continued table cell when another cell contains a link with balanced destination parentheses" do
+    rows = (1..60).map do |n|
+      n == 1 ? "| [Row #{n}](https://example.com/path_(detail)) | Value #{n} |" : "| Row #{n} | Value #{n} |"
+    end.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Continued linked table editing", source: source)
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+    value = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frames = [...document.querySelectorAll('.document-editor-projection .document-page-frame')];
+        const cell = frames[1]?.querySelector('tbody tr:first-child td:last-child');
+        if (!cell) return null;
+        const block = cell.closest('[data-editor-block-id]');
+        const range = document.createRange();
+        range.selectNodeContents(cell); range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+        return cell.textContent;
+      })()
+    JAVASCRIPT
+    assert value, "expected a table cell on the continuation page"
+    active_document_block.send_keys(" added")
+    assert_field "Markdown source", with: source.sub(value, "#{value} added"), wait: 5
+  end
+
+  test "repaginates a continued table without duplicating rows or breaking edits" do
+    rows = (1..60).map { |n| "| Row #{n} | Value #{n} |" }.join("\n")
+    source = "| Item | Description |\n| --- | --- |\n#{rows}"
+    document = Document.create!(title: "Repaginated continued table", source: source)
+    visit edit_document_path(document, editor_mode: "visual")
+    wait_for_settled_document_projection
+
+    outcome = page.evaluate_async_script(<<~JAVASCRIPT)
+      const done = arguments[arguments.length - 1];
+      const surface = document.querySelector('.document-editor-projection .document-surface');
+      const owner = surface.closest('[data-controller~="document-pages"]');
+      const controller = window.Stimulus.getControllerForElementAndIdentifier(owner, 'document-pages');
+      const collectRows = () => [...surface.querySelectorAll('.document-page-content table tbody tr')]
+        .map((row) => row.cells[0]?.textContent.trim());
+      const before = collectRows();
+      surface.addEventListener('elef:document-pages-settled', () => done({ before, after: collectRows() }), { once: true });
+      surface.dataset.documentPagesSettled = 'false';
+      controller.paginate();
+    JAVASCRIPT
+    expected_rows = (1..60).map { |n| "Row #{n}" }
+    assert_equal expected_rows, outcome.fetch("before")
+    assert_equal expected_rows, outcome.fetch("after")
+
+    value = page.evaluate_script(<<~JAVASCRIPT)
+      (() => {
+        const frames = [...document.querySelectorAll('.document-editor-projection .document-page-frame')];
+        const cell = frames[1]?.querySelector('tbody tr:first-child td:last-child');
+        if (!cell) return null;
+        const block = cell.closest('[data-editor-block-id]');
+        const range = document.createRange();
+        range.selectNodeContents(cell); range.collapse(false);
+        block.focus({ preventScroll: true });
+        window.getSelection().removeAllRanges(); window.getSelection().addRange(range);
+        return cell.textContent;
+      })()
+    JAVASCRIPT
+    assert value, "expected an editable table cell after repagination"
+    active_document_block.send_keys(" edited")
+    assert_field "Markdown source", with: source.sub(value, "#{value} edited"), wait: 5
   end
 
   test "paginates oversized tables across pages" do
@@ -2924,7 +3662,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "removes an empty visual block at the beginning without shifting the following page content" do
     document = Document.create!(title: "Leading empty block", source: "# First page\n\nBody text")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     body = find(".document-editor-block", text: "Body text")
     page.execute_script(<<~JAVASCRIPT, body)
@@ -2971,7 +3709,7 @@ class DocumentsTest < ApplicationSystemTestCase
   test "positions document blocks visually and preserves directives across source mode" do
     source = "# Alignment\n\nLeft block\n\n:::align{middle center}\n\nCentered block"
     document = Document.create!(title: "Block alignment", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     left = find(".document-editor-block", text: "Left block")
@@ -3028,7 +3766,7 @@ class DocumentsTest < ApplicationSystemTestCase
     wait_for_autosave_idle
     assert_equal expected_source, normalize_source.call(document.reload.source)
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_equal expected_source, normalize_source.call(find_field("Markdown source").value)
     click_on "Source"
     click_on "Visual"
@@ -3040,7 +3778,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "positions the first document block when no source content precedes it" do
     document = Document.create!(title: "First block alignment", source: "Test")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Test")
@@ -3062,9 +3800,7 @@ class DocumentsTest < ApplicationSystemTestCase
   end
 
   test "pins the block alignment control until selection is dismissed" do
-    visit root_path
-    find(".new-work-menu summary").click
-    find(".new-work-option", text: "Document").click
+    visit new_document_path(editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Untitled document")
@@ -3112,7 +3848,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "changes a position directive on the first document block" do
     document = Document.create!(title: "Change first block alignment", source: ":::align{right}\n\nTest")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Test")
@@ -3125,7 +3861,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "changes a position directive added in source mode" do
     document = Document.create!(title: "Source mode alignment", source: "Test")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     click_on "Source"
@@ -3150,7 +3886,7 @@ class DocumentsTest < ApplicationSystemTestCase
       title: "Delete positioned block",
       source: "# Keep\n\n:::align{center}\n\nDelete me\n\nTail"
     )
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     block = find(".document-editor-block", text: "Delete me")
     removed = page.execute_script(<<~JAVASCRIPT, block)
@@ -3175,7 +3911,7 @@ class DocumentsTest < ApplicationSystemTestCase
     assert_equal "center", positioned[:position][:horizontal]
 
     document = Document.create!(title: "Delete positioned block", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
 
     block = find(".document-editor-block", text: "Delete me")
     removed = page.execute_script(<<~JAVASCRIPT, block)
@@ -3297,7 +4033,7 @@ class DocumentsTest < ApplicationSystemTestCase
 
   test "changes alignment immediately after visual edits and reflects it visually in the block" do
     document = Document.create!(title: "Visual edit alignment", source: "Initial block")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     block = find(".document-editor-block", text: "Initial block")

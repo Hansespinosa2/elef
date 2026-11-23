@@ -14,11 +14,13 @@ const editorViewSource = (await loadPackageSource("packages/editor-runtime/src/l
   .replace('import { markProjectionBlocksReadOnly } from "./projection_editability.js"', () => projectionEditabilitySource)
   .replace('import { markStage } from "./stage_marks.js"', () => stageMarksSource)
 const previewRequestBodySource = await loadPackageSource("packages/editor-runtime/src/lib/preview_request_body.ts")
+const previewAutoscrollSource = await loadPackageSource("packages/editor-runtime/src/lib/preview_autoscroll.ts")
 const source = (await loadPackageSource("packages/editor-runtime/src/controllers/preview_controller.ts"))
   .replace('import { Controller } from "@hotwired/stimulus"', "class Controller {}")
   .replace('import { installPreviewHtml } from "../lib/editor_view.js"', () => editorViewSource)
   .replace('import { buildPreviewRequestBody } from "../lib/preview_request_body.js"', () => previewRequestBodySource)
   .replace('import { preserveSurfaceScroll } from "../lib/scroll_preservation.js"', () => scrollPreservationSource)
+  .replace('import { scrollPreviewToSourceOffset } from "../lib/preview_autoscroll.js"', () => previewAutoscrollSource)
   .replace(
     'import { attachCanvasScaling } from "@elef/client"',
     `import { attachCanvasScaling } from "${import.meta.resolve("@elef/client")}"`
@@ -325,6 +327,95 @@ test("coalesces preview revisions behind the active render", async () => {
     clearTimeout(controller.timer)
     controller.abortActiveRequest()
     globalThis.fetch = originalFetch
+    globalThis.document = originalDocument
+    globalThis.CustomEvent = originalCustomEvent
+  }
+})
+
+test("source edit autoscrolls preview on installProjection and preserves scroll without edit", async () => {
+  const { parseHTML } = await import("linkedom")
+  const { document } = parseHTML(`
+    <form data-editor-mode="source">
+      <div class="preview-pane">
+        <div class="slide-frame"><section class="slide" data-slide-index="0"><div data-editor-block-id="b1">Top</div></section></div>
+        <div class="slide-frame"><section class="slide" data-slide-index="1"><div data-editor-block-id="b2">Mid</div></section></div>
+      </div>
+    </form>
+  `)
+  const form = document.querySelector("form")
+  const container = document.querySelector(".preview-pane")
+  Object.defineProperty(container, "scrollHeight", { value: 2000, configurable: true })
+  Object.defineProperty(container, "clientHeight", { value: 500, configurable: true })
+  container.scrollTop = 0
+  container.getBoundingClientRect = () => ({ top: 0, bottom: 500, height: 500, toJSON: () => ({}) })
+
+  const controller = new preview.default()
+  const originalDocument = globalThis.document
+  const originalCustomEvent = globalThis.CustomEvent
+  globalThis.document = document
+  globalThis.CustomEvent = document.defaultView.CustomEvent
+
+  try {
+    Object.assign(controller, {
+      element: form,
+      containerTarget: container,
+      hasContainerTarget: true,
+      warningsTarget: document.createElement("div"),
+      currentSource: () => "# Slide 1\n\n---\n\n# Slide 2",
+      syncSlideScaling() {},
+      clearSlideScaling() {},
+      hideRetry() {},
+      setStatus() {}
+    })
+    controller.warningsTarget.innerHTML = "<ul></ul>"
+    controller.connect()
+
+    const payload = {
+      html: `
+        <div class="slide-frame"><section class="slide" data-slide-index="0"><div data-editor-block-id="b1">Top</div></section></div>
+        <div class="slide-frame"><section class="slide" data-slide-index="1"><div data-editor-block-id="b2">Mid</div></section></div>
+      `,
+      editor_map: {
+        mode: "presentation",
+        slides: [
+          { id: "slide-1", index: 0, range: { start: 0, end: 10 }, blocks: [{ id: "b1", index: 0, kind: "heading", range: { start: 0, end: 10 }, source_range: { start: 0, end: 10 }, content_range: { start: 2, end: 10 } }] },
+          { id: "slide-2", index: 1, range: { start: 15, end: 30 }, blocks: [{ id: "b2", index: 0, kind: "heading", range: { start: 15, end: 30 }, source_range: { start: 15, end: 30 }, content_range: { start: 17, end: 30 } }] }
+        ]
+      }
+    }
+
+    const WinEvent = document.defaultView.Event
+    form.dispatchEvent(Object.assign(new WinEvent("elef:source-edit", { bubbles: true }), { detail: { offset: 15 } }))
+
+    // Simulate layout after installProjection replaces HTML by patching getBoundingClientRect on newly installed b2
+    controller.syncSlideScaling = () => {
+      const b1 = container.querySelector("[data-editor-block-id='b1']")
+      const b2 = container.querySelector("[data-editor-block-id='b2']")
+      if (b1) b1.getBoundingClientRect = () => ({ top: 20 - container.scrollTop, bottom: 100 - container.scrollTop, height: 80, toJSON: () => ({}) })
+      if (b2) b2.getBoundingClientRect = () => ({ top: 900 - container.scrollTop, bottom: 1000 - container.scrollTop, height: 100, toJSON: () => ({}) })
+    }
+
+    controller.installProjection(payload, { ok: true }, "# Slide 1\n\n---\n\n# Slide 2")
+    assert.equal(container.scrollTop, 735)
+
+    // Without a new elef:source-edit, manual scrollTop is preserved across installProjection
+    container.scrollTop = 120
+    controller.installProjection(payload, { ok: true }, "# Slide 1\n\n---\n\n# Slide 2")
+    assert.equal(container.scrollTop, 120)
+
+    // User scrolling preview cancels pending source-edit autoscroll
+    form.dispatchEvent(Object.assign(new WinEvent("elef:source-edit", { bubbles: true }), { detail: { offset: 15 } }))
+    container.dispatchEvent(new WinEvent("wheel"))
+    controller.installProjection(payload, { ok: true }, "# Slide 1\n\n---\n\n# Slide 2")
+    assert.equal(container.scrollTop, 120)
+
+    // A stale source-edit from a different source string is discarded
+    form.dispatchEvent(Object.assign(new WinEvent("elef:source-edit", { bubbles: true }), { detail: { offset: 15 } }))
+    controller.installProjection(payload, { ok: true }, "# Different source")
+    assert.equal(container.scrollTop, 120)
+
+    controller.disconnect()
+  } finally {
     globalThis.document = originalDocument
     globalThis.CustomEvent = originalCustomEvent
   }

@@ -1,6 +1,14 @@
 :root { --document-page-width: 210mm; --document-page-inset: 16mm; --document-content-width: calc(var(--document-page-width) - 2 * var(--document-page-inset) - 2px); --document-body-size: 18px; --document-body-leading: 1.6; }
 .document-reader { width: 100%; }
-.document-surface { color: var(--oradia-paper-ink); font-family: var(--oradia-sans); }
+.document-surface { color: var(--oradia-paper-ink); color-scheme: light; font-family: var(--oradia-sans); }
+/* Preserve surface ink on selection so non-recolored elements (::marker
+   bullets/numbers, pseudo-elements, KaTeX rules/SVGs) stay matched with text
+   even when the host shell sets color-scheme: dark. */
+.document-surface ::selection,
+.document-surface::selection {
+  background-color: var(--oradia-vim-selection);
+  color: var(--oradia-paper-ink);
+}
 /* MathML elements carry no KaTeX classes, so without this they inherit the
    body stack and symbols missing from it fall back per-glyph to whatever the
    OS provides (DejaVu on CI, assorted local fonts), paginating math
@@ -55,6 +63,9 @@ math[display="block"] mo {
 .document-block.position-middle { justify-content: center; }
 .document-block.position-bottom { justify-content: flex-end; }
 .document-surface pre { background: #191714; border: 1px solid rgba(255, 247, 232, 0.12); border-radius: 0.75rem; color: #fff7e8; font-size: 16px; line-height: 1.5; margin: 20px 0; max-width: 100%; overflow: auto; padding: 16px; }
+.document-surface pre:not(.mermaid[data-processed], .mermaid.mermaid-error) { color-scheme: dark; }
+.document-surface pre:not(.mermaid[data-processed], .mermaid.mermaid-error) ::selection,
+.document-surface pre:not(.mermaid[data-processed], .mermaid.mermaid-error)::selection { background-color: var(--work-code-selection-background); color: var(--work-code-selection-ink); }
 .document-surface pre code { display: block; font-family: var(--oradia-mono); min-width: max-content; }
 .document-surface code { font-family: var(--oradia-mono); }
 .document-surface table { border-collapse: collapse; max-width: 100%; width: 100%; }
@@ -117,8 +128,11 @@ math[display="block"] mo {
   content-visibility: auto;
 }
 @media print {
-  .document-page-frame.is-quiet { content-visibility: visible; }
-  .document-page-frame.is-sealed { content-visibility: visible; }
+  .document-page-frame.is-quiet,
+  .document-page-frame.is-sealed {
+    content-visibility: visible;
+    contain-intrinsic-size: none;
+  }
   .document-editor-projection .document-surface:not(.is-paginated) { content-visibility: visible; }
 }
 .document-page-frame > .document-page {
@@ -145,16 +159,33 @@ math[display="block"] mo {
   transform-origin: top left;
   width: var(--document-page-width);
   color: var(--document-page-ink);
+  color-scheme: var(--document-color-scheme, light);
+}
+.document-page ::selection,
+.document-page::selection {
+  background-color: var(--document-selection-background);
+  color: var(--document-page-ink);
 }
 .document-page-content { box-sizing: border-box; flex: 1 1 auto; min-height: 0; overflow: hidden; width: 100%; }
 .document-page-content:focus-within { overflow: auto; }
+.document-page-content li[data-document-page-continuation] { list-style-type: none; }
 .document-page-footer { border-top: 1px solid var(--presentation-line); color: var(--oradia-paper-muted); flex: 0 0 auto; font-size: 11px; letter-spacing: 0.08em; margin-top: 16px; padding-top: 12px; text-align: right; text-transform: uppercase; }
 .document-page.is-overflowing-content .document-page-content { overflow: auto; }
 
-.document-print { page: document; }
+.document-print { color-scheme: dark; page: document; }
 @page document { size: A4 portrait; margin: 0; }
 @media print {
   html:has(.document-print), body:has(.document-print) { background: white; margin: 0; padding: 0; }
+  .document-reader,
+  .editor-projection .document-reader { container-type: normal; }
+  .document-surface.is-paginated { display: block; }
+  .document-page-frame { aspect-ratio: auto; break-after: page; height: auto; max-width: none; overflow: visible; page-break-after: always; width: 100%; }
+  .document-page-frame:last-child,
+  .document-page-frame:last-of-type { break-after: auto; page-break-after: auto; }
+  .document-page,
+  .document-page-frame > .document-page { border: 0; border-radius: 0; box-shadow: none; break-after: auto; height: auto; min-height: 0; overflow: visible; page-break-after: auto; position: static; transform: none; width: 100%; }
+  .document-page-content,
+  .document-page.is-overflowing-content .document-page-content { overflow: visible; }
   .document-print { background: white; color-adjust: exact; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
   .document-print-toolbar { display: none; }
   .document-print-pages { display: block; gap: 0; }
@@ -168,25 +199,40 @@ math[display="block"] mo {
     page-break-after: always;
     width: var(--document-page-width);
   }
-  .document-print-pages .document-page-frame:last-child { break-after: auto; page-break-after: auto; }
+  .document-print-pages .document-page-frame:last-child,
+  .document-print-pages .document-page-frame:last-of-type { break-after: auto; page-break-after: auto; }
+  .document-print-pages .document-page-frame:has(> .document-page.is-overflowing-content) {
+    break-inside: auto;
+    height: auto;
+    overflow: visible;
+    page-break-inside: auto;
+  }
   .document-print .document-page {
     border: 0;
     border-radius: 0;
     box-shadow: none;
+    break-after: auto;
     height: 297mm;
     padding: var(--document-page-inset);
+    page-break-after: auto;
     position: static;
     transform: none;
     width: var(--document-page-width);
   }
-  .document-print .document-page-content { overflow: visible; }
-  .document-reader { container-type: normal; }
-  .document-surface.is-paginated { display: block; }
-  .document-page-frame { aspect-ratio: auto; break-after: page; height: auto; max-width: none; overflow: visible; page-break-after: always; width: 100%; }
-  .document-page-frame:last-child { break-after: auto; page-break-after: auto; }
-  .document-page { border: 0; border-radius: 0; box-shadow: none; break-after: page; height: auto; min-height: 0; overflow: visible; position: static; transform: none; width: 100%; }
-  .document-page:last-child { break-after: auto; page-break-after: auto; }
-  .document-page-content { overflow: visible; }
+  .document-print .document-page.is-overflowing-content {
+    break-inside: auto;
+    display: block;
+    height: auto;
+    min-height: 297mm;
+    overflow: visible;
+    page-break-inside: auto;
+  }
+  .document-print .document-page-content,
+  .document-print .document-page.is-overflowing-content .document-page-content { overflow: visible; }
+  .document-print .document-page.is-overflowing-content .document-editor-block {
+    break-inside: auto;
+    page-break-inside: auto;
+  }
 }
 
 .presentation-print { page: presentation; }
@@ -214,7 +260,9 @@ math[display="block"] mo {
 .document-graph-panel .document-graph-legend { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; }
 .document-graph-key-arrow { border-top: 2px solid var(--oradia-green-deep); display: inline-block; margin-right: 0.35rem; position: relative; vertical-align: middle; width: 1.4rem; }
 .document-graph-key-arrow::after { border-bottom: 4px solid transparent; border-left: 6px solid var(--oradia-green-deep); border-top: 4px solid transparent; content: ""; position: absolute; right: -1px; top: -5px; }
-.document-graph { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 1rem; overflow: hidden; }
+.document-graph { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 1rem; color-scheme: light; overflow: hidden; }
+.document-graph::selection,
+.document-graph ::selection { background-color: var(--oradia-vim-selection); color: var(--oradia-paper-ink); }
 .document-graph-navigation { align-items: center; background: var(--oradia-paper-bright); border-bottom: 1px solid var(--oradia-paper-line); display: flex; flex-wrap: wrap; gap: 10px; padding: 12px; }
 .document-graph-search { flex: 1; min-width: 180px; position: relative; }
 .document-graph-navigation input { background: white; border: 1px solid var(--oradia-paper-line); border-radius: 8px; color: var(--oradia-paper-ink); font-size: 13px; min-height: 40px; padding: 8px 12px; width: 100%; }

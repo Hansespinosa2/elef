@@ -10,7 +10,7 @@
   <%= preload_link_tag "katex/fonts/KaTeX_Main-Regular.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" %>
   <%= preload_link_tag "katex/fonts/KaTeX_Size1-Regular.woff2", as: "font", type: "font/woff2", crossorigin: "anonymous" %>
 <% end %>
-<% visual_mode = params[:editor_mode] != "source" %>
+<% visual_mode = params[:editor_mode] == "visual" || (work.document? && params[:editor_surface] == "continuous" && params[:editor_mode] != "source") %>
 <% continuous_candidate = work.document? && visual_mode && params[:editor_surface] == "continuous" %>
 <% editor_projection = if continuous_candidate
   { html: "", editor_map: {}, warnings: [] }

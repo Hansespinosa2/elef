@@ -28,12 +28,15 @@ function settingText(value: unknown, fallback: string): string {
   return typeof value === "string" && value.length > 0 ? value : fallback;
 }
 
+type SettingsSection = "appearance" | "keyboard" | "updates";
+
 export function SettingsApp({ host, options, storage, editorBridge, onSaved, registerControl }: SettingsAppProps): JSX.Element {
   const [theme, setTheme] = useState("dark");
   const [typography, setTypography] = useState("book");
   const [ready, setReady] = useState(false);
   const [notice, setNotice] = useState("");
   const [noticeTone, setNoticeTone] = useState<NoticeTone>("info");
+  const [section, setSection] = useState<SettingsSection>("appearance");
 
   const showNotice = useCallback((message: string | null, tone: NoticeTone = "info") => {
     setNotice(message ?? "");
@@ -80,74 +83,178 @@ export function SettingsApp({ host, options, storage, editorBridge, onSaved, reg
   }
 
   const showUpdater = host.capabilities.updater && options.updater !== undefined;
+  const visibleSections: readonly SettingsSection[] = showUpdater
+    ? ["appearance", "keyboard", "updates"]
+    : ["appearance", "keyboard"];
+
+  function selectSection(next: SettingsSection): void {
+    setSection(next);
+    document.getElementById(`settings-panel-${next}`)?.scrollIntoView?.({ behavior: "smooth", block: "nearest" });
+  }
+
+  function onTabKeyDown(event: React.KeyboardEvent<HTMLElement>): void {
+    const idx = visibleSections.indexOf(section);
+    let nextIdx = -1;
+    if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+      nextIdx = (idx + 1) % visibleSections.length;
+    } else if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+      nextIdx = (idx - 1 + visibleSections.length) % visibleSections.length;
+    } else if (event.key === "Home") {
+      nextIdx = 0;
+    } else if (event.key === "End") {
+      nextIdx = visibleSections.length - 1;
+    }
+    if (nextIdx === -1) return;
+    event.preventDefault();
+    const next = visibleSections[nextIdx]!;
+    selectSection(next);
+    document.getElementById(`settings-tab-${next}`)?.focus();
+  }
 
   return (
-    <div className="settings-page">
-      <section className="page-title mb-8">
-        <p className="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em]">Workspace defaults</p>
-        <h1 className="mb-2 text-4xl font-bold">Settings</h1>
-        <p>New and unstyled works use these values. Each work can override them in its editor.</p>
-      </section>
-      {notice !== "" ? (
-        <p role="status" data-tone={noticeTone} className="settings-notice">
-          {notice}
-        </p>
-      ) : null}
-      {!ready ? (
-        <p>Loading settings…</p>
-      ) : (
-        <>
-          <form
-            onSubmit={(event) => void saveDefaults(event)}
-            className="settings-card max-w-2xl rounded-2xl border p-6 mb-8"
+    <div className="settings-page settings-arc-shell">
+      <aside className="settings-rail" aria-label="Settings sections">
+        <section className="page-title mb-6">
+          <p className="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em]">Workspace defaults</p>
+          <h1 className="mb-1 text-3xl font-bold">Settings</h1>
+          <p className="text-sm opacity-75">New and unstyled works use these values.</p>
+        </section>
+        <nav className="settings-tabs" role="tablist" aria-label="Settings categories" onKeyDown={onTabKeyDown}>
+          <button
+            type="button"
+            role="tab"
+            id="settings-tab-appearance"
+            aria-selected={section === "appearance"}
+            aria-controls="settings-panel-appearance"
+            tabIndex={section === "appearance" ? 0 : -1}
+            className={`settings-tab${section === "appearance" ? " is-active" : ""}`}
+            onClick={() => selectSection("appearance")}
           >
-            <div className="field mb-5">
-              <label htmlFor="settings-theme" className="mb-1 block font-extrabold">
-                Default theme
-              </label>
-              <select
-                id="settings-theme"
-                value={theme}
-                onChange={(event) => setTheme(event.target.value)}
-                className="settings-control w-full rounded-xl border p-3"
-              >
-                {THEME_CHOICES.map((choice) => (
-                  <option key={choice} value={choice}>
-                    {choice}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="field mb-5">
-              <label htmlFor="settings-typography" className="mb-1 block font-extrabold">
-                Default typography
-              </label>
-              <select
-                id="settings-typography"
-                value={typography}
-                onChange={(event) => setTypography(event.target.value)}
-                className="settings-control w-full rounded-xl border p-3"
-              >
-                {TYPOGRAPHY_CHOICES.map((choice) => (
-                  <option key={choice} value={choice}>
-                    {choice}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <button type="submit" className="button primary">
-              Save workspace defaults
+            Appearance
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="settings-tab-keyboard"
+            aria-selected={section === "keyboard"}
+            aria-controls="settings-panel-keyboard"
+            tabIndex={section === "keyboard" ? 0 : -1}
+            className={`settings-tab${section === "keyboard" ? " is-active" : ""}`}
+            onClick={() => selectSection("keyboard")}
+          >
+            Keyboard &amp; Vim
+          </button>
+          {showUpdater ? (
+            <button
+              type="button"
+              role="tab"
+              id="settings-tab-updates"
+              aria-selected={section === "updates"}
+              aria-controls="settings-panel-updates"
+              tabIndex={section === "updates" ? 0 : -1}
+              className={`settings-tab${section === "updates" ? " is-active" : ""}`}
+              onClick={() => selectSection("updates")}
+            >
+              Updates
             </button>
-          </form>
+          ) : null}
+        </nav>
+        {options.navigate !== undefined ? (
+          <button
+            type="button"
+            className="settings-tab settings-snippets-link mt-3"
+            onClick={() => options.navigate?.({ url: "/snippets" })}
+          >
+            Snippets &amp; Math →
+          </button>
+        ) : null}
+      </aside>
 
-          <VimSettings
-            {...(storage === undefined ? {} : { storage })}
-            {...(editorBridge === undefined || editorBridge === null ? {} : { editorBridge })}
-          />
+      <div className="settings-stage">
+        {notice !== "" ? (
+          <p role="status" data-tone={noticeTone} className="settings-notice">
+            {notice}
+          </p>
+        ) : null}
+        {!ready ? (
+          <p>Loading settings…</p>
+        ) : (
+          <>
+            <div
+              id="settings-panel-appearance"
+              role="tabpanel"
+              aria-labelledby="settings-tab-appearance"
+              className={section === "appearance" ? "is-focused-section" : undefined}
+            >
+              <form
+                onSubmit={(event) => void saveDefaults(event)}
+                className="settings-card max-w-2xl rounded-2xl border p-6 mb-8"
+              >
+                <div className="field mb-5">
+                  <label htmlFor="settings-theme" className="mb-1 block font-extrabold">
+                    Default theme
+                  </label>
+                  <select
+                    id="settings-theme"
+                    value={theme}
+                    onChange={(event) => setTheme(event.target.value)}
+                    className="settings-control w-full rounded-xl border p-3"
+                  >
+                    {THEME_CHOICES.map((choice) => (
+                      <option key={choice} value={choice}>
+                        {choice}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="field mb-5">
+                  <label htmlFor="settings-typography" className="mb-1 block font-extrabold">
+                    Default typography
+                  </label>
+                  <select
+                    id="settings-typography"
+                    value={typography}
+                    onChange={(event) => setTypography(event.target.value)}
+                    className="settings-control w-full rounded-xl border p-3"
+                  >
+                    {TYPOGRAPHY_CHOICES.map((choice) => (
+                      <option key={choice} value={choice}>
+                        {choice}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button type="submit" className="button primary">
+                  Save workspace defaults
+                </button>
+              </form>
+            </div>
 
-          {showUpdater && options.updater ? <UpdaterSection seam={options.updater} /> : null}
-        </>
-      )}
+            <div
+              id="settings-panel-keyboard"
+              role="tabpanel"
+              aria-labelledby="settings-tab-keyboard"
+              className={section === "keyboard" ? "is-focused-section" : undefined}
+            >
+              <VimSettings
+                {...(storage === undefined ? {} : { storage })}
+                {...(editorBridge === undefined || editorBridge === null ? {} : { editorBridge })}
+              />
+            </div>
+
+            {showUpdater && options.updater ? (
+              <div
+                id="settings-panel-updates"
+                role="tabpanel"
+                aria-labelledby="settings-tab-updates"
+                className={section === "updates" ? "is-focused-section" : undefined}
+              >
+                <UpdaterSection seam={options.updater} />
+              </div>
+            ) : null}
+          </>
+        )}
+      </div>
     </div>
   );
 }

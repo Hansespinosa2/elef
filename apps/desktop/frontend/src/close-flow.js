@@ -1,19 +1,13 @@
-// Native close/Quit flow: dirty windows flush silently before closing. A clean
+// Native close/Quit flow: dirty windows flush silently before closing. `close`
+// completes an approved close without emitting another close request. A clean
 // flush closes; a conflict stays open because the conflict dialog already
 // warns; only a failed flush asks the native discard confirmation.
 //
-// Safe-quit update activation composes with the flush outcomes when the host
-// passes its update runtime (macOS only, where the update dialog can arm an
-// update; the disabled runtime never arms):
-// - clean, or a "saved" flush, with an armed update installs it and relaunches
-//   instead of closing; a cancelled native confirmation disarms and the
-//   requested quit proceeds instead;
-// - a "failed" or "conflict" flush with an armed update defers the update
-//   (disarms it) and stays open with no new prompt; without an armed update
-//   the failed/conflict paths behave exactly as before;
-// - an install error is reported and the app stays open with the update
-//   disarmed, so the next quit is an ordinary quit.
-export function createCloseFlow({ isDirty, flushForClose, close, confirmDiscard = null, onError = () => {}, updateRuntime = null }) {
+// A consented update may still be downloading. Keep the window open and input
+// inert until preparation and safe-save activation finish. Failed/conflicted
+// saves retain the prepared update for the next safe quit. Installation errors
+// stay visible; only a successful activation (or cancelled preparation) closes.
+export function createCloseFlow({ isDirty, flushForClose, close, confirmDiscard = null, onError = () => {}, updateRuntime = null, setClosing = () => {} }) {
   let pending = null
   const installArmedUpdate = async () => {
     const armed = updateRuntime.takeArmedUpdate()
@@ -27,6 +21,13 @@ export function createCloseFlow({ isDirty, flushForClose, close, confirmDiscard 
     return installed ? "installed" : "deferred"
   }
   return event => {
+    // Taking the armed update clears it before the asynchronous native install.
+    // Keep *all* subsequent close requests blocked until that operation ends,
+    // even when saving has made the editor clean and no armed handle remains.
+    if (pending) {
+      event.preventDefault()
+      return pending
+    }
     let dirty
     try {
       dirty = isDirty()
@@ -38,28 +39,28 @@ export function createCloseFlow({ isDirty, flushForClose, close, confirmDiscard 
     const armed = updateRuntime?.peekArmedUpdate() ?? null
     if (!dirty && !armed) return
     event.preventDefault()
-    if (pending) return pending
     pending = (async () => {
       try {
+        setClosing(true)
         if (!dirty) {
-          // A clean quit with an armed update is already safe: install and
-          // relaunch instead of closing.
-          if (await installArmedUpdate() !== "installed") await close()
+          await installArmedUpdate()
+          await close()
           return
         }
         const outcome = await flushForClose()
         if (outcome === "saved") {
-          if (armed && await installArmedUpdate() === "installed") return
+          if (armed) await installArmedUpdate()
           await close()
         } else if (armed) {
-          // An unsafe save defers the armed update and keeps the app open.
-          updateRuntime.clearArmedUpdate()
+          // Preserve the approved update while the user resolves the save.
+          // The next safe quit can activate it without asking for consent again.
         } else if (outcome === "failed" && typeof confirmDiscard === "function") {
           if (await confirmDiscard()) await close()
         }
       } catch (error) {
         onError(error)
       } finally {
+        setClosing(false)
         pending = null
       }
     })()

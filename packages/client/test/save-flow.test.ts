@@ -38,6 +38,8 @@ interface Harness {
   disk: { source: string };
   setEditor: (source: string) => void;
   getEditor: () => string;
+  queueUnmaterializedEdit: (source: string) => void;
+  setMergeOutcome: (fn: (source: string, attempt: number) => MergeOutcome) => void;
   saves: Array<{ source: string; base: string }>;
   snapshots: Array<{ id: string; reason: string }>;
   mergeCalls: string[];
@@ -49,13 +51,25 @@ interface Harness {
   applyGate: ReturnType<typeof deferred>;
   delayApplication: () => void;
   staleSnapshot: ExternalSnapshot;
+  echoSnapshot: ExternalSnapshot;
+  externalSnapshot: ExternalSnapshot;
 }
 
+const EARLIER = "# Before E2E\n";
 const BEFORE = "# Before E2E\n\nSeed paragraph.\n";
+const EXTERNAL = "# External E2E\n\nSeed paragraph.\n";
 const AFTER = "# Before E2E\n\nSeed paragraph.\n\nEdited.\n";
+const AFTER_TYPING = "# Before E2E\n\nSeed paragraph.\n\nEdited while merging.\n";
 
 function setup(saveDelay = 3_600_000): Harness {
   let editor = BEFORE;
+  let pendingVisualEdit: string | null = null;
+  const materializeEdits = (): void => {
+    if (pendingVisualEdit !== null) {
+      editor = pendingVisualEdit;
+      pendingVisualEdit = null;
+    }
+  };
   const disk = { source: BEFORE };
   const work: SaveWork = {
     id: "work-1",
@@ -73,10 +87,13 @@ function setup(saveDelay = 3_600_000): Harness {
   const mergeGate = deferred();
   const applyGate = deferred();
   let applyDelayed = false;
+  let mergeOutcome = (source: string, _attempt: number): MergeOutcome => ({ kind: "merged", source });
   const flow = createSaveFlow({
     saveDelay,
+    materializeEdits,
     getSource: () => editor,
     setSource: async (source, meta): Promise<boolean> => {
+      materializeEdits();
       setSourceCalls.push(source);
       if (applyDelayed) await applyGate.promise;
       if (editor !== meta.expectedSource) return false;
@@ -114,7 +131,7 @@ function setup(saveDelay = 3_600_000): Harness {
       void id;
       mergeCalls.push(localSource);
       await mergeGate.promise;
-      return { kind: "merged", source: localSource };
+      return mergeOutcome(localSource, mergeCalls.length);
     },
     onConflict: (conflict: unknown) => {
       conflicts.push(conflict);
@@ -131,6 +148,10 @@ function setup(saveDelay = 3_600_000): Harness {
       editor = source;
     },
     getEditor: () => editor,
+    queueUnmaterializedEdit: (source: string) => {
+      pendingVisualEdit = source;
+    },
+    setMergeOutcome: (fn) => { mergeOutcome = fn; },
     saves,
     snapshots,
     mergeCalls,
@@ -141,9 +162,32 @@ function setup(saveDelay = 3_600_000): Harness {
     mergeGate,
     applyGate,
     delayApplication: () => { applyDelayed = true; },
-    staleSnapshot: { source: BEFORE, content_hash: sha(BEFORE) },
+    staleSnapshot: { source: EARLIER, content_hash: sha(EARLIER) },
+    echoSnapshot: { source: BEFORE, content_hash: sha(BEFORE) },
+    externalSnapshot: { source: EXTERNAL, content_hash: sha(EXTERNAL) },
   };
 }
+
+test("a watcher echo matching the active baseline hash returns current without merging or saving while dirty", async () => {
+  const h = setup();
+  try {
+    h.flow.activate(h.work);
+    h.setEditor(AFTER);
+    h.flow.noteChange();
+    assert.equal(
+      await h.flow.resolveExternalChange("work-1", h.echoSnapshot),
+      "current"
+    );
+    assert.deepEqual(h.snapshots, []);
+    assert.deepEqual(h.mergeCalls, []);
+    assert.deepEqual(h.setSourceCalls, []);
+    assert.deepEqual(h.saves, []);
+    assert.equal(h.flow.dirty, true);
+    assert.equal(h.flow.conflict, null);
+  } finally {
+    h.flow.deactivate();
+  }
+});
 
 test("a save that lands mid-merge supersedes the stale merge instead of conflicting", async () => {
   const h = setup();
@@ -154,7 +198,7 @@ test("a save that lands mid-merge supersedes the stale merge instead of conflict
     const resolved = h.flow.resolveExternalChange("work-1", h.staleSnapshot);
     await waitFor(
       () => h.snapshots.length === 1,
-      "the stale echo should enter the snapshot merge path"
+      "the stale snapshot should enter the snapshot merge path"
     );
     // The timer save lands while the merge awaits its snapshots.
     assert.equal(await h.flow.flush(), true);
@@ -183,18 +227,21 @@ test("typing while an external merge runs preserves the newer buffer", async () 
     h.flow.activate(h.work);
     h.setEditor(AFTER);
     h.flow.noteChange();
-    const resolved = h.flow.resolveExternalChange("work-1", h.staleSnapshot);
+    h.disk.source = EXTERNAL;
+    h.setMergeOutcome((source) => ({ kind: "merged", source: `${source}\nExternal change.` }));
+    const resolved = h.flow.resolveExternalChange("work-1", h.externalSnapshot);
     h.snapshotGate.resolve();
     await waitFor(() => h.mergeCalls.length === 1, "the merge should be running");
     const newer = `${AFTER}Still typing.`;
     h.setEditor(newer);
     h.flow.noteChange();
     h.mergeGate.resolve();
-    assert.equal(await resolved, "current");
-    assert.equal(h.getEditor(), newer);
-    assert.deepEqual(h.setSourceCalls, []);
+    assert.equal(await resolved, "merged");
+    assert.deepEqual(h.mergeCalls, [AFTER, newer]);
+    assert.equal(h.getEditor(), `${newer}\nExternal change.`);
+    assert.deepEqual(h.setSourceCalls, [`${newer}\nExternal change.`]);
     assert.equal(await h.flow.flush(), true);
-    assert.equal(h.disk.source, newer);
+    assert.equal(h.disk.source, `${newer}\nExternal change.`);
     assert.equal(h.flow.conflict, null);
   } finally {
     h.flow.deactivate();
@@ -208,7 +255,8 @@ test("typing while the editor adapter waits rejects a stale merge result", async
     h.setEditor(AFTER);
     h.flow.noteChange();
     h.delayApplication();
-    const resolved = h.flow.resolveExternalChange("work-1", h.staleSnapshot);
+    h.disk.source = EXTERNAL;
+    const resolved = h.flow.resolveExternalChange("work-1", h.externalSnapshot);
     h.snapshotGate.resolve();
     await waitFor(() => h.mergeCalls.length === 1, "the merge should be running");
     h.mergeGate.resolve();
@@ -219,11 +267,11 @@ test("typing while the editor adapter waits rejects a stale merge result", async
     // Let the original autosave timer fire while the adapter is still busy.
     await new Promise((resolve) => setTimeout(resolve, 60));
     h.applyGate.resolve();
-    assert.equal(await resolved, "current");
+    assert.equal(await resolved, "conflict");
     assert.equal(h.getEditor(), newer);
-    await waitFor(() => h.disk.source === newer, "autosave should resume after the adapter finishes");
-    assert.equal(h.disk.source, newer);
-    assert.equal(h.flow.conflict, null);
+    assert.equal(h.disk.source, EXTERNAL);
+    assert.equal(h.flow.conflict?.localSource, newer);
+    assert.equal(h.flow.conflict?.diskSource, EXTERNAL);
   } finally {
     h.flow.deactivate();
   }
@@ -237,6 +285,7 @@ test("typing during a real external merge preserves both sides for conflict reso
     h.flow.noteChange();
     const external = `${BEFORE}External edit.`;
     h.disk.source = external;
+    h.setMergeOutcome((source, attempt) => attempt === 1 ? { kind: "merged", source } : { kind: "conflict" });
     const resolved = h.flow.resolveExternalChange("work-1", { source: external, content_hash: sha(external) });
     h.snapshotGate.resolve();
     await waitFor(() => h.mergeCalls.length === 1, "the merge should be running");
@@ -261,10 +310,11 @@ test("an uninterrupted dirty merge still applies and saves", async () => {
     h.flow.activate(h.work);
     h.setEditor(AFTER);
     h.flow.noteChange();
-    const resolved = h.flow.resolveExternalChange("work-1", h.staleSnapshot);
+    h.disk.source = EXTERNAL;
+    const resolved = h.flow.resolveExternalChange("work-1", h.externalSnapshot);
     await waitFor(
       () => h.snapshots.length === 1,
-      "the echo should enter the snapshot merge path"
+      "the external change should enter the snapshot merge path"
     );
     h.snapshotGate.resolve();
     await waitFor(
@@ -280,4 +330,59 @@ test("an uninterrupted dirty merge still applies and saves", async () => {
   } finally {
     h.flow.deactivate();
   }
+});
+
+test("typing while a dirty external merge awaits re-merges against the latest editor text instead of clobbering keystrokes", async () => {
+  const h = setup();
+  try {
+    h.flow.activate(h.work);
+    h.setEditor(AFTER);
+    h.flow.noteChange();
+    h.disk.source = EXTERNAL;
+    const resolved = h.flow.resolveExternalChange("work-1", h.externalSnapshot);
+    await waitFor(
+      () => h.snapshots.length === 1,
+      "the external change should enter the snapshot merge path"
+    );
+    h.snapshotGate.resolve();
+    await waitFor(
+      () => h.mergeCalls.length === 1,
+      "the first merge call should run with the initial dirty buffer"
+    );
+    // User types in visual mode (unmaterialized pending edit) while mergeExternalChange is awaiting over IPC.
+    h.queueUnmaterializedEdit(AFTER_TYPING);
+    h.flow.noteChange();
+    h.mergeGate.resolve();
+    assert.equal(await resolved, "merged");
+    assert.deepEqual(h.mergeCalls, [AFTER, AFTER_TYPING]);
+    assert.deepEqual(h.setSourceCalls, [AFTER_TYPING]);
+    assert.equal(h.disk.source, AFTER_TYPING);
+    assert.equal(h.work.content_hash, sha(AFTER_TYPING));
+    assert.equal(h.flow.conflict, null);
+  } finally {
+    h.flow.deactivate();
+  }
+});
+
+test("deactivating while a dirty external merge awaits returns inactive without errors", async () => {
+  const h = setup();
+  h.flow.activate(h.work);
+  h.setEditor(AFTER);
+  h.flow.noteChange();
+  h.disk.source = EXTERNAL;
+  const resolved = h.flow.resolveExternalChange("work-1", h.externalSnapshot);
+  await waitFor(
+    () => h.snapshots.length === 1,
+    "the external change should enter the snapshot merge path"
+  );
+  h.snapshotGate.resolve();
+  await waitFor(
+    () => h.mergeCalls.length === 1,
+    "mergeExternalChange should be in flight before deactivation"
+  );
+  h.flow.deactivate();
+  h.mergeGate.resolve();
+  assert.equal(await resolved, "inactive");
+  assert.deepEqual(h.setSourceCalls, []);
+  assert.deepEqual(h.errors, []);
 });

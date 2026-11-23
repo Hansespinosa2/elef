@@ -35,21 +35,21 @@
    differ. Revealed list items drop their native bullet (the source
    marker takes its place); local reflow while revealed is expected. */
 .editor-reveal-marker::before {
-  color: var(--oradia-muted);
+  color: var(--work-reveal-marker-ink, #4f5852);
   content: attr(data-editor-reveal-prefix);
   font-family: var(--oradia-mono);
   white-space: pre;
 }
 li.editor-reveal-marker { list-style: none; }
 .editor-reveal-fence::before {
-  color: var(--oradia-muted);
+  color: var(--work-reveal-marker-ink, #4f5852);
   content: attr(data-editor-reveal-fence-open);
   display: block;
   font-family: var(--oradia-mono);
   white-space: pre-wrap;
 }
 .editor-reveal-fence[data-editor-reveal-fence-close]::after {
-  color: var(--oradia-muted);
+  color: var(--work-reveal-marker-ink, #4f5852);
   content: attr(data-editor-reveal-fence-close);
   display: block;
   font-family: var(--oradia-mono);
@@ -100,7 +100,12 @@ li.editor-reveal-marker { list-style: none; }
 .visual-editor-form[data-editor-mode="source"] .source-field .editor-surface { display: block; }
 .visual-editor-form[data-editor-mode="source"] .source-field.is-source-hidden { display: block; }
 .editor-layout, .source-pane, .preview-pane { min-width: 0; }
-.visual-editor-form[data-editor-mode="source"] .editor-layout { align-items: start; display: grid; gap: clamp(0.75rem, 1.5vw, 1.25rem); grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr); }
+.visual-editor-form[data-editor-mode="source"] .editor-layout { align-items: start; display: grid; grid-template-columns: minmax(0, calc((100% - 1.25rem) * var(--source-split, 0.46))) 1.25rem minmax(0, 1fr); }
+.editor-splitter { display: none; }
+.visual-editor-form[data-editor-mode="source"] .editor-splitter { align-self: stretch; cursor: col-resize; display: flex; justify-content: center; min-height: 24rem; touch-action: none; }
+.editor-splitter::before { background: var(--oradia-slate-700); border-radius: 2px; content: ""; width: 3px; }
+.editor-splitter:hover::before, .editor-splitter:focus-visible::before { background: var(--oradia-green); }
+.editor-splitter:focus-visible { outline: 2px solid var(--oradia-green); outline-offset: -2px; }
 .visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: min(74vh, 58rem); min-height: 24rem; overflow: auto; }
 .visual-editor-form[data-editor-mode="source"] .document-editor-projection,
 .visual-editor-form[data-editor-mode="source"] .document-editor-projection .document-surface { min-width: 0; width: 100%; }
@@ -110,8 +115,13 @@ li.editor-reveal-marker { list-style: none; }
 .visual-editor-form[data-editor-mode="source"] .document-editor-block:focus { background: transparent; outline-color: transparent; }
 .visual-editor-form[data-editor-mode="source"] .document-block-position-control { display: none; }
 @media (max-width: 900px) {
-  .visual-editor-form[data-editor-mode="source"] .editor-layout { grid-template-columns: minmax(0, 1fr); }
+  .visual-editor-form[data-editor-mode="source"] .editor-layout { gap: 1rem; grid-template-columns: minmax(0, 1fr); }
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter { display: none; }
   .visual-editor-form[data-editor-mode="source"] .editor-projection { max-height: 60vh; min-height: min(24rem, 60vh); }
+}
+@media print {
+  .visual-editor-form[data-editor-mode="source"] .editor-layout { display: block; }
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter { display: none !important; }
 }
 .editor-toolbar { align-items: center; color: var(--oradia-muted); display: flex; flex-wrap: wrap; gap: 0.55rem; min-height: 2rem; position: relative; }
 .editor-mode-switch { align-items: center; display: inline-flex; gap: 0.15rem; }
@@ -125,7 +135,9 @@ li.editor-reveal-marker { list-style: none; }
 .editor-mode[data-mode="insert"] { color: var(--oradia-vim-insert); }
 .editor-mode[data-mode="visual"] { color: var(--oradia-vim-visual); }
 .editor-command { color: var(--oradia-ink); font-family: var(--oradia-mono); min-width: 1rem; }
-.editor-projection { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 0.85rem; box-shadow: 0 14px 35px rgba(0, 0, 0, 0.14); color: var(--oradia-paper-ink); min-height: 22rem; overflow: hidden; padding: clamp(0.75rem, 2vw, 1.25rem); position: relative; z-index: 5; }
+.editor-projection { background: var(--oradia-paper-bright); border: 1px solid var(--oradia-paper-line); border-radius: 0.85rem; box-shadow: 0 14px 35px rgba(0, 0, 0, 0.14); color: var(--oradia-paper-ink); color-scheme: light; min-height: 22rem; overflow: hidden; padding: clamp(0.75rem, 2vw, 1.25rem); position: relative; z-index: 5; }
+.editor-projection ::selection,
+.editor-projection::selection { background-color: var(--oradia-vim-selection); color: var(--oradia-paper-ink); }
 .editor-projection.preview-pane { background: var(--oradia-paper-bright); border-color: var(--oradia-paper-line); box-shadow: 0 14px 35px rgba(0, 0, 0, 0.14); }
 .editor-projection .document-reader { container-type: inline-size; }
 .editor-projection .document-page-frame { width: min(794px, 100%); }
@@ -137,7 +149,13 @@ li.editor-reveal-marker { list-style: none; }
 .document-editor-block.position-left { text-align: left; }
 .document-editor-block.position-center { text-align: center; }
 .document-editor-block.position-right { text-align: right; }
-.document-block-position-control { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; right: 0.25rem; top: 0.15rem; transition: opacity 120ms ease; z-index: 4; }
+.document-block-position-control { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; color-scheme: dark; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; right: 0.25rem; top: 0.15rem; transition: opacity 120ms ease; z-index: 4; }
+.editor-projection .document-block-position-control::selection,
+.editor-projection .document-block-position-control ::selection,
+.editor-projection .presentation-editor-slide-toolbar::selection,
+.editor-projection .presentation-editor-slide-toolbar ::selection,
+.editor-projection .presentation-editor-block-controls::selection,
+.editor-projection .presentation-editor-block-controls ::selection { background-color: var(--work-code-selection-background); color: #e9eee9; }
 .document-editor-block-shell:hover .document-block-position-control,
 .document-editor-block-shell:focus-within .document-block-position-control,
 .document-block-position-control:focus-within,
@@ -160,7 +178,7 @@ li.editor-reveal-marker { list-style: none; }
 .presentation-editor-projection { padding: clamp(0.35rem, 1vw, 0.75rem); }
 .presentation-editor-projection .slides { gap: 1.25rem; }
 .presentation-editor-projection .slide-frame { outline: 1px solid transparent; outline-offset: 0.25rem; }
-.presentation-editor-slide-toolbar { align-items: center; background: rgba(24, 33, 38, 0.9); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; flex-wrap: wrap; gap: 0.35rem; left: 1.25rem; padding: 0.3rem 0.45rem; position: absolute; right: 1.25rem; top: 0.8rem; z-index: 3; }
+.presentation-editor-slide-toolbar { align-items: center; background: rgba(24, 33, 38, 0.9); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; color-scheme: dark; display: flex; flex-wrap: wrap; gap: 0.35rem; left: 1.25rem; padding: 0.3rem 0.45rem; position: absolute; right: 1.25rem; top: 0.8rem; z-index: 3; }
 .presentation-editor-slide-label { font-size: 0.7rem; font-weight: 800; margin-right: auto; text-transform: uppercase; }
 .presentation-editor-slide-toolbar button, .presentation-editor-block-controls select { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 999px; color: inherit; cursor: pointer; font: inherit; font-size: 0.68rem; font-weight: 700; padding: 0.25rem 0.5rem; }
 .presentation-editor-slide-toolbar button:hover, .presentation-editor-block-controls select:hover { background: rgba(255, 255, 255, 0.18); }
@@ -168,7 +186,7 @@ li.editor-reveal-marker { list-style: none; }
 .presentation-editor-projection .slide-title[contenteditable="true"], .presentation-editor-projection .slide-block[contenteditable="true"] { border-radius: 0.45rem; outline: 1px solid transparent; outline-offset: 0.35rem; transition: outline-color 120ms ease, background 120ms ease; }
 .presentation-editor-projection [contenteditable="true"]:hover, .presentation-editor-projection [contenteditable="true"]:focus { background: rgba(79, 139, 104, 0.08); outline-color: rgba(79, 139, 104, 0.5); }
 .slide-block-shell { position: relative; }
-.presentation-editor-block-controls { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; left: 100%; margin-left: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; top: 0; transition: opacity 120ms ease; white-space: nowrap; z-index: 4; }
+.presentation-editor-block-controls { align-items: center; background: rgba(24, 33, 38, 0.94); border: 1px solid rgba(48, 64, 71, 0.9); border-radius: 999px; color: #e9eee9; color-scheme: dark; display: flex; font-size: 0.68rem; font-weight: 700; gap: 0.35rem; left: 100%; margin-left: 0.35rem; opacity: 0; padding: 0.25rem 0.4rem 0.25rem 0.55rem; pointer-events: none; position: absolute; top: 0; transition: opacity 120ms ease; white-space: nowrap; z-index: 4; }
 .presentation-editor-block-controls.pill-left { left: auto; margin-left: 0; margin-right: 0.35rem; right: 100%; }
 .presentation-editor-block-controls.pill-inside { left: auto; margin-left: 0; right: 0.25rem; top: 0.15rem; }
 .slide-block-shell:hover .presentation-editor-block-controls,
@@ -456,4 +474,431 @@ body:has(form[data-editor-focus="continuous"][data-editor-mode="visual"]:not([da
   background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 999px;
   bottom: 1rem; color: var(--oradia-ink); cursor: pointer; font: inherit; font-size: 0.75rem;
   padding: 0.4rem 0.65rem; position: fixed; right: 1rem; z-index: 15;
+}
+
+/* ==========================================================================
+   Source-First Full-Bleed Workspace (Folio + Command-First Studio)
+   ========================================================================== */
+.editor-micro-rail-left { display: none; }
+.editor-micro-btn { display: none; }
+
+@media screen {
+  body.is-editing-source .app-header {
+    background: transparent;
+    border: 0;
+    height: 0;
+    min-height: 0;
+    overflow: visible;
+    padding: 0;
+  }
+  body.is-editing-source .app-header-identity,
+  body.is-editing-source .app-nav,
+  body.is-editing-source .bug-report-trigger,
+  body.is-editing-source .bug-report-disclosure,
+  body.is-editing-source .command-palette-triggers,
+  body.is-editing-source .new-work-menu,
+  body.is-editing-source .desktop-library-location,
+  body.is-editing-source .desktop-header-actions,
+  body.is-editing-source .page-title > div:first-child {
+    display: none;
+  }
+  body.is-editing-source .page-title {
+    align-items: center;
+    background: var(--oradia-slate-900);
+    border-bottom: 1px solid var(--oradia-line);
+    display: flex;
+    height: 36px;
+    justify-content: flex-end;
+    margin: 0;
+    padding: 0 14px;
+  }
+  body.is-editing-source .page-title .button,
+  body.is-editing-source .work-actions .button {
+    font-size: 12px;
+    min-height: 26px;
+    padding: 2px 10px;
+  }
+  body.is-editing-source .page-title .icon-button {
+    height: 26px;
+    min-height: 26px;
+    padding: 0 8px;
+    width: auto;
+  }
+  body.is-editing-source .work-actions {
+    align-items: center;
+    background: var(--oradia-slate-900);
+    border-bottom: 1px solid var(--oradia-line);
+    display: flex;
+    height: 36px;
+    justify-content: flex-end;
+    margin: 0;
+    padding: 0 14px;
+  }
+  body.is-editing-source .app-shell {
+    margin: 0;
+    max-width: 100%;
+    padding: 0;
+    width: 100%;
+  }
+  .visual-editor-form[data-editor-mode="source"] { gap: 0; grid-template-columns: minmax(0, 1fr); height: calc(100vh - 36px); max-width: 100%; min-width: 0; width: 100%; }
+  .visual-editor-form[data-editor-mode="source"] .editor-shell {
+    background: var(--oradia-slate-950);
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 36px);
+    max-width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    padding: 0;
+    width: 100%;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-shell-header {
+    background: var(--oradia-slate-950);
+    border-bottom: 1px solid var(--oradia-line);
+    margin: 0;
+    padding: 6px 16px;
+  }
+  body.is-editing-source .flash {
+    margin: 0;
+    padding: 0.45rem 0.85rem;
+    position: fixed;
+    right: 14px;
+    top: 44px;
+    z-index: 40;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-shell-header:has(.editor-title-field[hidden]) {
+    display: none;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-title-label,
+  .visual-editor-form[data-editor-mode="source"] .editor-kind-badge,
+  .visual-editor-form[data-editor-mode="source"] .media-editor-controls > :not(.media-upload-status):not([data-media-target="input"]),
+  .visual-editor-form[data-editor-mode="source"] .editor-mode-hint,
+  .visual-editor-form[data-editor-mode="source"] .editor-editing-mode,
+  .visual-editor-form[data-editor-mode="source"] .editor-settings {
+    display: none;
+  }
+  .visual-editor-form[data-editor-mode="source"] .media-editor-controls {
+    bottom: 36px;
+    margin: 0;
+    pointer-events: none;
+    position: fixed;
+    right: 16px;
+    z-index: 25;
+  }
+  .visual-editor-form[data-editor-mode="source"] .media-upload-status:not(:empty) {
+    background: rgba(24, 33, 38, 0.94);
+    border: 1px solid var(--oradia-line);
+    border-radius: 6px;
+    color: var(--oradia-ink);
+    font-size: 12px;
+    padding: 4px 10px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-reveal-metadata {
+    border: 0;
+    color: var(--oradia-muted);
+    font-size: 0.68rem;
+    padding: 0.1rem 0.35rem;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-reveal-metadata[hidden] {
+    display: none;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-title-input {
+    border-bottom: 0;
+    font-size: 1.05rem;
+    padding: 0.1rem 0;
+  }
+
+  /* Slim 34px top slide scrubber strip (Mockup 3: Folio) */
+  .visual-editor-form[data-editor-mode="source"] .slide-overview {
+    align-items: center;
+    background: var(--oradia-slate-900);
+    border-bottom: 1px solid var(--oradia-line);
+    border-top: 0;
+    display: flex;
+    flex: 0 0 34px;
+    gap: 0.75rem;
+    height: 34px;
+    margin: 0;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    padding: 0 16px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview[hidden] { display: none; }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-heading-row {
+    align-items: center;
+    flex: 0 0 auto;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    order: 2;
+    margin-left: auto;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-heading-row h3 { display: none; }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-heading-row p {
+    font-family: var(--oradia-mono);
+    font-size: 0.7rem;
+    margin: 0;
+    white-space: nowrap;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-actions button {
+    font-size: 0.7rem;
+    min-height: 22px;
+    padding: 0.1rem 0.45rem;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-grid {
+    align-items: center;
+    display: flex;
+    flex: 1 1 auto;
+    gap: 0.35rem;
+    margin: 0;
+    max-height: none;
+    min-width: 0;
+    order: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-card {
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 6px;
+    color: var(--oradia-muted);
+    flex: 0 0 auto;
+    padding: 0.2rem 0.6rem;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-card:hover {
+    background: var(--oradia-slate-800);
+    color: var(--oradia-ink);
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-card[aria-current="true"] {
+    background: var(--oradia-slate-800);
+    border-color: rgba(159, 197, 169, 0.35);
+    box-shadow: none;
+    color: var(--oradia-ink);
+    font-weight: 600;
+  }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-thumbnail { display: none; }
+  .visual-editor-form[data-editor-mode="source"] .slide-overview-label {
+    font-size: 0.75rem;
+    margin: 0;
+    max-width: 14rem;
+  }
+
+  /* Full-bleed Source | Preview split */
+  .visual-editor-form[data-editor-mode="source"] .editor-layout {
+    align-items: stretch;
+    flex: 1 1 auto;
+    grid-template-columns: minmax(0, calc((100% - 1px) * var(--source-split, 0.46))) 1px minmax(0, 1fr);
+    min-height: 0;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-layout.is-preview-hidden {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-layout.is-preview-hidden .editor-splitter,
+  .visual-editor-form[data-editor-mode="source"] .editor-layout.is-preview-hidden .editor-projection {
+    display: none;
+  }
+  .visual-editor-form[data-editor-mode="source"] .source-pane,
+  .visual-editor-form[data-editor-mode="source"] .source-field {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    height: 100%;
+    margin: 0;
+    min-height: 0;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-surface {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+    overflow: hidden;
+    resize: none;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-surface .cm-editor {
+    border: 0;
+    border-radius: 0;
+    flex: 1 1 auto;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-surface .cm-scroller {
+    flex: 1 1 auto;
+    height: 100%;
+    overflow: auto;
+    padding: 1.5rem 2rem;
+  }
+
+  /* Dock Vim / mode controls cleanly inside the 28px bottom micro-rail */
+  .visual-editor-form[data-editor-mode="source"] .editor-toolbar {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    bottom: 0;
+    display: flex;
+    gap: 0.45rem;
+    height: 28px;
+    left: 50%;
+    margin: 0;
+    min-height: 0;
+    padding: 0;
+    position: fixed;
+    transform: translateX(-50%);
+    z-index: 15;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-mode-button {
+    border: 0;
+    font-size: 0.68rem;
+    padding: 0.1rem 0.4rem;
+  }
+  .visual-editor-form[data-editor-mode="source"] .edit-actions-button {
+    border: 0;
+    font-size: 0.68rem;
+    padding: 0.1rem 0.4rem;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-mode {
+    border: 0;
+    font-size: 0.7rem;
+    letter-spacing: 0.04em;
+    padding: 0.1rem 0.2rem;
+  }
+
+  /* Hairline 1px visual divider with 9px hit target for pointer dragging */
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter {
+    background: transparent;
+    justify-content: center;
+    margin-inline: -4px;
+    min-height: 0;
+    position: relative;
+    width: 9px;
+    z-index: 6;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter::before {
+    background: var(--oradia-line);
+    content: "";
+    display: block;
+    width: 1px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter:hover::before,
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter:focus-visible::before {
+    background: var(--oradia-green);
+    width: 2px;
+  }
+
+  /* Full-height Preview Pane */
+  .visual-editor-form[data-editor-mode="source"] .editor-projection {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+    overflow: auto;
+  }
+  .visual-editor-form[data-editor-mode="source"][data-visual-editor-kind-value="presentation"] .editor-projection.preview-pane {
+    background: #0d1114;
+  }
+
+  /* 28px Bottom Micro-Rail (Mockup 4: Command-First Studio) */
+  .visual-editor-form[data-editor-mode="source"] .editor-footer {
+    align-items: center;
+    background: var(--oradia-slate-900);
+    border-top: 1px solid var(--oradia-line);
+    color: var(--oradia-muted);
+    display: flex;
+    flex: 0 0 28px;
+    font-size: 11.5px;
+    gap: 1rem;
+    height: 28px;
+    justify-content: space-between;
+    padding: 0 14px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-rail-left {
+    align-items: center;
+    display: flex;
+    gap: 8px;
+    min-width: 0;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-back {
+    color: var(--oradia-muted);
+    text-decoration: none;
+    white-space: nowrap;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-back:hover { color: var(--oradia-ink); }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-sep { color: var(--oradia-slate-700); }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-title {
+    color: var(--oradia-ink);
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-actions {
+    align-items: center;
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-actions .button.primary {
+    background: transparent;
+    border: 0;
+    color: var(--oradia-green);
+    font-size: 11.5px;
+    font-weight: 600;
+    min-height: 0;
+    padding: 0 4px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-actions .button {
+    font-size: 11.5px;
+    min-height: 0;
+    padding: 0 4px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .dirty-state { font-size: 11.5px; }
+  .visual-editor-form[data-editor-mode="source"] .dirty-state:empty { display: none; }
+  .visual-editor-form[data-editor-mode="source"] .editor-actions :is(.dirty-state, .autosave-retry, .preview-retry, .release-state) {
+    order: -1;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-btn {
+    background: transparent;
+    border: 1px solid var(--oradia-line);
+    border-radius: 4px;
+    color: var(--oradia-muted);
+    cursor: pointer;
+    display: inline-flex;
+    font-family: var(--oradia-mono);
+    font-size: 10.5px;
+    padding: 1px 6px;
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-micro-btn:hover {
+    border-color: var(--oradia-green);
+    color: var(--oradia-ink);
+  }
+  body[data-desktop-view="editor"][data-desktop-sidebar="open"] .visual-editor-form[data-editor-mode="source"] .editor-toolbar {
+    left: calc(50% + 10.5rem);
+  }
+}
+
+@media screen and (min-width: 1024px) {
+  body.has-editor-library-drawer .visual-editor-form[data-editor-mode="source"] .editor-toolbar {
+    left: calc(50% + 11rem);
+  }
+}
+
+@media screen and (max-width: 900px) {
+  .visual-editor-form[data-editor-mode="source"] .editor-layout {
+    gap: 0;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-layout.is-preview-hidden {
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .visual-editor-form[data-editor-mode="source"] .editor-splitter { display: none; }
 }

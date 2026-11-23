@@ -305,3 +305,93 @@ test("ART-SRC-INVALID-PARITY: invalid Art is consumed with only its stable Art d
   assert.doesNotMatch(preview.html, /:::art\{flow\}/)
   assert.doesNotMatch(preview.html, /data-elef-art-root/)
 })
+
+test("consecutive non-blank lines render in a single aligned and stepped block", () => {
+  const source = [
+    "# Slide",
+    "",
+    ":::align{center}",
+    ":::step{1}",
+    "## Fitzgerald",
+    "American novelist",
+    "- The Great Gatsby",
+    "- Tender Is the Night"
+  ].join("\n")
+  const preview = renderPreviewCore({ kind: "presentation", source, title: "Grouped" })
+
+  assert.equal((preview.html.match(/class="slide-block[^"]*"/g) || []).length, 2)
+  assert.match(
+    preview.html,
+    /<div class="slide-block position-center position-top" data-elef-reveal-event="0"><h2>Fitzgerald<\/h2>\s*<p>American novelist<\/p>\s*<ul>\s*<li>The Great Gatsby<\/li>\s*<li>Tender Is the Night<\/li>\s*<\/ul>\s*<\/div>/
+  )
+})
+
+test("grouped blocks starting with headings do not hijack slide title or two-column layout", () => {
+  const mixedTitle = [
+    "# Slide Title",
+    "Body paragraph",
+    "",
+    "## Col 1",
+    "",
+    "Left",
+    "",
+    "## Col 2",
+    "",
+    "Right"
+  ].join("\n")
+  const mixedPreview = renderPreviewCore({ kind: "presentation", source: mixedTitle, title: "Mixed" })
+  assert.match(mixedPreview.html, /<section class="slide slide-body">/)
+  assert.doesNotMatch(mixedPreview.html, /slide-title/)
+  assert.doesNotMatch(mixedPreview.html, /slide-two-column/)
+
+  const twoCards = [
+    "# Authors",
+    "",
+    ":::align{center}",
+    ":::step{1}",
+    "## Fitzgerald",
+    "American novelist",
+    "- The Great Gatsby",
+    "",
+    ":::align{center}",
+    ":::step{2}",
+    "## Hemingway",
+    "American novelist"
+  ].join("\n")
+  const cardsPreview = renderPreviewCore({ kind: "presentation", source: twoCards, title: "Cards" })
+  assert.match(cardsPreview.html, /<section class="slide slide-body"/)
+  assert.doesNotMatch(cardsPreview.html, /slide-two-column/)
+  assert.match(cardsPreview.html, /data-elef-reveal-event="0"><h2>Fitzgerald<\/h2>/)
+  assert.match(cardsPreview.html, /data-elef-reveal-event="1"><h2>Hemingway<\/h2>/)
+
+  const singleGroupedCard = renderPreviewCore({
+    kind: "presentation",
+    title: "Single card",
+    source: "# Authors\n\n:::align{center}\n## Fitzgerald\nAmerican novelist\n- The Great Gatsby\n- Tender Is the Night"
+  })
+  assert.match(singleGroupedCard.html, /<section class="slide slide-body"/)
+  assert.doesNotMatch(singleGroupedCard.html, /slide-statement/)
+  assert.match(singleGroupedCard.html, /<div class="slide-block position-center position-top"><h2>Fitzgerald<\/h2>/)
+
+  const paraPlusList = renderPreviewCore({
+    kind: "presentation",
+    title: "Para and list",
+    source: "# Intro\n\nParagraph line\n- Bullet"
+  })
+  assert.match(paraPlusList.html, /<section class="slide slide-body"/)
+  assert.doesNotMatch(paraPlusList.html, /slide-statement/)
+})
+
+test("executable python fences render output-first and show-code containers while static python fences stay highlighted code", () => {
+  const staticHtml = renderMarkdownBlock("```python\nx = 1 < 2\n```")
+  assert.match(staticHtml, /<pre><code class="highlight python">/)
+  assert.doesNotMatch(staticHtml, /elef-python-block/)
+
+  const runHtml = renderMarkdownBlock("```python run\nimport matplotlib.pyplot as plt\nplt.plot([1, 2])\n```")
+  assert.match(runHtml, /^<div class="elef-python-block"><pre class="elef-python-source">import matplotlib\.pyplot as plt\nplt\.plot\(\[1, 2\]\)\n<\/pre><div class="elef-python-output"><\/div><\/div>\n$/)
+  assert.doesNotMatch(runHtml, /elef-python-code/)
+
+  const showCodeHtml = renderMarkdownBlock("```python run show-code\nx = 1 + 2\nprint(x)\n```")
+  assert.match(showCodeHtml, /^<div class="elef-python-block elef-python-show-code"><pre class="elef-python-code"><code class="highlight python">/)
+  assert.match(showCodeHtml, /<pre class="elef-python-source">x = 1 \+ 2\nprint\(x\)\n<\/pre><div class="elef-python-output"><\/div><\/div>\n$/)
+})

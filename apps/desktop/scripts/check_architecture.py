@@ -292,13 +292,14 @@ assert macos_updater_allowed == {"install_update"}, f"only the macOS updater cap
 assert macos_updater_capability["platforms"] == ["macOS"], "updater command permissions must be macOS-only"
 assert "core:default" not in permissions, "use only the individual core permissions needed"
 assert {permission for permission in permissions if permission.startswith("core:")} == {
+    "core:app:allow-version",
     "core:event:allow-listen",
     "core:event:allow-unlisten",
     "core:window:allow-close",
     "core:window:allow-destroy",
     "core:window:allow-set-fullscreen",
     "core:resources:allow-close",
-}, "grant only events, window close completion, presentation fullscreen, and releasing updater resources"
+}, "grant only the About version query, events, window close completion, presentation fullscreen, and releasing updater resources"
 assert "await this.destroy();" in (REPO_ROOT / "apps/desktop/frontend/node_modules/@tauri-apps/api/window.js").read_text(), "recheck window permissions when the close-listener implementation changes"
 assert not any(permission.startswith(("fs:", "shell:", "dialog:")) for permission in permissions)
 assert config["app"]["security"]["capabilities"] == ["main-capability", "macos-updater-capability"], "Stable must attach only its common and macOS-only updater capabilities"
@@ -374,7 +375,12 @@ for part in csp.split(";"):
     tokens = part.strip().split()
     if tokens:
         directives[tokens[0]] = tokens[1:]
-assert directives.get("script-src") == ["'self'"], "script-src must stay self-only"
+assert directives.get("script-src") == [
+    "'self'",
+    "'wasm-unsafe-eval'",
+    "elefpython:",
+    "http://elefpython.localhost",
+], "script-src must allow only self, WebAssembly compilation, and the verified elefpython protocol"
 assert "'unsafe-eval'" not in csp and "'unsafe-inline'" not in directives.get("script-src", [])
 assert directives.get("style-src") == ["'self'", "'unsafe-inline'"], (
     "CodeMirror's style-mod runtime inserts its base and theme rules in inline style elements"

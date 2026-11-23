@@ -151,7 +151,7 @@ Capability keys come from the `HostCapabilities` interface
   and a kind marker (`printing-document` / `printing-presentation`) selects
   the matching web print geometry, so the PDF carries the Work preview only —
   shell, Export menu, notices, and editor affordances stay out — with fixed
-  13.333 × 7.5 in presentation pages and flowing A4 document pages. The native
+  13.333 × 7.5 in presentation pages and fixed A4 document pages. The native
   dialog fires no `afterprint` event, and the platform dialog (with its PDF
   destination) outlives the resolve of the native print command, so the
   markers intentionally stay once set: clearing them when the command

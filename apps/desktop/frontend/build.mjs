@@ -192,13 +192,10 @@ const desktopHost = await readFile(path.join(repoRoot, "apps/web/app/views/deskt
 // inlining server-rendered dialog markup.
 let indexHtml = desktopHost
 if (isStableProfile) {
-  // The Stable profile opens every work in source mode; the runtime
-  // configures the same value, so this only sets the pre-JS shell default.
-  const shellDefault = 'data-editor-mode="visual"'
-  if (indexHtml.split(shellDefault).length !== 2) {
-    throw new Error("The desktop host shell default changed; update the Stable profile rewrite.")
+  // Both profiles now default to source mode; verify the pre-JS shell default.
+  if (!indexHtml.includes('data-editor-mode="source"')) {
+    throw new Error("The desktop host shell default changed; expected data-editor-mode=\"source\".")
   }
-  indexHtml = indexHtml.replace(shellDefault, 'data-editor-mode="source"')
 }
 if (!indexHtml.includes('id="authoring-settings-mount"')) {
   throw new Error("The desktop host must provide the shared authoring dialog mount point.")
@@ -230,6 +227,7 @@ await cp(path.join(frontendRoot, "node_modules/katex/dist/fonts"), path.join(ass
 // the esbuild font loaders above: its urls rebase to the emitted files, so
 // no whole-file copy is needed here.
 await copyFile(path.join(repoRoot, "apps/web/vendor/javascript/mermaid.min.js"), path.join(assets, "mermaid.min.js"))
+await copyFile(path.join(repoRoot, "packages/client/dist/python-worker.js"), path.join(assets, "python-worker.js"))
 // The PowerPoint generator ships with the app like the other vendor bundles:
 // PPTX export must work fully offline, so the export transport loads this
 // file instead of a CDN copy.

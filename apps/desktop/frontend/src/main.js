@@ -8,7 +8,7 @@ import { createDiagnosticFailures } from "./diagnostic-failures.js"
 import { installDesktopDropGuard } from "./desktop-drop-guard.js"
 import { createTransportAdapter } from "./transport-adapter.js"
 import { createMediaFetch, mediaUrlsForWorkFolder } from "./media-transport.js"
-import { createPreviewFetch } from "./preview-transport.js"
+import { createPreviewFetch, createPreviewTrace } from "./preview-transport.js"
 import { createIdleUpdateCheck } from "./update-flow.js"
 import { createFileLibraryTransport } from "#desktop/file-library-transport"
 import { createDesktopUpdateRuntime } from "#desktop/update-runtime"
@@ -27,6 +27,7 @@ const fileLibrary = createFileLibraryTransport({ invoke })
 const updateRuntime = createDesktopUpdateRuntime({ invoke })
 const diagnosticFailures = createDiagnosticFailures(invoke)
 const nativeFetch = globalThis.fetch.bind(globalThis)
+globalThis.__ELEF_PYTHON_RUNTIME_BASE__ = "elefpython://localhost/"
 installDesktopDropGuard()
 
 startFileLibraryApplication({
@@ -48,18 +49,10 @@ startFileLibraryApplication({
   createTransportAdapter: options => createTransportAdapter({ invoke, ...options }),
   installFetchTransport: options => {
     const mediaFetch = createMediaFetch({ invoke, fetchImpl: nativeFetch })
-    const previewTrace = []
-    if (__ELEF_E2E__) globalThis.__elefPreviewTrace = previewTrace
-    globalThis.fetch = createPreviewFetch({
-      ...options,
-      fetchImpl: mediaFetch,
-      onFailure: diagnosticFailures.recordPreviewFailure,
-      onEvent: __ELEF_E2E__ ? event => {
-        previewTrace.push(event)
-        if (previewTrace.length > 512) previewTrace.shift()
-      } : undefined
-    })
-    return () => previewTrace.slice()
+    const trace = createPreviewTrace(__ELEF_E2E__)
+    globalThis.fetch = createPreviewFetch({ ...options, fetchImpl: mediaFetch,
+      onFailure: diagnosticFailures.recordPreviewFailure, onEvent: trace.onEvent })
+    return trace.snapshot
   },
   mediaUrlsForWorkFolder,
   checkForUpdate: updateRuntime.checkForUpdate,

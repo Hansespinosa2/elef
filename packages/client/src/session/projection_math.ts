@@ -120,7 +120,7 @@ export function mathMatchForSpan(
 export function activeDisplayMathForNodes(anchorNode: Node | null, focusNode: Node | null): Element | null {
   const spanFor = (node: Node | null): Element | null => {
     if (!node) return null
-    const element = node.nodeType === Node.ELEMENT_NODE ? (node as Element) : (node as ChildNode).parentElement
+    const element = node.nodeType === 1 ? (node as Element) : (node as ChildNode).parentElement
     return element?.closest?.(".editor-math-active.editor-live-math-display") ?? null
   }
   const anchorSpan = spanFor(anchorNode)

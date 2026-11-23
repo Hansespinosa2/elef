@@ -26,8 +26,8 @@ export async function libraryAndGraphWorkflow(ui) {
   await ui.assertDocumentOpened("E2E linked")
   await ui.openLibrary()
   await ui.openWork("E2E seed")
-  await ui.showSourceMode()
+  await ui.showVisualMode()
   await ui.openLibrary()
   await ui.openWork("E2E seed")
-  await ui.assertVisualMode()
+  await ui.assertSourceMode()
 }

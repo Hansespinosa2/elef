@@ -8,8 +8,11 @@ import { scanMathSource } from "@elef/work-model/math-source"
 import { localMathEdit, localInlineMathLineEdit, type LocalMathEdit, type InlineMathLineEdit } from "./continuous_math_edit.js"
 import { localParagraphEndEdit } from "./continuous_paragraph_edit.js"
 import { isContinuousPlainTableEdit } from "./continuous_table_edit.js"
+import { mountPythonExecutionResult, normalizePythonCode, runPythonCode } from "./python_runtime.js"
+import { parsePythonFenceInfo } from "@elef/work-model/document-map"
 
 export const livePreviewMode = StateEffect.define<boolean>()
+export const pythonFenceRunEffect = StateEffect.define<number>()
 
 // KaTeX (262K vendored ESM) stays out of the open path: math widgets render a
 // TeX-source placeholder synchronously and swap in MathML once KaTeX
@@ -151,6 +154,68 @@ class PreviewWidget extends WidgetType {
         }
       )
       return diagram
+    }
+
+    if (this.kind === "python") {
+      const showCode = this.attributes.showCode === "true"
+      const block = document.createElement("div")
+      block.className = `cm-live-widget cm-live-widget-python elef-python-block${showCode ? " elef-python-show-code" : ""}`
+      block.setAttribute("aria-label", this.value)
+      if (showCode) {
+        const pre = document.createElement("pre")
+        pre.className = "elef-python-code"
+        const codeEl = document.createElement("code")
+        codeEl.className = "highlight python"
+        codeEl.textContent = this.value
+        pre.appendChild(codeEl)
+        block.appendChild(pre)
+      }
+      const output = document.createElement("div")
+      output.className = "elef-python-output"
+      block.appendChild(output)
+      runPythonCode(this.value, block).then((result) => {
+        if (block.isConnected) mountPythonExecutionResult(block, result)
+      })
+      return block
+    }
+
+    if (this.kind === "python-controls") {
+      const panel = document.createElement("div")
+      panel.className = "cm-live-widget cm-live-widget-python-controls elef-python-editor-controls"
+      panel.dataset.pythonCode = this.value
+      const toolbar = document.createElement("div")
+      toolbar.className = "elef-python-editor-toolbar"
+      const runBtn = document.createElement("button")
+      runBtn.type = "button"
+      runBtn.className = "elef-python-run-button"
+      runBtn.textContent = "Run"
+      runBtn.title = "Run Python block (Cmd+Enter / Ctrl+Enter)"
+      const hint = document.createElement("span")
+      hint.className = "elef-python-run-hint"
+      hint.textContent = "Cmd+Enter / Ctrl+Enter to run"
+      const output = document.createElement("div")
+      output.className = "elef-python-output"
+      const triggerRun = (event?: Event) => {
+        event?.preventDefault()
+        event?.stopPropagation()
+        const codeToRun = panel.dataset.pythonCode ?? this.value
+        runPythonCode(codeToRun, panel, { force: true }).then((result) => {
+          if (panel.isConnected) mountPythonExecutionResult(panel, result)
+        })
+      }
+      runBtn.addEventListener("mousedown", (event) => {
+        event.preventDefault()
+        event.stopPropagation()
+      })
+      runBtn.addEventListener("click", triggerRun)
+      toolbar.append(runBtn, hint)
+      panel.append(toolbar, output)
+      if (this.attributes.autorun === "true") {
+        runPythonCode(this.value, panel).then((result) => {
+          if (panel.isConnected) mountPythonExecutionResult(panel, result)
+        })
+      }
+      return panel
     }
 
     const element = document.createElement("span")
@@ -436,10 +501,97 @@ function addMermaidFence(decorations: DecorationPlan, state: EditorState, from: 
       Decoration.replace({ widget: new PreviewWidget("mermaid", diagramSource), block: true }).range(from, to)])
 }
 
+function addPythonFence(decorations: DecorationPlan, state: EditorState, from: number, to: number,
+  fencedSource: string, showCode: boolean): void {
+  const pythonSource = fencedDiagramSource(fencedSource)
+  if (from >= to || !pythonSource.trim()) return
+  decorations.conditional(state, from, to,
+    [markDecoration("cm-live-active-syntax").range(from, to),
+      Decoration.widget({ widget: new PreviewWidget("python-controls", pythonSource, { showCode: String(showCode) }),
+        side: 1, block: true }).range(to)],
+    [markDecoration("cm-live-syntax-marker").range(from, to),
+      Decoration.replace({ widget: new PreviewWidget("python", pythonSource, { showCode: String(showCode) }),
+        block: true }).range(from, to)])
+}
+
+export interface ExecutablePythonFenceRange {
+  from: number
+  to: number
+  code: string
+  showCode: boolean
+}
+
+export function findExecutablePythonFenceAt(state: EditorState, pos: number): ExecutablePythonFenceRange | null {
+  const source = state.doc.toString()
+  const lines = source.split("\n")
+  let offset = 0
+  let fence: { marker: string; length: number; start: number; showCode: boolean } | null = null
+
+  for (const line of lines) {
+    const lineStart = offset
+    const lineEnd = lineStart + line.length
+    const fenceMatch = line.match(/^(\s{0,3})(`{3,}|~{3,})(.*)$/)
+    if (fenceMatch) {
+      if (!fence) {
+        const py = parsePythonFenceInfo(fenceMatch[3] ?? "")
+        if (py.executable) {
+          fence = {
+            marker: fenceMatch[2]?.[0] ?? "",
+            length: (fenceMatch[2] ?? "").length,
+            start: lineStart,
+            showCode: py.showCode
+          }
+        }
+      } else if (
+        fence.marker === fenceMatch[2]?.[0] &&
+        (fenceMatch[2] ?? "").length >= fence.length &&
+        (fenceMatch[3] ?? "").trim() === ""
+      ) {
+        if (pos >= fence.start && pos <= lineEnd) {
+          return {
+            from: fence.start,
+            to: lineEnd,
+            code: fencedDiagramSource(source.slice(fence.start, lineEnd)),
+            showCode: fence.showCode
+          }
+        }
+        fence = null
+      }
+    }
+    offset = lineEnd + 1
+  }
+  return null
+}
+
+export function runActivePythonFence(view: EditorView): boolean {
+  const head = view.state.selection.main.head
+  const fence = findExecutablePythonFenceAt(view.state, head)
+  if (!fence || !fence.code.trim()) return false
+  const normalizedTarget = normalizePythonCode(fence.code)
+  runPythonCode(fence.code, view.dom, { force: true }).then((result) => {
+    const controls = view.dom.querySelectorAll<HTMLElement>(".elef-python-editor-controls")
+    controls.forEach((panel) => {
+      if (normalizePythonCode(panel.dataset.pythonCode ?? "") === normalizedTarget) {
+        mountPythonExecutionResult(panel, result)
+      }
+    })
+    view.dom.dispatchEvent(
+      new CustomEvent("elef:python-fence-run", {
+        bubbles: true,
+        detail: { code: fence.code, result }
+      })
+    )
+    if (view.dom.isConnected) {
+      view.dispatch({ effects: pythonFenceRunEffect.of(Date.now()) })
+    }
+  })
+  return true
+}
+
 function addBlockMarkup(decorations: DecorationPlan, state: EditorState, source: string): void {
   const lines = source.split("\n")
   let offset = 0
-  let fence: { marker: string; length: number; start: number; language: string } | null = null
+  let fence: { marker: string; length: number; start: number; language: string; pythonExecutable: boolean; pythonShowCode: boolean } | null = null
 
   lines.forEach((line, index) => {
     const lineStart = offset
@@ -447,15 +599,18 @@ function addBlockMarkup(decorations: DecorationPlan, state: EditorState, source:
     const fenceMatch = line.match(/^(\s{0,3})(`{3,}|~{3,})(.*)$/)
     if (fenceMatch) {
       if (!fence) {
+        const pyInfo = parsePythonFenceInfo(fenceMatch[3] ?? "")
         fence = {
           marker: fenceMatch[2]?.[0] ?? "",
           length: (fenceMatch[2] ?? "").length,
           start: lineStart,
-          language: fenceLanguage(fenceMatch[3] ?? "")
+          language: fenceLanguage(fenceMatch[3] ?? ""),
+          pythonExecutable: pyInfo.executable,
+          pythonShowCode: pyInfo.showCode
         }
-        // A Mermaid fence becomes a single diagram widget once its closing
+        // A Mermaid or executable Python fence becomes a single block widget once its closing
         // fence arrives, so nothing inside it is decorated line by line.
-        if (fence.language === "mermaid") {
+        if (fence.language === "mermaid" || fence.pythonExecutable) {
           offset = lineEnd + 1
           return
         }
@@ -476,6 +631,12 @@ function addBlockMarkup(decorations: DecorationPlan, state: EditorState, source:
           offset = lineEnd + 1
           return
         }
+        if (fence.pythonExecutable) {
+          addPythonFence(decorations, state, fence.start, lineEnd, source.slice(fence.start, lineEnd), fence.pythonShowCode)
+          fence = null
+          offset = lineEnd + 1
+          return
+        }
         addHidden(decorations, state, lineStart + (fenceMatch[1] ?? "").length, lineStart + line.length, null, [lineStart, lineEnd])
         decorations.push(lineDecoration("cm-live-code-fence").range(lineStart))
         fence = null
@@ -485,7 +646,9 @@ function addBlockMarkup(decorations: DecorationPlan, state: EditorState, source:
     }
 
     if (fence) {
-      if (fence.language !== "mermaid") decorations.push(lineDecoration("cm-live-code-line").range(lineStart))
+      if (fence.language !== "mermaid" && !fence.pythonExecutable) {
+        decorations.push(lineDecoration("cm-live-code-line").range(lineStart))
+      }
       offset = lineEnd + 1
       return
     }
@@ -579,7 +742,18 @@ function addSyntaxTreeHints(decorations: DecorationPlan, state: EditorState): vo
 }
 
 function buildDecorations(state: EditorState, enabled: boolean): Omit<LivePreviewValue, "enabled"> {
-  if (!enabled) return { decorations: Decoration.none, atomic: Decoration.none, error: null, dynamic: [], maxDynamicEnd: 0 }
+  if (!enabled) {
+    const activeFence = findExecutablePythonFenceAt(state, state.selection.main.head)
+    if (activeFence && activeFence.code.trim()) {
+      const controlWidget = Decoration.widget({
+        widget: new PreviewWidget("python-controls", activeFence.code, { showCode: String(activeFence.showCode) }),
+        side: 1,
+        block: true
+      }).range(activeFence.to)
+      return { decorations: Decoration.set([controlWidget], true), atomic: Decoration.none, error: null, dynamic: [], maxDynamicEnd: 0 }
+    }
+    return { decorations: Decoration.none, atomic: Decoration.none, error: null, dynamic: [], maxDynamicEnd: 0 }
+  }
 
   try {
     const source = state.doc.toString()
@@ -588,7 +762,7 @@ function buildDecorations(state: EditorState, enabled: boolean): Omit<LivePrevie
     addInlineMarkup(decorations, state, source, inlineRangesOutsideFences(source))
     addSyntaxTreeHints(decorations, state)
     const set = Decoration.set(decorations.ranges, true)
-    const atomic = Decoration.set(decorations.ranges.filter((range) => range.value.spec.widget), true)
+    const atomic = Decoration.set(decorations.ranges.filter((range) => range.value.spec.widget && range.from < range.to), true)
     return { decorations: set, atomic, error: null, dynamic: decorations.dynamic,
       maxDynamicEnd: decorations.dynamic.reduce((end, context) => Math.max(end, context.to), 0) }
   } catch (error) {
@@ -700,7 +874,7 @@ function mapPlainEdit(value: LivePreviewValue, transaction: Transaction, math?: 
   return { ...value, dynamic, maxDynamicEnd,
     decorations: decorations.update({ filter: (_from, _to, decoration) => !removed.has(decoration), add: added, sort: true }),
     atomic: atomic.update({ filter: (_from, _to, decoration) => !removed.has(decoration),
-      add: added.filter(range => range.value.spec.widget), sort: true }),
+      add: added.filter(range => range.value.spec.widget && range.from < range.to), sort: true }),
   }
 }
 
@@ -724,7 +898,7 @@ function updateInlineMathLine(value: LivePreviewValue, transaction: Transaction,
     ...mapped.dynamic.filter(context => context.from >= line.to)]
   return { ...mapped,
     decorations: replace(mapped.decorations, plan.ranges),
-    atomic: replace(mapped.atomic, plan.ranges.filter(range => range.value.spec.widget)),
+    atomic: replace(mapped.atomic, plan.ranges.filter(range => range.value.spec.widget && range.from < range.to)),
     dynamic, maxDynamicEnd: dynamic.reduce((end, context) => Math.max(end, context.to), 0),
   }
 }
@@ -735,10 +909,12 @@ export const livePreviewField = StateField.define<LivePreviewValue>({
   },
   update(value, transaction) {
     let enabled = value.enabled
+    let forceRebuild = false
     for (const effect of transaction.effects) {
       if (effect.is(livePreviewMode)) enabled = Boolean(effect.value)
+      if (effect.is(pythonFenceRunEffect)) forceRebuild = true
     }
-    if (transaction.docChanged && enabled === value.enabled && enabled) {
+    if (!forceRebuild && transaction.docChanged && enabled === value.enabled && enabled) {
       if (canMapPlainEdit(value, transaction)) return mapPlainEdit(value, transaction)
       const paragraphEnd = localParagraphEndEdit(transaction)
       if (paragraphEnd && !value.error && !value.dynamic.some(context =>
@@ -765,7 +941,7 @@ export const livePreviewField = StateField.define<LivePreviewValue>({
         if (updated) return updated
       }
     }
-    if (transaction.docChanged || enabled !== value.enabled) {
+    if (transaction.docChanged || enabled !== value.enabled || forceRebuild || (!enabled && transaction.selection)) {
       return { enabled, ...buildDecorations(transaction.state, enabled) }
     }
     if (!transaction.selection || !enabled) return value
@@ -782,11 +958,22 @@ export const livePreviewField = StateField.define<LivePreviewValue>({
     return { ...value,
       decorations: value.decorations.update({ filter: (_from, _to, decoration) => !removed.has(decoration), add: added, sort: true }),
       atomic: value.atomic.update({ filter: (_from, _to, decoration) => !removed.has(decoration),
-        add: added.filter(range => range.value.spec.widget), sort: true }),
+        add: added.filter(range => range.value.spec.widget && range.from < range.to), sort: true }),
     }
   },
   provide: (field) => [
     EditorView.decorations.from(field, (value) => value.decorations),
-    EditorView.atomicRanges.of((view) => view.state.field(field).atomic)
+    EditorView.atomicRanges.of((view) => view.state.field(field).atomic),
+    EditorView.domEventHandlers({
+      keydown(event, view) {
+        if ((event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey && event.key === "Enter") {
+          if (runActivePythonFence(view)) {
+            event.preventDefault()
+            return true
+          }
+        }
+        return false
+      }
+    })
   ]
 })

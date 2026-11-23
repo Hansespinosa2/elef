@@ -56,6 +56,13 @@
   position: relative;
   padding: 5rem;
   color: var(--work-surface-ink);
+  color-scheme: var(--work-color-scheme, light);
+}
+
+.slide::selection,
+.slide ::selection {
+  background-color: var(--work-selection-background);
+  color: var(--work-surface-ink);
 }
 
 .presentation-editor-projection .slide { border-color: var(--work-editor-slide-border); }
@@ -125,10 +132,12 @@
   width: 100%;
 }
 
-.presentation-mode .slide-block.is-presentation-reveal-hidden,
-.presenting-work .slide-block.is-presentation-reveal-hidden {
-  pointer-events: none !important;
-  visibility: hidden !important;
+@media screen {
+  .presentation-mode .slide-block.is-presentation-reveal-hidden,
+  .presenting-work .slide-block.is-presentation-reveal-hidden {
+    pointer-events: none !important;
+    visibility: hidden !important;
+  }
 }
 
 .slide-title {
@@ -385,6 +394,16 @@
   overflow: auto;
   padding: 1.5rem;
   text-align: left;
+}
+
+.presentation-surface pre:not(.mermaid[data-processed], .mermaid.mermaid-error) {
+  color-scheme: dark;
+}
+
+.presentation-surface pre:not(.mermaid[data-processed], .mermaid.mermaid-error) ::selection,
+.presentation-surface pre:not(.mermaid[data-processed], .mermaid.mermaid-error)::selection {
+  background-color: var(--work-code-selection-background);
+  color: var(--work-code-selection-ink);
 }
 
 .presentation-surface pre code {

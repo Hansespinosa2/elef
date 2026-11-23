@@ -24,6 +24,7 @@ export function asEditorSeam(candidate: unknown): DocumentEditorSeam | null {
   if (typeof seam.focus !== "function") return null
   if (typeof seam.commitSource !== "function") return null
   if (typeof seam.replaceRange !== "function") return null
+  if (typeof seam.replaceRangeWithSelection !== "function") return null
   if (typeof seam.replaceRanges !== "function") return null
   if (typeof seam.setSelectionRange !== "function") return null
   if (typeof seam.handleVimKey !== "function") return null

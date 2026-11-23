@@ -183,19 +183,19 @@ test("the shared application references elements present in its host template", 
   assert.deepEqual(missing, [])
 })
 
-test("the desktop host defaults to Rails' Visual mode and gates it until preview renders", async () => {
+test("the desktop host defaults to Rails' Source mode and gates Visual mode until preview renders", async () => {
   const sourceForm = document.querySelector("#desktop-editor-form")
-  assert.equal(sourceForm.dataset.editorMode, "visual")
+  assert.equal(sourceForm.dataset.editorMode, "source")
   assert.equal(sourceForm.dataset.controller, undefined)
   assert.ok(document.querySelector("#desktop-editor-mount"))
   assert.match(application, /renderEditorView\(document\.querySelector\("#desktop-editor-mount"\)/)
-  assert.match(application, /mode: desktopFeatures\.visualEditing \? "visual" : "source"/)
+  assert.match(application, /mode: "source",/)
   assert.match(desktopProfile, /visualEditing: devEnabled/)
   assert.match(desktopProfile, /desktopProfile !== "stable"/)
   assert.match(application, /sourceName: "presentation\[source\]"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "editor"/)
   assert.match(application, /document\.body\.dataset\.desktopView = "library"/)
-  assert.match(application, /editor\.loadDocument\(work\.source\)[\s\S]*?editor\.setEditingMode\(desktopFeatures\.visualEditing \? "visual" : "source", \{ restoreCaret: false \}\)/)
+  assert.match(application, /editor\.loadDocument\(work\.source\)[\s\S]*?editor\.setEditingMode\("source", \{ restoreCaret: false \}\)/)
   const editorController = await read("packages/client/src/features/editor/engine.ts")
   assert.match(editorController, /this\.form\?\.dispatchEvent\(new CustomEvent\("elef:editor-mode-change"/)
   assert.match(application, /theme: "dark"/)

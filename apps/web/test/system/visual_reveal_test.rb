@@ -28,7 +28,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "entering emphasis reveals its delimiters without touching source" do
     document = Document.create!(title: "Reveal", source: "A *warm* word.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     assert_no_selector ".editor-inline-active"
 
@@ -40,7 +40,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "leaving a revealed construct restores its rendered form" do
     document = Document.create!(title: "Reveal", source: "A *warm* word.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     place_caret_in(".document-editor-block em", offset: 2)
     assert_selector ".editor-inline-active", text: "*warm*", wait: 5
@@ -53,7 +53,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "typing inside revealed emphasis commits at the caret" do
     document = Document.create!(title: "Reveal", source: "A *warm* word.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     place_caret_in(".document-editor-block em", offset: 2)
     assert_selector ".editor-inline-active", text: "*warm*", wait: 5
@@ -64,7 +64,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "overwriting revealed delimiters un-formats in the source" do
     document = Document.create!(title: "Reveal", source: "A *warm* word.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     place_caret_in(".document-editor-block em", offset: 2)
     assert_selector ".editor-inline-active", text: "*warm*", wait: 5
@@ -85,7 +85,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "strong and code reveal on entry" do
     document = Document.create!(title: "Reveal", source: "A **bold** move and `cell` code.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     place_caret_in(".document-editor-block strong", offset: 2)
@@ -99,10 +99,10 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "Vim normal motion into emphasis reveals it" do
     document = Document.create!(title: "Reveal", source: "A *warm* word.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     page.execute_script("localStorage.setItem('elef.editor.vim.enabled', 'true')")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     place_caret_in(".document-editor-block p", child_index: 0, offset: 1)
@@ -117,7 +117,7 @@ class VisualRevealTest < ApplicationSystemTestCase
   test "fenced code never activates while table emphasis reveals" do
     source = "# T\n\n```js\nconst star = \"*\"\n```\n\n| a |\n| - |\n| *b* |\n"
     document = Document.create!(title: "Reveal", source: source)
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     find(".document-editor-block", text: "const star").click
@@ -130,7 +130,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "entering a link reveals its URL and typing commits" do
     document = Document.create!(title: "Reveal", source: "See [docs](https://x.test/d) now.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     assert_no_selector ".editor-inline-active"
 
@@ -144,7 +144,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "a range across constructs reveals every one it touches" do
     document = Document.create!(title: "Reveal", source: "A *warm* and [cool](https://x.test) word.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     page.execute_script(<<~JAVASCRIPT)
@@ -166,7 +166,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "unresolved document links never activate" do
     document = Document.create!(title: "Reveal", source: "Open [[No Such Doc 12345]] please.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     find(".document-editor-block .document-link.unresolved").click
@@ -176,7 +176,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "autolinks do not block emphasis revelation in the same block" do
     document = Document.create!(title: "Reveal", source: "Visit https://x.test/a and *warm* word.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     place_caret_in(".document-editor-block em", offset: 2)
@@ -186,7 +186,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "heading marker reveals on entry and clears on leave" do
     document = Document.create!(title: "Reveal", source: "## Warm head\n\nBody here.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     assert_no_selector "[data-editor-reveal-prefix]"
 
@@ -200,7 +200,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "list markers reveal per item and never enter committed text" do
     document = Document.create!(title: "Reveal", source: "- one\n- two\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     page.execute_script(<<~JAVASCRIPT)
@@ -220,7 +220,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "quote markers and nested list indents reveal exactly" do
     document = Document.create!(title: "Reveal", source: "> quoted line\n\n- a\n  - b\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     place_caret_in(".document-editor-block blockquote p", offset: 2)
@@ -241,7 +241,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "fence delimiters reveal while editing code" do
     document = Document.create!(title: "Reveal", source: "```js\ncode here\n```\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     assert_no_selector ".editor-reveal-fence"
 
@@ -261,7 +261,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "a range across blocks reveals in each block" do
     document = Document.create!(title: "Reveal", source: "First *aa* end.\n\nStart *bb* last.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     page.execute_script(<<~JAVASCRIPT)
@@ -281,7 +281,7 @@ class VisualRevealTest < ApplicationSystemTestCase
   test "a range across pages reveals on both pages" do
     paras = (1..40).map { |i| "Paragraph #{i} with *emphasis* content here." }
     document = Document.create!(title: "Reveal", source: paras.join("\n\n") + "\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
     assert_selector ".document-page-frame", minimum: 2, wait: 10
 
@@ -303,7 +303,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "cross-block deletion replaces the complete selected source range" do
     document = Document.create!(title: "Reveal", source: "First *aa* end.\n\nStart *bb* last.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     page.execute_script(<<~JAVASCRIPT)
@@ -331,7 +331,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "blocks bound to alignment directives reveal normally" do
     document = Document.create!(title: "Reveal", source: ":::align center\n\n## Headed\n\nBody *warm* here.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     place_caret_in(".document-editor-block em", offset: 2)
@@ -343,7 +343,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "presentation slide emphasis reveals on entry" do
     presentation = Presentation.create!(title: "Reveal", source: "# Slide *one*\n\n---\n\nBody *two* here.\n")
-    visit edit_presentation_path(presentation)
+    visit edit_presentation_path(presentation, editor_mode: "visual")
     wait_for_fresh_projection
     assert_no_selector ".editor-inline-active"
 
@@ -362,7 +362,7 @@ class VisualRevealTest < ApplicationSystemTestCase
 
   test "emphasis containing math stays rendered" do
     document = Document.create!(title: "Reveal", source: "A *mix $x$ up* word.\n")
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     wait_for_fresh_projection
 
     em = find(".document-editor-block em", wait: 5)

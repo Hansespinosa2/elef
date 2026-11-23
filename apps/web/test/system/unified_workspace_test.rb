@@ -4,7 +4,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "Mod+K opens Elef actions without listing work" do
     document = Document.create!(title: "Palette target", source: "# Palette target")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     page.driver.browser.action.key_down(:control).send_keys("k").key_up(:control).perform
     assert_selector "dialog.command-palette[open]"
     assert_selector "#command-palette-heading", text: "Command palette"
@@ -95,7 +95,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     MathShortcut.create!(name: "Array", aliases: ["array"], prefix: "@", expansion: "\\operatorname{array}")
 
     visit edit_document_path(document)
-    click_on "Source"
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     page.execute_script("const editor = document.querySelector('.source-field').editorController; editor.setSelectionRange(editor.value.length, editor.value.length); editor.focus();")
     editor = find(".cm-content")
     editor.send_keys("\n$x.b")
@@ -154,7 +154,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Greek math palette", source: "# Greek math palette")
 
     visit edit_document_path(document)
-    click_on "Source"
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$ @b")
@@ -192,7 +192,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Math shortcut previews", source: "# Math shortcut previews")
 
     visit edit_document_path(document)
-    click_on "Source"
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$@g")
@@ -229,7 +229,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Chained math previews", source: "# Chained math previews")
 
     visit edit_document_path(document)
-    click_on "Source"
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$$x.bar.b.t.inv")
@@ -252,7 +252,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "TeX operators", source: "# TeX operators")
 
     visit edit_document_path(document)
-    click_on "Source"
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$@nabla")
@@ -285,7 +285,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Structured math", source: "# Math\n\n$$x$$")
 
     visit edit_document_path(document)
-    click_on "Source"
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     page.execute_script(<<~JAVASCRIPT)
       const editor = document.querySelector(".source-field").editorController;
@@ -329,7 +329,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Selected math transform", source: "# Math")
 
     visit edit_document_path(document)
-    click_on "Source"
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n$x.bo")
@@ -345,7 +345,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     document = Document.create!(title: "Authoring snippets", source: "# Authoring snippets")
 
     visit edit_document_path(document)
-    click_on "Source"
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     editor = find(".cm-content")
     editor.click
     editor.send_keys("\n/equation")
@@ -362,7 +362,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
       source: "---\ntheme: dark\ntypography: modern\n---\n# Metadata notes\n\nBody"
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".cm-foldPlaceholder", wait: 5
     assert_no_selector "button.editor-reveal-metadata", visible: true
     click_on "Source"
@@ -384,7 +384,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
       source: "---\ntheme: light\ntypography: book\n---\n# Appearance metadata\n\nBody"
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
     assert_no_selector "button.editor-reveal-metadata", text: "Reveal source metadata", visible: true
     assert_no_selector "select#document_theme", visible: true
@@ -409,7 +409,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
       source: "---\ntheme: light\ntypography: book\n---\n# Mode bound appearance\n\nBody"
     )
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector "summary.editor-reveal-metadata", text: "Appearance", visible: true
     assert_no_selector "select#document_theme", visible: true
     assert_no_selector "select#document_typography", visible: true
@@ -448,7 +448,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     )
 
     visit edit_document_path(document)
-    click_on "Source"
+    assert_selector ".editor-mode-button[aria-pressed='true']", text: "Source"
     type_source_text(document.source, "theme: light", "theme: dark")
     assert_selector ".document-reader.document-theme-dark", wait: 5
     assert_equal "source", page.evaluate_script("document.querySelector('[name=editor_mode]').value")
@@ -466,7 +466,7 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
   test "keeps visual editing and the source-left preview-right layout usable at desktop and narrow widths" do
     document = Document.create!(title: "Responsive editor", source: "# Responsive editor\n\nBody")
 
-    visit edit_document_path(document)
+    visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".editor-shell"
     assert_selector ".editor-projection", visible: true
     assert_selector ".editor-mode-button.is-active", text: "Visual"
@@ -497,7 +497,21 @@ class UnifiedWorkspaceTest < ApplicationSystemTestCase
     assert_operator desktop["projection"], :>, 0
     assert_operator desktop["document"], :<=, desktop["viewport"] + 1
 
+    splitter = find("[role='separator'][aria-label='Resize source and preview']")
+    splitter.send_keys(:arrow_right)
+    assert_equal "48", splitter["aria-valuenow"]
+    wider_source = page.evaluate_script("document.querySelector('.source-pane').getBoundingClientRect().width")
+    assert_operator wider_source, :>, desktop["sourceWidth"]
+    splitter.send_keys(:home)
+    assert_equal "20", splitter["aria-valuenow"]
+    splitter.send_keys(:end)
+    assert_equal "80", splitter["aria-valuenow"]
+    splitter.send_keys(:home)
+    page.driver.browser.action.move_to(splitter.native).click_and_hold.move_by(150, 0).release.perform
+    assert_operator splitter["aria-valuenow"].to_i, :>, 20
+
     page.driver.browser.manage.window.resize_to(700, 900)
+    assert_no_selector "[role='separator'][aria-label='Resize source and preview']", visible: true
     narrow = page.evaluate_script(<<~JAVASCRIPT)
       (() => {
         const source = document.querySelector('.source-pane').getBoundingClientRect();

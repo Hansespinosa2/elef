@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { installPreviewHtml } from "../lib/editor_view.js"
 import { buildPreviewRequestBody } from "../lib/preview_request_body.js"
+import { scrollPreviewToSourceOffset } from "../lib/preview_autoscroll.js"
 import { markStage } from "../lib/stage_marks.js"
 import { attachCanvasScaling } from "@elef/client"
 import { preserveSurfaceScroll } from "../lib/scroll_preservation.js"
@@ -15,8 +16,16 @@ export default class extends Controller<HTMLElement> {
   static targets = ["container", "warnings", "status", "retry"]
   static values = { url: String, delay: { type: Number, default: 300 }, timeout: { type: Number, default: 8000 } }
 
+  frozenForPrint = false
+  pendingRefreshWhileFrozen = false
+  pendingSourceEditScroll: { offset: number; source: string; cancelled: boolean } | null = null
+  private printUnfreezeCleanup: (() => void) | null = null
+  private printInteractionRecoveryCleanup: (() => void) | null = null
+
   connect() {
     this.element.previewController = this
+    this.frozenForPrint = false
+    this.pendingRefreshWhileFrozen = false
     this.requestFields = [
       this.element.querySelector(".editor-input-proxy"),
       this.element.querySelector(".editor-title-input"),
@@ -53,7 +62,7 @@ export default class extends Controller<HTMLElement> {
       if (!event.target.closest?.("[data-editor-block-id]") || !this.containerTarget.contains(event.target)) return
 
       queueMicrotask(() => {
-        if (this.isEditingProjection()) return
+        if (!this.active || this.isEditingProjection()) return
 
         if (this.pendingProjection) this.applyPendingProjection()
         else if (!this.projectionFresh) this.markProjectionStale(false)
@@ -62,11 +71,29 @@ export default class extends Controller<HTMLElement> {
     this.localPreviewError = (event: any) => this.handleLocalPreviewError(event)
     this.localPreviewRecovered = () => this.handleLocalPreviewRecovered()
     this.artDiagnostic = (event: any) => this.handleArtDiagnostic(event)
+    this.sourceEditHandler = (event: any) => {
+      if (this.element.dataset.editorMode !== "source") return
+      const offset = event.detail?.offset
+      if (typeof offset !== "number" || !Number.isFinite(offset)) return
+      this.pendingSourceEditScroll = { offset, source: this.currentSource(), cancelled: false }
+    }
+    this.modeChangeScrollHandler = (event: any) => {
+      if (event.detail?.mode !== "source") this.pendingSourceEditScroll = null
+    }
+    this.previewUserScrollHandler = () => {
+      if (this.pendingSourceEditScroll) this.pendingSourceEditScroll.cancelled = true
+    }
     // The boot projection is installed by the editor view before this
     // controller connects, and no fetch has run yet to re-sync: scale the
     // installed frames now so full-size slides never render unscaled
     // (clipped by the projection container) until the first edit.
-    if (this.hasContainerTarget) this.syncSlideScaling()
+    if (this.hasContainerTarget) {
+      this.syncSlideScaling()
+      this.containerTarget.addEventListener("wheel", this.previewUserScrollHandler, { passive: true })
+      this.containerTarget.addEventListener("touchstart", this.previewUserScrollHandler, { passive: true })
+      this.containerTarget.addEventListener("pointerdown", this.previewUserScrollHandler, { passive: true })
+      this.containerTarget.addEventListener("keydown", this.previewUserScrollHandler)
+    }
     this.element.addEventListener("focusout", this.focusoutHandler)
     this.element.addEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.addEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
@@ -86,6 +113,8 @@ export default class extends Controller<HTMLElement> {
     }
     this.element.addEventListener("elef:editor-mode-change", this.continuousModeChanged)
     this.element.addEventListener("elef:editor-surface-change", this.continuousModeChanged)
+    this.element.addEventListener("elef:source-edit", this.sourceEditHandler)
+    this.element.addEventListener("elef:editor-mode-change", this.modeChangeScrollHandler)
   }
 
   // Slide frames carry no Stimulus hooks since the presentation canvas
@@ -102,22 +131,87 @@ export default class extends Controller<HTMLElement> {
 
   disconnect() {
     this.active = false
+    this.unfreezeForPrint()
+    this.cancelPendingPreviewScroll?.()
     clearTimeout(this.timer)
     this.timer = null
     this.abortActiveRequest()
     this.clearSlideScaling()
     this.queuedRequestId = null
+    this.pendingProjection = null
+    this.pendingSourceEditScroll = null
     this.element.removeEventListener("focusout", this.focusoutHandler)
     this.element.removeEventListener("elef:live-preview-error", this.localPreviewError)
     this.element.removeEventListener("elef:live-preview-recovered", this.localPreviewRecovered)
     this.element.removeEventListener("elef:art-diagnostic", this.artDiagnostic)
     this.element.removeEventListener("elef:editor-mode-change", this.continuousModeChanged)
     this.element.removeEventListener("elef:editor-surface-change", this.continuousModeChanged)
+    this.element.removeEventListener("elef:source-edit", this.sourceEditHandler)
+    this.element.removeEventListener("elef:editor-mode-change", this.modeChangeScrollHandler)
+    if (this.hasContainerTarget && this.previewUserScrollHandler) {
+      this.containerTarget.removeEventListener("wheel", this.previewUserScrollHandler)
+      this.containerTarget.removeEventListener("touchstart", this.previewUserScrollHandler)
+      this.containerTarget.removeEventListener("pointerdown", this.previewUserScrollHandler)
+      this.containerTarget.removeEventListener("keydown", this.previewUserScrollHandler)
+    }
     this.artWarningObserver?.disconnect()
     if (this.element.previewController === this) delete this.element.previewController
   }
 
+  freezeForPrint(options: { armInteractionRecovery?: boolean } = {}): void {
+    this.unfreezeForPrint()
+    if (!this.active) return
+    this.frozenForPrint = true
+    this.pendingRefreshWhileFrozen = false
+    if (typeof window === "undefined") return
+    const unfreeze = () => this.unfreezeForPrint()
+    window.addEventListener("afterprint", unfreeze, { once: true })
+    this.printUnfreezeCleanup = () => {
+      window.removeEventListener("afterprint", unfreeze)
+    }
+    if (options.armInteractionRecovery !== false) {
+      this.armPrintInteractionRecovery()
+    }
+  }
+
+  armPrintInteractionRecovery(): void {
+    if (!this.active || !this.frozenForPrint || typeof window === "undefined") return
+    this.printInteractionRecoveryCleanup?.()
+    const unfreeze = () => this.unfreezeForPrint()
+    const interactionEvents = ["pointerdown", "keydown", "input", "focusin"] as const
+    interactionEvents.forEach((eventName) => {
+      window.addEventListener(eventName, unfreeze, { capture: true, once: true, passive: true })
+    })
+    this.printInteractionRecoveryCleanup = () => {
+      interactionEvents.forEach((eventName) => {
+        window.removeEventListener(eventName, unfreeze, { capture: true })
+      })
+    }
+  }
+
+  unfreezeForPrint(options: { replayPending?: boolean } = {}): void {
+    const wasFrozen = this.frozenForPrint
+    const needsRefresh = this.pendingRefreshWhileFrozen
+    this.frozenForPrint = false
+    this.pendingRefreshWhileFrozen = false
+    this.printInteractionRecoveryCleanup?.()
+    this.printInteractionRecoveryCleanup = null
+    this.printUnfreezeCleanup?.()
+    this.printUnfreezeCleanup = null
+    if (!wasFrozen || !this.active || options.replayPending === false) return
+    if (needsRefresh) {
+      this.schedule()
+    } else if (this.pendingProjection && !this.isEditingProjection()) {
+      this.applyPendingProjection()
+    }
+  }
+
   schedule() {
+    if (this.frozenForPrint) {
+      this.pendingRefreshWhileFrozen = true
+      this.projectionFresh = false
+      return
+    }
     clearTimeout(this.timer)
     this.timer = null
     this.pendingProjection = null
@@ -148,6 +242,11 @@ export default class extends Controller<HTMLElement> {
   // 300ms schedule, so an Enter followed by typing keeps pushing its own
   // consequence back. Same immediate path as a manual retry.
   refreshNow(): void {
+    if (this.frozenForPrint) {
+      this.pendingRefreshWhileFrozen = true
+      this.projectionFresh = false
+      return
+    }
     clearTimeout(this.timer)
     this.timer = null
     this.pendingProjection = null
@@ -160,6 +259,10 @@ export default class extends Controller<HTMLElement> {
 
   async refresh(requestId = this.requestId) {
     this.timer = null
+    if (this.frozenForPrint) {
+      this.pendingRefreshWhileFrozen = true
+      return false
+    }
     if (this.requestController) {
       if (this.active && requestId === this.requestId) this.queuedRequestId = requestId
       return false
@@ -265,6 +368,8 @@ export default class extends Controller<HTMLElement> {
         })
       } else if (
         this.active &&
+        !this.frozenForPrint &&
+        !this.pendingRefreshWhileFrozen &&
         !this.requestController &&
         !this.projectionFresh &&
         !this.pendingProjection &&
@@ -290,7 +395,8 @@ export default class extends Controller<HTMLElement> {
   }
 
   isEditingProjection() {
-    const activeEditable = document.activeElement?.closest?.("[contenteditable='true']")
+    const active = typeof document === "undefined" ? null : document.activeElement
+    const activeEditable = active?.closest?.("[contenteditable='true']")
     return Boolean(activeEditable && this.containerTarget.contains(activeEditable))
   }
 
@@ -299,22 +405,81 @@ export default class extends Controller<HTMLElement> {
   }
 
   finishEditing() {
-    const activeEditable = document.activeElement?.closest?.("[contenteditable='true']")
+    const active = typeof document === "undefined" ? null : document.activeElement
+    const activeEditable = active?.closest?.("[contenteditable='true']")
     if (!activeEditable || !this.containerTarget.contains(activeEditable)) return false
 
+    const selection = typeof window === "undefined" ? null : window.getSelection?.()
+    if (selection?.focusNode && activeEditable.contains(selection.focusNode)) {
+      selection.removeAllRanges()
+    }
     ;(activeEditable as HTMLElement).blur()
     return true
   }
 
   applyPendingProjection() {
-    if (!this.pendingProjection || this.isEditingProjection()) return
+    if (this.frozenForPrint || !this.pendingProjection || this.isEditingProjection()) return
 
     const projection = this.pendingProjection
     this.pendingProjection = null
     this.installProjection(projection.payload, projection.response, projection.source)
   }
 
+  async flushForPrint(): Promise<boolean> {
+    if (!this.active) return false
+    if (this.frozenForPrint) this.unfreezeForPrint({ replayPending: false })
+
+    if (this.finishEditing()) {
+      await Promise.resolve()
+      if (!this.active) return false
+    }
+    if (this.pendingProjection) {
+      this.applyPendingProjection()
+      await Promise.resolve()
+      if (!this.active) return false
+    }
+
+    const hadPendingTimer = Boolean(this.timer)
+    if (this.timer) {
+      clearTimeout(this.timer)
+      this.timer = null
+    }
+
+    const hadInFlightRequest = Boolean(this.requestController)
+    if (this.requestController) {
+      this.abortActiveRequest()
+    }
+
+    if (hadPendingTimer || hadInFlightRequest || !this.projectionFresh || !this.containerTarget.childElementCount) {
+      const result = await this.refresh(++this.requestId)
+      if (!this.active || result !== true) return false
+      if (this.pendingProjection) {
+        this.applyPendingProjection()
+      }
+      await Promise.resolve()
+      if (!this.active) return false
+    }
+
+    if (this.pendingProjection || !this.projectionFresh || this.timer || this.requestController) {
+      return false
+    }
+
+    // Clear any source-mode scroll snapshot (which hides the live surface behind an
+    // absolute overlay with opacity: 0 and inert) before paginating/printing.
+    this.cancelPendingPreviewScroll?.()
+
+    return Boolean(this.containerTarget.childElementCount)
+  }
+
   installProjection(payload: any, response: any, source: any) {
+    if (this.frozenForPrint) {
+      if (!this.sameSource(this.currentSource(), source)) {
+        this.pendingRefreshWhileFrozen = true
+      } else {
+        this.pendingProjection = { payload, response, source }
+      }
+      return
+    }
     if (!this.sameSource(this.currentSource(), source)) {
       this.schedule()
       return
@@ -323,8 +488,24 @@ export default class extends Controller<HTMLElement> {
     const previousSurface = this.containerTarget.querySelector(".document-editor-projection .document-surface.is-paginated") as HTMLElement | null
     const preservedScroll = previousSurface ? preserveSurfaceScroll(previousSurface) : null
     const previousHeight = previousSurface?.getBoundingClientRect().height ?? 0
-    const scrollLeft = this.containerTarget.scrollLeft
-    const scrollTop = this.containerTarget.scrollTop
+    // A prior install may still be waiting for its first pagination. Its
+    // intended offset can exceed the temporary unpaginated scroll range.
+    const pending = this.pendingPreviewScroll
+    const scrollLeft = pending?.restore ? pending.left : this.containerTarget.scrollLeft
+    const scrollTop = pending?.restore ? pending.top : this.containerTarget.scrollTop
+    const sourceEditScroll = this.element.dataset?.editorMode === "source" ? this.pendingSourceEditScroll : null
+    this.pendingSourceEditScroll = null
+    const autoscrollOffset = sourceEditScroll &&
+      !sourceEditScroll.cancelled &&
+      this.sameSource(sourceEditScroll.source, source) &&
+      payload?.editor_map
+      ? sourceEditScroll.offset
+      : (pending?.autoscrollOffset ?? null)
+    const oldRoot = this.containerTarget.querySelector(".document-editor-projection") as HTMLElement | null
+    const visibleRoot = oldRoot?.querySelector(":scope > [data-preview-scroll-snapshot]") ?? oldRoot
+    const oldView = visibleRoot?.cloneNode(true) as HTMLElement | undefined
+    const oldHeight = oldRoot?.getBoundingClientRect().height ?? 0
+    this.cancelPendingPreviewScroll?.()
     recordPreviewTrace("preview-install-start")
     this.clearSlideScaling()
     installPreviewHtml(this.containerTarget, payload.html)
@@ -342,8 +523,77 @@ export default class extends Controller<HTMLElement> {
     }
     this.syncSlideScaling()
     recordPreviewTrace("preview-install-ready")
+    const surface = this.containerTarget.querySelector(".document-editor-projection [data-document-pages-target='surface']")
+    if (surface && this.element.dataset.editorMode === "source") {
+      const root = surface.closest(".document-editor-projection") as HTMLElement | null
+      if (root && oldView) {
+        oldView.removeAttribute("data-controller")
+        oldView.querySelectorAll("[data-controller]").forEach(node => node.removeAttribute("data-controller"))
+        oldView.querySelectorAll("a, button, input, select, textarea, [tabindex], [contenteditable]").forEach(node => {
+          node.setAttribute("tabindex", "-1")
+          node.removeAttribute("contenteditable")
+          node.removeAttribute("href")
+          node.removeAttribute("role")
+          if (node.matches("button, input, select, textarea")) node.setAttribute("disabled", "")
+        })
+        oldView.setAttribute("data-preview-scroll-snapshot", "")
+        Object.assign(oldView.style, { position: "absolute", top: "0", left: "0", width: "100%", pointerEvents: "none" })
+        Object.assign(root.style, { minHeight: `${oldHeight}px`, position: "relative" })
+        ;(surface as HTMLElement).style.opacity = "0"
+        surface.setAttribute("inert", "")
+        surface.setAttribute("aria-hidden", "true")
+        root.append(oldView)
+      }
+      const pending = { left: scrollLeft, top: scrollTop, restore: true, autoscrollOffset }
+      this.pendingPreviewScroll = pending
+      const cancel = () => {
+        this.containerTarget.removeEventListener("elef:document-pages-settled", settled)
+        this.containerTarget.removeEventListener("wheel", userMoved)
+        this.containerTarget.removeEventListener("touchstart", userMoved)
+        this.containerTarget.removeEventListener("pointerdown", userMoved)
+        this.containerTarget.removeEventListener("keydown", userMoved)
+        this.element.removeEventListener("elef:editor-mode-change", cancel)
+        oldView?.remove()
+        ;(surface as HTMLElement).style.opacity = ""
+        surface.removeAttribute("inert")
+        surface.removeAttribute("aria-hidden")
+        if (root) {
+          root.style.minHeight = ""
+          root.style.position = ""
+        }
+        if (this.pendingPreviewScroll === pending) this.pendingPreviewScroll = null
+        if (this.cancelPendingPreviewScroll === cancel) this.cancelPendingPreviewScroll = null
+      }
+      const userMoved = () => {
+        pending.restore = false
+        pending.autoscrollOffset = null
+      }
+      const settled = (event: Event) => {
+        if (event.target !== surface) return
+        cancel()
+        const autoscrolled = pending.autoscrollOffset !== null && payload?.editor_map
+          ? scrollPreviewToSourceOffset(this.containerTarget, payload.editor_map, pending.autoscrollOffset)
+          : false
+        if (!autoscrolled && pending.restore) {
+          this.containerTarget.scrollLeft = pending.left
+          this.containerTarget.scrollTop = pending.top
+        }
+      }
+      this.cancelPendingPreviewScroll = cancel
+      this.containerTarget.addEventListener("elef:document-pages-settled", settled)
+      this.containerTarget.addEventListener("wheel", userMoved, { passive: true })
+      this.containerTarget.addEventListener("touchstart", userMoved, { passive: true })
+      this.containerTarget.addEventListener("pointerdown", userMoved, { passive: true })
+      this.containerTarget.addEventListener("keydown", userMoved)
+      this.element.addEventListener("elef:editor-mode-change", cancel)
+    }
     this.containerTarget.scrollLeft = scrollLeft
-    this.containerTarget.scrollTop = scrollTop
+    const autoscrolled = !surface && autoscrollOffset !== null && this.element.dataset?.editorMode === "source" && payload?.editor_map
+      ? scrollPreviewToSourceOffset(this.containerTarget, payload.editor_map, autoscrollOffset)
+      : false
+    if (!autoscrolled) {
+      this.containerTarget.scrollTop = scrollTop
+    }
     this.projectionFresh = true
     delete this.element.dataset.previewProjectionStale
     this.containerTarget.removeAttribute("aria-busy")

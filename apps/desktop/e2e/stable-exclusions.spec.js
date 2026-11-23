@@ -30,6 +30,18 @@ async function openWork(title) {
 }
 
 describe("Stable profile exclusions", () => {
+  it("shows the installed native version in About", async () => {
+    await $("#library-view").waitForDisplayed()
+    const version = await browser.execute(async () => {
+      const installed = await window.__TAURI__.core.invoke("plugin:app|version")
+      await window.__TAURI__.event.emit("desktop-menu-action", "about")
+      return installed
+    })
+    await $("#about-dialog").waitForDisplayed()
+    assert.equal(await $("#about-version").getText(), `Version ${version}`)
+    await $("#about-dialog button").click()
+  })
+
   it("keeps experimental entry points unreachable and preserves literal source", async () => {
     await openWork(STABLE_PROFILE_WORK_TITLE)
     await browser.waitUntil(async () => browser.execute(() => {

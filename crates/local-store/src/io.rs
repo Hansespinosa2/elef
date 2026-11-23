@@ -147,22 +147,8 @@ pub(crate) fn fingerprint_bytes(bytes: &[u8], path: &Path) -> Result<Fingerprint
     })
 }
 
-pub(crate) fn move_to_trash(path: &Path) -> Result<(), trash::Error> {
-    #[cfg(target_os = "macos")]
-    {
-        use trash::macos::{DeleteMethod, TrashContextExtMacos};
-
-        // The default macOS implementation automates Finder with AppleScript,
-        // which can require an Automation permission prompt. NSFileManager
-        // moves the same item to Trash without that prompt.
-        let mut context = trash::TrashContext::new();
-        context.set_delete_method(DeleteMethod::NsFileManager);
-        context.delete(path)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        trash::delete(path)
-    }
+pub(crate) fn move_to_trash(path: &Path) -> Result<(), junkyard::Error> {
+    junkyard::discard(path).map(|_| ())
 }
 
 #[cfg(test)]
@@ -215,7 +201,7 @@ pub(crate) fn sync_directory(path: &Path) -> Result<(), CoreError> {
     Ok(())
 }
 
-pub(crate) fn sha256(bytes: &[u8]) -> String {
+pub fn sha256(bytes: &[u8]) -> String {
     hex::encode(Sha256::digest(bytes))
 }
 

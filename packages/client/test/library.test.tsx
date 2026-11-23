@@ -720,3 +720,69 @@ test("card previews stand down while hidden and resume on return", async () => {
     delete scope["requestIdleCallback"];
   }
 });
+
+test("arc hover popover opens on keyboard navigation and toggles the rail with Cmd+B", async () => {
+  const host = typedHost();
+  await seed(host);
+  const seen: unknown[] = [];
+  const { element, shell } = await mountInto(host, {
+    navigate: (target) => seen.push(target),
+  });
+  try {
+    assert.equal(element.querySelector(".library-hover-popover"), null);
+    assert.ok(element.querySelector(".library-quickstart-canvas"));
+    const doc = element.ownerDocument;
+    const press = async (key: string, metaKey = false) => {
+      const ev = doc.createEvent("Event") as unknown as {
+        initEvent: (t: string, b: boolean, c: boolean) => void;
+        key: string;
+        metaKey: boolean;
+        ctrlKey: boolean;
+        shiftKey: boolean;
+        altKey: boolean;
+      };
+      ev.initEvent("keydown", true, true);
+      ev.key = key;
+      ev.metaKey = metaKey;
+      ev.ctrlKey = false;
+      ev.shiftKey = false;
+      ev.altKey = false;
+      await act(async () => {
+        doc.dispatchEvent(ev as unknown as Event);
+      });
+      await settled();
+    };
+    await press("ArrowDown");
+    assert.equal(element.querySelector(".library-hover-popover .library-stage-title")?.textContent, "Beta work");
+    await press("k");
+    assert.equal(element.querySelector(".library-hover-popover .library-stage-title")?.textContent, "Alpha doc");
+    await press("j");
+    assert.equal(element.querySelector(".library-hover-popover .library-stage-title")?.textContent, "Beta work");
+    await press("Enter");
+    assert.equal(seen.length, 1);
+    assert.equal((seen[0] as { kind?: string }).kind, "presentation");
+    await press("Escape");
+    assert.equal(element.querySelector(".library-hover-popover"), null);
+    await press("b", true);
+    assert.equal(
+      element.querySelector(".library-arc-shell")?.classList.contains("is-rail-collapsed"),
+      true,
+    );
+    await press("b", true);
+    assert.equal(
+      element.querySelector(".library-arc-shell")?.classList.contains("is-rail-collapsed"),
+      false,
+    );
+    element.setAttribute("hidden", "");
+    await press("j");
+    assert.equal(element.querySelector(".library-hover-popover"), null, "hidden library ignores keydown");
+    await press("b", true);
+    assert.equal(
+      element.querySelector(".library-arc-shell")?.classList.contains("is-rail-collapsed"),
+      false,
+      "hidden library ignores Cmd+B",
+    );
+  } finally {
+    shell.unmount();
+  }
+});
