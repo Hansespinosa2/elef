@@ -262,7 +262,10 @@ export class EditorEngine {
     })
     this.inputTarget.addEventListener("keydown", this.handleProxyKeydown = (event: KeyboardEvent) => this.forwardProxyKeydown(event))
     this.form = this.element.closest("form")
-    this.handleEditorSurfaceChange = () => this.syncGutterVisibility()
+    this.handleEditorSurfaceChange = () => {
+      this.syncGutterVisibility()
+      this.syncVisualSurfaceGeometry()
+    }
     this.element.addEventListener("elef:editor-surface-change", this.handleEditorSurfaceChange)
     this.observeProjectionNavigation()
     this.form?.addEventListener("submit", this.handleSubmit = () => {
@@ -554,9 +557,19 @@ export class EditorEngine {
     if (!this.toolbar) return
 
     const toolbarHeight = this.toolbar.getBoundingClientRect().height
+    const toolbarValue = `${toolbarHeight}px`
+    if (this.element.style.getPropertyValue("--editor-toolbar-height") !== toolbarValue) {
+      this.element.style.setProperty("--editor-toolbar-height", toolbarValue)
+    }
+    // The continuous editor is the document surface, so it has no hidden
+    // source strip to size. Rewriting an inherited geometry variable as the
+    // document grows invalidates styles throughout the active editor.
+    if (this.form?.dataset?.editorSurface === "continuous") return
     const surfaceHeight = Math.max(0, this.element.getBoundingClientRect().height - toolbarHeight)
-    this.element.style.setProperty("--editor-toolbar-height", `${toolbarHeight}px`)
-    this.element.style.setProperty("--editor-surface-height", `${surfaceHeight}px`)
+    const surfaceValue = `${surfaceHeight}px`
+    if (this.element.style.getPropertyValue("--editor-surface-height") !== surfaceValue) {
+      this.element.style.setProperty("--editor-surface-height", surfaceValue)
+    }
   }
 
   get value() {

@@ -98,6 +98,28 @@ class ContinuousAuthoringTest < ApplicationSystemTestCase
     assert_equal source.length, page.evaluate_script("document.querySelector('.source-field').editorController.selectionHead")
   end
 
+  test "continuous document resizing does not update legacy hidden-editor geometry" do
+    source = "# Geometry\n\n" + (1..30).map { |number| "Paragraph #{number}." }.join("\n\n")
+    document = Document.create!(title: "Geometry", source: source)
+    visit edit_document_path(document, editor_surface: "continuous")
+    assert_selector ".continuous-document .cm-content"
+    page.driver.browser.action.key_down(:control).send_keys(:end).key_up(:control).perform
+    page.execute_script(<<~JAVASCRIPT)
+      const editor = document.querySelector('.source-field').editorController;
+      window.geometryWrites = [];
+      const style = editor.element.style;
+      const setProperty = style.setProperty.bind(style);
+      style.setProperty = (name, value, priority) => {
+        window.geometryWrites.push(name);
+        return setProperty(name, value, priority);
+      };
+    JAVASCRIPT
+    page.driver.browser.action.send_keys(:end, :enter, "Second paragraph.").perform
+    assert_field "Markdown source", with: "#{source}\n\nSecond paragraph."
+    page.evaluate_async_script("const done = arguments[arguments.length - 1]; requestAnimationFrame(() => requestAnimationFrame(done));")
+    assert_empty page.evaluate_script("window.geometryWrites.filter(name => name === '--editor-surface-height')")
+  end
+
   test "Enter continues and exits a visual list" do
     source = "# Editing\n\n- First"
     document = Document.create!(title: "Editing", source: source)
