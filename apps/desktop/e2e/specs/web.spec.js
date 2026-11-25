@@ -1281,6 +1281,23 @@ test("shared authoring settings create, edit, and delete flow works in the web a
   await authoringSettingsWorkflow(new WebEditorUi(page))
 })
 
+test("settings peer tabs show their own panels and preserve an authoring draft", async ({ page }) => {
+  await page.goto("/settings")
+  await expect(page.locator("#settings-panel-appearance")).toBeVisible()
+  await page.locator("#settings-tab-authoring").click()
+  await expect(page.locator("#settings-panel-appearance")).toBeHidden()
+  await expect(page.locator("#authoring-settings-dialog")).toBeVisible()
+  await page.locator("#new-authoring-entry").click()
+  await page.locator("#authoring-name").fill("Draft")
+  await page.locator("#authoring-tab-snippets").focus()
+  await page.keyboard.press("Home")
+  await expect(page.locator("#authoring-name")).toHaveValue("Draft")
+  await page.locator("#settings-tab-keyboard").click()
+  await expect(page.locator("#settings-panel-keyboard")).toBeVisible()
+  await page.locator("#settings-tab-authoring").click()
+  await expect(page.locator("#authoring-name")).toHaveValue("Draft")
+})
+
 test("the web app without an updater capability shows no updater affordance", async ({ page }) => {
   const ui = new WebEditorUi(page)
   await ui.openAuthoringSettings()

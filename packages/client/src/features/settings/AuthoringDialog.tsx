@@ -163,6 +163,13 @@ export function AuthoringDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [registries, loaded]);
 
+  function selectRegistry(registry: AuthoringRegistryName): void {
+    if (registry === activeRegistry) return;
+    setActiveRegistry(registry);
+    setFormOpen(false);
+    setStatus("");
+  }
+
   function beginEntryForm(entry: AuthoringEntry | null, registry: AuthoringRegistryName): void {
     setActiveRegistry(registry);
     const isSnippet = registry === "snippets";
@@ -335,9 +342,7 @@ export function AuthoringDialog({
           if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
           event.preventDefault();
           const next = event.key === "Home" ? "snippets" : event.key === "End" ? "math_shortcuts" : activeRegistry === "snippets" ? "math_shortcuts" : "snippets";
-          setActiveRegistry(next);
-          setFormOpen(false);
-          setStatus("");
+          selectRegistry(next);
           document.getElementById(`authoring-tab-${next}`)?.focus();
         }}>
           {(["snippets", "math_shortcuts"] as const).map((registry) => (
@@ -351,11 +356,7 @@ export function AuthoringDialog({
               data-authoring-tab={registry}
               aria-selected={registry === activeRegistry}
               tabIndex={registry === activeRegistry ? 0 : -1}
-              onClick={() => {
-                setActiveRegistry(registry);
-                setFormOpen(false);
-                setStatus("");
-              }}
+              onClick={() => selectRegistry(registry)}
             >
               {registry === "snippets" ? "Snippets" : "Math shortcuts"}
             </button>
