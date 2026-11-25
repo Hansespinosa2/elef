@@ -1,5 +1,6 @@
 require "test_helper"
 require "selenium/webdriver"
+require_relative "support/chrome_storage_reset"
 
 chromedriver = ENV["CHROMEDRIVER_PATH"]
 chromedriver ||= %w[/usr/bin/chromedriver /usr/local/bin/chromedriver].find do |path|
@@ -15,6 +16,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   driven_by :selenium, using: :headless_chrome, screen_size: [1400, 1000] do |options|
     options.binary = chrome_binary if File.executable?(chrome_binary)
     options.add_argument("--headless=new")
+    options.add_argument("--window-size=1400,1000")
     options.add_argument("--disable-gpu")
     options.add_argument("--no-sandbox")
     options.add_argument("--disable-dev-shm-usage")
