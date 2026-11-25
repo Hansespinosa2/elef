@@ -43,6 +43,7 @@ class AppToolbarTest < ApplicationSystemTestCase
     assert_operator page.evaluate_script('document.querySelector(".editor-shell").getBoundingClientRect().bottom'), :<=, page.evaluate_script("window.innerHeight + 1")
   end
   test "source preview remains scrollable beneath the toolbar" do
+    original_size = page.driver.browser.manage.window.size
     source = "# Long document\n\n" + 70.times.map { |i| "Paragraph #{i}: #{'long document text ' * 8}\n\n" }.join
     document = Document.create!(title: "Toolbar scroll document", source: source)
     visit edit_document_path(document, editor_mode: "source")
@@ -62,6 +63,8 @@ class AppToolbarTest < ApplicationSystemTestCase
         return frame.getBoundingClientRect().width < #{wide} - 1 && frame.getBoundingClientRect().width <= preview.clientWidth + 1; })()
       JS
     }, "the document page should fit and shrink in a narrower preview"
+  ensure
+    page.driver.browser.manage.window.resize_to(original_size.width, original_size.height) if original_size
   end
 
 end
