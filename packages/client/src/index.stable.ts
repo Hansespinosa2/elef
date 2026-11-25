@@ -98,3 +98,5 @@ export type {
 } from "./application/types.js";
 export type { ElefHost } from "@elef/contracts";
 export { appendPageFragment } from "./features/document/page_fragments.js";
+
+export { setupAppToolbar } from "./application/app_toolbar.js";

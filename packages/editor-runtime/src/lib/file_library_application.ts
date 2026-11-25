@@ -12,7 +12,7 @@ import { presentConflictDialog } from "./conflict_dialog.js"
 import { createRendererClient } from "./renderer_worker_client.js"
 import { applyDesktopFeatureFlags } from "./feature_flags.js"
 import { configureEditorKind, enableVisualModeFromInstalledPreview, renderEditorView } from "./editor_view.js"
-import { ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, clearPrintPageSizeStyle, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById, syncPrintPageSizeStyle } from "@elef/client"
+import { setupAppToolbar, ALL_PRINT_MARKERS, CREATE_WORK_EVENT, chordDisplay, clearPrintPageSizeStyle, exportMenuOptionsFor, mountElef, mountExportMenu, mountNewWorkMenu, mountPresentation, parseLibraryRoute, pausePrintVideos, printMarkerClasses, printWorkKindForSourceFile, shortcutById, syncPrintPageSizeStyle } from "@elef/client"
 import type { ExportMenuHandle, ExportMenuProps, GraphController, LibraryPaletteCommand } from "@elef/client"
 
 interface OpenedEditor {
@@ -453,6 +453,7 @@ function shellElement<T extends Element>(selector: string): T {
 }
 
 export function startFileLibraryApplication(platform: DesktopPlatform): void {
+  setupAppToolbar()
   const {
     fileLibrary, createLibraryHost, listen, getCurrentWindow, getAppVersion,
     completeBootstrap, createCloseFlow, createTransportAdapter, installFetchTransport,
@@ -947,6 +948,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     elements.editorForm.previewController?.finishEditing()
     document.body.dataset.desktopView = "library"
     delete document.body.dataset.desktopSidebar
+    shellElement<HTMLButtonElement>("#toggle-desktop-library-sidebar").setAttribute("aria-pressed", "false")
     document.body.classList.remove("is-editing-source")
     elements.welcome.hidden = Boolean(library)
     elements.library.hidden = !library
@@ -1253,6 +1255,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       notice.textContent = work.notices.join(" ")
       notice.hidden = work.notices.length === 0
       delete document.body.dataset.desktopSidebar
+      shellElement<HTMLButtonElement>("#toggle-desktop-library-sidebar").setAttribute("aria-pressed", "false")
       elements.library.hidden = true
       elements.workView.hidden = false
       elements.presentationStart.hidden = isDocument
@@ -1873,6 +1876,15 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
     setClosing: (closing: boolean) => { document.body.inert = closing }
   }))
 
+  function toggleEditorLibrarySidebar(): void {
+    const nextOpen = document.body.dataset.desktopSidebar !== "open"
+    if (nextOpen) document.body.dataset.desktopSidebar = "open"
+    else delete document.body.dataset.desktopSidebar
+    elements.library.hidden = !nextOpen
+    shellElement<HTMLButtonElement>("#toggle-desktop-library-sidebar").setAttribute("aria-pressed", String(nextOpen))
+  }
+  shellElement<HTMLButtonElement>("#toggle-desktop-library-sidebar").addEventListener("click", toggleEditorLibrarySidebar)
+
   window.addEventListener("keydown", event => {
     if (
       document.body.dataset.desktopView === "editor" &&
@@ -1884,10 +1896,7 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       event.key.toLowerCase() === "b"
     ) {
       event.preventDefault()
-      const nextOpen = document.body.dataset.desktopSidebar !== "open"
-      if (nextOpen) document.body.dataset.desktopSidebar = "open"
-      else delete document.body.dataset.desktopSidebar
-      elements.library.hidden = !nextOpen
+      toggleEditorLibrarySidebar()
       return
     }
     // Present chord (registry "present") rides the same menu action as the

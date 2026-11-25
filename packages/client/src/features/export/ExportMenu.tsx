@@ -140,6 +140,8 @@ export function ExportMenu({ menuId, buttonId, menuLabel, statusId, options }: E
       <details id={menuId} className="export-menu relative" ref={menuRef}>
         <summary
           id={buttonId}
+          title={menuLabel}
+          aria-label={menuLabel}
           className="button secondary inline-flex min-h-10 cursor-pointer items-center gap-2 rounded-full border px-4 py-2 font-bold"
         >
           {menuLabel} <span aria-hidden="true">▾</span>

@@ -415,57 +415,7 @@ li.editor-reveal-marker { list-style: none; }
 .editor-micro-btn { display: none; }
 
 @media screen {
-  body.is-editing-source .app-header {
-    background: transparent;
-    border: 0;
-    height: 0;
-    min-height: 0;
-    overflow: visible;
-    padding: 0;
-  }
-  body.is-editing-source .app-header-identity,
-  body.is-editing-source .app-nav,
-  body.is-editing-source .bug-report-trigger,
-  body.is-editing-source .bug-report-disclosure,
-  body.is-editing-source .command-palette-triggers,
-  body.is-editing-source .new-work-menu,
-  body.is-editing-source .desktop-library-location,
-  body.is-editing-source .desktop-header-actions,
-  body.is-editing-source .page-title > div:first-child {
-    display: none;
-  }
-  body.is-editing-source .page-title {
-    align-items: center;
-    background: var(--oradia-slate-900);
-    border-bottom: 1px solid var(--oradia-line);
-    display: flex;
-    height: 36px;
-    justify-content: flex-end;
-    margin: 0;
-    padding: 0 14px;
-  }
-  body.is-editing-source .page-title .button,
-  body.is-editing-source .work-actions .button {
-    font-size: 12px;
-    min-height: 26px;
-    padding: 2px 10px;
-  }
-  body.is-editing-source .page-title .icon-button {
-    height: 26px;
-    min-height: 26px;
-    padding: 0 8px;
-    width: auto;
-  }
-  body.is-editing-source .work-actions {
-    align-items: center;
-    background: var(--oradia-slate-900);
-    border-bottom: 1px solid var(--oradia-line);
-    display: flex;
-    height: 36px;
-    justify-content: flex-end;
-    margin: 0;
-    padding: 0 14px;
-  }
+  body.is-editing-source .page-title { display: none; }
   body.is-editing-source .app-shell {
     margin: 0;
     max-width: 100%;

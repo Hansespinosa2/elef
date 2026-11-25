@@ -443,17 +443,10 @@ body[data-desktop-view="editor"] .desktop-header-actions { display: none; }
   body.is-editing-source .work-view {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: calc(100vh - 36px);
     max-width: 100%;
     min-width: 0;
     width: 100%;
   }
-  body.is-editing-source #start-presentation {
-    min-height: 24px;
-    padding: 2px 10px;
-    position: fixed;
-    right: 110px;
-    top: 6px;
-    z-index: 12;
-  }
+
 }

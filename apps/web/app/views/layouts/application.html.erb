@@ -18,20 +18,22 @@
   </head>
   <body class="elef-app m-0 bg-[#f6f4ef] text-[#1e1c18] font-sans <%= yield :body_class %>">
     <header class="app-header sticky top-0 z-10 border-b border-[#ddd5c8] bg-[rgba(255,253,248,0.94)] px-[clamp(1rem,4vw,3rem)] py-4">
+      <div class="app-toolbar">
+        <input class="app-toolbar-checkbox" id="app-toolbar-visible" type="checkbox" checked aria-label="Show toolbar">
+        <label class="app-toolbar-toggle" for="app-toolbar-visible" title="Toggle toolbar" aria-hidden="true"><span>⌃</span></label>
       <div class="app-header-inner mx-auto flex max-w-[1440px] flex-wrap items-center gap-8">
         <div class="app-header-identity flex shrink-0 items-center">
           <%= link_to "Elef", root_path, class: "brand font-extrabold tracking-[-0.04em] no-underline", data: { turbo: false } %>
         </div>
         <nav class="app-nav mr-auto flex items-center gap-1" aria-label="Primary">
-          <%= link_to "Library", root_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[library presentations documents].include?(controller_name)}" %>
-          <%= link_to "Settings", settings_path, class: "app-nav-link rounded-lg px-3 py-2 text-sm font-bold no-underline text-[#aab7b1] #{'is-active' if %w[workspace_settings snippets math_shortcuts].include?(controller_name)}" %>
+          <%= link_to "Library", root_path, class: "app-nav-link toolbar-library #{'is-active' if %w[library presentations documents].include?(controller_name) && !%w[edit update new create].include?(action_name)}", title: "Library", aria: { label: "Library" } %>
+          <%= link_to "Settings", settings_path, class: "app-nav-link toolbar-settings #{'is-active' if %w[workspace_settings snippets math_shortcuts].include?(controller_name)}", title: "Settings", aria: { label: "Settings" } %>
           <% if %w[presentations documents].include?(controller_name) && %w[edit update new create].include?(action_name) %>
-            <button type="button" id="toggle-editor-library-sidebar" class="app-nav-link rounded-lg px-3 py-2 text-sm font-bold text-[#aab7b1]" title="Toggle Library Sidebar (⌘B)">Sidebar <kbd>⌘B</kbd></button>
+            <button type="button" id="toggle-editor-library-sidebar" aria-pressed="false" aria-label="Toggle Library Sidebar" class="app-nav-link toolbar-sidebar rounded-lg px-3 py-2 text-sm font-bold text-[#aab7b1]" title="Toggle Library Sidebar (⌘B)">Sidebar <kbd>⌘B</kbd></button>
           <% end %>
         </nav>
         <div class="bug-report-root" data-controller="bug-report" data-bug-report-endpoint-value="<%= bug_reports_path %>">
-          <p id="bug-report-recording-disclosure" class="bug-report-disclosure">While you use Elef, recent clicks, typed text, keys, and page paths are automatically kept in memory for up to 60 seconds to prepare bug reports. If submitted, these may be included. Review and edit the generated steps first; recognized sensitive fields are redacted.</p>
-          <button type="button" class="bug-report-trigger" data-action="bug-report#open" data-bug-report-ignore aria-haspopup="dialog" aria-controls="bug-report-dialog" aria-describedby="bug-report-recording-disclosure">Report Bug</button>
+          <button type="button" class="bug-report-trigger" title="Report Bug" data-action="bug-report#open" data-bug-report-ignore aria-haspopup="dialog" aria-controls="bug-report-dialog" aria-describedby="bug-report-recording-disclosure">Report Bug</button>
           <dialog id="bug-report-dialog" class="bug-report-dialog" data-bug-report-target="dialog" data-bug-report-ignore data-action="close->bug-report#closed cancel->bug-report#cancel" aria-labelledby="bug-report-heading">
             <section class="bug-report-panel">
               <header class="bug-report-heading">
@@ -102,8 +104,8 @@
           { id: "keyboard-shortcuts", label: "Keyboard shortcuts", description: "Open the shortcut and trigger reference", requiresEditor: true }
         ].to_json) %>">
           <div class="command-palette-triggers" aria-label="Open Elef tools">
-            <button type="button" class="command-palette-trigger" data-action="command-palette#openCommands" aria-label="Open command palette">Commands <kbd data-command-palette-shortcut="k">⌘K</kbd></button>
-            <button type="button" class="command-palette-trigger" data-action="command-palette#openSearch" aria-label="Search presentations and documents">Search <kbd data-command-palette-shortcut="p">⌘P</kbd></button>
+            <button type="button" class="command-palette-trigger" data-action="command-palette#openCommands" aria-label="Open command palette" title="Open command palette">Commands <kbd data-command-palette-shortcut="k">⌘K</kbd></button>
+            <button type="button" class="command-palette-trigger" data-action="command-palette#openSearch" aria-label="Search presentations and documents" title="Search presentations and documents">Search <kbd data-command-palette-shortcut="p">⌘P</kbd></button>
           </div>
           <dialog class="command-palette" data-command-palette-target="dialog" data-bug-report-ignore data-action="click->command-palette#dialogClick close->command-palette#dialogClosed" aria-labelledby="command-palette-heading">
             <div class="command-palette-panel">
@@ -121,8 +123,12 @@
           </dialog>
         </div>
         <%= render "layouts/new_work_menu" %>
+        <div class="app-toolbar-work-actions"><%= yield :toolbar_work_actions %></div>
+      </div>
       </div>
     </header>
+
+    <p id="bug-report-recording-disclosure" class="bug-report-disclosure">While you use Elef, recent clicks, typed text, keys, and page paths are automatically kept in memory for up to 60 seconds to prepare bug reports. If submitted, these may be included. Review and edit the generated steps first; recognized sensitive fields are redacted.</p>
 
     <main class="app-shell mx-auto max-w-[1440px] p-[clamp(1rem,4vw,3rem)]">
       <% flash.each do |type, message| %>
@@ -138,8 +144,25 @@
           const btn = document.getElementById("toggle-editor-library-sidebar");
           if (!drawer) return;
           let mounted = false;
+          const cleanup = new AbortController();
+          const placeDrawer = () => {
+            const main = document.querySelector("main.app-shell");
+            const header = document.querySelector("header.app-header");
+            const top = Math.max(main?.getBoundingClientRect().top || 0, header?.getBoundingClientRect().bottom || 0);
+            drawer.style.top = `${top}px`;
+            drawer.style.height = `calc(100dvh - ${top}px)`;
+          };
+          const observer = new ResizeObserver(placeDrawer);
+          observer.observe(document.querySelector("header.app-header"));
+          const disclosure = document.querySelector(".bug-report-disclosure");
+          if (disclosure) observer.observe(disclosure);
+          window.addEventListener("resize", placeDrawer, { signal: cleanup.signal });
+          window.addEventListener("scroll", placeDrawer, { passive: true, signal: cleanup.signal });
+          document.addEventListener("turbo:before-cache", () => { observer.disconnect(); cleanup.abort(); }, { once: true });
           const toggle = () => {
+            placeDrawer();
             drawer.hidden = !drawer.hidden;
+            btn?.setAttribute("aria-pressed", String(!drawer.hidden));
             document.body.classList.toggle("has-editor-library-drawer", !drawer.hidden);
             if (!drawer.hidden && !mounted) {
               mounted = true;
@@ -148,7 +171,7 @@
               drawer.setAttribute("data-client-shell-base-path-value", drawer.dataset.basePath || "");
             }
           };
-          btn?.addEventListener("click", toggle);
+          btn?.addEventListener("click", toggle, { signal: cleanup.signal });
           window.addEventListener("keydown", (event) => {
             if (
               !document.querySelector("dialog[open]") &&
@@ -160,7 +183,7 @@
               event.preventDefault();
               toggle();
             }
-          });
+          }, { signal: cleanup.signal });
         })();
       </script>
     <% end %>
