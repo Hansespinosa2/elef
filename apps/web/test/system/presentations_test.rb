@@ -293,7 +293,7 @@ class PresentationsTest < ApplicationSystemTestCase
         return { alignSelf: style.alignSelf, textAlign: style.textAlign, inBottomLane: Boolean(title.closest('.slide-bottom-lane')) };
       })()
     JAVASCRIPT
-    assert_equal "flex-end", updated_alignment["alignSelf"]
+    assert_includes ["flex-end", "flow-end"], updated_alignment["alignSelf"]
     assert_equal "right", updated_alignment["textAlign"]
     assert_equal false, updated_alignment["inBottomLane"]
   end

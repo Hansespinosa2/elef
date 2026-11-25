@@ -177,6 +177,7 @@ class DocumentScrollTest < ApplicationSystemTestCase
   end
 
   def test_blur_released_pagination_preserves_scroll
+    page.driver.browser.manage.window.resize_to(1400, 800)
     document = Document.create!(title: "Scroll preservation", source: SOURCE)
     visit edit_document_path(document, editor_mode: "visual")
     assert_selector ".document-editor-projection .document-surface[data-document-pages-settled='true']", wait: 15
@@ -212,6 +213,8 @@ class DocumentScrollTest < ApplicationSystemTestCase
     end
     assert_in_delta before["windowY"], after["windowY"], 120,
       "repagination reset the window scroll (#{before["windowY"]} -> #{after["windowY"]})"
+  ensure
+    page.driver.browser.manage.window.resize_to(1400, 1000)
   end
 
   def test_source_edit_autoscrolls_preview_and_navigation_preserves_scroll
