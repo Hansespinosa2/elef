@@ -19,4 +19,4 @@
 @import url("./components/settings.css") layer(elef-components);
 @import url("./utilities.css") layer(elef-utilities);
 
-@import url("./components/toolbar.css");
+@import url("./components/toolbar.css") layer(elef-utilities);
