@@ -359,31 +359,40 @@ class PresentationsTest < ApplicationSystemTestCase
 
     visit root_path
 
-    # The client shell renders previews asynchronously (fetch, then the
-    # shared pagination pass for documents): wait for settled DOM before
-    # measuring geometry, the same readiness the suite asserts elsewhere.
-    assert_selector ".library-card .slide", wait: 10
-    assert_selector '.library-card .library-preview-page [data-document-pages-settled="true"]', wait: 10
+    presentation_preview = "#presentation_#{presentation.id} .library-preview"
+    document_preview = "#document_#{document.id} .library-preview"
+    slide_selector = "#{presentation_preview} .slide"
+    page_surface = "#{document_preview} .library-preview-page [data-document-pages-target='surface']"
+    page_selector = "#{page_surface} .document-page"
 
-    geometry = page.evaluate_script(<<~JAVASCRIPT)
-      (() => {
-        const box = selector => document.querySelector(selector).getBoundingClientRect();
-        const frame = box('.library-card .library-preview');
-        const slide = box('.library-card .slide');
-        const page1 = box('.library-card .library-preview-page .document-page');
+    # Wait for the actual preview nodes on the two cards this test created.
+    assert_selector slide_selector, wait: 10
+    assert_selector %(#{page_surface}[data-document-pages-settled="true"] .document-page), wait: 10
+
+    geometry = page.evaluate_script(<<~JAVASCRIPT, presentation_preview, document_preview, slide_selector, page_selector)
+      ((slideFrameSelector, pageFrameSelector, slideSelector, pageSelector) => {
+        const slideElement = document.querySelector(slideSelector);
+        const pageElement = document.querySelector(pageSelector);
+        const slideFrame = document.querySelector(slideFrameSelector).getBoundingClientRect();
+        const pageFrame = document.querySelector(pageFrameSelector).getBoundingClientRect();
+        const slide = slideElement.getBoundingClientRect();
+        const page = pageElement.getBoundingClientRect();
+
         return {
-          frameRatio: frame.width / frame.height,
+          slideFrameRatio: slideFrame.width / slideFrame.height,
+          pageFrameRatio: pageFrame.width / pageFrame.height,
           slideRatio: slide.width / slide.height,
-          pageRatio: page1.width / page1.height,
-          slideFits: slide.width <= frame.width + 1 && slide.height <= frame.height + 1,
-          pageFits: page1.width <= frame.width + 1 && page1.height <= frame.height + 1,
-          slideScale: getComputedStyle(document.querySelector('.library-card .slide')).getPropertyValue('--slide-scale').trim(),
-          pageScale: getComputedStyle(document.querySelector('.library-card .library-preview-page')).getPropertyValue('--slide-scale').trim()
+          pageRatio: page.width / page.height,
+          slideFits: slide.width <= slideFrame.width + 1 && slide.height <= slideFrame.height + 1,
+          pageFits: page.width <= pageFrame.width + 1 && page.height <= pageFrame.height + 1,
+          slideScale: getComputedStyle(slideElement).getPropertyValue('--slide-scale').trim(),
+          pageScale: getComputedStyle(pageElement.closest('.library-preview-page')).getPropertyValue('--slide-scale').trim()
         };
-      })()
+      })(...arguments)
     JAVASCRIPT
 
-    assert_in_delta 16.0 / 9.0, geometry["frameRatio"], 0.02
+    assert_in_delta 16.0 / 9.0, geometry["slideFrameRatio"], 0.02
+    assert_in_delta 16.0 / 9.0, geometry["pageFrameRatio"], 0.02
     assert_in_delta 16.0 / 9.0, geometry["slideRatio"], 0.02
     assert_in_delta 52.0 / 72.0, geometry["pageRatio"], 0.02
     assert geometry["slideFits"], "slide preview overflows its card frame"
