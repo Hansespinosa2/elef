@@ -10,7 +10,7 @@ import { editAndPreviewWorkflow } from "../../../../apps/web/test/e2e/scenarios/
 import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-create-delete.js"
-import { libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
+import { libraryDeepLinkFilters, libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
 import { externalEditConflictWorkflow, CONFLICT_WORK_NAME, CONFLICT_SOURCE_FILE, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
 import { hostileWorkNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-work.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
@@ -2177,6 +2177,24 @@ class DesktopLibraryUi {
     }
   }
 
+  async assertDocumentPreviewSwitch(first, second) {
+    for (const title of [first, second]) {
+      await browser.execute(expected => {
+        const card = [...document.querySelectorAll(".library-card")]
+          .find(candidate => candidate.querySelector(".library-card-title")?.textContent.trim() === expected)
+        if (!card) throw new Error(`Missing library card ${expected}`)
+        card.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
+      }, title)
+      await browser.waitUntil(async () => browser.execute(expected => {
+        const popover = document.querySelector(".library-hover-popover")
+        const surface = popover?.querySelector("[data-document-pages-target='surface']")
+        return popover?.querySelector(".library-stage-title")?.textContent.trim() === expected &&
+          surface?.getAttribute("data-document-pages-settled") === "true" &&
+          Boolean(surface.querySelector(".document-page-frame"))
+      }, title), { timeout: 15_000, timeoutMsg: `The ${title} stage preview did not paginate` })
+    }
+  }
+
   async previewWork(title) {
     await this.openLibrary()
     await $("#show-work-list").click()
@@ -2922,13 +2940,11 @@ describe("desktop binary workflows and native boundaries", () => {
     await libraryCreateDeleteWorkflow(new DesktopLibraryUi())
   })
 
-  it("runs the shared library deep links flow", async function () {
-    // Three full-boot deep-link reloads cost ~20s each on macOS CI runners
-    // (WebKit boot behind the postMessage IPC fallback); the per-step waits
-    // still bound every stage, this only extends the total budget.
-    this.timeout(180_000)
-    await libraryDeepLinksWorkflow(new DesktopLibraryUi())
-  })
+  for (const filter of libraryDeepLinkFilters) {
+    it(`runs the shared library deep-link flow for ${filter}`, async () => {
+      await libraryDeepLinksWorkflow(new DesktopLibraryUi(), filter)
+    })
+  }
 
   it("persists appearance through the shared editing flow", async () => {
     await appearanceWorkflow(new DesktopEditorUi())

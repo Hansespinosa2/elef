@@ -786,3 +786,35 @@ test("arc hover popover opens on keyboard navigation and toggles the rail with C
     shell.unmount();
   }
 });
+
+test("switching document previews after pagination keeps the library usable", async () => {
+  const host = typedHost();
+  for (const title of ["First", "Second"]) {
+    await host.library.createWork({ workspaceId: ws("ws-1"), title, kind: "document", text: `# ${title}` });
+  }
+  const { element, shell } = await mountInto(host);
+  const press = async (key: string) => {
+    const event = element.ownerDocument.createEvent("Event") as unknown as Event & { key: string };
+    event.initEvent("keydown", true, true);
+    event.key = key;
+    await act(async () => { element.ownerDocument.dispatchEvent(event); });
+    await settled();
+  };
+  try {
+    await press("ArrowDown");
+    const mount = element.querySelector(".library-hover-popover [data-client-mount='document-pages mermaid']");
+    assert.ok(mount);
+    const surface = element.querySelector(".library-hover-popover [data-document-pages-target='surface']");
+    assert.ok(surface);
+    // The pagination controller replaces the surface's children with pages.
+    surface.replaceChildren(element.ownerDocument.createElement("div"));
+    await press("ArrowDown");
+    assert.equal(element.querySelector(".library-hover-popover .library-stage-title")?.textContent, "First");
+    assert.notEqual(element.querySelector(".library-hover-popover [data-client-mount='document-pages mermaid']"), mount, "pagination controller gets a fresh mount");
+    assert.ok(element.querySelector(".library-quickstart-canvas"), "library remains mounted");
+    await click(element.querySelector('[data-library-tab="documents"]'));
+    assert.equal(element.querySelectorAll(".library-card").length, 2);
+  } finally {
+    shell.unmount();
+  }
+});

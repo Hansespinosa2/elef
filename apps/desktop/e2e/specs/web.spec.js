@@ -5,7 +5,7 @@ import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../../apps/web/test/
 import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-create-delete.js"
-import { libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
+import { libraryDeepLinkFilters, libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
 import { externalEditConflictWorkflow, CONFLICT_WORK_NAME, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
 import { hostileWorkNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-work.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
@@ -1026,6 +1026,19 @@ class WebLibraryUi {
     await expect(this.page.getByRole("heading", { name: title, exact: true })).toHaveCount(0)
   }
 
+  async assertDocumentPreviewSwitch(first, second) {
+    for (const title of [first, second]) {
+      const card = this.page.locator("article.library-card").filter({
+        has: this.page.getByRole("heading", { name: title, exact: true })
+      })
+      await card.dispatchEvent("mouseover")
+      const popover = this.page.locator(".library-hover-popover")
+      await expect(popover.locator(".library-stage-title")).toHaveText(title)
+      await expect(popover.locator("[data-document-pages-target='surface']")).toHaveAttribute("data-document-pages-settled", "true", { timeout: 15_000 })
+      await expect(popover.locator(".document-page-frame").first()).toBeAttached()
+    }
+  }
+
   async previewWork(title) {
     const card = this.page.locator("article.library-card").filter({
       has: this.page.getByRole("heading", { name: title, exact: true })
@@ -1235,9 +1248,11 @@ test("shared library create and delete flow works in the web app", async ({ page
   await libraryCreateDeleteWorkflow(new WebLibraryUi(page))
 })
 
-test("shared library deep links land on the requested filter in the web app", async ({ page }) => {
-  await libraryDeepLinksWorkflow(new WebLibraryUi(page))
-})
+for (const filter of libraryDeepLinkFilters) {
+  test(`shared library deep links land on ${filter} in the web app`, async ({ page }) => {
+    await libraryDeepLinksWorkflow(new WebLibraryUi(page), filter)
+  })
+}
 
 test("shared external-edit conflict flow preserves the disk version in the web app", async ({ page }) => {
   const ui = new WebEditorUi(page)
