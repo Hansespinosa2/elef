@@ -5,7 +5,7 @@ import { editAndPreviewWorkflow, SAVED_SOURCE } from "../../../../apps/web/test/
 import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-create-delete.js"
-import { libraryDeepLinkScenarios } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
+import { libraryDeepLinkFilters, libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
 import { externalEditConflictWorkflow, CONFLICT_WORK_NAME, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
 import { hostileWorkNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-work.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
@@ -1248,9 +1248,9 @@ test("shared library create and delete flow works in the web app", async ({ page
   await libraryCreateDeleteWorkflow(new WebLibraryUi(page))
 })
 
-for (const [filter, run] of Object.entries(libraryDeepLinkScenarios)) {
+for (const filter of libraryDeepLinkFilters) {
   test(`shared library deep links land on ${filter} in the web app`, async ({ page }) => {
-    await run(new WebLibraryUi(page))
+    await libraryDeepLinksWorkflow(new WebLibraryUi(page), filter)
   })
 }
 

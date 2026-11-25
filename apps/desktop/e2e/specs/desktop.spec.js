@@ -10,7 +10,7 @@ import { editAndPreviewWorkflow } from "../../../../apps/web/test/e2e/scenarios/
 import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-create-delete.js"
-import { libraryDeepLinkScenarios } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
+import { libraryDeepLinkFilters, libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
 import { externalEditConflictWorkflow, CONFLICT_WORK_NAME, CONFLICT_SOURCE_FILE, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
 import { hostileWorkNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-work.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
@@ -2940,9 +2940,9 @@ describe("desktop binary workflows and native boundaries", () => {
     await libraryCreateDeleteWorkflow(new DesktopLibraryUi())
   })
 
-  for (const [filter, run] of Object.entries(libraryDeepLinkScenarios)) {
+  for (const filter of libraryDeepLinkFilters) {
     it(`runs the shared library deep-link flow for ${filter}`, async () => {
-      await run(new DesktopLibraryUi())
+      await libraryDeepLinksWorkflow(new DesktopLibraryUi(), filter)
     })
   }
 

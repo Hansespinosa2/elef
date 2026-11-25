@@ -1,22 +1,20 @@
-export const libraryDeepLinkScenarios = {
-  async documents(ui) {
-    await ui.openLibraryDeepLink("documents")
-    await ui.assertDocumentsOnly("E2E document")
-  },
+const filterAssertions = {
+  documents: ui => ui.assertDocumentsOnly("E2E document"),
+  presentations: ui => ui.assertPresentationsOnly("E2E seed", "E2E document"),
+  all: ui => ui.assertAllWorkKindsVisible("E2E seed", "E2E document")
+}
 
-  async presentations(ui) {
-    await ui.openLibraryDeepLink("presentations")
-    await ui.assertPresentationsOnly("E2E seed", "E2E document")
-  },
+export const libraryDeepLinkFilters = Object.keys(filterAssertions)
 
-  async all(ui) {
-    await ui.openLibraryDeepLink("all")
-    await ui.assertAllWorkKindsVisible("E2E seed", "E2E document")
+export async function libraryDeepLinksWorkflow(ui, filter) {
+  await ui.openLibraryDeepLink(filter)
+  await filterAssertions[filter](ui)
 
+  if (filter === "all") {
     // In-app hash moves sync the filter without a reload.
     await ui.setLibraryHash("documents")
-    await ui.assertDocumentsOnly("E2E document")
+    await filterAssertions.documents(ui)
     await ui.setLibraryHash("all")
-    await ui.assertAllWorkKindsVisible("E2E seed", "E2E document")
+    await filterAssertions.all(ui)
   }
 }
