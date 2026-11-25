@@ -509,7 +509,7 @@ export function CardPreview({
   const mediaBaseUrl = options.resolveMediaBaseUrl?.(work) ?? "";
   const sanitized = (
     <SafeHtml
-      {...(kind === "document" ? {} : { className: stageClass })}
+      {...(kind === "document" ? { className: "document-surface", documentPageSurface: true } : { className: stageClass })}
       html={state.html}
       sanitize={(container, html) =>
         sanitizePreview(container, html, {
@@ -530,9 +530,7 @@ export function CardPreview({
           // lazy content lands) while mount-less hosts render the same
           // content unpaginated.
           <div className={stageClass} data-client-mount="document-pages mermaid">
-            <div className="document-surface" data-document-pages-target="surface">
-              {sanitized}
-            </div>
+            {sanitized}
           </div>
         ) : (
           sanitized
@@ -594,7 +592,7 @@ export function StagePreview({
   const sanitized = (
     <SafeHtml
       key={key}
-      {...(work.kind === "document" ? {} : { className: stageClass })}
+      {...(work.kind === "document" ? { className: "document-surface", documentPageSurface: true } : { className: stageClass })}
       html={cached.html}
       sanitize={(container, html) =>
         sanitizePreview(container, html, {
@@ -610,9 +608,7 @@ export function StagePreview({
       <div className="library-stage-preview-frame" aria-hidden="true" inert data-preview-state="ready">
         {work.kind === "document" ? (
           <div className={stageClass} data-client-mount="document-pages mermaid">
-            <div className="document-surface" data-document-pages-target="surface">
-              {sanitized}
-            </div>
+            {sanitized}
           </div>
         ) : (
           sanitized
