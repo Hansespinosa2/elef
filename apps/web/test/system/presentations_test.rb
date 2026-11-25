@@ -2358,7 +2358,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "user creates saves and reopens a markdown presentation" do
     visit presentations_path
-    find("summary", text: "New").click
+    find("summary[aria-label='New']").click
     within ".new-work-panel" do
       click_on "Presentation"
     end
