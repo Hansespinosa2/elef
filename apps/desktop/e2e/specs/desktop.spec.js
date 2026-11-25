@@ -10,7 +10,7 @@ import { editAndPreviewWorkflow } from "../../../../apps/web/test/e2e/scenarios/
 import { appearanceWorkflow } from "../../../../apps/web/test/e2e/scenarios/appearance.js"
 import { libraryAndGraphWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-and-graph.js"
 import { libraryCreateDeleteWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-create-delete.js"
-import { libraryDeepLinksWorkflow } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
+import { libraryDeepLinkScenarios } from "../../../../apps/web/test/e2e/scenarios/library-deep-links.js"
 import { externalEditConflictWorkflow, CONFLICT_WORK_NAME, CONFLICT_SOURCE_FILE, CONFLICT_EXTERNAL_SOURCE } from "../../../../apps/web/test/e2e/scenarios/external-edit-conflict.js"
 import { hostileWorkNeutralizedWorkflow } from "../../../../apps/web/test/e2e/scenarios/hostile-work.js"
 import { documentLinkCompletionWorkflow, mathInputWorkflow, snippetInsertWorkflow } from "../../../../apps/web/test/e2e/scenarios/authoring-palettes.js"
@@ -2940,13 +2940,11 @@ describe("desktop binary workflows and native boundaries", () => {
     await libraryCreateDeleteWorkflow(new DesktopLibraryUi())
   })
 
-  it("runs the shared library deep links flow", async function () {
-    // Three full-boot deep-link reloads cost ~20s each on macOS CI runners
-    // (WebKit boot behind the postMessage IPC fallback); the per-step waits
-    // still bound every stage, this only extends the total budget.
-    this.timeout(180_000)
-    await libraryDeepLinksWorkflow(new DesktopLibraryUi())
-  })
+  for (const [filter, run] of Object.entries(libraryDeepLinkScenarios)) {
+    it(`runs the shared library deep-link flow for ${filter}`, async () => {
+      await run(new DesktopLibraryUi())
+    })
+  }
 
   it("persists appearance through the shared editing flow", async () => {
     await appearanceWorkflow(new DesktopEditorUi())
