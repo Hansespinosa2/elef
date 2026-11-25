@@ -367,14 +367,6 @@
   overflow-wrap: anywhere;
   padding: 0.9rem;
 }
-/* Desktop light mode remaps these shell colors. Keep the dark sample on
-   the dark document palette while the appearance choice is still a draft. */
-.settings-proof-sample.document-theme-dark {
-  --oradia-slate-900: #182126;
-  --oradia-slate-800: #202c32;
-  --oradia-slate-700: #304047;
-  --oradia-ink: #e9eee9;
-}
 .settings-proof-sample .document-surface { color: var(--document-page-ink); }
 .settings-proof-sample .document-surface :is(h2, h3) {
   color: var(--document-heading-ink);

@@ -107,7 +107,7 @@ export function AuthoringDialog({
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("");
-  const [loaded, setLoaded] = useState(false);
+  const [loadStatus, setLoadStatus] = useState<"loading" | "error" | "ready">("loading");
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [fields, setFields] = useState<FormFields>(EMPTY_FORM);
@@ -127,6 +127,7 @@ export function AuthoringDialog({
   stateRef.current = { registries, hashes, activeRegistry };
 
   const load = useCallback(async () => {
+    setLoadStatus("loading");
     try {
       const result = await transport.readRegistries();
       setRegistries({
@@ -134,12 +135,11 @@ export function AuthoringDialog({
         math_shortcuts: [...(result.math_shortcuts || [])],
       });
       setHashes(result.hashes || { snippets: null, math_shortcuts: null });
+      setLoadStatus("ready");
     } catch {
       setRegistries({ snippets: [], math_shortcuts: [] });
       setHashes({ snippets: null, math_shortcuts: null });
-      setStatus("Could not load authoring settings. Check that your work is available.");
-    } finally {
-      setLoaded(true);
+      setLoadStatus("error");
     }
   }, [transport]);
 
@@ -151,7 +151,7 @@ export function AuthoringDialog({
   // the registries load, mirroring the pre-migration dialog open options.
   const openedRef = useRef(false);
   useEffect(() => {
-    if (openedRef.current || !loaded) return;
+    if (openedRef.current || loadStatus !== "ready") return;
     openedRef.current = true;
     if (entryId !== null && entryId !== undefined) {
       const list = (initialRegistry === "math_shortcuts" ? registries.math_shortcuts : registries.snippets) as readonly AuthoringEntry[];
@@ -161,7 +161,7 @@ export function AuthoringDialog({
     }
     if (openNew) beginEntryForm(null, initialRegistry);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [registries, loaded]);
+  }, [registries, loadStatus]);
 
   function selectRegistry(registry: AuthoringRegistryName): void {
     if (registry === activeRegistry) return;
@@ -389,20 +389,28 @@ export function AuthoringDialog({
           </div>
 
           <p id="authoring-settings-status" className="authoring-settings-status" role="status" aria-live="polite">
-            {status}
+            {loadStatus === "error" ? "Could not load authoring settings." : loadStatus === "loading" ? "Loading authoring settings…" : status}
           </p>
+          {loadStatus === "error" && (
+            <button className="button" type="button" onClick={() => {
+              document.getElementById("authoring-settings-search")?.focus();
+              void load();
+            }}>
+              Retry
+            </button>
+          )}
           <div className="authoring-settings-heading">
             <p id="authoring-settings-count" className="dialog-copy">
               {`${allEntries.length} ${label}${allEntries.length === 1 ? "" : "s"} · ${personalCount} personal`}
             </p>
-            <button id="new-authoring-entry" className="button primary" type="button" onClick={() => beginEntryForm(null, activeRegistry)}>
+            <button id="new-authoring-entry" className="button primary" type="button" disabled={loadStatus !== "ready"} onClick={() => beginEntryForm(null, activeRegistry)}>
               {isSnippet ? "New snippet" : "New shortcut"}
             </button>
           </div>
           <div id="authoring-settings-list" className="authoring-settings-list" aria-live="polite">
             {visible.map(renderCard)}
           </div>
-          <p id="authoring-settings-empty" className="authoring-settings-empty" hidden={visible.length > 0}>
+          <p id="authoring-settings-empty" className="authoring-settings-empty" hidden={loadStatus !== "ready" || visible.length > 0}>
             {query || category ? "No entries match this search." : "No entries are available."}
           </p>
         </div>

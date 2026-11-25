@@ -42,6 +42,15 @@
   --work-reveal-marker-ink: var(--work-dark-reveal-marker-ink);
 }
 
+/* Desktop light mode remaps these shell colors. Keep the dark sample on
+   the dark document palette while the appearance choice is still a draft. */
+.settings-proof-sample.document-theme-dark {
+  --oradia-slate-900: #182126;
+  --oradia-slate-800: #202c32;
+  --oradia-slate-700: #304047;
+  --oradia-ink: #e9eee9;
+}
+
 .document-theme-light {
   --document-page-background: #fffdf8;
   --document-page-border: var(--oradia-paper-line);

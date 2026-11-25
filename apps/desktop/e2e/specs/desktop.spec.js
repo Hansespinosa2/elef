@@ -3242,6 +3242,8 @@ describe("desktop binary workflows and native boundaries", () => {
     if (afterDelete.snippets.some(entry => entry.trigger === trigger)) {
       throw new Error("Deleting the personal snippet left it in the library registry file")
     }
+    await $("#close-settings").click()
+    await $("#settings-dialog").waitForDisplayed({ reverse: true })
   })
 
   it("creates and deletes a personal math shortcut through desktop settings", async () => {
