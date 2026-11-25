@@ -14,6 +14,9 @@ class AppToolbarTest < ApplicationSystemTestCase
     presentation = Presentation.create!(title: "Toolbar presentation", source: "# Toolbar presentation")
     visit root_path
     assert_selector ".app-toolbar .toolbar-library", visible: true
+    active_color = page.evaluate_script('getComputedStyle(document.querySelector(".toolbar-library")).color')
+    settings_color = page.evaluate_script('getComputedStyle(document.querySelector(".toolbar-settings")).color')
+    refute_equal settings_color, active_color, "the current location should use the green active color"
     capture_toolbar("library")
     find("label.app-toolbar-toggle").click
     assert_no_selector ".app-toolbar .toolbar-library", visible: true

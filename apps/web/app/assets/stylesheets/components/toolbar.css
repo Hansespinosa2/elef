@@ -9,8 +9,8 @@
 .app-toolbar .app-header-inner { max-width: none; min-height: 36px; padding: 0 48px 0 8px; gap: 4px; flex-wrap: wrap; }
 .app-toolbar .app-header-identity { display: none; }
 .app-toolbar .app-nav { gap: 0; margin-right: auto; }
-.app-toolbar :is(.app-nav-link, .new-work-trigger, .export-menu > summary, #start-presentation, [data-command-palette-present], .desktop-header-actions > button) { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--oradia-muted); box-shadow: none; font-size: 0; line-height: 1; }
-.app-toolbar :is(.app-nav-link, .new-work-trigger, .export-menu > summary, #start-presentation, [data-command-palette-present], .desktop-header-actions > button):hover { background: transparent; color: var(--oradia-ink); }
+.app-toolbar :is(.app-nav-link, .new-work-trigger, .export-menu > summary, [id="start-presentation"], [data-command-palette-present], .desktop-header-actions > button) { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--oradia-muted); box-shadow: none; font-size: 0; line-height: 1; }
+.app-toolbar :is(.app-nav-link, .new-work-trigger, .export-menu > summary, [id="start-presentation"], [data-command-palette-present], .desktop-header-actions > button):hover { background: transparent; color: var(--oradia-ink); }
 .app-toolbar :is(.app-nav-link.is-active, .app-nav-link[aria-pressed="true"]) { background: transparent; color: var(--oradia-green); }
 .app-toolbar :is(.toolbar-library, .toolbar-settings, .toolbar-sidebar, #refresh-library, #check-for-updates, #import-elef, #start-presentation, .export-menu > summary)::before { font: 18px/1 system-ui, sans-serif; }
 .app-toolbar .toolbar-library::before { content: '▤'; }
