@@ -4,6 +4,7 @@ export async function libraryAndGraphWorkflow(ui) {
   await ui.assertCardPreview("E2E seed", "The visual editor changed this text.")
   await ui.assertDocumentCardTheme("E2E document", "dark")
   await ui.assertDocumentCardTheme("E2E linked", "light")
+  await ui.assertDocumentPreviewSwitch("E2E document", "E2E linked")
   await ui.previewWork("E2E seed")
   await ui.presentWork("E2E seed")
   await ui.renameWork("E2E seed", "E2E seed renamed")

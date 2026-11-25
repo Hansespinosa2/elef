@@ -636,7 +636,7 @@ export function LibraryApp({ host, initialFilter, options, registerControl }: Li
               </div>
             </div>
             <div className="library-stage-preview">
-              <StagePreview host={host} work={popoverWork} options={options} />
+              <StagePreview key={`${popoverWork.id}:${popoverWork.updatedAt ?? ""}`} host={host} work={popoverWork} options={options} />
             </div>
           </div>
         ) : null}

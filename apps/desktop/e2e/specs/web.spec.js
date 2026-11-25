@@ -1026,6 +1026,19 @@ class WebLibraryUi {
     await expect(this.page.getByRole("heading", { name: title, exact: true })).toHaveCount(0)
   }
 
+  async assertDocumentPreviewSwitch(first, second) {
+    for (const title of [first, second]) {
+      const card = this.page.locator("article.library-card").filter({
+        has: this.page.getByRole("heading", { name: title, exact: true })
+      })
+      await card.dispatchEvent("mouseover")
+      const popover = this.page.locator(".library-hover-popover")
+      await expect(popover.locator(".library-stage-title")).toHaveText(title)
+      await expect(popover.locator("[data-document-pages-target='surface']")).toHaveAttribute("data-document-pages-settled", "true", { timeout: 15_000 })
+      await expect(popover.locator(".document-page-frame").first()).toBeAttached()
+    }
+  }
+
   async previewWork(title) {
     const card = this.page.locator("article.library-card").filter({
       has: this.page.getByRole("heading", { name: title, exact: true })

@@ -2177,6 +2177,24 @@ class DesktopLibraryUi {
     }
   }
 
+  async assertDocumentPreviewSwitch(first, second) {
+    for (const title of [first, second]) {
+      await browser.execute(expected => {
+        const card = [...document.querySelectorAll(".library-card")]
+          .find(candidate => candidate.querySelector(".library-card-title")?.textContent.trim() === expected)
+        if (!card) throw new Error(`Missing library card ${expected}`)
+        card.dispatchEvent(new MouseEvent("mouseover", { bubbles: true }))
+      }, title)
+      await browser.waitUntil(async () => browser.execute(expected => {
+        const popover = document.querySelector(".library-hover-popover")
+        const surface = popover?.querySelector("[data-document-pages-target='surface']")
+        return popover?.querySelector(".library-stage-title")?.textContent.trim() === expected &&
+          surface?.getAttribute("data-document-pages-settled") === "true" &&
+          Boolean(surface.querySelector(".document-page-frame"))
+      }, title), { timeout: 15_000, timeoutMsg: `The ${title} stage preview did not paginate` })
+    }
+  }
+
   async previewWork(title) {
     await this.openLibrary()
     await $("#show-work-list").click()

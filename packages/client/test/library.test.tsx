@@ -802,12 +802,15 @@ test("switching document previews after pagination keeps the library usable", as
   };
   try {
     await press("ArrowDown");
+    const mount = element.querySelector(".library-hover-popover [data-client-mount='document-pages mermaid']");
+    assert.ok(mount);
     const surface = element.querySelector(".library-hover-popover [data-document-pages-target='surface']");
     assert.ok(surface);
     // The pagination controller replaces the surface's children with pages.
     surface.replaceChildren(element.ownerDocument.createElement("div"));
     await press("ArrowDown");
     assert.equal(element.querySelector(".library-hover-popover .library-stage-title")?.textContent, "First");
+    assert.notEqual(element.querySelector(".library-hover-popover [data-client-mount='document-pages mermaid']"), mount, "pagination controller gets a fresh mount");
     assert.ok(element.querySelector(".library-quickstart-canvas"), "library remains mounted");
     await click(element.querySelector('[data-library-tab="documents"]'));
     assert.equal(element.querySelectorAll(".library-card").length, 2);
