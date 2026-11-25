@@ -163,6 +163,7 @@ class WebEditorUi {
     await this.page.goto("/settings")
     // Vim preferences render through the shared client UI (same hooks as
     // the desktop settings flow); drive its stable element ids.
+    await this.page.locator("#settings-tab-keyboard").click()
     const vimToggle = this.page.locator("#vim-enabled")
     if (!await vimToggle.isChecked()) await vimToggle.check()
     await this.page.locator("#vim-line-numbers").selectOption("relative")

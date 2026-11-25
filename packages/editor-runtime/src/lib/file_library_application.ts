@@ -650,6 +650,12 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       settingsShell = await mountElef(settingsMount, libraryHost, {
         initialUrl: "/settings",
         vimEditorBridge: vimEditorBridge(),
+        authoring: {
+          transport: platform.authoringTransport,
+          renderExample: source => renderer.renderMarkdownBlock(source),
+          reloadEditorRegistry: loadDesktopAuthoringRegistry,
+          onSaved: setStatus
+        },
         onSettingsSaved: saved => {
           const theme = typeof saved["theme"] === "string" ? saved["theme"] : libraryConfig.theme
           const typography = typeof saved["typography"] === "string" ? saved["typography"] : libraryConfig.typography
@@ -1831,10 +1837,6 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
       settingsShell.unmount()
       settingsShell = null
     }
-  })
-  shellElement<HTMLElement>("#manage-authoring").addEventListener("click", () => {
-    closeSettings()
-    void openAuthoringSettings()
   })
   // The updater affordances exist only on updater-capable builds; the shell
   // removes the check button where updates are disabled, so its listener is
