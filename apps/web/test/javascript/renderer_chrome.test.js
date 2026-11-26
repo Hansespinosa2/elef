@@ -145,6 +145,21 @@ test("an unmatched display opener leaves the next fenced code block intact", () 
   assert.match(html, /const/)
 })
 
+test("closed display math keeps fence-like text within its expression", () => {
+  for (const [open, close] of [["$$", "$$"], ["\\[", "\\]"]]) {
+    const html = renderMarkdownBlock(`${open}\nx\n~~~\ny\n${close}\n\nNext`)
+    assert.match(html, /class="katex-display"/)
+    assert.match(html, /data-editor-math-source="\nx\n~~~\ny\n"/)
+    assert.match(html, /<p>Next<\/p>/)
+  }
+})
+
+test("dollars in a trailing autolink leave the next display equation intact", () => {
+  const html = renderMarkdownBlock("$$\nx\n$$, see <https://example.com/$$>\n$$\n\ny\n$$")
+  assert.equal((html.match(/class="katex-display"/g) || []).length, 2)
+  assert.match(html, /href="https:\/\/example\.com\/\$\$"/)
+})
+
 // NOTE (dev-sync): T's "exposes Stimulus canvas targets" case is not ported:
 // the campaign retired the presentation-canvas controller (present mode is
 // the framework-free mountPresentation now), so its target hook would be

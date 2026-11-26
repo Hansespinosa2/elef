@@ -121,12 +121,14 @@ test("a trailing paragraph keeps indented equations with their expression on the
   );
 });
 
-test("an unmatched display opener leaves a following code fence intact", () => {
-  const doc = '$$\n\n```js\nconst s = "$$";\n```';
+test("dollars in a trailing autolink do not consume the next display opener", () => {
+  const doc = "$$\nx\n$$, see <https://example.com/$$>\n$$\n\ny\n$$";
   const nodes = collectNodes(parsedState(doc));
 
-  assert.equal(nodes.filter((node) => node.name === "FencedCode").length, 1);
-  assert.equal(nodes.filter((node) => node.name === "MathMark").length, 1);
+  assert.deepEqual(
+    nodes.filter((node) => node.name === "MathContent").map((node) => node.text),
+    ["\nx\n", "\n\ny\n"]
+  );
 });
 
 test("prose currency, escaped dollars, multiline single-dollar, and inline code are not parsed as math", () => {

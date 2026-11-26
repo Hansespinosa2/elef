@@ -1,4 +1,4 @@
-import { closesParagraphDisplayMath, findMathClosingDelimiter, markdownCodeFenceMarker } from "@elef/work-model/math-source"
+import { closesParagraphDisplayMath, findMathClosingDelimiter } from "@elef/work-model/math-source"
 import { syntaxTree } from "@codemirror/language"
 import type { EditorState, Extension, Range } from "@codemirror/state"
 import { Decoration, EditorView, ViewPlugin } from "@codemirror/view"
@@ -177,7 +177,6 @@ export const elefMath = {
         let contentTo = contentFrom
         while (cx.nextLine()) {
           if (line.depth < blockDepth) break
-          if (line.indent < line.baseIndent + 4 && markdownCodeFenceMarker(line.text.slice(line.pos))) break
           const delimiterStart = findMathClosingDelimiter(line.text, "$$", line.pos)
           if (delimiterStart >= 0) {
             const closeFrom = cx.lineStart + delimiterStart

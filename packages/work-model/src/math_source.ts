@@ -84,6 +84,13 @@ export function scanMathSource(source: string, { inline = false } = {}): MathSou
       index = close < 0 ? index + run.length : close + run.length
       continue
     }
+    if (source[index] === "<") {
+      const autolink = /^<(?:[a-z][a-z\d+.-]{1,31}:[^<>\s]*|[^<>\s@]+@[a-z\d][a-z\d.-]*)>/i.exec(source.slice(index))
+      if (autolink) {
+        index += autolink[0].length
+        continue
+      }
+    }
     const image = source[index] === "!" ? /^!\[(?:\\.|[^\]])*\]\((?:\\.|[^)])*\)/.exec(source.slice(index)) : null
     if (image) { index += image[0].length; continue }
     // Link destinations are metadata; math in a link's label remains prose.
@@ -104,7 +111,6 @@ export function scanMathSource(source: string, { inline = false } = {}): MathSou
   }
   return matches
 }
-
 
 // When a paragraph already opened display math, a bare dollar fence on the
 // next line closes that span instead of interrupting the paragraph.

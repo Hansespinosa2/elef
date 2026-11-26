@@ -243,6 +243,7 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
     }
   }
   const closeDelimiter = openDelimiter === "$$" ? "$$" : "\\]"
+  let sawCodeFence = false
   for (let line = startLine + 1; line < endLine; line += 1) {
     const lineStart = state.bMarks[line]
     const lineEnd = state.eMarks[line]
@@ -252,11 +253,15 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
     const indent = state.sCount[line]
     if (contentStart < lineEnd && indent !== undefined && indent < state.blkIndent) break
     const closer = state.src.slice(contentStart, lineEnd)
-    if (indent !== undefined && indent - state.blkIndent < 4 && markdownCodeFenceMarker(closer)) break
+    if (indent !== undefined && indent - state.blkIndent < 4 && markdownCodeFenceMarker(closer)) {
+      sawCodeFence = true
+    }
     const delimiterStart = closeDelimiter === "$$"
       ? findMathClosingDelimiter(closer, closeDelimiter, 0)
       : closer.trim() === closeDelimiter ? closer.indexOf(closeDelimiter) : -1
-    if (delimiterStart < 0) continue
+    // A possible fenced code block cannot supply a mid-line math closer.
+    // Explicit closing lines still allow literal fence-like text within TeX.
+    if (delimiterStart < 0 || (closeDelimiter === "$$" && sawCodeFence && delimiterStart > 0)) continue
     if (silent) return true
     const closeFrom = contentStart + delimiterStart
     const closeTo = closeFrom + closeDelimiter.length
