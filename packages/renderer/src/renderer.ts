@@ -1,6 +1,6 @@
 /// <reference path="../../work-model/src/types/markdown-it.d.ts" />
 /// <reference path="./types/highlightjs-common.d.ts" />
-import MarkdownIt from "markdown-it"
+import MarkdownIt, { type MarkdownItBlockState } from "markdown-it"
 import parseParagraph from "markdown-it/lib/rules_block/paragraph.mjs"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
@@ -227,7 +227,10 @@ markdown.inline.ruler.at("newline", (state, silent) => {
   return true
 })
 
+const mathSuffixParagraphs = new WeakSet<MarkdownItBlockState>()
+
 markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, endLine, silent) => {
+  if (silent && !mathSuffixParagraphs.has(state)) return false
   const opener = state.getLines(startLine, startLine + 1, state.blkIndent, false).trim()
   const openDelimiter = opener === "$$" ? "$$" : opener === "\\[" ? "\\[" : null
   if (!openDelimiter) return false
@@ -239,7 +242,7 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
     if (lineStart === undefined || lineEnd === undefined || shift === undefined) continue
     const delimiterEnd = closeDelimiter === "$$"
       ? dollarMathClosingDelimiterEnd(state.src, lineStart + shift)
-      : state.src.slice(lineStart + shift, lineEnd).trimEnd() === closeDelimiter ? lineEnd : null
+      : state.getLines(line, line + 1, state.blkIndent, false).trim() === closeDelimiter ? lineEnd : null
     if (delimiterEnd === null) continue
     if (silent) return true
     const env = asRenderEnv(state.env)
@@ -253,9 +256,13 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
       // The remainder of the closing line is the beginning of a paragraph.
       state.bMarks[line] = delimiterEnd
       state.tShift[line] = 0
+      // Let a new equation interrupt this paragraph without treating dollar
+      // delimiters in ordinary paragraphs as block openers.
+      mathSuffixParagraphs.add(state)
       try {
         parseParagraph(state, line, endLine, false)
       } finally {
+        mathSuffixParagraphs.delete(state)
         state.bMarks[line] = lineStart
         state.tShift[line] = shift
       }

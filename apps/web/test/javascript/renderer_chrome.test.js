@@ -106,6 +106,14 @@ test("composed display math preserves trailing prose before the next equation", 
   assert.match(html, /<p>, for <em>all\s+values<\/em>\.<\/p>/)
 })
 
+test("display math can still open with its expression on the same line", () => {
+  const html = renderMarkdownBlock("$$x\n$$\ntext\n$$\ny\n$$")
+  assert.equal((html.match(/class="katex-display"/g) || []).length, 2)
+  assert.match(html, /data-editor-math-source="x\n"/)
+  assert.match(html, /data-editor-math-source="\ny\n"/)
+  assert.match(html, /<\/span>\s+text\s+<span/)
+})
+
 // NOTE (dev-sync): T's "exposes Stimulus canvas targets" case is not ported:
 // the campaign retired the presentation-canvas controller (present mode is
 // the framework-free mountPresentation now), so its target hook would be
