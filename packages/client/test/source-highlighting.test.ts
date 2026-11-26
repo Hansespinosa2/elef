@@ -114,6 +114,13 @@ test("a display closer with trailing prose preserves a following horizontal rule
   assert.ok(nodes.some((node) => node.name === "Paragraph" && node.text === "next"));
 });
 
+test("continued prose retains setext headings after a display closer", () => {
+  for (const [underline, heading] of [["===", "SetextHeading1"], ["---", "SetextHeading2"]]) {
+    const nodes = collectNodes(parsedState(`$$\nx\n$$, prose\nHeading\n${underline}`));
+    assert.ok(nodes.some((node) => node.name === heading && node.text.includes("Heading")));
+  }
+});
+
 test("dollars in a trailing autolink do not consume the next display opener", () => {
   const doc = "$$\nx\n$$, see <https://example.com/$$>\n$$\n\ny\n$$";
   const nodes = collectNodes(parsedState(doc));

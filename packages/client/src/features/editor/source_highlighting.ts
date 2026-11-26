@@ -27,7 +27,7 @@ interface LezerBlockContext {
   readonly lineStart: number
   readonly stack: readonly unknown[]
   nextLine(): boolean
-  startComposite(type: string, start: number): void
+  startComposite(type: string, start: number, value: number): void
   elt(type: string, from: number, to: number, children?: readonly LezerElement[]): LezerElement
   addElement(elt: LezerElement): void
 }
@@ -105,9 +105,16 @@ function isBlockMathFenceLine(text: string, pos: number): boolean {
 export const elefMath = {
   defineNodes: [
     { name: "BlockMath", block: true },
-    // A suffix paragraph uses normal Lezer continuation and ends this
-    // composite when its next line is parsed at block level.
-    { name: "BlockMathWithProse", composite: () => false },
+    {
+      name: "BlockMathWithProse",
+      composite(cx: LezerBlockContext, line: LezerLine, closingLineEnd: number): boolean {
+        // Let Lezer recognize setext underlines in continued prose. Dashes
+        // immediately after the closing line still form a horizontal rule.
+        const content = line.text.slice(line.pos)
+        if (/^=+[ \t]*$/.test(content)) return true
+        return cx.lineStart > closingLineEnd + 1 && /^-+[ \t]*$/.test(content)
+      }
+    },
     { name: "InlineMath" },
     { name: "MathMark" },
     { name: "MathMarkBeforeProse" },
@@ -144,7 +151,7 @@ export const elefMath = {
               // placeholder for the final dollar keeps block syntax in the
               // suffix inline, while preserving every source offset.
               const paragraphStart = line.pos + 1
-              cx.startComposite("BlockMathWithProse", blockFrom - cx.lineStart)
+              cx.startComposite("BlockMathWithProse", blockFrom - cx.lineStart, cx.lineStart + line.text.length)
               children.push(cx.elt("MathMarkBeforeProse", closeFrom, closeTo - 1))
               cx.addElement(cx.elt("BlockMath", blockFrom, closeTo - 1, children))
               line.text = line.text.slice(0, paragraphStart) + "\uFFFC" + line.text.slice(paragraphStart + 1)
