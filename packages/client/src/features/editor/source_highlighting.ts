@@ -31,17 +31,29 @@ interface TrailingParagraph {
   start: number
   content: string
   marks: LezerElement[]
-  parsers: []
 }
+
+interface LezerInput {
+  length: number
+  read(from: number, to: number): string
+}
+
+interface LezerParse<Tree> {
+  advance(): Tree | null
+  readonly parsedPos: number
+  readonly stoppedAt: number | null
+  stopAt(pos: number): void
+}
+
+let activeMarkdownInput: LezerInput | undefined
 
 interface LezerBlockContext {
   readonly lineStart: number
   readonly parsedPos: number
-  readonly input: { length: number; read(from: number, to: number): string }
   readonly stack: readonly unknown[]
   readonly parser: {
     parseInline(text: string, offset: number): LezerElement[]
-    endLeafBlock?: Array<(cx: LezerBlockContext, line: LezerLine, leaf: TrailingParagraph) => boolean>
+    parse(text: string): { topNode: { firstChild: { name: string; to: number } | null } }
   }
   nextLine(): boolean
   addLeafElement(leaf: TrailingParagraph, elt: LezerElement): void
@@ -119,23 +131,32 @@ function isBlockMathFenceLine(text: string, pos: number): boolean {
   return text.slice(pos + 2).trim() === ""
 }
 
+function interruptsTrailingParagraph(content: string, cx: LezerBlockContext): boolean {
+  // Ordinary text cannot start a Markdown block that interrupts a paragraph.
+  if (!/^[#>*+`~<_\[|\d-]/.test(content)) return false
+  if (/^-{3,}[ \t]*$/.test(content)) return true
+
+  // Parse against a plain paragraph prefix to use Lezer's public grammar.
+  // A suffix paragraph cannot become a setext heading.
+  const probe = "text\n" + content
+  const first = cx.parser.parse(probe).topNode.firstChild
+  return first !== null && !first.name.startsWith("SetextHeading") && first.to < probe.length
+}
+
 // The closing line already contains a block, so the suffix starts a paragraph
 // directly. Use Lezer's paragraph continuation rules and composite markers.
 function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, math: LezerElement, suffix: string): void {
-  const stopRules = cx.parser.endLeafBlock
-  if (!stopRules) throw new Error("Lezer Markdown paragraph interruption rules are unavailable")
-
-  const leaf: TrailingParagraph = { start: math.to, content: suffix, marks: [], parsers: [] }
+  const leaf: TrailingParagraph = { start: math.to, content: suffix, marks: [] }
   let mathScanFrom = 0
 
   while (cx.nextLine() && line.pos < line.text.length) {
     if (line.indent < line.baseIndent + 4) {
-      // Lezer normally leaves contiguous dashes for the setext parser.
-      if (/^-{3,}[ \t]*$/.test(line.text.slice(line.pos))) break
-      if (stopRules.some(stop => stop(cx, line, leaf))) {
-        if (!isBlockMathFenceLine(line.text, line.pos) ||
-            !closesParagraphDisplayMath(leaf.content.slice(mathScanFrom))) break
+      const content = line.text.slice(line.pos)
+      if (isBlockMathFenceLine(content, 0)) {
+        if (!closesParagraphDisplayMath(leaf.content.slice(mathScanFrom))) break
         mathScanFrom = leaf.content.length + 1 + line.text.length
+      } else if (interruptsTrailingParagraph(content, cx)) {
+        break
       }
     }
     // Replace composite markup with spaces to preserve source offsets.
@@ -152,6 +173,22 @@ function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, ma
 }
 
 export const elefMath = {
+  wrap<Tree>(parse: LezerParse<Tree>, input: LezerInput): LezerParse<Tree> {
+    return {
+      get parsedPos() { return parse.parsedPos },
+      get stoppedAt() { return parse.stoppedAt },
+      stopAt(pos) { parse.stopAt(pos) },
+      advance() {
+        const previous = activeMarkdownInput
+        activeMarkdownInput = input
+        try {
+          return parse.advance()
+        } finally {
+          activeMarkdownInput = previous
+        }
+      }
+    }
+  },
   defineNodes: [
     { name: "BlockMath", block: true },
     { name: "BlockMathWithProse", block: true },
@@ -184,8 +221,10 @@ export const elefMath = {
           const content = line.text.slice(line.pos)
           if (line.indent < line.baseIndent + 4) {
             codeFence = mathCodeFenceAtLine(content, codeFence, afterBlank, () => {
-              const nextLine = Math.min(cx.parsedPos + line.text.length + 1, cx.input.length)
-              return cx.input.read(nextLine, cx.input.length)
+              const input = activeMarkdownInput
+              if (!input) return ""
+              const nextLine = Math.min(cx.parsedPos + line.text.length + 1, input.length)
+              return input.read(nextLine, input.length)
             })
           }
           afterBlank = content.length === 0

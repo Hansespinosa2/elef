@@ -106,6 +106,12 @@ test("composed display math preserves trailing prose before the next equation", 
   assert.match(html, /<p>, for <em>all\s+values<\/em>\.<\/p>/)
 })
 
+test("document preview keeps closing-line prose with its continuation", () => {
+  const source = "$$\nx\n$$, for *all\nvalues* of x."
+  const { html } = renderPreview({ source, kind: "document" })
+  assert.match(html, /<p>, for <em>all\s+values<\/em> of x\.<\/p>/)
+})
+
 test("display math can still open with its expression on the same line", () => {
   const html = renderMarkdownBlock("$$x\n$$\ntext\n$$\ny\n$$")
   assert.equal((html.match(/class="katex-display"/g) || []).length, 2)

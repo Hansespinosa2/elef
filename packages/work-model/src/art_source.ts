@@ -16,6 +16,7 @@
 // the art_* suites, not prose.
 /// <reference path="./types/markdown-it.d.ts" />
 import MarkdownIt, { type MarkdownItToken } from "markdown-it"
+import { findMathClosingDelimiter } from "./math_source.js"
 
 const listParser = new MarkdownIt({
   html: false,
@@ -273,16 +274,6 @@ function markdownBoundaryContext(source: string): MarkdownBoundaryContext {
     if (/^ {0,3}:::step(?=$|[^A-Za-z0-9_-])/.test(lines[index] as string) && !codeProtectedLines[index] && !mathLines[index]) directiveLines.add(index)
   }
 
-  const maskedSource = lines.map((line, index) =>
-    directiveLines.has(index) || blankLines[index] === 1 || mathLines[index] === 1 ? "" : line
-  ).join("\n")
-  const markdownTokens = listParser.parse(maskedSource, {})
-  const markdownBlocks: Array<BlockSpan> = markdownTokens.filter((token) =>
-    token.level === 0 && token.map && token.type !== "inline" && token.nesting !== -1
-  ).map((token) => ({
-    startLine: token.map?.[0] as number,
-    endLine: token.map?.[1] as number
-  }))
   const nonMathProtectedPrefix = new Uint32Array(lines.length + 1)
   for (let line = 0; line < lines.length; line += 1) {
     nonMathProtectedPrefix[line + 1] = (nonMathProtectedPrefix[line] as number) + (markdownProtectedLines[line] as number)
@@ -290,11 +281,34 @@ function markdownBoundaryContext(source: string): MarkdownBoundaryContext {
   const topLevelMathRanges = mathRanges.filter((range) =>
     nonMathProtectedPrefix[range.endLine] === nonMathProtectedPrefix[range.startLine]
   )
-  markdownBlocks.push(...topLevelMathRanges.map((range) => ({ startLine: range.startLine, endLine: range.endLine })))
+  const mathSuffixLines = new Set(
+    topLevelMathRanges.filter(range => range.hasClosingProse).map(range => range.endLine - 1)
+  )
+  const maskedSource = lines.map((line, index) => {
+    // Only the closing line's trailing prose starts a Markdown paragraph.
+    if (mathSuffixLines.has(index)) return "text"
+    return directiveLines.has(index) || blankLines[index] === 1 || mathLines[index] === 1 ? "" : line
+  }).join("\n")
+  const markdownTokens = listParser.parse(maskedSource, {})
+  const markdownBlocks: Array<BlockSpan> = markdownTokens.filter((token) =>
+    token.level === 0 && token.map && token.type !== "inline" && token.nesting !== -1
+  ).map((token) => ({
+    startLine: token.map?.[0] as number,
+    endLine: token.map?.[1] as number
+  }))
+  const paragraphEnds = new Map(markdownBlocks.map(block => [block.startLine, block.endLine]))
+  const groupedMathSuffixLines = new Set<number>()
+  for (const range of topLevelMathRanges) {
+    const closingLine = range.endLine - 1
+    const paragraphEnd = range.hasClosingProse ? paragraphEnds.get(closingLine) : undefined
+    if (paragraphEnd !== undefined) groupedMathSuffixLines.add(closingLine)
+    markdownBlocks.push({ startLine: range.startLine, endLine: paragraphEnd ?? range.endLine })
+  }
+  const boundaryBlocks = markdownBlocks.filter(block => !groupedMathSuffixLines.has(block.startLine))
 
   const boundaryMap: ArtBoundaryMap = {
-    blockStarts: markdownBlocks.map((block) => block.startLine),
-    blockEnds: markdownBlocks.map((block) => block.endLine),
+    blockStarts: boundaryBlocks.map((block) => block.startLine),
+    blockEnds: boundaryBlocks.map((block) => block.endLine),
     directiveLines: [...directiveLines].sort((left, right) => left - right),
     artDirectiveLines: [...artDirectiveLines].sort((left, right) => left - right),
     blankLines: indexesOf(blankLines)
@@ -312,15 +326,25 @@ export function markdownBoundaryMap(source: string): ArtBoundaryMap {
   return markdownBoundaryContext(source).boundaryMap
 }
 
-function displayMathRanges(lines: Array<string>, codeProtectedLines: Uint8Array): Array<BlockSpan> {
-  const ranges: Array<BlockSpan> = []
+interface DisplayMathSpan extends BlockSpan {
+  hasClosingProse?: boolean
+}
+
+function displayMathRanges(lines: Array<string>, codeProtectedLines: Uint8Array): Array<DisplayMathSpan> {
+  const ranges: Array<DisplayMathSpan> = []
   let mathFence: { marker: string; startLine: number } | null = null
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] as string
     if (codeProtectedLines[index]) continue
     if (mathFence) {
-      if (mathFenceCloser(line, mathFence.marker)) {
-        ranges.push({ type: "display_math", startLine: mathFence.startLine, endLine: index + 1 })
+      const close = findMathClosingDelimiter(line, mathFence.marker, 0)
+      if (close >= 0) {
+        ranges.push({
+          type: "display_math",
+          startLine: mathFence.startLine,
+          endLine: index + 1,
+          hasClosingProse: mathFence.marker === "$$" && Boolean(line.slice(close + mathFence.marker.length).trim())
+        })
         mathFence = null
       }
       continue
@@ -593,19 +617,4 @@ function mathFenceOpener(line: string): string | null {
   if (marker === "\\[") return "\\]"
   const inlineDisplayOpener = /^[ \t]{0,3}\$\$[ \t]*(\S.*)$/.exec(line)
   return inlineDisplayOpener && !inlineDisplayOpener[1]?.includes("$$") ? "$$" : null
-}
-
-// Mirror the renderer's inline display-math rule: once a fence is open, the
-// first unescaped closing delimiter ends the span, so `\end{aligned}$$`
-// closers close the fence instead of swallowing the rest of the document.
-function mathFenceCloser(line: string, fence: string): boolean {
-  if (mathFenceMarker(line) === fence) return true
-  let index = line.indexOf(fence)
-  while (index >= 0) {
-    let slashes = 0
-    for (let cursor = index - 1; cursor >= 0 && line[cursor] === "\\"; cursor -= 1) slashes += 1
-    if (slashes % 2 === 0) return true
-    index = line.indexOf(fence, index + fence.length)
-  }
-  return false
 }
