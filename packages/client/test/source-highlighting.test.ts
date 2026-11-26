@@ -80,6 +80,15 @@ test("display math closes before trailing prose and highlights adjacent equation
   assert.ok(nodes.some((node) => node.name === "Emphasis" && node.text === "*all\nvalues*"));
 });
 
+test("backticks after a display math closer stay inline", () => {
+  const doc = "$$\nx\n$$```\n### Heading\n$$\ny\n$$";
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.equal(nodes.filter((node) => node.name === "BlockMath").length, 2);
+  assert.equal(nodes.filter((node) => node.name === "FencedCode").length, 0);
+  assert.ok(nodes.some((node) => node.name === "ATXHeading3" && node.text === "### Heading"));
+});
+
 test("prose currency, escaped dollars, multiline single-dollar, and inline code are not parsed as math", () => {
   const doc = [
     "Costs $5 and $10 or $ 5 today.",

@@ -20,13 +20,28 @@ interface LezerLine {
   readonly text: string
   readonly pos: number
   readonly depth: number
-  moveBase(to: number): void
+  readonly indent: number
+  readonly baseIndent: number
+  readonly markers: LezerElement[]
+  scrub(): string
+}
+
+interface TrailingParagraph {
+  start: number
+  content: string
+  marks: LezerElement[]
+  parsers: []
 }
 
 interface LezerBlockContext {
   readonly lineStart: number
   readonly stack: readonly unknown[]
+  readonly parser: {
+    parseInline(text: string, offset: number): LezerElement[]
+    endLeafBlock: Array<(cx: LezerBlockContext, line: LezerLine, leaf: TrailingParagraph) => boolean>
+  }
   nextLine(): boolean
+  addLeafElement(leaf: TrailingParagraph, elt: LezerElement): void
   elt(type: string, from: number, to: number, children?: readonly LezerElement[]): LezerElement
   addElement(elt: LezerElement): void
 }
@@ -101,6 +116,21 @@ function isBlockMathFenceLine(text: string, pos: number): boolean {
   return text.slice(pos + 2).trim() === ""
 }
 
+// The closing line already contains a block, so the suffix starts a paragraph
+// directly. Use Lezer's paragraph continuation rules and composite markers.
+function parseTrailingParagraph(cx: LezerBlockContext, line: LezerLine, suffix: string, start: number): void {
+  const leaf: TrailingParagraph = { start, content: suffix, marks: [], parsers: [] }
+
+  while (cx.nextLine() && line.pos < line.text.length) {
+    if (line.indent < line.baseIndent + 4 && cx.parser.endLeafBlock.some(stop => stop(cx, line, leaf))) break
+    leaf.content += "\n" + line.scrub()
+    leaf.marks.push(...line.markers)
+  }
+
+  const children = cx.parser.parseInline(leaf.content, start)
+  cx.addLeafElement(leaf, cx.elt("Paragraph", start, start + leaf.content.length, children))
+}
+
 export const elefMath = {
   defineNodes: [
     { name: "BlockMath", block: true },
@@ -115,7 +145,7 @@ export const elefMath = {
       endLeaf(_cx: LezerBlockContext, line: LezerLine): boolean {
         return isBlockMathFenceLine(line.text, line.pos)
       },
-      parse(cx: LezerBlockContext, line: LezerLine): boolean | null {
+      parse(cx: LezerBlockContext, line: LezerLine): boolean {
         if (!isBlockMathFenceLine(line.text, line.pos)) return false
 
         const blockDepth = cx.stack.length
@@ -137,12 +167,9 @@ export const elefMath = {
             children.push(cx.elt("MathMark", closeFrom, closeTo))
             cx.addElement(cx.elt("BlockMath", blockFrom, closeTo, children))
 
-            if (line.text.slice(line.pos + 2).trim()) {
-              // Resume Markdown parsing on this line after the math delimiter.
-              line.moveBase(line.pos + 2)
-              return null
-            }
-            cx.nextLine()
+            const suffix = line.text.slice(line.pos + 2)
+            if (suffix.trim()) parseTrailingParagraph(cx, line, suffix, closeTo)
+            else cx.nextLine()
             return true
           }
           contentTo = cx.lineStart + line.text.length
