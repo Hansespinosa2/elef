@@ -66,7 +66,7 @@ test("block $$ math parses multi-line display equations", () => {
 });
 
 test("display math closes before trailing prose and highlights adjacent equations independently", () => {
-  const doc = "$$\nx_1\n$$, for *all* $x$.\nAnd by induction\n$$\ny_2\n$$done";
+  const doc = "$$\nx_1\n$$, for *all\nvalues* of $x$.\nAnd by induction\n$$\ny_2\n$$done";
   const nodes = collectNodes(parsedState(doc));
 
   assert.deepEqual(
@@ -77,7 +77,7 @@ test("display math closes before trailing prose and highlights adjacent equation
     nodes.filter((node) => node.name === "MathContent").map((node) => node.text),
     ["\nx_1\n", "x", "\ny_2\n"]
   );
-  assert.ok(nodes.some((node) => node.name === "Emphasis" && node.text === "*all*"));
+  assert.ok(nodes.some((node) => node.name === "Emphasis" && node.text === "*all\nvalues*"));
 });
 
 test("prose currency, escaped dollars, multiline single-dollar, and inline code are not parsed as math", () => {

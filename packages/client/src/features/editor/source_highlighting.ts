@@ -20,12 +20,12 @@ interface LezerLine {
   readonly text: string
   readonly pos: number
   readonly depth: number
+  moveBase(to: number): void
 }
 
 interface LezerBlockContext {
   readonly lineStart: number
   readonly stack: readonly unknown[]
-  readonly parser: { parseInline(text: string, offset: number): LezerElement[] }
   nextLine(): boolean
   elt(type: string, from: number, to: number, children?: readonly LezerElement[]): LezerElement
   addElement(elt: LezerElement): void
@@ -115,7 +115,7 @@ export const elefMath = {
       endLeaf(_cx: LezerBlockContext, line: LezerLine): boolean {
         return isBlockMathFenceLine(line.text, line.pos)
       },
-      parse(cx: LezerBlockContext, line: LezerLine): boolean {
+      parse(cx: LezerBlockContext, line: LezerLine): boolean | null {
         if (!isBlockMathFenceLine(line.text, line.pos)) return false
 
         const blockDepth = cx.stack.length
@@ -137,10 +137,10 @@ export const elefMath = {
             children.push(cx.elt("MathMark", closeFrom, closeTo))
             cx.addElement(cx.elt("BlockMath", blockFrom, closeTo, children))
 
-            const suffix = line.text.slice(line.pos + 2)
-            if (suffix.trim()) {
-              const prose = cx.parser.parseInline(suffix, closeTo)
-              cx.addElement(cx.elt("Paragraph", closeTo, closeTo + suffix.length, prose))
+            if (line.text.slice(line.pos + 2).trim()) {
+              // Resume Markdown parsing on this line after the math delimiter.
+              line.moveBase(line.pos + 2)
+              return null
             }
             cx.nextLine()
             return true
