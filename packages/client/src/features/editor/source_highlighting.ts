@@ -17,45 +17,17 @@ interface LezerInlineContext {
 }
 
 interface LezerLine {
-  readonly text: string
+  text: string
   readonly pos: number
   readonly depth: number
-  readonly indent: number
-  readonly baseIndent: number
-  readonly basePos: number
-  readonly markers: LezerElement[]
+  moveBase(to: number): void
 }
-
-interface TrailingParagraph {
-  start: number
-  content: string
-  marks: LezerElement[]
-}
-
-interface LezerInput {
-  length: number
-  read(from: number, to: number): string
-}
-
-interface LezerParse<Tree> {
-  advance(): Tree | null
-  readonly parsedPos: number
-  readonly stoppedAt: number | null
-  stopAt(pos: number): void
-}
-
-let activeMarkdownInput: LezerInput | undefined
 
 interface LezerBlockContext {
   readonly lineStart: number
-  readonly parsedPos: number
   readonly stack: readonly unknown[]
-  readonly parser: {
-    parseInline(text: string, offset: number): LezerElement[]
-    parse(text: string): { topNode: { firstChild: { name: string; to: number } | null } }
-  }
   nextLine(): boolean
-  addLeafElement(leaf: TrailingParagraph, elt: LezerElement): void
+  startComposite(type: string, start: number): void
   elt(type: string, from: number, to: number, children?: readonly LezerElement[]): LezerElement
   addElement(elt: LezerElement): void
 }
@@ -130,88 +102,15 @@ function isBlockMathFenceLine(text: string, pos: number): boolean {
   return text.slice(pos + 2).trim() === ""
 }
 
-function interruptsTrailingParagraph(content: string, cx: LezerBlockContext): boolean {
-  // Ordinary text cannot start a Markdown block that interrupts a paragraph.
-  if (!/^[#>*+`~<_\[|\d-]/.test(content)) return false
-  if (/^-{3,}[ \t]*$/.test(content)) return true
-
-  // Parse against a plain paragraph prefix to use Lezer's public grammar.
-  // A suffix paragraph cannot become a setext heading.
-  const probe = "text\n" + content
-  const first = cx.parser.parse(probe).topNode.firstChild
-  return first !== null && !first.name.startsWith("SetextHeading") && first.to < probe.length
-}
-
-function closesTrailingInlineMath(paragraph: string, cx: LezerBlockContext, line: LezerLine): boolean {
-  const probe = paragraph + "\n$$"
-  if (!cx.parser.parseInline(probe, 0).some(element => element.to === probe.length)) return false
-
-  // A backtick opener in the paragraph can close beyond the dollar fence.
-  // Include that continuation before deciding whether the dollars are opaque.
-  const input = activeMarkdownInput
-  if (!input || !paragraph.includes("`")) return true
-
-  const nextLine = Math.min(cx.parsedPos + line.text.length + 1, input.length)
-  const tail = input.read(nextLine, input.length)
-  const blankLine = /(?:^|\n)[ \t]*(?:\n|$)/.exec(tail)
-  const continuation = blankLine ? tail.slice(0, blankLine.index) : tail
-  if (!continuation.includes("`")) return true
-
-  return cx.parser.parseInline(probe + "\n" + continuation, 0).some(element => element.to === probe.length)
-}
-
-// The closing line already contains a block, so the suffix starts a paragraph
-// directly. Use Lezer's paragraph continuation rules and composite markers.
-function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, math: LezerElement, suffix: string): void {
-  const leaf: TrailingParagraph = { start: math.to, content: suffix, marks: [] }
-  const blockDepth = cx.stack.length
-  let mathScanFrom = 0
-
-  while (cx.nextLine() && line.depth >= blockDepth && line.pos < line.text.length) {
-    if (line.indent < line.baseIndent + 4) {
-      const content = line.text.slice(line.pos)
-      if (isBlockMathFenceLine(content, 0)) {
-        if (!closesTrailingInlineMath(leaf.content.slice(mathScanFrom), cx, line)) break
-        mathScanFrom = leaf.content.length + 1 + line.text.length
-      } else if (interruptsTrailingParagraph(content, cx)) {
-        break
-      }
-    }
-    // Replace composite markup with spaces to preserve source offsets.
-    leaf.content += "\n" + " ".repeat(line.basePos) + line.text.slice(line.basePos)
-    leaf.marks.push(...line.markers)
-  }
-
-  const end = leaf.start + leaf.content.length
-  const children = cx.parser.parseInline(leaf.content, leaf.start)
-  const paragraph = cx.elt("Paragraph", leaf.start, end, children)
-  // Lezer reuses block nodes across edits and expects them to end on a line
-  // boundary. Keep the delimiter and its suffix in one reusable block.
-  cx.addLeafElement(leaf, cx.elt("BlockMathWithProse", math.from, end, [math, paragraph]))
-}
-
 export const elefMath = {
-  wrap<Tree>(parse: LezerParse<Tree>, input: LezerInput): LezerParse<Tree> {
-    return {
-      get parsedPos() { return parse.parsedPos },
-      get stoppedAt() { return parse.stoppedAt },
-      stopAt(pos) { parse.stopAt(pos) },
-      advance() {
-        const previous = activeMarkdownInput
-        activeMarkdownInput = input
-        try {
-          return parse.advance()
-        } finally {
-          activeMarkdownInput = previous
-        }
-      }
-    }
-  },
   defineNodes: [
     { name: "BlockMath", block: true },
-    { name: "BlockMathWithProse", block: true },
+    // A suffix paragraph uses normal Lezer continuation and ends this
+    // composite when its next line is parsed at block level.
+    { name: "BlockMathWithProse", composite: () => false },
     { name: "InlineMath" },
     { name: "MathMark" },
+    { name: "MathMarkBeforeProse" },
     { name: "MathContent" }
   ],
   parseBlock: [
@@ -221,7 +120,7 @@ export const elefMath = {
       endLeaf(_cx: LezerBlockContext, line: LezerLine): boolean {
         return isBlockMathFenceLine(line.text, line.pos)
       },
-      parse(cx: LezerBlockContext, line: LezerLine): boolean {
+      parse(cx: LezerBlockContext, line: LezerLine): boolean | null {
         if (!isBlockMathFenceLine(line.text, line.pos)) return false
 
         const blockDepth = cx.stack.length
@@ -240,15 +139,21 @@ export const elefMath = {
             if (closeFrom > contentFrom) {
               children.push(cx.elt("MathContent", contentFrom, closeFrom))
             }
-            children.push(cx.elt("MathMark", closeFrom, closeTo))
-            const suffix = line.text.slice(line.pos + 2)
-            if (suffix.trim()) {
-              const math = cx.elt("BlockMath", blockFrom, closeTo, children)
-              addMathWithTrailingParagraph(cx, line, math, suffix)
-            } else {
-              cx.addElement(cx.elt("BlockMath", blockFrom, closeTo + suffix.length, children))
-              cx.nextLine()
+            if (line.text.slice(line.pos + 2).trim()) {
+              // Let the native Markdown parser start a paragraph here. A
+              // placeholder for the final dollar keeps block syntax in the
+              // suffix inline, while preserving every source offset.
+              const paragraphStart = line.pos + 1
+              cx.startComposite("BlockMathWithProse", blockFrom - cx.lineStart)
+              children.push(cx.elt("MathMarkBeforeProse", closeFrom, closeTo - 1))
+              cx.addElement(cx.elt("BlockMath", blockFrom, closeTo - 1, children))
+              line.text = line.text.slice(0, paragraphStart) + "\uFFFC" + line.text.slice(paragraphStart + 1)
+              line.moveBase(paragraphStart)
+              return null
             }
+            children.push(cx.elt("MathMark", closeFrom, closeTo))
+            cx.addElement(cx.elt("BlockMath", blockFrom, cx.lineStart + line.text.length, children))
+            cx.nextLine()
             return true
           }
           contentTo = cx.lineStart + line.text.length
@@ -376,8 +281,9 @@ export function buildSourceCodeDecorationsFromState(
         if (node.name === "InlineMath" || node.name === "BlockMath") {
           let child = node.node.firstChild
           while (child) {
-            if (child.name === "MathMark") {
-              addMark(child.from, child.to, sourceMathMarkDecoration, "cm-source-math-mark")
+            if (child.name === "MathMark" || child.name === "MathMarkBeforeProse") {
+              const markEnd = child.name === "MathMarkBeforeProse" ? child.to + 1 : child.to
+              addMark(child.from, markEnd, sourceMathMarkDecoration, "cm-source-math-mark")
             } else if (child.name === "MathContent") {
               addMark(child.from, child.to, sourceMathContentDecoration, "cm-source-math-content")
             }
