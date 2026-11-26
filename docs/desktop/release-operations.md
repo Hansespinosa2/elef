@@ -2,15 +2,26 @@
 
 Reach for when: tagging a desktop release, watching Gate A, publishing the draft, blocking a bad release, or recovering Linux installs.
 
-The v0.x release is tag-driven: a `desktop-v*` tag opens a draft GitHub Release, CI-built evidence gates it, and a human publishes it. There is no coordinator, ledger, or Pages feed; the updater reads the GitHub Releases `latest.json` feed. Every machine-checked claim below names its enforcer.
+Status: The release operator verifies the source commit before tagging. `ci.yml`, `slow-lane.yml`, and `desktop-release.yml` enforce the CI and publication steps described below.
+
+The v0.x release is tag-driven: an owner-authorized `desktop-v*` tag opens a draft GitHub Release, and the release workflow publishes it after both platform builds pass. The updater reads the GitHub Releases `latest.json` feed. Every machine-checked claim below names its enforcer.
 
 ## Tag a release
 
-Tag the release commit after the `dev` → `main` promotion as `desktop-vX.Y.Z` and push the tag:
+The [web promotion to `main`](../ci-operations.md#manual-promotion-user-only) is a separate operation. First fetch and record the `dev` tip for this desktop release:
 
 ~~~sh
-git tag desktop-v0.1.0
-git push origin desktop-v0.1.0
+git fetch origin refs/heads/dev && verified_dev_sha=$(git rev-parse FETCH_HEAD)
+printf '%s\n' "$verified_dev_sha"
+~~~
+
+Before tagging, verify that the CI and slow-lane runs passed for that exact SHA. Run `git ls-remote origin refs/heads/dev refs/heads/elef-deploy-dev` and check that both refs point to the same verified SHA. If either ref differs, stop and verify the current tip.
+
+Once those checks pass, substitute the next desktop version and push the tag:
+
+~~~sh
+git tag desktop-v0.1.0 "$verified_dev_sha" &&
+  git push origin refs/tags/desktop-v0.1.0
 ~~~
 
 The release workflow triggers on `desktop-v*` tags only (enforced by `check_release_ci.mjs`). Pushing the tag starts the `macos` job, which builds the Apple Silicon app plus DMG, signs the updater artifacts, and opens the release as a **draft** with `latest.json` attached. Nothing is offered to users until the draft is published.

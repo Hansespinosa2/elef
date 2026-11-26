@@ -2,6 +2,8 @@
 
 Reach for when: changing CI lanes or gates, reading the shadow plan, shepherding dev, promoting dev to main, or sizing sharding work.
 
+Status: The GitHub Actions workflows run the lanes below. `tooling/release/verify-deployment-authorization` enforces the deploy gate, and the owner controls manual promotion.
+
 ## Lanes
 
 | Lane | Workflow | Trigger | Purpose |
@@ -74,7 +76,7 @@ tooling/release/promote-dev-to-main --create   # open the PR (refuses while lane
 tooling/release/promote-dev-to-main --create --allow-red "reason"  # recorded override
 ~~~
 
-Merge the promotion PR by hand after it is fully green. Tag desktop releases only after the promotion, per [Desktop release operations](desktop/release-operations.md#tag-a-release).
+Merge the promotion PR by hand after it is fully green. See [Desktop release operations](desktop/release-operations.md#tag-a-release) for desktop tags.
 
 ## Shepherd loop (dev)
 
