@@ -61,14 +61,17 @@ function markdownCodeFenceCloses(line: string, marker: string): boolean {
 
 export function mathCodeFenceAtLine(line: string, fence: string | null, followsBlank: boolean): string | null {
   if (fence) return markdownCodeFenceCloses(line, fence) ? null : fence
-  return followsBlank ? markdownCodeFenceMarker(line) : null
+  const marker = markdownCodeFenceMarker(line)
+  if (!marker) return null
+  // Bare tildes within an expression can be TeX spacing. A fence with an
+  // info string or backticks is recognizable without a preceding blank.
+  if (followsBlank || marker[0] === "`" || line.slice(marker.length).trim()) return marker
+  return null
 }
 
-// A mid-line delimiter in fenced code cannot close display math. A line
-// whose first token is the delimiter remains an explicit math closer.
 export function displayMathDelimiterOnLine(line: string, inCodeFence: boolean): number {
-  const delimiter = findMathClosingDelimiter(line, "$$", 0)
-  return inCodeFence && delimiter > 0 ? -1 : delimiter
+  if (inCodeFence && line.trimEnd() !== "$$") return -1
+  return findMathClosingDelimiter(line, "$$", 0)
 }
 
 export function scanMathSource(source: string, { inline = false } = {}): MathSource[] {

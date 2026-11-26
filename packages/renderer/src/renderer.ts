@@ -244,7 +244,7 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
   }
   const closeDelimiter = openDelimiter === "$$" ? "$$" : "\\]"
   let codeFence: string | null = null
-  let afterBlank = false
+  let afterBlank = true
   for (let line = startLine + 1; line < endLine; line += 1) {
     const lineStart = state.bMarks[line]
     const lineEnd = state.eMarks[line]

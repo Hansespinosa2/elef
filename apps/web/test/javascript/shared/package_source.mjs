@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises"
-import { transformSync } from "esbuild"
+import { fileURLToPath } from "node:url"
+import { buildSync, transformSync } from "esbuild"
 
 const repoRoot = new URL("../../../../../", import.meta.url)
 
@@ -12,4 +13,17 @@ const repoRoot = new URL("../../../../../", import.meta.url)
 export async function loadPackageSource(pathFromRepoRoot) {
   const typescript = await readFile(new URL(pathFromRepoRoot, repoRoot), "utf8")
   return transformSync(typescript, { loader: "ts", format: "esm", target: "es2022" }).code
+}
+
+
+// Bundle relative imports when a source module is loaded from a data URL.
+export function bundledPackageSourceUrl(pathFromRepoRoot) {
+  const { outputFiles: [module] } = buildSync({
+    entryPoints: [fileURLToPath(new URL(pathFromRepoRoot, repoRoot))],
+    bundle: true,
+    format: "esm",
+    target: "es2022",
+    write: false
+  })
+  return `data:text/javascript;base64,${Buffer.from(module.contents).toString("base64")}`
 }

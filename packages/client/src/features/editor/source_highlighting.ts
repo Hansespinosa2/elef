@@ -176,7 +176,7 @@ export const elefMath = {
         let blockTo = openEnd
         let contentTo = contentFrom
         let codeFence: string | null = null
-        let afterBlank = false
+        let afterBlank = true
         while (cx.nextLine()) {
           if (line.depth < blockDepth) break
           const content = line.text.slice(line.pos)

@@ -139,10 +139,14 @@ test("a trailing paragraph keeps indented equations with their expression on the
 })
 
 test("an unmatched display opener leaves the next fenced code block intact", () => {
-  const html = renderMarkdownBlock('$$\n\n```js\nconst s = "$$";\n```')
-  assert.doesNotMatch(html, /class="katex-display"/)
-  assert.match(html, /<pre><code class="highlight js">/)
-  assert.match(html, /const/)
+  for (const separator of ["\n", "\n\n"]) {
+    for (const code of ['const s = "$$";', '$$ value']) {
+      const html = renderMarkdownBlock(`$$${separator}\`\`\`js\n${code}\n\`\`\``)
+      assert.doesNotMatch(html, /class="katex-display"/)
+      assert.match(html, /<pre><code class="highlight js">/)
+      assert.match(html, /\$\$/)
+    }
+  }
 })
 
 test("closed display math keeps fence-like text within its expression", () => {
