@@ -70,4 +70,12 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
       } catch (error) { done("js-error"); }
     JAVASCRIPT
   end
+
+  private
+
+  def system_test_evidence_path(relative_path)
+    path = Rails.root.join("tmp/screenshots", relative_path)
+    FileUtils.mkdir_p(path.dirname)
+    path
+  end
 end

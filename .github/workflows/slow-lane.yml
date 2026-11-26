@@ -20,7 +20,8 @@ concurrency:
 
 jobs:
   slow-lane-full:
-    runs-on: ubuntu-latest
+    # Match the Linux desktop CI runner so the release envelope uses the same WebKit.
+    runs-on: ubuntu-24.04
     # bin/check all carries its own 45-minute ceiling; the extra budget is
     # toolchain, dependency, and browser setup on a cold runner.
     timeout-minutes: 60
@@ -116,7 +117,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: slow-lane-log-${{ github.run_id }}-attempt${{ github.run_attempt }}
-          path: /tmp/elef-slow-lane.log
+          path: |
+            /tmp/elef-slow-lane.log
+            apps/desktop/e2e/logs/check-*.log
           if-no-files-found: warn
           retention-days: 14
 

@@ -1009,13 +1009,13 @@ class DocumentsTest < ApplicationSystemTestCase
       selection.removeAllRanges();
       selection.addRange(range);
     JAVASCRIPT
-    page.save_screenshot("../../assets/pr-shots/visual-enter-flow/enter-split-before.png")
+    page.save_screenshot(system_test_evidence_path("visual-enter-flow/enter-split-before.png"))
     block.send_keys(:enter)
 
     assert_field "Markdown source", with: "# Notes\n\nAlpha beta\n\ngamma", wait: 5
     assert_selector ".document-editor-block", text: "Alpha beta"
     assert_selector ".document-editor-block", text: "gamma"
-    page.save_screenshot("../../assets/pr-shots/visual-enter-flow/enter-split-after.png")
+    page.save_screenshot(system_test_evidence_path("visual-enter-flow/enter-split-after.png"))
   end
 
   test "trailing whitespace does not break a visual document block" do
@@ -1027,7 +1027,7 @@ class DocumentsTest < ApplicationSystemTestCase
     # carries no box, so a visibility-filtered selector passes vacuously.
     block_html = page.evaluate_script("(() => { const els = [...document.querySelectorAll('.document-editor-block')]; const hit = els.find((b) => b.textContent.includes('He drives')); return hit ? hit.innerHTML : 'NONE'; })()")
     assert_not_includes block_html, "<br", "trailing whitespace must not emit a break element"
-    page.save_screenshot("../../assets/pr-shots/visual-trailing-ws/trailing-ws-after.png")
+    page.save_screenshot(system_test_evidence_path("visual-trailing-ws/trailing-ws-after.png"))
   end
 
   test "visual document blocks accept direct keyboard edits" do
