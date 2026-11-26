@@ -114,13 +114,17 @@ def run_harness_step(label: str, inner: str) -> float:
             ["dbus-run-session", "--", "xvfb-run", "--auto-servernum", "bash", "-c",
              f"set -o pipefail; openbox --sm-disable >/tmp/elef-{label}-openbox.log 2>&1 & sleep 1; {inner}"],
             cwd=ROOT,
-            capture_output=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
             text=True,
             check=False,
         )
         if result.returncode:
-            tail = (result.stdout + result.stderr).strip().splitlines()[-25:]
-            fail(f"{label} failed\n" + "\n".join(tail))
+            log = ROOT / D_E2E / "logs" / f"check-{label}.log"
+            log.parent.mkdir(parents=True, exist_ok=True)
+            log.write_text(result.stdout, encoding="utf-8")
+            tail = result.stdout.strip().splitlines()[-25:]
+            fail(f"{label} failed (full output: {log})\n" + "\n".join(tail))
     finally:
         for pattern in ("tauri-driver", "chromedriver", "openbox --sm-disable"):
             subprocess.run(["pkill", "-f", pattern], capture_output=True, check=False)
