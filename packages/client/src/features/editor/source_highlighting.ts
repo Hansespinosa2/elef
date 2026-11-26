@@ -1,4 +1,4 @@
-import { closesParagraphDisplayMath, findMathClosingDelimiter } from "@elef/work-model/math-source"
+import { closesParagraphDisplayMath, findMathClosingDelimiter, markdownCodeFenceMarker } from "@elef/work-model/math-source"
 import { syntaxTree } from "@codemirror/language"
 import type { EditorState, Extension, Range } from "@codemirror/state"
 import { Decoration, EditorView, ViewPlugin } from "@codemirror/view"
@@ -23,8 +23,8 @@ interface LezerLine {
   readonly depth: number
   readonly indent: number
   readonly baseIndent: number
+  readonly basePos: number
   readonly markers: LezerElement[]
-  scrub(): string
 }
 
 interface TrailingParagraph {
@@ -39,7 +39,7 @@ interface LezerBlockContext {
   readonly stack: readonly unknown[]
   readonly parser: {
     parseInline(text: string, offset: number): LezerElement[]
-    endLeafBlock: Array<(cx: LezerBlockContext, line: LezerLine, leaf: TrailingParagraph) => boolean>
+    endLeafBlock?: Array<(cx: LezerBlockContext, line: LezerLine, leaf: TrailingParagraph) => boolean>
   }
   nextLine(): boolean
   addLeafElement(leaf: TrailingParagraph, elt: LezerElement): void
@@ -120,6 +120,9 @@ function isBlockMathFenceLine(text: string, pos: number): boolean {
 // The closing line already contains a block, so the suffix starts a paragraph
 // directly. Use Lezer's paragraph continuation rules and composite markers.
 function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, math: LezerElement, suffix: string): void {
+  const stopRules = cx.parser.endLeafBlock
+  if (!stopRules) throw new Error("Lezer Markdown paragraph interruption rules are unavailable")
+
   const leaf: TrailingParagraph = { start: math.to, content: suffix, marks: [], parsers: [] }
   let mathScanFrom = 0
 
@@ -127,13 +130,14 @@ function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, ma
     if (line.indent < line.baseIndent + 4) {
       // Lezer normally leaves contiguous dashes for the setext parser.
       if (/^-{3,}[ \t]*$/.test(line.text.slice(line.pos))) break
-      if (cx.parser.endLeafBlock.some(stop => stop(cx, line, leaf))) {
+      if (stopRules.some(stop => stop(cx, line, leaf))) {
         if (!isBlockMathFenceLine(line.text, line.pos) ||
             !closesParagraphDisplayMath(leaf.content.slice(mathScanFrom))) break
         mathScanFrom = leaf.content.length + 1 + line.text.length
       }
     }
-    leaf.content += "\n" + line.scrub()
+    // Replace composite markup with spaces to preserve source offsets.
+    leaf.content += "\n" + " ".repeat(line.basePos) + line.text.slice(line.basePos)
     leaf.marks.push(...line.markers)
   }
 
@@ -173,6 +177,7 @@ export const elefMath = {
         let contentTo = contentFrom
         while (cx.nextLine()) {
           if (line.depth < blockDepth) break
+          if (line.indent < line.baseIndent + 4 && markdownCodeFenceMarker(line.text.slice(line.pos))) break
           const delimiterStart = findMathClosingDelimiter(line.text, "$$", line.pos)
           if (delimiterStart >= 0) {
             const closeFrom = cx.lineStart + delimiterStart

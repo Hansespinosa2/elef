@@ -111,14 +111,22 @@ test("a display closer after TeX preserves a following horizontal rule", () => {
   assert.ok(nodes.some((node) => node.name === "Paragraph" && node.text === "next"));
 });
 
-test("a trailing paragraph keeps equations with their expression on the opening line", () => {
-  const doc = "$$\nx\n$$, prose\n$$y\n$$\n$$z\n$$";
+test("a trailing paragraph keeps indented equations with their expression on the opening line", () => {
+  const doc = "$$\nx\n$$, prose\n    $$y\n$$\n$$z\n$$";
   const nodes = collectNodes(parsedState(doc));
 
   assert.deepEqual(
     nodes.filter((node) => node.name === "MathContent").map((node) => node.text),
     ["\nx\n", "y\n", "z\n"]
   );
+});
+
+test("an unmatched display opener leaves a following code fence intact", () => {
+  const doc = '$$\n\n```js\nconst s = "$$";\n```';
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.equal(nodes.filter((node) => node.name === "FencedCode").length, 1);
+  assert.equal(nodes.filter((node) => node.name === "MathMark").length, 1);
 });
 
 test("prose currency, escaped dollars, multiline single-dollar, and inline code are not parsed as math", () => {

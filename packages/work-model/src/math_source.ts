@@ -44,16 +44,21 @@ export function mathSourceAt(source: string, start = 0): MathSource | null {
   return { start, end: end + close.length, interior, open, close, display }
 }
 
-export function scanMathSource(source: string): MathSource[] {
+export function markdownCodeFenceMarker(line: string): string | null {
+  const fence = /^( {0,3})(`{3,}|~{3,})(.*)$/.exec(line)
+  const marker = fence?.[2]
+  return marker && !(marker[0] === "`" && fence?.[3]?.includes("`")) ? marker : null
+}
+
+export function scanMathSource(source: string, { inline = false } = {}): MathSource[] {
   const matches: MathSource[] = []
   let index = 0
   while (index < source.length) {
-    if (index === 0 || source[index - 1] === "\n") {
+    if (!inline && (index === 0 || source[index - 1] === "\n")) {
       const lineEnd = source.indexOf("\n", index)
       const line = source.slice(index, lineEnd < 0 ? source.length : lineEnd)
-      const fence = /^( {0,3})(`{3,}|~{3,})(.*)$/.exec(line)
-      const marker = fence?.[2]
-      if (marker && !(marker[0] === "`" && fence?.[3]?.includes("`"))) {
+      const marker = markdownCodeFenceMarker(line)
+      if (marker) {
         const closer = new RegExp(`^ {0,3}${marker[0]}{${marker.length},}[ \\t\\r]*$`)
         index = lineEnd < 0 ? source.length : lineEnd + 1
         while (index < source.length) {
@@ -106,5 +111,5 @@ export function scanMathSource(source: string): MathSource[] {
 export function closesParagraphDisplayMath(paragraph: string): boolean {
   if (!paragraph.includes("$$")) return false
   const source = paragraph + "\n$$"
-  return scanMathSource(source).some(math => math.open === "$$" && math.end === source.length)
+  return scanMathSource(source, { inline: true }).some(math => math.open === "$$" && math.end === source.length)
 }

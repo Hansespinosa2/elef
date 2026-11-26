@@ -5,7 +5,7 @@ import parseParagraph from "markdown-it/lib/rules_block/paragraph.mjs"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
 import { buildEditorStructure, createDocumentLinkResolver, parseDocumentLinkAt, parsePythonFenceInfo } from "@elef/work-model"
-import { closesParagraphDisplayMath, findMathClosingDelimiter, mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
+import { closesParagraphDisplayMath, findMathClosingDelimiter, markdownCodeFenceMarker, mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
 import { analyzeArtList, ART_DIAGNOSTICS } from "@elef/work-model/art-source"
 import { slidePositionClasses, slidePositionLayout } from "@elef/work-model/slide-position-layout"
 import type {
@@ -252,6 +252,7 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
     const indent = state.sCount[line]
     if (contentStart < lineEnd && indent !== undefined && indent < state.blkIndent) break
     const closer = state.src.slice(contentStart, lineEnd)
+    if (indent !== undefined && indent - state.blkIndent < 4 && markdownCodeFenceMarker(closer)) break
     const delimiterStart = closeDelimiter === "$$"
       ? findMathClosingDelimiter(closer, closeDelimiter, 0)
       : closer.trim() === closeDelimiter ? closer.indexOf(closeDelimiter) : -1

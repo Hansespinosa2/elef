@@ -131,11 +131,18 @@ test("a closer in a dedented paragraph stays outside the math list item", () => 
   assert.match(html, /<\/ul>\s*<p>outside \$\$, prose<\/p>/)
 })
 
-test("a trailing paragraph keeps equations with their expression on the opening line", () => {
-  const html = renderMarkdownBlock("$$\nx\n$$, prose\n$$y\n$$\n$$z\n$$")
+test("a trailing paragraph keeps indented equations with their expression on the opening line", () => {
+  const html = renderMarkdownBlock("$$\nx\n$$, prose\n    $$y\n$$\n$$z\n$$")
   assert.equal((html.match(/class="katex-display"/g) || []).length, 3)
   assert.match(html, /data-editor-math-source="y\n"/)
   assert.match(html, /data-editor-math-source="z\n"/)
+})
+
+test("an unmatched display opener leaves the next fenced code block intact", () => {
+  const html = renderMarkdownBlock('$$\n\n```js\nconst s = "$$";\n```')
+  assert.doesNotMatch(html, /class="katex-display"/)
+  assert.match(html, /<pre><code class="highlight js">/)
+  assert.match(html, /const/)
 })
 
 // NOTE (dev-sync): T's "exposes Stimulus canvas targets" case is not ported:
