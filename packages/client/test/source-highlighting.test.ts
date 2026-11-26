@@ -131,6 +131,24 @@ test("dollars in a trailing autolink do not consume the next display opener", ()
   );
 });
 
+test("trailing prose stays in its original ordered-list item", () => {
+  const doc = "1. $$\n   x\n   $$, prose\n2. **item**";
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.equal(nodes.filter((node) => node.name === "ListItem").length, 2);
+  assert.ok(nodes.some((node) => node.name === "ListMark" && node.text === "2."));
+});
+
+test("an incomplete inline-code span cannot claim the next display opener", () => {
+  const doc = "$$\nx\n$$, `$$a\n$$\nz`\n$$";
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.deepEqual(
+    nodes.filter((node) => node.name === "MathContent").map((node) => node.text),
+    ["\nx\n", "\nz`\n"]
+  );
+});
+
 test("prose currency, escaped dollars, multiline single-dollar, and inline code are not parsed as math", () => {
   const doc = [
     "Costs $5 and $10 or $ 5 today.",

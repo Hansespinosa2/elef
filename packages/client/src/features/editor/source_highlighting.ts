@@ -32,8 +32,23 @@ interface TrailingParagraph {
   marks: LezerElement[]
 }
 
+interface LezerInput {
+  length: number
+  read(from: number, to: number): string
+}
+
+interface LezerParse<Tree> {
+  advance(): Tree | null
+  readonly parsedPos: number
+  readonly stoppedAt: number | null
+  stopAt(pos: number): void
+}
+
+let activeMarkdownInput: LezerInput | undefined
+
 interface LezerBlockContext {
   readonly lineStart: number
+  readonly parsedPos: number
   readonly stack: readonly unknown[]
   readonly parser: {
     parseInline(text: string, offset: number): LezerElement[]
@@ -127,19 +142,36 @@ function interruptsTrailingParagraph(content: string, cx: LezerBlockContext): bo
   return first !== null && !first.name.startsWith("SetextHeading") && first.to < probe.length
 }
 
+function closesTrailingInlineMath(paragraph: string, cx: LezerBlockContext, line: LezerLine): boolean {
+  const probe = paragraph + "\n$$"
+  if (!cx.parser.parseInline(probe, 0).some(element => element.to === probe.length)) return false
+
+  // A backtick opener in the paragraph can close beyond the dollar fence.
+  // Include that continuation before deciding whether the dollars are opaque.
+  const input = activeMarkdownInput
+  if (!input || !paragraph.includes("`")) return true
+
+  const nextLine = Math.min(cx.parsedPos + line.text.length + 1, input.length)
+  const tail = input.read(nextLine, input.length)
+  const blankLine = /(?:^|\n)[ \t]*(?:\n|$)/.exec(tail)
+  const continuation = blankLine ? tail.slice(0, blankLine.index) : tail
+  if (!continuation.includes("`")) return true
+
+  return cx.parser.parseInline(probe + "\n" + continuation, 0).some(element => element.to === probe.length)
+}
+
 // The closing line already contains a block, so the suffix starts a paragraph
 // directly. Use Lezer's paragraph continuation rules and composite markers.
 function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, math: LezerElement, suffix: string): void {
   const leaf: TrailingParagraph = { start: math.to, content: suffix, marks: [] }
+  const blockDepth = cx.stack.length
   let mathScanFrom = 0
 
-  while (cx.nextLine() && line.pos < line.text.length) {
+  while (cx.nextLine() && line.depth >= blockDepth && line.pos < line.text.length) {
     if (line.indent < line.baseIndent + 4) {
       const content = line.text.slice(line.pos)
       if (isBlockMathFenceLine(content, 0)) {
-        const probe = leaf.content.slice(mathScanFrom) + "\n$$"
-        // An inline display opener earlier in the paragraph may own this line.
-        if (!cx.parser.parseInline(probe, 0).some(element => element.to === probe.length)) break
+        if (!closesTrailingInlineMath(leaf.content.slice(mathScanFrom), cx, line)) break
         mathScanFrom = leaf.content.length + 1 + line.text.length
       } else if (interruptsTrailingParagraph(content, cx)) {
         break
@@ -159,6 +191,22 @@ function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, ma
 }
 
 export const elefMath = {
+  wrap<Tree>(parse: LezerParse<Tree>, input: LezerInput): LezerParse<Tree> {
+    return {
+      get parsedPos() { return parse.parsedPos },
+      get stoppedAt() { return parse.stoppedAt },
+      stopAt(pos) { parse.stopAt(pos) },
+      advance() {
+        const previous = activeMarkdownInput
+        activeMarkdownInput = input
+        try {
+          return parse.advance()
+        } finally {
+          activeMarkdownInput = previous
+        }
+      }
+    }
+  },
   defineNodes: [
     { name: "BlockMath", block: true },
     { name: "BlockMathWithProse", block: true },
