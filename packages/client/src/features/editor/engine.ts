@@ -2,7 +2,7 @@
 import { createDocumentState } from "./document_state.js"
 import { Compartment, EditorState } from "@codemirror/state"
 import type { ChangeSet, Extension } from "@codemirror/state"
-import { EditorView, lineNumbers, panels, runScopeHandlers } from "@codemirror/view"
+import { EditorView, panels, runScopeHandlers } from "@codemirror/view"
 import type { ViewUpdate } from "@codemirror/view"
 import { foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language"
 import { basicSetup } from "codemirror"
@@ -48,7 +48,7 @@ interface SourceChange extends MediaInsertRange {
 import { snippetStopsField } from "./snippet_stops.js"
 import { editorTabKeymap } from "./tab_keymap.js"
 import { markdownSelectionWrapping } from "./markdown_wrap.js"
-import { formatLineNumber } from "./line_numbers.js"
+import { editorLineNumbers } from "./line_numbers.js"
 import {
   caretAfterInsert,
   clampSelection,
@@ -176,7 +176,7 @@ export class EditorEngine {
     this.documentExtensions = [
       this.panelCompartment.of(panels()),
       this.vimCompartment.of(this.vimEnabled ? vim() : []),
-      this.lineNumbersCompartment.of(this.createLineNumbersExtension()),
+      this.lineNumbersCompartment.of(editorLineNumbers(this.lineNumberMode)),
       ...basicSetup.slice(1),
       markdownSelectionWrapping,
       editorTabKeymap,
@@ -256,7 +256,6 @@ export class EditorEngine {
     this.destroyed = true
     this.session = null
     this.pendingMediaRanges?.clear()
-    if (this.lineNumberFrame) cancelAnimationFrame(this.lineNumberFrame)
     this.form?.removeEventListener("submit", this.handleSubmit)
     this.stopObservingProjectionNavigation()
     this.resizeObserver?.disconnect()
@@ -769,7 +768,6 @@ export class EditorEngine {
       }
     }
     if (update.selectionSet || update.docChanged) this.updateMode()
-    if (update.selectionSet || update.docChanged || update.viewportChanged) this.scheduleLineNumberUpdate()
     this.syncMetadataToggle()
   }
 
@@ -1066,42 +1064,8 @@ export class EditorEngine {
 
   applyLineNumbers(): void {
     this.surfaceTarget.dataset.lineNumbers = this.lineNumberMode
-    const gutter = this.view.dom.querySelector(".cm-lineNumbers")
-    if (gutter instanceof HTMLElement) gutter.style.display = this.lineNumberMode === "off" ? "none" : ""
-    this.scheduleLineNumberUpdate()
-  }
-
-  createLineNumbersExtension(): Extension {
-    return lineNumbers({
-      formatNumber: (number, state) => formatLineNumber(number, state, this.lineNumberMode)
-    })
-  }
-
-  scheduleLineNumberUpdate(): void {
-    if (this.destroyed || this.lineNumberMode === "off" || this.lineNumberFrame) return
-
-    this.lineNumberFrame = requestAnimationFrame(() => {
-      this.lineNumberFrame = null
-      if (this.destroyed || this.lineNumberMode === "off") return
-
-      const gutter = this.view.dom.querySelector(".cm-lineNumbers")
-      if (!gutter) return
-
-      // Sync gutter text directly instead of reconfiguring the compartment:
-      // a per-selection extension rebuild does not reliably re-render on
-      // WebKit (desktop e2e vim-relative-line-numbers reads stale values),
-      // while this DOM sync is green there and everywhere else. Numbers
-      // still come from the shared formatLineNumber helper, so the
-      // compartment's initial render and this refresh cannot disagree.
-      const contentLeft = this.view.contentDOM.getBoundingClientRect().left + 1
-      gutter.querySelectorAll(".cm-gutterElement").forEach((element) => {
-        if (!(element instanceof HTMLElement) || element.style.visibility === "hidden") return
-        const rect = element.getBoundingClientRect()
-        const position = this.view.posAtCoords({ x: contentLeft, y: rect.top + rect.height / 2 })
-        if (position === null) return
-        const line = this.view.state.doc.lineAt(position).number
-        element.textContent = formatLineNumber(line, this.view.state, this.lineNumberMode)
-      })
+    this.view.dispatch({
+      effects: this.lineNumbersCompartment.reconfigure(editorLineNumbers(this.lineNumberMode))
     })
   }
 

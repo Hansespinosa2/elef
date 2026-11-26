@@ -216,7 +216,6 @@ test("handleUpdate dispatches elef:source-edit only on non-server edits in sourc
       },
     },
     updateMode() {},
-    scheduleLineNumberUpdate() {},
     syncMetadataToggle() {},
   });
 
