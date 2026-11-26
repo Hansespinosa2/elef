@@ -2,6 +2,8 @@
 
 Reach for when: changing CI lanes or gates, reading the shadow plan, shepherding dev, promoting dev to main, or sizing sharding work.
 
+Status: The GitHub Actions workflows run the lanes below. `tooling/release/verify-deployment-authorization` enforces the deploy gate, and the owner controls manual promotion.
+
 ## Lanes
 
 | Lane | Workflow | Trigger | Purpose |
