@@ -369,7 +369,7 @@ test("desktop image paste and file drop reach the shared media controller", asyn
 })
 
 test("the desktop editor offers a shared present-mode entry for presentation works", () => {
-  const start = document.querySelector("#work-view #start-presentation")
+  const start = document.querySelector(".app-toolbar-work-actions #start-presentation")
   assert.ok(start)
   assert.equal(start.hidden, true)
   assert.match(start.className, /button secondary/)

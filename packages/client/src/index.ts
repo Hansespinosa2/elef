@@ -125,3 +125,5 @@ export type {
   UpdaterStatus,
 } from "./application/types.js";
 export type { ElefHost } from "@elef/contracts";
+
+export { setupAppToolbar } from "./application/app_toolbar.js";

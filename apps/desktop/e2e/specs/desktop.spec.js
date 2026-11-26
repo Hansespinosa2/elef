@@ -2590,6 +2590,34 @@ class DesktopLibraryUi {
 }
 
 describe("desktop binary workflows and native boundaries", () => {
+  it("uses the same hideable toolbar in the library and both editor kinds", async () => {
+    const library = new DesktopLibraryUi()
+    const editor = new DesktopEditorUi()
+    await library.openLibrary()
+    const toggle = $("label.app-toolbar-toggle")
+    const expanded = await browser.execute(() => document.querySelector(".app-header").getBoundingClientRect().height)
+    await toggle.click()
+    assert.equal(await $("#back-to-library").isDisplayed(), false)
+    const collapsed = await browser.execute(() => document.querySelector(".app-header").getBoundingClientRect().height)
+    assert.ok(collapsed < expanded)
+    await toggle.click()
+    await editor.openWork("E2E document")
+    assert.equal(await $("#export-menu-button").isDisplayed(), true)
+    assert.equal(await $("#start-presentation").isDisplayed(), false)
+    await $("#source-mode").click()
+    await $("#toggle-desktop-library-sidebar").click()
+    assert.equal(await $("#toggle-desktop-library-sidebar").getAttribute("aria-pressed"), "true")
+    const editorFits = await browser.execute(() => document.querySelector("#work-view").getBoundingClientRect().bottom <= innerHeight + 1)
+    assert.equal(editorFits, true)
+    await $("#toggle-desktop-library-sidebar").click()
+    assert.equal(await $("#toggle-desktop-library-sidebar").getAttribute("aria-pressed"), "false")
+    await library.openLibrary()
+    await editor.openWork("E2E seed")
+    assert.equal(await $("#export-menu-button").isDisplayed(), true)
+    assert.equal(await $("#start-presentation").isDisplayed(), true)
+    await library.openLibrary()
+  })
+
   it("creates a presentation directly from the native menu accelerator", async () => {
     await $("#library-view").waitForDisplayed()
     await browser.execute(() => window.focus())
@@ -2643,6 +2671,7 @@ describe("desktop binary workflows and native boundaries", () => {
   })
 
   it("opens and cancels the native library folder picker", async () => {
+    await $(".toolbar-overflow > summary").click()
     await $("#change-library").click()
     if (process.platform === "darwin") {
       answerMacNativeDialog("Cancel")

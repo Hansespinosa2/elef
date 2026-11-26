@@ -15,25 +15,41 @@
   </head>
   <body class="elef-app">
     <header class="app-header sticky top-0 z-10 border-b border-[#ddd5c8] px-[clamp(1rem,4vw,3rem)] py-4 desktop-app-header">
+      <div class="app-toolbar">
+        <input class="app-toolbar-checkbox" id="app-toolbar-visible" type="checkbox" checked aria-label="Show toolbar">
+        <label class="app-toolbar-toggle" for="app-toolbar-visible" title="Toggle toolbar" aria-hidden="true"><span>⌃</span></label>
       <div class="app-header-inner mx-auto flex max-w-[1440px] flex-wrap items-center gap-8">
         <div class="app-header-identity">
           <a class="brand font-extrabold tracking-[-0.04em] no-underline" href="#library" aria-label="Elef Library">Elef</a>
         </div>
         <nav class="app-nav" aria-label="Primary">
-          <button id="back-to-library" class="app-nav-link is-active" type="button">Library</button>
-          <button id="open-settings" class="app-nav-link" type="button">Settings</button>
+          <button id="back-to-library" title="Library" aria-label="Library" class="app-nav-link toolbar-library is-active" type="button">Library</button>
+          <button id="open-settings" title="Settings" aria-label="Settings" class="app-nav-link toolbar-settings" type="button">Settings</button>
+          <button id="toggle-desktop-library-sidebar" aria-pressed="false" class="app-nav-link toolbar-sidebar" type="button" title="Toggle Library Sidebar (⌘B)" aria-label="Toggle Library Sidebar">Sidebar</button>
         </nav>
-        <div class="desktop-library-location">
-          <span id="library-name">No library selected</span>
-          <button id="change-library" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" aria-label="Choose library folder" title="Choose library folder">Change</button>
-        </div>
         <div class="desktop-header-actions" aria-label="Library actions">
-          <button id="refresh-library" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Refresh</button>
-          <button id="check-for-updates" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Check for updates</button>
-          <button id="import-elef" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" disabled>Import .elef</button>
+          <button id="refresh-library" title="Refresh" aria-label="Refresh" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button">Refresh</button>
           <div id="new-work-mount"></div>
+          <details class="toolbar-overflow">
+            <summary title="More library actions" aria-label="More library actions">⋯</summary>
+            <div class="toolbar-overflow-panel">
+              <div class="desktop-library-location"><span id="library-name">No library selected</span><button id="change-library" type="button" aria-label="Choose library folder">Change library</button></div>
+              <button id="check-for-updates" type="button">Check for updates</button>
+              <button id="import-elef" type="button" disabled>Import .elef</button>
+            </div>
+          </details>
+        </div>
+        <div class="app-toolbar-work-actions">
+          <button id="start-presentation" title="Present" aria-label="Present" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" hidden>Present</button>
+          <div class="work-actions flex flex-wrap items-center gap-3">
+            <!-- Shared Export menu mount: the client component renders the
+              Export trigger, its kind-scoped options, and the status region
+              with the same ids, labels, and dismissal on both hosts. -->
+            <div id="export-menu-mount" class="flex flex-wrap items-center gap-3"></div>
+          </div>
         </div>
         <span id="breadcrumb-current" class="sr-only">Works</span>
+      </div>
       </div>
     </header>
 
@@ -60,13 +76,6 @@
           <span id="work-source-name" class="sr-only"></span>
           <span id="work-id" class="sr-only"></span>
           <p id="work-notice" class="notice" role="status" hidden></p>
-          <button id="start-presentation" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" type="button" hidden>Present</button>
-          <div class="work-actions flex flex-wrap items-center gap-3">
-            <!-- Shared Export menu mount: the client component renders the
-              Export trigger, its kind-scoped options, and the status region
-              with the same ids, labels, and dismissal on both hosts. -->
-            <div id="export-menu-mount" class="flex flex-wrap items-center gap-3"></div>
-          </div>
           <p class="desktop-save-note">External edits are checked before every save. A simultaneous write in the final atomic replacement window can still be overwritten; keep version history enabled in your sync tool.</p>
           <form id="desktop-editor-form" class="visual-editor-form file-library-editor-form" data-action="input->preview#schedule change->preview#schedule input->slide-overview#sourceChanged change->slide-overview#sourceChanged preview:updated->slide-overview#previewUpdated paste->media#paste:capture" data-preview-url-value="" data-preview-timeout-value="4000" data-media-enabled-value="false" data-media-work-kind-value="presentation" data-editor-mode="source">
             <div id="desktop-editor-mount"></div>

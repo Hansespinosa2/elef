@@ -1,0 +1,95 @@
+/* One compact application toolbar for both hosts. The checkbox keeps the reveal control keyboard-accessible when hidden. */
+.elef-app .app-header { padding: 0; z-index: 50; }
+.app-toolbar { position: relative; min-height: 36px; }
+.app-toolbar-toggle { position: absolute; right: 8px; top: 0; z-index: 2; display: grid; place-items: center; width: 36px; height: 36px; list-style: none; color: var(--oradia-muted); cursor: pointer; }
+.app-toolbar-checkbox { position: absolute; right: 8px; top: 0; width: 36px; height: 36px; margin: 0; opacity: 0; z-index: 1; cursor: pointer; }
+.app-toolbar-checkbox:focus-visible + .app-toolbar-toggle { outline: 2px solid var(--oradia-green); outline-offset: -2px; }
+.app-toolbar-checkbox:not(:checked) + .app-toolbar-toggle span { transform: rotate(180deg); }
+.app-toolbar-toggle:hover, .app-toolbar-toggle:focus-visible { color: var(--oradia-ink); }
+.app-toolbar .app-header-inner { max-width: none; min-height: 36px; padding: 0 48px 0 8px; gap: 4px; flex-wrap: wrap; }
+.app-toolbar .app-header-identity { display: none; }
+.app-toolbar .app-nav { gap: 0; margin-right: auto; }
+.app-toolbar :is(.app-nav-link, .new-work-trigger, .export-menu > summary, [id="start-presentation"], [data-command-palette-present], .desktop-header-actions > button) { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--oradia-muted); box-shadow: none; font-size: 0; line-height: 1; }
+.app-toolbar :is(.app-nav-link, .new-work-trigger, .export-menu > summary, [id="start-presentation"], [data-command-palette-present], .desktop-header-actions > button):hover { background: transparent; color: var(--oradia-ink); }
+.app-toolbar :is(.app-nav-link.is-active, .app-nav-link[aria-pressed="true"]) { background: transparent; color: var(--oradia-green); }
+.app-toolbar :is(.toolbar-library, .toolbar-settings, .toolbar-sidebar, #refresh-library, #check-for-updates, #import-elef, #start-presentation, .export-menu > summary)::before { font: 18px/1 system-ui, sans-serif; }
+.app-toolbar .toolbar-library::before { content: '▤'; }
+.app-toolbar .toolbar-settings::before { content: '⚙'; }
+.app-toolbar .toolbar-sidebar::before { content: '◧'; }
+.app-toolbar #refresh-library::before { content: '⟳'; }
+.app-toolbar #check-for-updates::before { content: '↻'; }
+.app-toolbar #import-elef::before { content: '⇩'; }
+.app-toolbar #start-presentation::before { content: '▷'; }
+.app-toolbar .export-menu > summary::before { content: '⇧'; }
+.app-toolbar .new-work-trigger .new-work-plus { font: 20px/1 system-ui, sans-serif; }
+.app-toolbar .new-work-trigger .new-work-chevron { display: none; }
+.app-toolbar .desktop-header-actions, .app-toolbar .desktop-library-location, .app-toolbar .app-toolbar-work-actions, .app-toolbar .work-actions, .app-toolbar .app-toolbar-work-actions > div { display: flex; align-items: center; gap: 0; }
+.app-toolbar .desktop-library-location { max-width: 12rem; border: 0; padding: 0; }
+.app-toolbar .desktop-header-actions { margin-left: 0; }
+.app-toolbar .app-toolbar-work-actions { margin-left: auto; }
+.app-toolbar .app-toolbar-work-actions:empty { display: none; }
+.app-toolbar .present-form { display: flex; align-items: center; }
+.app-toolbar .present-form svg { width: 18px; height: 18px; }
+.app-toolbar .present-chord { display: none; }
+.app-toolbar #toggle-desktop-library-sidebar { display: none; }
+body[data-desktop-view="editor"] .app-toolbar #toggle-desktop-library-sidebar { display: inline-flex; }
+body:not([data-desktop-view="editor"]) .desktop-app-header .app-toolbar-work-actions { display: none; }
+.app-toolbar :is(.new-work-panel, .export-menu-panel) { font-size: initial; }
+.app-toolbar .new-work-trigger span:not(.new-work-plus), .app-toolbar .export-menu > summary span { display: none; }
+.app-toolbar :is(button, a, summary):focus-visible { outline: 2px solid var(--oradia-green); outline-offset: -2px; }
+@media (max-width: 700px) {
+  .app-toolbar .app-nav { width: auto; order: 0; }
+  .app-toolbar .app-nav-link { flex: none; }
+  .app-toolbar .desktop-library-location > span { display: none; }
+}
+
+.app-toolbar-checkbox:not(:checked) ~ .app-header-inner > :is(.app-nav, .desktop-library-location, .desktop-header-actions, .app-toolbar-work-actions, .new-work-menu) { display: none; }
+.app-toolbar-checkbox:not(:checked) ~ .app-header-inner :is(.bug-report-trigger, .command-palette-triggers) { display: none; }
+.app-toolbar [hidden] { display: none; }
+
+.app-toolbar :is(.bug-report-trigger, .command-palette-trigger) { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--oradia-muted); font-size: 0; }
+.app-toolbar :is(.bug-report-trigger, .command-palette-trigger):hover { background: transparent; color: var(--oradia-ink); }
+.app-toolbar .bug-report-trigger::before { content: '⚑'; font: 18px/1 system-ui, sans-serif; }
+.app-toolbar .command-palette-trigger[data-action$="openCommands"]::before { content: '⌘'; font: 18px/1 system-ui, sans-serif; }
+.app-toolbar .command-palette-trigger[data-action$="openSearch"]::before { content: '⌕'; font: 20px/1 system-ui, sans-serif; }
+.app-toolbar .command-palette-trigger kbd { display: none; }
+.app-toolbar #start-presentation[hidden] { display: none; }
+body[data-desktop-view="editor"] .app-toolbar .toolbar-library.is-active { color: var(--oradia-muted); }
+/* Let the editor consume the actual remaining height, including a wrapped
+   toolbar and the web host's recording disclosure. */
+@media screen {
+  body.is-editing-source { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+  body.is-editing-source > .app-header, body.is-editing-source > .bug-report-disclosure { flex: none; }
+  body.is-editing-source > .app-shell { flex: 1 1 auto; min-height: 0; overflow: hidden; }
+  body.is-editing-source :is(#work-shell, #work-view) { height: 100%; min-height: 0; }
+  body.is-editing-source .visual-editor-form[data-editor-mode="source"] { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  body.is-editing-source .visual-editor-form[data-editor-mode="source"] > :is([data-editor-form-controllers], #desktop-editor-mount) { flex: 1 1 0; min-height: 0; }
+  body.is-editing-source .visual-editor-form[data-editor-mode="source"] .editor-shell { height: 100%; min-height: 0; }
+}
+.app-toolbar :is(button, summary):disabled { opacity: .4; }
+.app-toolbar .app-toolbar-work-actions [data-command-palette-present] svg { display: none; }
+.app-toolbar .app-toolbar-work-actions [data-command-palette-present]::before { content: '▷'; font: 18px/1 system-ui, sans-serif; }
+/* In the collapsed state only the reveal tab occupies vertical space. */
+.app-toolbar:has(.app-toolbar-checkbox:not(:checked)) { min-height: 18px; }
+.app-toolbar-checkbox:not(:checked) ~ .app-header-inner { min-height: 0; }
+.app-toolbar-checkbox:not(:checked),
+.app-toolbar-checkbox:not(:checked) + .app-toolbar-toggle { height: 18px; }
+
+@media print { .printing-work .app-toolbar .work-actions { display: none; } }
+.toolbar-overflow { position: relative; }
+.toolbar-overflow > summary { display: grid; place-items: center; width: 36px; height: 36px; color: var(--oradia-muted); cursor: pointer; list-style: none; font-size: 20px; line-height: 1; }
+.toolbar-overflow > summary::-webkit-details-marker { display: none; }
+.toolbar-overflow > summary:hover { color: var(--oradia-ink); }
+.toolbar-overflow-panel { position: absolute; right: 0; top: 100%; z-index: 20; width: 220px; padding: 6px; background: var(--oradia-slate-900); border: 1px solid var(--oradia-slate-700); border-radius: 8px; box-shadow: 0 12px 32px #0005; }
+.app-toolbar .toolbar-overflow-panel .desktop-library-location { display: block; max-width: none; padding: 4px 8px; }
+.toolbar-overflow-panel .desktop-library-location span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--oradia-muted); font-size: 12px; }
+.app-toolbar .toolbar-overflow-panel button { display: block; width: 100%; min-height: 32px; padding: 6px 8px; border: 0; border-radius: 4px; background: transparent; color: var(--oradia-ink); text-align: left; font: inherit; font-size: 13px; }
+.app-toolbar .toolbar-overflow-panel button:hover { background: var(--oradia-slate-800); }
+/* Preserve the source editor's existing recording-disclosure behavior. */
+body.is-editing-source > .bug-report-disclosure,
+body.is-editing-source .app-toolbar .bug-report-trigger { display: none; }
+.app-toolbar [data-controller~="export-menu-host"] { display: flex; align-items: center; }
+@media screen {
+  body.is-editing-source[data-desktop-sidebar="open"] .desktop-app-shell { min-height: 0; grid-template-rows: minmax(0, 1fr); }
+  body.is-editing-source[data-desktop-sidebar="open"] #library-view .library-rail { height: 100%; }
+}

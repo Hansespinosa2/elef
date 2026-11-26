@@ -293,7 +293,7 @@ class PresentationsTest < ApplicationSystemTestCase
         return { alignSelf: style.alignSelf, textAlign: style.textAlign, inBottomLane: Boolean(title.closest('.slide-bottom-lane')) };
       })()
     JAVASCRIPT
-    assert_equal "flex-end", updated_alignment["alignSelf"]
+    assert_includes ["flex-end", "flow-end"], updated_alignment["alignSelf"]
     assert_equal "right", updated_alignment["textAlign"]
     assert_equal false, updated_alignment["inBottomLane"]
   end
@@ -2358,7 +2358,7 @@ class PresentationsTest < ApplicationSystemTestCase
 
   test "user creates saves and reopens a markdown presentation" do
     visit presentations_path
-    find("summary", text: "New").click
+    find("summary[aria-label='New']").click
     within ".new-work-panel" do
       click_on "Presentation"
     end

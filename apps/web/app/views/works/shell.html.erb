@@ -9,6 +9,8 @@
       <p class="eyebrow mb-1 text-xs font-extrabold uppercase tracking-[0.12em] text-[#6d4aff]"><%= new_record ? (work.document? ? "Visual document editor" : "Source-first editor") : "Visual editor" %></p>
       <h1 class="mb-0 text-4xl font-bold"><%= heading %></h1>
     </div>
+  </div>
+  <% content_for :toolbar_work_actions do %>
     <div class="flex flex-wrap items-center gap-3">
       <%# Shared Export menu: the same component both hosts mount (labels and
         option visibility come from the client export registry). The web
@@ -44,6 +46,6 @@
         <% end %>
       <% end %>
     </div>
-  </div>
+  <% end %>
   <%= render "works/form", work: work %>
 </div>

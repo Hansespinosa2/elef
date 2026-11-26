@@ -111,6 +111,8 @@ export function NewWorkMenu({ onSelect, disabled = false, className = "" }: NewW
     >
       <button
         ref={triggerRef}
+        title="New"
+        aria-label="New"
         type="button"
         className="new-work-trigger inline-flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm font-bold text-[#aab7b1] list-none"
         aria-haspopup="menu"

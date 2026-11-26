@@ -43,6 +43,7 @@ if (!verifyUpgraded) {
             window.__elefCloseRequests += 1
           })
         })
+        await $(".toolbar-overflow > summary").click()
         await $("#check-for-updates").click()
         answerMacNativeDialog("Install on Quit")
         await browser.waitUntil(async () => {
