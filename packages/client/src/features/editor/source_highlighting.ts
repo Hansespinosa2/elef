@@ -1,4 +1,4 @@
-import { closesParagraphDisplayMath, findMathClosingDelimiter } from "@elef/work-model/math-source"
+import { closesParagraphDisplayMath, displayMathDelimiterOnLine, mathCodeFenceAtLine } from "@elef/work-model/math-source"
 import { syntaxTree } from "@codemirror/language"
 import type { EditorState, Extension, Range } from "@codemirror/state"
 import { Decoration, EditorView, ViewPlugin } from "@codemirror/view"
@@ -175,17 +175,25 @@ export const elefMath = {
 
         let blockTo = openEnd
         let contentTo = contentFrom
+        let codeFence: string | null = null
+        let afterBlank = false
         while (cx.nextLine()) {
           if (line.depth < blockDepth) break
-          const delimiterStart = findMathClosingDelimiter(line.text, "$$", line.pos)
+          const content = line.text.slice(line.pos)
+          if (line.indent < line.baseIndent + 4) {
+            codeFence = mathCodeFenceAtLine(content, codeFence, afterBlank)
+          }
+          afterBlank = content.length === 0
+
+          const delimiterStart = displayMathDelimiterOnLine(content, codeFence !== null)
           if (delimiterStart >= 0) {
-            const closeFrom = cx.lineStart + delimiterStart
+            const closeFrom = cx.lineStart + line.pos + delimiterStart
             const closeTo = closeFrom + 2
             if (closeFrom > contentFrom) {
               children.push(cx.elt("MathContent", contentFrom, closeFrom))
             }
             children.push(cx.elt("MathMark", closeFrom, closeTo))
-            const suffix = line.text.slice(delimiterStart + 2)
+            const suffix = content.slice(delimiterStart + 2)
             if (suffix.trim()) {
               const math = cx.elt("BlockMath", blockFrom, closeTo, children)
               addMathWithTrailingParagraph(cx, line, math, suffix)

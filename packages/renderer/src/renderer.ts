@@ -5,7 +5,7 @@ import parseParagraph from "markdown-it/lib/rules_block/paragraph.mjs"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
 import { buildEditorStructure, createDocumentLinkResolver, parseDocumentLinkAt, parsePythonFenceInfo } from "@elef/work-model"
-import { closesParagraphDisplayMath, findMathClosingDelimiter, markdownCodeFenceMarker, mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
+import { closesParagraphDisplayMath, displayMathDelimiterOnLine, mathCodeFenceAtLine, mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
 import { analyzeArtList, ART_DIAGNOSTICS } from "@elef/work-model/art-source"
 import { slidePositionClasses, slidePositionLayout } from "@elef/work-model/slide-position-layout"
 import type {
@@ -243,7 +243,8 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
     }
   }
   const closeDelimiter = openDelimiter === "$$" ? "$$" : "\\]"
-  let sawCodeFence = false
+  let codeFence: string | null = null
+  let afterBlank = false
   for (let line = startLine + 1; line < endLine; line += 1) {
     const lineStart = state.bMarks[line]
     const lineEnd = state.eMarks[line]
@@ -253,15 +254,15 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
     const indent = state.sCount[line]
     if (contentStart < lineEnd && indent !== undefined && indent < state.blkIndent) break
     const closer = state.src.slice(contentStart, lineEnd)
-    if (indent !== undefined && indent - state.blkIndent < 4 && markdownCodeFenceMarker(closer)) {
-      sawCodeFence = true
+    if (indent !== undefined && indent - state.blkIndent < 4) {
+      codeFence = mathCodeFenceAtLine(closer, codeFence, afterBlank)
     }
+    afterBlank = closer.length === 0
+
     const delimiterStart = closeDelimiter === "$$"
-      ? findMathClosingDelimiter(closer, closeDelimiter, 0)
+      ? displayMathDelimiterOnLine(closer, codeFence !== null)
       : closer.trim() === closeDelimiter ? closer.indexOf(closeDelimiter) : -1
-    // A possible fenced code block cannot supply a mid-line math closer.
-    // Explicit closing lines still allow literal fence-like text within TeX.
-    if (delimiterStart < 0 || (closeDelimiter === "$$" && sawCodeFence && delimiterStart > 0)) continue
+    if (delimiterStart < 0) continue
     if (silent) return true
     const closeFrom = contentStart + delimiterStart
     const closeTo = closeFrom + closeDelimiter.length

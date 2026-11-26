@@ -1,3 +1,5 @@
+import { parseDocumentLinkAt } from "./document_links.js"
+
 // Math delimiter semantics shared by the reader and editor projections.
 // Offsets index UTF-16 source. Markdown context (code, images, escapes) is
 // excluded by scanMathSource; renderer rules call mathSourceAt from their
@@ -44,10 +46,29 @@ export function mathSourceAt(source: string, start = 0): MathSource | null {
   return { start, end: end + close.length, interior, open, close, display }
 }
 
-export function markdownCodeFenceMarker(line: string): string | null {
+function markdownCodeFenceMarker(line: string): string | null {
   const fence = /^( {0,3})(`{3,}|~{3,})(.*)$/.exec(line)
   const marker = fence?.[2]
   return marker && !(marker[0] === "`" && fence?.[3]?.includes("`")) ? marker : null
+}
+
+function markdownCodeFenceCloses(line: string, marker: string): boolean {
+  const rest = line.replace(/^ {0,3}/, "")
+  let count = 0
+  while (count < rest.length && rest[count] === marker[0]) count++
+  return count >= marker.length && /^[ \t\r]*$/.test(rest.slice(count))
+}
+
+export function mathCodeFenceAtLine(line: string, fence: string | null, followsBlank: boolean): string | null {
+  if (fence) return markdownCodeFenceCloses(line, fence) ? null : fence
+  return followsBlank ? markdownCodeFenceMarker(line) : null
+}
+
+// A mid-line delimiter in fenced code cannot close display math. A line
+// whose first token is the delimiter remains an explicit math closer.
+export function displayMathDelimiterOnLine(line: string, inCodeFence: boolean): number {
+  const delimiter = findMathClosingDelimiter(line, "$$", 0)
+  return inCodeFence && delimiter > 0 ? -1 : delimiter
 }
 
 export function scanMathSource(source: string, { inline = false } = {}): MathSource[] {
@@ -59,11 +80,10 @@ export function scanMathSource(source: string, { inline = false } = {}): MathSou
       const line = source.slice(index, lineEnd < 0 ? source.length : lineEnd)
       const marker = markdownCodeFenceMarker(line)
       if (marker) {
-        const closer = new RegExp(`^ {0,3}${marker[0]}{${marker.length},}[ \\t\\r]*$`)
         index = lineEnd < 0 ? source.length : lineEnd + 1
         while (index < source.length) {
           const nextEnd = source.indexOf("\n", index)
-          const closed = closer.test(source.slice(index, nextEnd < 0 ? source.length : nextEnd))
+          const closed = markdownCodeFenceCloses(source.slice(index, nextEnd < 0 ? source.length : nextEnd), marker)
           index = nextEnd < 0 ? source.length : nextEnd + 1
           if (closed) break
         }
@@ -90,6 +110,11 @@ export function scanMathSource(source: string, { inline = false } = {}): MathSou
         index += autolink[0].length
         continue
       }
+    }
+    const documentLink = source[index] === "[" ? parseDocumentLinkAt(source, index) : null
+    if (documentLink) {
+      index = documentLink.end
+      continue
     }
     const image = source[index] === "!" ? /^!\[(?:\\.|[^\]])*\]\((?:\\.|[^)])*\)/.exec(source.slice(index)) : null
     if (image) { index += image[0].length; continue }

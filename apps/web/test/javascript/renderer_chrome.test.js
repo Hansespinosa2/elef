@@ -160,6 +160,19 @@ test("dollars in a trailing autolink leave the next display equation intact", ()
   assert.match(html, /href="https:\/\/example\.com\/\$\$"/)
 })
 
+test("an expression-line closer works after fence-like TeX", () => {
+  const html = renderMarkdownBlock("$$\nx\n~~~\ny$$, prose")
+  assert.match(html, /class="katex-display"/)
+  assert.match(html, /data-editor-math-source="\nx\n~~~\ny"/)
+  assert.match(html, /<p>, prose<\/p>/)
+})
+
+test("dollars in a trailing wiki-link label leave the next display equation intact", () => {
+  const html = renderMarkdownBlock("$$\nx\n$$, see [[Notes|$$]]\n$$\n\ny\n$$")
+  assert.equal((html.match(/class="katex-display"/g) || []).length, 2)
+  assert.match(html, /class="document-link unresolved"/)
+})
+
 // NOTE (dev-sync): T's "exposes Stimulus canvas targets" case is not ported:
 // the campaign retired the presentation-canvas controller (present mode is
 // the framework-free mountPresentation now), so its target hook would be
