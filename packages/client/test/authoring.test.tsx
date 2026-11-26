@@ -93,6 +93,22 @@ function memoryTransport(
   };
 }
 
+describe("authoring registry tabs", () => {
+  it("keeps a draft when the selected tab is activated again", async () => {
+    const transport = memoryTransport({ snippets: [], math: [], hashes: { snippets: null, math_shortcuts: null } });
+    const { document } = await mountDialog({ transport, inline: true });
+    await click(document.getElementById("new-authoring-entry"));
+    await setControlledInput(document.getElementById("authoring-name"), "Draft");
+    await click(document.getElementById("authoring-tab-snippets"));
+    const tabs = document.querySelector('.authoring-settings-tabs[role="tablist"]')!;
+    const key = document.createEvent("Event") as unknown as { initEvent: (type: string, bubbles: boolean, cancelable: boolean) => void; key: string };
+    key.initEvent("keydown", true, true);
+    key.key = "Home";
+    await act(async () => { tabs.dispatchEvent(key as unknown as Event); });
+    assert.equal((document.getElementById("authoring-name") as unknown as HTMLInputElement).value, "Draft");
+  });
+});
+
 describe("authoring registry semantics", () => {
   it("validates snippet and shortcut entries like the editor surfaces", () => {
     const snippet = buildAuthoringEntry(

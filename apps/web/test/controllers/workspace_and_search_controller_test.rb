@@ -8,7 +8,8 @@ class WorkspaceAndSearchControllerTest < ActionDispatch::IntegrationTest
     assert_equal ["dark", "technical"], [Workspace.default.default_theme, Workspace.default.default_typography]
 
     get settings_path
-    assert_select "nav[aria-label='Settings sections'] a[aria-current='page']", text: "Appearance"
+    assert_response :success
+    assert_select "nav[aria-label='Settings sections']", count: 0
     assert_select '[data-controller="client-shell"]'
     assert_select '[data-client-shell-initial-url-value="/settings"]'
   end

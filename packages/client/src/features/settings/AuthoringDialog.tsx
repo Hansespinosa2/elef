@@ -25,6 +25,7 @@ import {
 } from "./authoringRegistry.js";
 
 export interface AuthoringDialogProps {
+  readonly inline?: boolean;
   readonly transport: AuthoringRegistryTransport;
   readonly initialRegistry?: AuthoringRegistryName;
   readonly openNew?: boolean;
@@ -90,6 +91,7 @@ function ExamplePreview({ source, renderExample }: { source: string; renderExamp
 
 export function AuthoringDialog({
   transport,
+  inline = false,
   initialRegistry = "snippets",
   openNew = false,
   entryId = null,
@@ -105,6 +107,7 @@ export function AuthoringDialog({
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus] = useState("");
+  const [loadStatus, setLoadStatus] = useState<"loading" | "error" | "ready">("loading");
   const [formOpen, setFormOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [fields, setFields] = useState<FormFields>(EMPTY_FORM);
@@ -116,11 +119,15 @@ export function AuthoringDialog({
   // keyboard flows start in the name field; keep that contract.
   const nameRef = useRef<HTMLInputElement | null>(null);
   useEffect(() => {
-    if (formOpen) nameRef.current?.focus();
-  }, [formOpen]);
+    if (formOpen) {
+      if (activeRegistry === "snippets") nameRef.current?.focus();
+      else document.getElementById("authoring-math-name")?.focus();
+    }
+  }, [formOpen, activeRegistry]);
   stateRef.current = { registries, hashes, activeRegistry };
 
   const load = useCallback(async () => {
+    setLoadStatus("loading");
     try {
       const result = await transport.readRegistries();
       setRegistries({
@@ -128,10 +135,11 @@ export function AuthoringDialog({
         math_shortcuts: [...(result.math_shortcuts || [])],
       });
       setHashes(result.hashes || { snippets: null, math_shortcuts: null });
+      setLoadStatus("ready");
     } catch {
       setRegistries({ snippets: [], math_shortcuts: [] });
       setHashes({ snippets: null, math_shortcuts: null });
-      setStatus("Could not load authoring settings. Check that your work is available.");
+      setLoadStatus("error");
     }
   }, [transport]);
 
@@ -143,7 +151,7 @@ export function AuthoringDialog({
   // the registries load, mirroring the pre-migration dialog open options.
   const openedRef = useRef(false);
   useEffect(() => {
-    if (openedRef.current) return;
+    if (openedRef.current || loadStatus !== "ready") return;
     openedRef.current = true;
     if (entryId !== null && entryId !== undefined) {
       const list = (initialRegistry === "math_shortcuts" ? registries.math_shortcuts : registries.snippets) as readonly AuthoringEntry[];
@@ -153,7 +161,14 @@ export function AuthoringDialog({
     }
     if (openNew) beginEntryForm(null, initialRegistry);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [registries]);
+  }, [registries, loadStatus]);
+
+  function selectRegistry(registry: AuthoringRegistryName): void {
+    if (registry === activeRegistry) return;
+    setActiveRegistry(registry);
+    setFormOpen(false);
+    setStatus("");
+  }
 
   function beginEntryForm(entry: AuthoringEntry | null, registry: AuthoringRegistryName): void {
     setActiveRegistry(registry);
@@ -310,9 +325,9 @@ export function AuthoringDialog({
   // the shared e2e scenarios assert that contract on both hosts, so the port
   // preserves it instead of inventing new hooks.
   return (
-    <section id="authoring-settings-dialog" aria-label="Authoring settings" className="authoring-settings-dialog">
+    <section id="authoring-settings-dialog" aria-label="Authoring settings" className={inline ? "authoring-settings-inline" : "authoring-settings-dialog"}>
       <div className="authoring-settings-panel">
-        <header className="authoring-settings-header">
+        {!inline ? <header className="authoring-settings-header">
           <div>
             <p className="eyebrow">AUTHORING SETTINGS</p>
             <h2 id="authoring-settings-title">{isSnippet ? "Snippets" : "Math shortcuts"}</h2>
@@ -321,70 +336,84 @@ export function AuthoringDialog({
           <button id="close-authoring-settings" className="authoring-settings-close" type="button" aria-label="Close authoring settings" onClick={onClose}>
             ×
           </button>
-        </header>
+        </header> : null}
 
-        <div className="authoring-settings-tabs" role="tablist" aria-label="Authoring settings">
+        <div className="authoring-settings-tabs" role="tablist" aria-label="Authoring settings" onKeyDown={(event) => {
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+          event.preventDefault();
+          const next = event.key === "Home" ? "snippets" : event.key === "End" ? "math_shortcuts" : activeRegistry === "snippets" ? "math_shortcuts" : "snippets";
+          selectRegistry(next);
+          document.getElementById(`authoring-tab-${next}`)?.focus();
+        }}>
           {(["snippets", "math_shortcuts"] as const).map((registry) => (
             <button
               key={registry}
+              id={`authoring-tab-${registry}`}
+              aria-controls="authoring-registry-panel"
               className={registry === activeRegistry ? "button is-active" : "button"}
               type="button"
               role="tab"
               data-authoring-tab={registry}
               aria-selected={registry === activeRegistry}
               tabIndex={registry === activeRegistry ? 0 : -1}
-              onClick={() => {
-                setActiveRegistry(registry);
-                setFormOpen(false);
-                setStatus("");
-              }}
+              onClick={() => selectRegistry(registry)}
             >
               {registry === "snippets" ? "Snippets" : "Math shortcuts"}
             </button>
           ))}
         </div>
 
-        <div className="authoring-settings-filters">
-          <label className="authoring-settings-search" htmlFor="authoring-settings-search">
-            <span>Search</span>
-            <input
-              id="authoring-settings-search"
-              type="search"
-              autoComplete="off"
-              placeholder="Name, trigger, or content"
-              value={query}
-              onInput={(event) => setQuery(event.currentTarget.value)}
-            />
-          </label>
-          <label id="authoring-settings-category-field" htmlFor="authoring-settings-category" hidden={!isSnippet}>
-            <span>Type</span>
-            <select id="authoring-settings-category" value={category} onChange={(event) => setCategory(event.target.value)}>
-              <option value="">All types</option>
-              <option value="Markdown">Markdown</option>
-              <option value="LaTeX">LaTeX</option>
-              <option value="Mermaid">Mermaid</option>
-              <option value="Elef DSL">Elef directives</option>
-            </select>
-          </label>
-        </div>
+        <div id="authoring-registry-panel" role="tabpanel" aria-labelledby={`authoring-tab-${activeRegistry}`}>
+          <div className="authoring-settings-filters">
+            <label className="authoring-settings-search" htmlFor="authoring-settings-search">
+              <span>Search</span>
+              <input
+                id="authoring-settings-search"
+                type="search"
+                autoComplete="off"
+                placeholder="Name, trigger, or content"
+                value={query}
+                onInput={(event) => setQuery(event.currentTarget.value)}
+              />
+            </label>
+            <label id="authoring-settings-category-field" htmlFor="authoring-settings-category" hidden={!isSnippet}>
+              <span>Type</span>
+              <select id="authoring-settings-category" value={category} onChange={(event) => setCategory(event.target.value)}>
+                <option value="">All types</option>
+                <option value="Markdown">Markdown</option>
+                <option value="LaTeX">LaTeX</option>
+                <option value="Mermaid">Mermaid</option>
+                <option value="Elef DSL">Elef directives</option>
+              </select>
+            </label>
+          </div>
 
-        <p id="authoring-settings-status" className="authoring-settings-status" role="status" aria-live="polite">
-          {status}
-        </p>
-        <div className="authoring-settings-heading">
-          <p id="authoring-settings-count" className="dialog-copy">
-            {`${allEntries.length} ${label}${allEntries.length === 1 ? "" : "s"} · ${personalCount} personal`}
+          <p id="authoring-settings-status" className="authoring-settings-status" role="status" aria-live="polite">
+            {loadStatus === "error" ? "Could not load authoring settings." : loadStatus === "loading" ? "Loading authoring settings…" : status}
           </p>
-          <button id="new-authoring-entry" className="button primary" type="button" onClick={() => beginEntryForm(null, activeRegistry)}>
-            {isSnippet ? "New snippet" : "New shortcut"}
-          </button>
+          {loadStatus === "error" && (
+            <button className="button" type="button" onClick={() => {
+              document.getElementById("authoring-settings-search")?.focus();
+              void load();
+            }}>
+              Retry
+            </button>
+          )}
+          <div className="authoring-settings-heading">
+            <p id="authoring-settings-count" className="dialog-copy">
+              {`${allEntries.length} ${label}${allEntries.length === 1 ? "" : "s"} · ${personalCount} personal`}
+            </p>
+            <button id="new-authoring-entry" className="button primary" type="button" disabled={loadStatus !== "ready"} onClick={() => beginEntryForm(null, activeRegistry)}>
+              {isSnippet ? "New snippet" : "New shortcut"}
+            </button>
+          </div>
+          <div id="authoring-settings-list" className="authoring-settings-list" aria-live="polite">
+            {visible.map(renderCard)}
+          </div>
+          <p id="authoring-settings-empty" className="authoring-settings-empty" hidden={loadStatus !== "ready" || visible.length > 0}>
+            {query || category ? "No entries match this search." : "No entries are available."}
+          </p>
         </div>
-        <div id="authoring-settings-list" className="authoring-settings-list" aria-live="polite">
-          {visible.map(renderCard)}
-        </div>
-        <p id="authoring-settings-empty" className="authoring-settings-empty" hidden={visible.length > 0}>
-          {query || category ? "No entries match this search." : "No entries are available."}
-        </p>
       </div>
       {formOpen ? (
         <form id="authoring-entry-form" className="authoring-entry-form" onSubmit={(event) => void saveEntry(event)}>

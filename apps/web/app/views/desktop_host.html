@@ -79,11 +79,9 @@
 
     <footer class="statusbar" role="status"><span id="status-text" aria-live="polite">Ready</span><span class="status-right">Folders are the source of truth</span></footer>
 
-    <dialog id="settings-dialog" class="app-dialog">
-      <p class="native-eyebrow">LIBRARY SETTINGS</p>
+    <dialog id="settings-dialog" class="settings-sheet" aria-labelledby="settings-title">
+      <form method="dialog"><button id="close-settings" class="settings-sheet-close" value="close" aria-label="Close settings">×</button></form>
       <div id="settings-page-mount"></div>
-      <button id="manage-authoring" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold authoring-settings-link" type="button">Manage snippets and math shortcuts</button>
-      <form method="dialog" class="dialog-actions"><button id="close-settings" class="button secondary inline-flex min-h-10 cursor-pointer items-center rounded-full border px-4 py-2 font-bold" value="close">Close</button></form>
     </dialog>
     <dialog id="authoring-dialog" class="app-dialog">
       <div id="authoring-settings-mount"></div>

@@ -730,6 +730,7 @@ class DocumentsTest < ApplicationSystemTestCase
     document = Document.create!(title: "Research source", source: "")
 
     visit settings_path
+    find("#settings-tab-keyboard").click
     find("#vim-enabled").check
     visit edit_document_path(document, editor_mode: "visual")
 
@@ -749,6 +750,7 @@ class DocumentsTest < ApplicationSystemTestCase
     document = Document.create!(title: "Research source", source: "")
 
     visit settings_path
+    find("#settings-tab-keyboard").click
     find("#vim-enabled").check
     visit edit_document_path(document, editor_mode: "visual")
 

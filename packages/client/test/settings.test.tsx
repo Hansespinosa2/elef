@@ -173,6 +173,84 @@ describe("settings route", () => {
     assert.equal(notice?.textContent, "Workspace appearance saved.");
   });
 
+  it("renders authoring as a peer tab and previews unsaved defaults", async () => {
+    const host = typedHost();
+    const seam: AuthoringSeam = { transport: {
+      readRegistries: async () => ({ snippets: [{ id: "s1", name: "Note", trigger: "note", category: "Markdown", body: "x" }], math_shortcuts: [], hashes: {} }),
+      writeRegistry: async () => ({ contentHash: null }),
+    } };
+    const { document } = await mountInto(host, { initialUrl: "/settings", authoring: seam });
+    await setSelectValue(document.getElementById("settings-theme"), "light");
+    assert.match(document.querySelector(".settings-proof-sample")?.className ?? "", /document-theme-light/);
+    assert.equal((await host.settings.getSettings())["theme"], "dark");
+    await click(document.getElementById("settings-tab-authoring"));
+    assert.equal(document.getElementById("settings-panel-appearance")?.hasAttribute("hidden"), true);
+    assert.equal(document.getElementById("settings-panel-authoring")?.hasAttribute("hidden"), false);
+    assert.equal(document.querySelector("#authoring-settings-count")?.textContent, "1 snippet · 1 personal");
+    assert.equal(document.getElementById("close-authoring-settings"), null);
+    const authoringTabs = document.querySelector('.authoring-settings-tabs[role="tablist"]');
+    assert.ok(authoringTabs);
+    const key = document.createEvent("Event") as unknown as { initEvent: (type: string, bubbles: boolean, cancelable: boolean) => void; key: string };
+    key.initEvent("keydown", true, true);
+    key.key = "ArrowRight";
+    await act(async () => { authoringTabs.dispatchEvent(key as unknown as Event); });
+    assert.equal(document.getElementById("authoring-tab-math_shortcuts")?.getAttribute("aria-selected"), "true");
+    assert.equal(document.getElementById("authoring-registry-panel")?.getAttribute("aria-labelledby"), "authoring-tab-math_shortcuts");
+  });
+
+  it("retries an authoring registry load without leaving its peer tab", async () => {
+    const host = typedHost();
+    let reads = 0;
+    const authoring: AuthoringSeam = { transport: {
+      readRegistries: async () => {
+        reads++;
+        if (reads === 1) throw new Error("offline");
+        return { snippets: [{ id: "s1", name: "Note", trigger: "note", category: "Markdown", body: "x" }] };
+      },
+      writeRegistry: async () => ({ contentHash: null }),
+    } };
+    const { document } = await mountInto(host, { initialUrl: "/settings", authoring });
+    await click(document.getElementById("settings-tab-authoring"));
+    const panel = document.getElementById("settings-panel-authoring");
+    assert.ok(panel);
+    assert.match(panel.textContent ?? "", /Could not load authoring settings/);
+    const retry = Array.from(panel.querySelectorAll("button")).find(button => button.textContent?.trim() === "Retry");
+    assert.ok(retry);
+    await click(retry);
+    assert.equal(reads, 2);
+    assert.match(panel.textContent ?? "", /1 snippet · 1 personal/);
+    assert.equal(panel.hasAttribute("hidden"), false);
+  });
+
+  it("keeps peer panels usable after appearance load fails", async () => {
+    const host = typedHost();
+    host.settings.getSettings = async () => { throw new Error("offline"); };
+    const { document } = await mountInto(host, { initialUrl: "/settings" });
+    assert.match(document.querySelector('[role="alert"]')?.textContent ?? "", /could not be loaded/);
+    await click(document.getElementById("settings-tab-keyboard"));
+    assert.equal(document.getElementById("settings-panel-keyboard")?.hasAttribute("hidden"), false);
+    assert.notEqual(document.querySelector('section[aria-label="Vim settings"]'), null);
+  });
+
+  it("prevents duplicate saves and locks the draft while saving", async () => {
+    const host = typedHost();
+    let finish!: (value: Record<string, unknown>) => void;
+    let calls = 0;
+    host.settings.updateSettings = async () => { calls++; return await new Promise(resolve => { finish = resolve; }); };
+    const { document } = await mountInto(host, { initialUrl: "/settings" });
+    const theme = document.getElementById("settings-theme");
+    assert.ok(theme);
+    const form = theme.closest("form");
+    assert.ok(form);
+    await submitForm(form);
+    await submitForm(form);
+    assert.equal(calls, 1);
+    assert.equal(form.querySelector("fieldset")?.hasAttribute("disabled"), true);
+    await act(async () => finish({ theme: "dark", typography: "book" }));
+    await settled();
+    assert.equal(form.querySelector("fieldset")?.hasAttribute("disabled"), false);
+  });
+
   it("names vim keys the way the editor and settings surfaces agree on", () => {
     const plain = { key: "j", ctrlKey: false, shiftKey: false, altKey: false, metaKey: false };
     assert.equal(vimKeyFromEvent(plain), "j");
@@ -327,7 +405,7 @@ describe("settings route", () => {
       const { host, seam } = updaterHost(false);
       const { document } = await mountInto(host, { initialUrl: "/settings", updater: seam });
       const tabs = [...document.querySelectorAll('.settings-tabs [role="tab"]')];
-      assert.equal(tabs.length, 3);
+      assert.equal(tabs.length, 4);
       await click(tabs[1]);
       assert.equal(tabs[1]?.getAttribute("aria-selected"), "true");
       const tablist = document.querySelector('.settings-tabs[role="tablist"]')!;
@@ -336,7 +414,7 @@ describe("settings route", () => {
         key: string;
       };
       ev.initEvent("keydown", true, true);
-      ev.key = "ArrowDown";
+      ev.key = "ArrowRight";
       await act(async () => {
         tablist.dispatchEvent(ev as unknown as Event);
       });

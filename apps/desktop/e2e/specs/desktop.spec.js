@@ -32,7 +32,7 @@ import { answerMacNativeDialog } from "../mac-native-dialog.js"
 
 async function openDesktopAuthoringSettings() {
   await openDesktopSettings()
-  await $("#manage-authoring").click()
+  await $("#settings-tab-authoring").click()
   await $("#authoring-settings-dialog").waitForDisplayed()
 }
 
@@ -245,7 +245,7 @@ class DesktopEditorUi {
   }
 
   async closeAuthoringSettings() {
-    await $("#close-authoring-settings").click()
+    await $("#close-settings").click()
     await $("#authoring-settings-dialog").waitForDisplayed({ reverse: true })
   }
 
@@ -589,6 +589,7 @@ class DesktopEditorUi {
     await this.saveSharedWorkspaceDefault("#settings-typography", "book")
     // Vim preferences render through the shared client UI (same device
     // storage keys, same editor bridge); drive its stable hooks.
+    await $("#settings-tab-keyboard").click()
     const vimToggle = $("#vim-enabled")
     if (!(await vimToggle.isSelected())) await vimToggle.click()
     // The embedded driver's option click does not update native <select>s.
@@ -3025,6 +3026,7 @@ describe("desktop binary workflows and native boundaries", () => {
 
   it("shows the updater affordance only where the updater boundary allows it", async () => {
     await openDesktopAuthoringSettings()
+    if (process.platform !== "linux") await $("#settings-tab-updates").click()
     // The updater boundary is macOS-only: macOS shows the settings Updates
     // section, while Linux (package-managed) renders no updater affordance.
     if (process.platform === "linux") {
@@ -3036,7 +3038,7 @@ describe("desktop binary workflows and native boundaries", () => {
       // resolving the updater endpoint in the background.
       await $("section[aria-label='Updates'] button").waitForDisplayed()
     }
-    await $("#close-authoring-settings").click()
+    await $("#close-settings").click()
     await $("#authoring-settings-dialog").waitForDisplayed({ reverse: true })
   })
 
@@ -3208,7 +3210,7 @@ describe("desktop binary workflows and native boundaries", () => {
       throw new Error("Editing the personal snippet did not update the library registry file")
     }
 
-    await $("#close-authoring-settings").click()
+    await $("#close-settings").click()
     const ui = new DesktopEditorUi()
     await ui.openWork()
     const originalSource = await ui.readSource()
@@ -3240,6 +3242,8 @@ describe("desktop binary workflows and native boundaries", () => {
     if (afterDelete.snippets.some(entry => entry.trigger === trigger)) {
       throw new Error("Deleting the personal snippet left it in the library registry file")
     }
+    await $("#close-settings").click()
+    await $("#settings-dialog").waitForDisplayed({ reverse: true })
   })
 
   it("creates and deletes a personal math shortcut through desktop settings", async () => {
