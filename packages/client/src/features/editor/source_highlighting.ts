@@ -1,4 +1,3 @@
-import { closesParagraphDisplayMath, displayMathDelimiterOnLine, mathCodeFenceAtLine } from "@elef/work-model/math-source"
 import { syntaxTree } from "@codemirror/language"
 import type { EditorState, Extension, Range } from "@codemirror/state"
 import { Decoration, EditorView, ViewPlugin } from "@codemirror/view"
@@ -33,23 +32,8 @@ interface TrailingParagraph {
   marks: LezerElement[]
 }
 
-interface LezerInput {
-  length: number
-  read(from: number, to: number): string
-}
-
-interface LezerParse<Tree> {
-  advance(): Tree | null
-  readonly parsedPos: number
-  readonly stoppedAt: number | null
-  stopAt(pos: number): void
-}
-
-let activeMarkdownInput: LezerInput | undefined
-
 interface LezerBlockContext {
   readonly lineStart: number
-  readonly parsedPos: number
   readonly stack: readonly unknown[]
   readonly parser: {
     parseInline(text: string, offset: number): LezerElement[]
@@ -153,7 +137,9 @@ function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, ma
     if (line.indent < line.baseIndent + 4) {
       const content = line.text.slice(line.pos)
       if (isBlockMathFenceLine(content, 0)) {
-        if (!closesParagraphDisplayMath(leaf.content.slice(mathScanFrom))) break
+        const probe = leaf.content.slice(mathScanFrom) + "\n$$"
+        // An inline display opener earlier in the paragraph may own this line.
+        if (!cx.parser.parseInline(probe, 0).some(element => element.to === probe.length)) break
         mathScanFrom = leaf.content.length + 1 + line.text.length
       } else if (interruptsTrailingParagraph(content, cx)) {
         break
@@ -173,22 +159,6 @@ function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, ma
 }
 
 export const elefMath = {
-  wrap<Tree>(parse: LezerParse<Tree>, input: LezerInput): LezerParse<Tree> {
-    return {
-      get parsedPos() { return parse.parsedPos },
-      get stoppedAt() { return parse.stoppedAt },
-      stopAt(pos) { parse.stopAt(pos) },
-      advance() {
-        const previous = activeMarkdownInput
-        activeMarkdownInput = input
-        try {
-          return parse.advance()
-        } finally {
-          activeMarkdownInput = previous
-        }
-      }
-    }
-  },
   defineNodes: [
     { name: "BlockMath", block: true },
     { name: "BlockMathWithProse", block: true },
@@ -214,28 +184,16 @@ export const elefMath = {
 
         let blockTo = openEnd
         let contentTo = contentFrom
-        let codeFence: string | null = null
         while (cx.nextLine()) {
           if (line.depth < blockDepth) break
-          const content = line.text.slice(line.pos)
-          if (line.indent < line.baseIndent + 4) {
-            codeFence = mathCodeFenceAtLine(content, codeFence, () => {
-              const input = activeMarkdownInput
-              if (!input) return ""
-              const nextLine = Math.min(cx.parsedPos + line.text.length + 1, input.length)
-              return input.read(nextLine, input.length)
-            })
-          }
-
-          const delimiterStart = displayMathDelimiterOnLine(content, codeFence !== null)
-          if (delimiterStart >= 0) {
-            const closeFrom = cx.lineStart + line.pos + delimiterStart
+          if (line.text.startsWith("$$", line.pos)) {
+            const closeFrom = cx.lineStart + line.pos
             const closeTo = closeFrom + 2
             if (closeFrom > contentFrom) {
               children.push(cx.elt("MathContent", contentFrom, closeFrom))
             }
             children.push(cx.elt("MathMark", closeFrom, closeTo))
-            const suffix = content.slice(delimiterStart + 2)
+            const suffix = line.text.slice(line.pos + 2)
             if (suffix.trim()) {
               const math = cx.elt("BlockMath", blockFrom, closeTo, children)
               addMathWithTrailingParagraph(cx, line, math, suffix)

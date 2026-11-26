@@ -1,18 +1,19 @@
 import assert from "node:assert/strict"
 import test from "node:test"
 import { parseHTML } from "linkedom"
-import { bundledPackageSourceUrl, loadPackageSource } from "./shared/package_source.mjs"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
 // Differ side of visual inline revelation: the projection holds the
 // base source slice for revealed constructs so edits inside them map
 // positionally, delimiter deletions commit, and pairing mismatches
 // refuse (the batch stays in the DOM for the next flush). The host
 // resolves the verified map and injects it; the differ stays
-// dependency-free. The suite runs the real package modules from source.
+// dependency-free. editor_reveal.ts and math_source.ts are import-free,
+// so the suite runs the real modules from source.
 const reveal = await import(
   `data:text/javascript;base64,${Buffer.from(await loadPackageSource("packages/editor-runtime/src/controllers/editor_reveal.ts")).toString("base64")}`
 )
-const mathSourceUrl = bundledPackageSourceUrl("packages/work-model/src/math_source.ts")
+const mathSourceUrl = `data:text/javascript;base64,${Buffer.from(await loadPackageSource("packages/work-model/src/math_source.ts")).toString("base64")}`
 const originalModuleSource = await loadPackageSource("packages/editor-runtime/src/controllers/editor_markdown.ts")
 const moduleSource = originalModuleSource.replaceAll('"@elef/work-model/math-source"', JSON.stringify(mathSourceUrl))
 const source = moduleSource

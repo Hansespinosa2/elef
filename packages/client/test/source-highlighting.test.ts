@@ -102,11 +102,11 @@ test("editing a continuation line preserves emphasis after the closing delimiter
   assert.deepEqual(nodes, collectNodes(parsedState(edited.doc.toString())));
 });
 
-test("a display closer after TeX preserves a following horizontal rule", () => {
-  const doc = "$$\nx$$, prose\n---\nnext";
+test("a display closer with trailing prose preserves a following horizontal rule", () => {
+  const doc = "$$\nx\n$$, prose\n---\nnext";
   const nodes = collectNodes(parsedState(doc));
 
-  assert.ok(nodes.some((node) => node.name === "MathContent" && node.text === "\nx"));
+  assert.ok(nodes.some((node) => node.name === "MathContent" && node.text === "\nx\n"));
   assert.ok(nodes.some((node) => node.name === "HorizontalRule" && node.text === "---"));
   assert.ok(nodes.some((node) => node.name === "Paragraph" && node.text === "next"));
 });
@@ -129,13 +129,6 @@ test("dollars in a trailing autolink do not consume the next display opener", ()
     nodes.filter((node) => node.name === "MathContent").map((node) => node.text),
     ["\nx\n", "\n\ny\n"]
   );
-});
-
-test("quoted dollars in paired tilde fences do not close display math", () => {
-  const doc = '$$\nDraft\n~~~\nconst s = "$$";\n~~~';
-  const nodes = collectNodes(parsedState(doc));
-
-  assert.deepEqual(nodes.filter((node) => node.name === "MathMark").map((node) => node.text), ["$$"]);
 });
 
 test("prose currency, escaped dollars, multiline single-dollar, and inline code are not parsed as math", () => {

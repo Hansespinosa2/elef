@@ -1,8 +1,10 @@
 import assert from "node:assert/strict"
 import test from "node:test"
-import { bundledPackageSourceUrl, loadPackageSource } from "./shared/package_source.mjs"
+import { loadPackageSource } from "./shared/package_source.mjs"
 
-const mathSourceUrl = bundledPackageSourceUrl("packages/work-model/src/math_source.ts")
+// math_source.ts is import-free, so the suite runs the real module from
+// source through a data: URL instead of resolving the work-model bundle.
+const mathSourceUrl = `data:text/javascript;base64,${Buffer.from(await loadPackageSource("packages/work-model/src/math_source.ts")).toString("base64")}`
 const originalModuleSource = await loadPackageSource("packages/editor-runtime/src/controllers/editor_markdown.ts")
 const moduleSource = originalModuleSource.replaceAll('"@elef/work-model/math-source"', JSON.stringify(mathSourceUrl))
 const source = moduleSource.replace('import { cachedKatex, loadKatex } from "../lib/katex_loader.js"', "const cachedKatex = () => ({ renderToString: () => '' }); const loadKatex = () => Promise.resolve(cachedKatex())")
