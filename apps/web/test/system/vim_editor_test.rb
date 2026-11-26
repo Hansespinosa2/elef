@@ -111,12 +111,12 @@ class VimEditorTest < ApplicationSystemTestCase
     # At-sign math shortcut popup (also a pending math shorthand chain).
     editor.send_keys("i", "\n$@a")
     assert_selector ".math-shortcut-option.is-selected", text: /Alpha/, wait: 5
-    page.save_screenshot("../../assets/pr-shots/single-escape-dismiss/escape-math-popup-open.png")
+    page.save_screenshot(system_test_evidence_path("single-escape-dismiss/escape-math-popup-open.png"))
     editor.send_keys(:escape)
     assert_no_selector "[data-math-shortcut-palette-target='palette']:not([hidden])", wait: 5
     assert_selector "[data-editor-target='mode'][data-mode='normal']", text: "Normal"
     assert_includes find_field("Markdown source").value, "$@a"
-    page.save_screenshot("../../assets/pr-shots/single-escape-dismiss/escape-math-normal-mode.png")
+    page.save_screenshot(system_test_evidence_path("single-escape-dismiss/escape-math-normal-mode.png"))
 
     # Double-bracket document link popup.
     editor.send_keys("i", "\n[[Escape li")
@@ -874,7 +874,7 @@ class VimEditorTest < ApplicationSystemTestCase
       window.getSelection().setPosition(text, 0);
     JAVASCRIPT
     page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
-    page.save_screenshot("../../assets/pr-shots/visual-vim-table/table-vim-before-j.png")
+    page.save_screenshot(system_test_evidence_path("visual-vim-table/table-vim-before-j.png"))
 
     # One j steps over the delimiter row into the body row below,
     # same column: the caret must leave the header for cell "c".
@@ -891,7 +891,7 @@ class VimEditorTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert_includes focused["text"], "c"
     assert_equal 0, focused["index"]
-    page.save_screenshot("../../assets/pr-shots/visual-vim-table/table-vim-after-j.png")
+    page.save_screenshot(system_test_evidence_path("visual-vim-table/table-vim-after-j.png"))
   ensure
     page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
   end
@@ -1207,7 +1207,7 @@ class VimEditorTest < ApplicationSystemTestCase
     assert_equal 0, selection.call["anchorOffset"]
     assert_equal "Three", selection.call["focusText"]
     assert_equal 1, selection.call["focusOffset"]
-    page.save_screenshot("../../assets/pr-shots/visual-vim-table/visual-range-across-blocks.png")
+    page.save_screenshot(system_test_evidence_path("visual-vim-table/visual-range-across-blocks.png"))
 
     # k shrinks the range back toward the anchor. Focus returns to the
     # middle block; the exact intra-cell column is engine-defined
@@ -1243,7 +1243,7 @@ class VimEditorTest < ApplicationSystemTestCase
       window.getSelection().setPosition(cell.firstChild, 0);
     JAVASCRIPT
     page.evaluate_async_script("requestAnimationFrame(() => requestAnimationFrame(() => arguments[0]()))")
-    page.save_screenshot("../../assets/pr-shots/visual-vim-table/table-8x8-before.png")
+    page.save_screenshot(system_test_evidence_path("visual-vim-table/table-8x8-before.png"))
 
     cell = lambda do
       page.evaluate_script(<<~JAVASCRIPT)
@@ -1303,7 +1303,7 @@ class VimEditorTest < ApplicationSystemTestCase
     settle.call
     assert_includes cell.call["text"], "r2c1"
     assert_equal 0, cell.call["index"]
-    page.save_screenshot("../../assets/pr-shots/visual-vim-table/table-8x8-after.png")
+    page.save_screenshot(system_test_evidence_path("visual-vim-table/table-8x8-after.png"))
 
     # Cohesive authoring: an insert-mode edit inside the cell rewrites source.
     find(".document-editor-block", text: "r2c1").send_keys("i", "!", :escape)
@@ -1379,8 +1379,8 @@ class VimEditorTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert_equal "rgb(159, 197, 169)", blurred["outline"], "unfocused [] outline must be Elef green, got #{blurred.inspect}"
     refute_equal "rgb(255, 150, 150)", blurred["outline"], "upstream vim red leaked into the unfocused block"
-    page.save_screenshot("../../assets/pr-shots/vim-normal-cursor/normal-block-unfocused.png")
-    save_probe_closeup("../../assets/pr-shots/vim-normal-cursor/normal-block-unfocused-closeup.png")
+    page.save_screenshot(system_test_evidence_path("vim-normal-cursor/normal-block-unfocused.png"))
+    save_probe_closeup("vim-normal-cursor/normal-block-unfocused-closeup.png")
 
     # Focused: the solid block state.
     page.execute_script("window.__vimGuardView.focus()")
@@ -1393,8 +1393,8 @@ class VimEditorTest < ApplicationSystemTestCase
     JAVASCRIPT
     assert_equal "rgb(159, 197, 169)", focused, "focused block must be Elef green"
     refute_equal "rgb(255, 150, 150)", focused, "upstream vim red leaked into the focused block"
-    page.save_screenshot("../../assets/pr-shots/vim-normal-cursor/normal-block-focused.png")
-    save_probe_closeup("../../assets/pr-shots/vim-normal-cursor/normal-block-focused-closeup.png")
+    page.save_screenshot(system_test_evidence_path("vim-normal-cursor/normal-block-focused.png"))
+    save_probe_closeup("vim-normal-cursor/normal-block-focused-closeup.png")
   ensure
     page.execute_script("localStorage.removeItem('elef.editor.vim.enabled')")
   end
@@ -1410,6 +1410,6 @@ class VimEditorTest < ApplicationSystemTestCase
       })()
     JAVASCRIPT
     shot = page.driver.browser.execute_cdp("Page.captureScreenshot", format: "png", clip: clip)
-    File.binwrite(File.expand_path(path, Dir.pwd), Base64.decode64(shot["data"]))
+    File.binwrite(system_test_evidence_path(path), Base64.decode64(shot["data"]))
   end
 end
