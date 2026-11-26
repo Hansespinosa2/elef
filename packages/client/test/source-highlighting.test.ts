@@ -111,6 +111,16 @@ test("a display closer after TeX preserves a following horizontal rule", () => {
   assert.ok(nodes.some((node) => node.name === "Paragraph" && node.text === "next"));
 });
 
+test("a trailing paragraph keeps equations with their expression on the opening line", () => {
+  const doc = "$$\nx\n$$, prose\n$$y\n$$\n$$z\n$$";
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.deepEqual(
+    nodes.filter((node) => node.name === "MathContent").map((node) => node.text),
+    ["\nx\n", "y\n", "z\n"]
+  );
+});
+
 test("prose currency, escaped dollars, multiline single-dollar, and inline code are not parsed as math", () => {
   const doc = [
     "Costs $5 and $10 or $ 5 today.",

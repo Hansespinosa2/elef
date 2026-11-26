@@ -5,7 +5,7 @@ import parseParagraph from "markdown-it/lib/rules_block/paragraph.mjs"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
 import { buildEditorStructure, createDocumentLinkResolver, parseDocumentLinkAt, parsePythonFenceInfo } from "@elef/work-model"
-import { findMathClosingDelimiter, mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
+import { closesParagraphDisplayMath, findMathClosingDelimiter, mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
 import { analyzeArtList, ART_DIAGNOSTICS } from "@elef/work-model/art-source"
 import { slidePositionClasses, slidePositionLayout } from "@elef/work-model/slide-position-layout"
 import type {
@@ -227,26 +227,37 @@ markdown.inline.ruler.at("newline", (state, silent) => {
   return true
 })
 
-const mathSuffixParagraphs = new WeakSet<MarkdownItBlockState>()
+const mathSuffixParagraphs = new WeakMap<MarkdownItBlockState, number>()
 
 markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, endLine, silent) => {
-  if (silent && !mathSuffixParagraphs.has(state)) return false
+  const suffixLine = mathSuffixParagraphs.get(state)
+  if (silent && suffixLine === undefined) return false
   const opener = state.getLines(startLine, startLine + 1, state.blkIndent, false).trim()
   const openDelimiter = opener === "$$" ? "$$" : opener === "\\[" ? "\\[" : null
   if (!openDelimiter) return false
+  if (silent && suffixLine !== undefined && openDelimiter === "$$") {
+    const preceding = state.getLines(suffixLine, startLine, state.blkIndent, false)
+    if (closesParagraphDisplayMath(preceding)) {
+      mathSuffixParagraphs.set(state, startLine + 1)
+      return false
+    }
+  }
   const closeDelimiter = openDelimiter === "$$" ? "$$" : "\\]"
   for (let line = startLine + 1; line < endLine; line += 1) {
     const lineStart = state.bMarks[line]
     const lineEnd = state.eMarks[line]
     const shift = state.tShift[line]
     if (lineStart === undefined || lineEnd === undefined || shift === undefined) continue
-    const closer = state.src.slice(lineStart + shift, lineEnd)
+    const contentStart = lineStart + shift
+    const indent = state.sCount[line]
+    if (contentStart < lineEnd && indent !== undefined && indent < state.blkIndent) break
+    const closer = state.src.slice(contentStart, lineEnd)
     const delimiterStart = closeDelimiter === "$$"
       ? findMathClosingDelimiter(closer, closeDelimiter, 0)
       : closer.trim() === closeDelimiter ? closer.indexOf(closeDelimiter) : -1
     if (delimiterStart < 0) continue
     if (silent) return true
-    const closeFrom = lineStart + shift + delimiterStart
+    const closeFrom = contentStart + delimiterStart
     const closeTo = closeFrom + closeDelimiter.length
     const env = asRenderEnv(state.env)
     const expression = state.getLines(startLine + 1, line, state.blkIndent, true) + closer.slice(0, delimiterStart)
@@ -261,7 +272,7 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
       state.tShift[line] = 0
       // Let a new equation interrupt this paragraph without treating dollar
       // delimiters in ordinary paragraphs as block openers.
-      mathSuffixParagraphs.add(state)
+      mathSuffixParagraphs.set(state, line)
       try {
         parseParagraph(state, line, endLine, false)
       } finally {

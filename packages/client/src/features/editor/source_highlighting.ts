@@ -1,4 +1,4 @@
-import { findMathClosingDelimiter } from "@elef/work-model/math-source"
+import { closesParagraphDisplayMath, findMathClosingDelimiter } from "@elef/work-model/math-source"
 import { syntaxTree } from "@codemirror/language"
 import type { EditorState, Extension, Range } from "@codemirror/state"
 import { Decoration, EditorView, ViewPlugin } from "@codemirror/view"
@@ -121,12 +121,17 @@ function isBlockMathFenceLine(text: string, pos: number): boolean {
 // directly. Use Lezer's paragraph continuation rules and composite markers.
 function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, math: LezerElement, suffix: string): void {
   const leaf: TrailingParagraph = { start: math.to, content: suffix, marks: [], parsers: [] }
+  let mathScanFrom = 0
 
   while (cx.nextLine() && line.pos < line.text.length) {
     if (line.indent < line.baseIndent + 4) {
       // Lezer normally leaves contiguous dashes for the setext parser.
       if (/^-{3,}[ \t]*$/.test(line.text.slice(line.pos))) break
-      if (cx.parser.endLeafBlock.some(stop => stop(cx, line, leaf))) break
+      if (cx.parser.endLeafBlock.some(stop => stop(cx, line, leaf))) {
+        if (!isBlockMathFenceLine(line.text, line.pos) ||
+            !closesParagraphDisplayMath(leaf.content.slice(mathScanFrom))) break
+        mathScanFrom = leaf.content.length + 1 + line.text.length
+      }
     }
     leaf.content += "\n" + line.scrub()
     leaf.marks.push(...line.markers)

@@ -99,3 +99,12 @@ export function scanMathSource(source: string): MathSource[] {
   }
   return matches
 }
+
+
+// When a paragraph already opened display math, a bare dollar fence on the
+// next line closes that span instead of interrupting the paragraph.
+export function closesParagraphDisplayMath(paragraph: string): boolean {
+  if (!paragraph.includes("$$")) return false
+  const source = paragraph + "\n$$"
+  return scanMathSource(source).some(math => math.open === "$$" && math.end === source.length)
+}

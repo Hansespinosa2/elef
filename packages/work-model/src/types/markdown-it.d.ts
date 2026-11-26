@@ -28,6 +28,7 @@ declare module "markdown-it" {
     bMarks: number[]
     eMarks: number[]
     tShift: number[]
+    sCount: number[]
     line: number
     env?: unknown
     getLines(begin: number, end: number, indent: number, keepLastLF: boolean): string

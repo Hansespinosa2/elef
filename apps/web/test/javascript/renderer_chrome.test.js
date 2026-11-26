@@ -125,6 +125,19 @@ test("display math closes at the first unescaped delimiter and preserves source 
   assert.match(indentedCloser, /<p>, prose<\/p>/)
 })
 
+test("a closer in a dedented paragraph stays outside the math list item", () => {
+  const html = renderMarkdownBlock("- $$\n  x\n\noutside $$, prose")
+  assert.doesNotMatch(html, /class="katex-display"/)
+  assert.match(html, /<\/ul>\s*<p>outside \$\$, prose<\/p>/)
+})
+
+test("a trailing paragraph keeps equations with their expression on the opening line", () => {
+  const html = renderMarkdownBlock("$$\nx\n$$, prose\n$$y\n$$\n$$z\n$$")
+  assert.equal((html.match(/class="katex-display"/g) || []).length, 3)
+  assert.match(html, /data-editor-math-source="y\n"/)
+  assert.match(html, /data-editor-math-source="z\n"/)
+})
+
 // NOTE (dev-sync): T's "exposes Stimulus canvas targets" case is not ported:
 // the campaign retired the presentation-canvas controller (present mode is
 // the framework-free mountPresentation now), so its target hook would be
