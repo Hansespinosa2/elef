@@ -1,3 +1,4 @@
+import { dollarMathClosingDelimiterEnd } from "@elef/work-model/math-source"
 import { syntaxTree } from "@codemirror/language"
 import type { EditorState, Extension, Range } from "@codemirror/state"
 import { Decoration, EditorView, ViewPlugin } from "@codemirror/view"
@@ -163,14 +164,15 @@ export const elefMath = {
         let contentTo = contentFrom
         while (cx.nextLine()) {
           if (line.depth < blockDepth) break
-          if (line.text.startsWith("$$", line.pos)) {
+          const delimiterEnd = dollarMathClosingDelimiterEnd(line.text, line.pos)
+          if (delimiterEnd !== null) {
             const closeFrom = cx.lineStart + line.pos
-            const closeTo = closeFrom + 2
+            const closeTo = cx.lineStart + delimiterEnd
             if (closeFrom > contentFrom) {
               children.push(cx.elt("MathContent", contentFrom, closeFrom))
             }
             children.push(cx.elt("MathMark", closeFrom, closeTo))
-            const suffix = line.text.slice(line.pos + 2)
+            const suffix = line.text.slice(delimiterEnd)
             if (suffix.trim()) {
               const math = cx.elt("BlockMath", blockFrom, closeTo, children)
               addMathWithTrailingParagraph(cx, line, math, suffix)

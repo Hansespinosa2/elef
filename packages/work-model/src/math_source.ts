@@ -17,6 +17,11 @@ export function sourceIsEscaped(source: string, index: number): boolean {
   return slashes % 2 === 1
 }
 
+// A display-math closing line can continue with punctuation or prose.
+export function dollarMathClosingDelimiterEnd(line: string, start: number): number | null {
+  return line.startsWith("$$", start) ? start + 2 : null
+}
+
 // The reader's existing rule: an unescaped matching delimiter closes;
 // a single dollar surrounded by another dollar cannot close inline math.
 export function mathSourceAt(source: string, start = 0): MathSource | null {

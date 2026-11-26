@@ -1,10 +1,11 @@
 /// <reference path="../../work-model/src/types/markdown-it.d.ts" />
 /// <reference path="./types/highlightjs-common.d.ts" />
 import MarkdownIt from "markdown-it"
+import parseParagraph from "markdown-it/lib/rules_block/paragraph.mjs"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
 import { buildEditorStructure, createDocumentLinkResolver, parseDocumentLinkAt, parsePythonFenceInfo } from "@elef/work-model"
-import { mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
+import { dollarMathClosingDelimiterEnd, mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
 import { analyzeArtList, ART_DIAGNOSTICS } from "@elef/work-model/art-source"
 import { slidePositionClasses, slidePositionLayout } from "@elef/work-model/slide-position-layout"
 import type {
@@ -232,22 +233,39 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
   if (!openDelimiter) return false
   const closeDelimiter = openDelimiter === "$$" ? "$$" : "\\]"
   for (let line = startLine + 1; line < endLine; line += 1) {
-    const closer = state.getLines(line, line + 1, state.blkIndent, false).trim()
-    if (closer !== closeDelimiter) continue
+    const lineStart = state.bMarks[line]
+    const lineEnd = state.eMarks[line]
+    const shift = state.tShift[line]
+    if (lineStart === undefined || lineEnd === undefined || shift === undefined) continue
+    const delimiterEnd = closeDelimiter === "$$"
+      ? dollarMathClosingDelimiterEnd(state.src, lineStart + shift)
+      : state.src.slice(lineStart + shift, lineEnd).trimEnd() === closeDelimiter ? lineEnd : null
+    if (delimiterEnd === null) continue
     if (silent) return true
     const env = asRenderEnv(state.env)
     const expression = state.getLines(startLine + 1, line, state.blkIndent, false)
     const token = state.push("html_block", "", 0)
     token.map = [startLine, line + 1]
     const startMark = state.eMarks[startLine]
-    const endMark = state.bMarks[line]
-    const sourceContent = startMark === undefined || endMark === undefined ? "" : state.src.slice(startMark, endMark)
+    const sourceContent = startMark === undefined ? "" : state.src.slice(startMark, lineStart)
     token.content = `<p>${renderMath(expression.trim(), true, openDelimiter, closeDelimiter, env.chrome, sourceContent)}</p>\n`
-    state.line = line + 1
+    if (state.src.slice(delimiterEnd, lineEnd).trim()) {
+      // The remainder of the closing line is the beginning of a paragraph.
+      state.bMarks[line] = delimiterEnd
+      state.tShift[line] = 0
+      try {
+        parseParagraph(state, line, endLine, false)
+      } finally {
+        state.bMarks[line] = lineStart
+        state.tShift[line] = shift
+      }
+    } else {
+      state.line = line + 1
+    }
     return true
   }
   return false
-})
+}, { alt: ["paragraph"] })
 
 markdown.inline.ruler.before("escape", "elef_bracket_math", (state, silent) => {
   const source = state.src

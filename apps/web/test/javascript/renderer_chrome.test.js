@@ -100,6 +100,12 @@ test("composed empty display math retains its exact inner source whitespace for 
   }
 })
 
+test("composed display math preserves trailing prose before the next equation", () => {
+  const html = renderMarkdownBlock("$$\nx\n$$, for *all\nvalues*.\n$$\ny\n$$")
+  assert.equal((html.match(/class="katex-display"/g) || []).length, 2)
+  assert.match(html, /<p>, for <em>all\s+values<\/em>\.<\/p>/)
+})
+
 // NOTE (dev-sync): T's "exposes Stimulus canvas targets" case is not ported:
 // the campaign retired the presentation-canvas controller (present mode is
 // the framework-free mountPresentation now), so its target hook would be

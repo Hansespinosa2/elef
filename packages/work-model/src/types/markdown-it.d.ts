@@ -27,6 +27,7 @@ declare module "markdown-it" {
     blkIndent: number
     bMarks: number[]
     eMarks: number[]
+    tShift: number[]
     line: number
     env?: unknown
     getLines(begin: number, end: number, indent: number, keepLastLF: boolean): string
@@ -59,7 +60,7 @@ declare module "markdown-it" {
   export type MarkdownItCoreRule = (state: MarkdownItCoreState) => void
 
   export interface MarkdownItRuler<Rule> {
-    before(beforeName: string, ruleName: string, fn: Rule): void
+    before(beforeName: string, ruleName: string, fn: Rule, options?: { alt: string[] }): void
     after(afterName: string, ruleName: string, fn: Rule): void
     at(name: string, fn: Rule): void
   }
@@ -98,4 +99,10 @@ declare module "markdown-it" {
 
   const MarkdownIt: MarkdownItFactory
   export default MarkdownIt
+}
+
+
+declare module "markdown-it/lib/rules_block/paragraph.mjs" {
+  const paragraph: import("markdown-it").MarkdownItBlockRule
+  export default paragraph
 }
