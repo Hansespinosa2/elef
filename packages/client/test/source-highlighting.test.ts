@@ -121,6 +121,13 @@ test("continued prose retains setext headings after a display closer", () => {
   }
 });
 
+test("one or two dashes after a suffixed closer still make a Setext heading", () => {
+  for (const underline of ["-", "--"]) {
+    const nodes = collectNodes(parsedState(`$$\nx\n$$ prose\n${underline}`));
+    assert.ok(nodes.some((node) => node.name === "SetextHeading2" && node.text.includes("prose")));
+  }
+});
+
 test("dollars in a trailing autolink do not consume the next display opener", () => {
   const doc = "$$\nx\n$$, see <https://example.com/$$>\n$$\n\ny\n$$";
   const nodes = collectNodes(parsedState(doc));

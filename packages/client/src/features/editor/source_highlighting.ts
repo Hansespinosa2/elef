@@ -111,7 +111,7 @@ export const elefMath = {
         // Let Lezer recognize setext underlines in continued prose. Dashes
         // immediately after the closing line still form a horizontal rule.
         const content = line.text.slice(line.pos)
-        if (/^=+[ \t]*$/.test(content)) return true
+        if (/^(?:=+|-{1,2})[ \t]*$/.test(content)) return true
         return cx.lineStart > closingLineEnd + 1 && /^-+[ \t]*$/.test(content)
       }
     },
