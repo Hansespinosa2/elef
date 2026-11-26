@@ -114,6 +114,17 @@ test("display math can still open with its expression on the same line", () => {
   assert.match(html, /<\/span>\s+text\s+<span/)
 })
 
+test("display math closes at the first unescaped delimiter and preserves source indentation", () => {
+  const inlineCloser = renderMarkdownBlock("$$\nx$$\n\n$$y$$")
+  assert.equal((inlineCloser.match(/class="katex-display"/g) || []).length, 2)
+  assert.match(inlineCloser, /data-editor-math-source="\nx"/)
+  assert.match(inlineCloser, /data-editor-math-source="y"/)
+
+  const indentedCloser = renderMarkdownBlock("$$\nx\n  $$, prose")
+  assert.match(indentedCloser, /data-editor-math-source="\nx\n  "/)
+  assert.match(indentedCloser, /<p>, prose<\/p>/)
+})
+
 // NOTE (dev-sync): T's "exposes Stimulus canvas targets" case is not ported:
 // the campaign retired the presentation-canvas controller (present mode is
 // the framework-free mountPresentation now), so its target hook would be

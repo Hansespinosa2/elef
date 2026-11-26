@@ -1,4 +1,4 @@
-import { dollarMathClosingDelimiterEnd } from "@elef/work-model/math-source"
+import { findMathClosingDelimiter } from "@elef/work-model/math-source"
 import { syntaxTree } from "@codemirror/language"
 import type { EditorState, Extension, Range } from "@codemirror/state"
 import { Decoration, EditorView, ViewPlugin } from "@codemirror/view"
@@ -123,7 +123,11 @@ function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, ma
   const leaf: TrailingParagraph = { start: math.to, content: suffix, marks: [], parsers: [] }
 
   while (cx.nextLine() && line.pos < line.text.length) {
-    if (line.indent < line.baseIndent + 4 && cx.parser.endLeafBlock.some(stop => stop(cx, line, leaf))) break
+    if (line.indent < line.baseIndent + 4) {
+      // Lezer normally leaves contiguous dashes for the setext parser.
+      if (/^-{3,}[ \t]*$/.test(line.text.slice(line.pos))) break
+      if (cx.parser.endLeafBlock.some(stop => stop(cx, line, leaf))) break
+    }
     leaf.content += "\n" + line.scrub()
     leaf.marks.push(...line.markers)
   }
@@ -164,15 +168,15 @@ export const elefMath = {
         let contentTo = contentFrom
         while (cx.nextLine()) {
           if (line.depth < blockDepth) break
-          const delimiterEnd = dollarMathClosingDelimiterEnd(line.text, line.pos)
-          if (delimiterEnd !== null) {
-            const closeFrom = cx.lineStart + line.pos
-            const closeTo = cx.lineStart + delimiterEnd
+          const delimiterStart = findMathClosingDelimiter(line.text, "$$", line.pos)
+          if (delimiterStart >= 0) {
+            const closeFrom = cx.lineStart + delimiterStart
+            const closeTo = closeFrom + 2
             if (closeFrom > contentFrom) {
               children.push(cx.elt("MathContent", contentFrom, closeFrom))
             }
             children.push(cx.elt("MathMark", closeFrom, closeTo))
-            const suffix = line.text.slice(delimiterEnd)
+            const suffix = line.text.slice(delimiterStart + 2)
             if (suffix.trim()) {
               const math = cx.elt("BlockMath", blockFrom, closeTo, children)
               addMathWithTrailingParagraph(cx, line, math, suffix)

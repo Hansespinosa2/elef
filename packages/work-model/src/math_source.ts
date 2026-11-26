@@ -17,9 +17,14 @@ export function sourceIsEscaped(source: string, index: number): boolean {
   return slashes % 2 === 1
 }
 
-// A display-math closing line can continue with punctuation or prose.
-export function dollarMathClosingDelimiterEnd(line: string, start: number): number | null {
-  return line.startsWith("$$", start) ? start + 2 : null
+// Search within the parser's current Markdown content.
+export function findMathClosingDelimiter(source: string, close: string, from: number): number {
+  for (let end = source.indexOf(close, from); end >= 0; end = source.indexOf(close, end + close.length)) {
+    if (!sourceIsEscaped(source, end) && (close !== "$" || source[end + 1] !== "$" && source[end - 1] !== "$")) {
+      return end
+    }
+  }
+  return -1
 }
 
 // The reader's existing rule: an unescaped matching delimiter closes;
@@ -32,11 +37,7 @@ export function mathSourceAt(source: string, start = 0): MathSource | null {
   const close = open === "\\(" ? "\\)" : open === "\\[" ? "\\]" : open
   const display = open === "$$" || open === "\\["
   if (open === "$" && /\s/.test(source[start + 1] || "")) return null
-  let end = start + open.length
-  while ((end = source.indexOf(close, end)) >= 0) {
-    if (!sourceIsEscaped(source, end) && (close !== "$" || source[end + 1] !== "$" && source[end - 1] !== "$")) break
-    end += close.length
-  }
+  const end = findMathClosingDelimiter(source, close, start + open.length)
   if (end < 0) return null
   const interior = source.slice(start + open.length, end)
   if (open === "$" && (!interior || /\s$/.test(interior))) return null

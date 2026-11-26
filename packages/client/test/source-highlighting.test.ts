@@ -102,6 +102,15 @@ test("editing a continuation line preserves emphasis after the closing delimiter
   assert.deepEqual(nodes, collectNodes(parsedState(edited.doc.toString())));
 });
 
+test("a display closer after TeX preserves a following horizontal rule", () => {
+  const doc = "$$\nx$$, prose\n---\nnext";
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.ok(nodes.some((node) => node.name === "MathContent" && node.text === "\nx"));
+  assert.ok(nodes.some((node) => node.name === "HorizontalRule" && node.text === "---"));
+  assert.ok(nodes.some((node) => node.name === "Paragraph" && node.text === "next"));
+});
+
 test("prose currency, escaped dollars, multiline single-dollar, and inline code are not parsed as math", () => {
   const doc = [
     "Costs $5 and $10 or $ 5 today.",

@@ -5,7 +5,7 @@ import parseParagraph from "markdown-it/lib/rules_block/paragraph.mjs"
 import hljs from "highlight.js/lib/common"
 import katex from "katex"
 import { buildEditorStructure, createDocumentLinkResolver, parseDocumentLinkAt, parsePythonFenceInfo } from "@elef/work-model"
-import { dollarMathClosingDelimiterEnd, mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
+import { findMathClosingDelimiter, mathSourceAt, sourceIsEscaped } from "@elef/work-model/math-source"
 import { analyzeArtList, ART_DIAGNOSTICS } from "@elef/work-model/art-source"
 import { slidePositionClasses, slidePositionLayout } from "@elef/work-model/slide-position-layout"
 import type {
@@ -240,21 +240,24 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
     const lineEnd = state.eMarks[line]
     const shift = state.tShift[line]
     if (lineStart === undefined || lineEnd === undefined || shift === undefined) continue
-    const delimiterEnd = closeDelimiter === "$$"
-      ? dollarMathClosingDelimiterEnd(state.src, lineStart + shift)
-      : state.getLines(line, line + 1, state.blkIndent, false).trim() === closeDelimiter ? lineEnd : null
-    if (delimiterEnd === null) continue
+    const closer = state.src.slice(lineStart + shift, lineEnd)
+    const delimiterStart = closeDelimiter === "$$"
+      ? findMathClosingDelimiter(closer, closeDelimiter, 0)
+      : closer.trim() === closeDelimiter ? closer.indexOf(closeDelimiter) : -1
+    if (delimiterStart < 0) continue
     if (silent) return true
+    const closeFrom = lineStart + shift + delimiterStart
+    const closeTo = closeFrom + closeDelimiter.length
     const env = asRenderEnv(state.env)
-    const expression = state.getLines(startLine + 1, line, state.blkIndent, false)
+    const expression = state.getLines(startLine + 1, line, state.blkIndent, true) + closer.slice(0, delimiterStart)
     const token = state.push("html_block", "", 0)
     token.map = [startLine, line + 1]
     const startMark = state.eMarks[startLine]
-    const sourceContent = startMark === undefined ? "" : state.src.slice(startMark, lineStart)
+    const sourceContent = startMark === undefined ? "" : state.src.slice(startMark, closeFrom)
     token.content = `<p>${renderMath(expression.trim(), true, openDelimiter, closeDelimiter, env.chrome, sourceContent)}</p>\n`
-    if (state.src.slice(delimiterEnd, lineEnd).trim()) {
+    if (state.src.slice(closeTo, lineEnd).trim()) {
       // The remainder of the closing line is the beginning of a paragraph.
-      state.bMarks[line] = delimiterEnd
+      state.bMarks[line] = closeTo
       state.tShift[line] = 0
       // Let a new equation interrupt this paragraph without treating dollar
       // delimiters in ordinary paragraphs as block openers.
