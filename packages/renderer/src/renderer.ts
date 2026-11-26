@@ -255,7 +255,7 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
     if (contentStart < lineEnd && indent !== undefined && indent < state.blkIndent) break
     const closer = state.src.slice(contentStart, lineEnd)
     if (indent !== undefined && indent - state.blkIndent < 4) {
-      codeFence = mathCodeFenceAtLine(closer, codeFence, afterBlank)
+      codeFence = mathCodeFenceAtLine(closer, codeFence, afterBlank, () => state.src.slice(lineEnd + 1))
     }
     afterBlank = closer.length === 0
 

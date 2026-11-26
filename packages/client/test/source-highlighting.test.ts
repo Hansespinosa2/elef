@@ -131,6 +131,13 @@ test("dollars in a trailing autolink do not consume the next display opener", ()
   );
 });
 
+test("quoted dollars in paired tilde fences do not close display math", () => {
+  const doc = '$$\nDraft\n~~~\nconst s = "$$";\n~~~';
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.deepEqual(nodes.filter((node) => node.name === "MathMark").map((node) => node.text), ["$$"]);
+});
+
 test("prose currency, escaped dollars, multiline single-dollar, and inline code are not parsed as math", () => {
   const doc = [
     "Costs $5 and $10 or $ 5 today.",

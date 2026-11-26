@@ -59,14 +59,21 @@ function markdownCodeFenceCloses(line: string, marker: string): boolean {
   return count >= marker.length && /^[ \t\r]*$/.test(rest.slice(count))
 }
 
-export function mathCodeFenceAtLine(line: string, fence: string | null, followsBlank: boolean): string | null {
+export function mathCodeFenceAtLine(
+  line: string,
+  fence: string | null,
+  followsBlank: boolean,
+  remainingSource: () => string
+): string | null {
   if (fence) return markdownCodeFenceCloses(line, fence) ? null : fence
   const marker = markdownCodeFenceMarker(line)
   if (!marker) return null
-  // Bare tildes within an expression can be TeX spacing. A fence with an
-  // info string or backticks is recognizable without a preceding blank.
+  // Bare tildes within an expression can be TeX spacing. Treat them as
+  // code when a matching fence appears before an explicit math closer.
   if (followsBlank || marker[0] === "`" || line.slice(marker.length).trim()) return marker
-  return null
+
+  const boundary = new RegExp(`^[ \\t>]*(~{${marker.length},}[ \\t]*|\\$\\$.*)$`, "m").exec(remainingSource())
+  return boundary?.[1]?.startsWith("~") ? marker : null
 }
 
 export function displayMathDelimiterOnLine(line: string, inCodeFence: boolean): number {

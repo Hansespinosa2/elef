@@ -36,6 +36,8 @@ interface TrailingParagraph {
 
 interface LezerBlockContext {
   readonly lineStart: number
+  readonly parsedPos: number
+  readonly input: { length: number; read(from: number, to: number): string }
   readonly stack: readonly unknown[]
   readonly parser: {
     parseInline(text: string, offset: number): LezerElement[]
@@ -181,7 +183,10 @@ export const elefMath = {
           if (line.depth < blockDepth) break
           const content = line.text.slice(line.pos)
           if (line.indent < line.baseIndent + 4) {
-            codeFence = mathCodeFenceAtLine(content, codeFence, afterBlank)
+            codeFence = mathCodeFenceAtLine(content, codeFence, afterBlank, () => {
+              const nextLine = Math.min(cx.parsedPos + line.text.length + 1, cx.input.length)
+              return cx.input.read(nextLine, cx.input.length)
+            })
           }
           afterBlank = content.length === 0
 

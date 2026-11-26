@@ -149,6 +149,12 @@ test("an unmatched display opener leaves the next fenced code block intact", () 
   }
 })
 
+test("paired bare tilde fences keep their code outside an unmatched display opener", () => {
+  const html = renderMarkdownBlock('$$\nDraft\n~~~\nconst s = "$$";\n~~~')
+  assert.doesNotMatch(html, /class="katex-display"/)
+  assert.match(html, /<pre><code>const s = &quot;\$\$&quot;;/)
+})
+
 test("closed display math keeps fence-like text within its expression", () => {
   for (const [open, close] of [["$$", "$$"], ["\\[", "\\]"]]) {
     const html = renderMarkdownBlock(`${open}\nx\n~~~\ny\n${close}\n\nNext`)
