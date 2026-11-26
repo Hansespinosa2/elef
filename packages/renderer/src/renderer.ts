@@ -244,7 +244,6 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
   }
   const closeDelimiter = openDelimiter === "$$" ? "$$" : "\\]"
   let codeFence: string | null = null
-  let afterBlank = true
   for (let line = startLine + 1; line < endLine; line += 1) {
     const lineStart = state.bMarks[line]
     const lineEnd = state.eMarks[line]
@@ -255,9 +254,8 @@ markdown.block.ruler.before("fence", "elef_display_math", (state, startLine, end
     if (contentStart < lineEnd && indent !== undefined && indent < state.blkIndent) break
     const closer = state.src.slice(contentStart, lineEnd)
     if (indent !== undefined && indent - state.blkIndent < 4) {
-      codeFence = mathCodeFenceAtLine(closer, codeFence, afterBlank, () => state.src.slice(lineEnd + 1))
+      codeFence = mathCodeFenceAtLine(closer, codeFence, () => state.src.slice(lineEnd + 1))
     }
-    afterBlank = closer.length === 0
 
     const delimiterStart = closeDelimiter === "$$"
       ? displayMathDelimiterOnLine(closer, codeFence !== null)

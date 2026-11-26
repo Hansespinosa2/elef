@@ -16,6 +16,7 @@
 // the art_* suites, not prose.
 /// <reference path="./types/markdown-it.d.ts" />
 import MarkdownIt, { type MarkdownItToken } from "markdown-it"
+import parseParagraph from "markdown-it/lib/rules_block/paragraph.mjs"
 import { findMathClosingDelimiter } from "./math_source.js"
 
 const listParser = new MarkdownIt({
@@ -23,6 +24,13 @@ const listParser = new MarkdownIt({
   linkify: true,
   breaks: false,
   typographer: false
+})
+
+listParser.block.ruler.before("lheading", "elef_math_suffix_paragraph", (state, startLine, endLine, silent) => {
+  const { mathSuffixLines } = (state.env ?? {}) as { mathSuffixLines?: ReadonlySet<number> }
+  if (silent || !mathSuffixLines?.has(startLine)) return false
+  // A paragraph that starts after math on the same line has no setext heading.
+  return parseParagraph(state, startLine, endLine, false)
 })
 
 const LIST_OPEN_TYPES = new Set(["bullet_list_open", "ordered_list_open"])
@@ -289,7 +297,7 @@ function markdownBoundaryContext(source: string): MarkdownBoundaryContext {
     if (mathSuffixLines.has(index)) return "text"
     return directiveLines.has(index) || blankLines[index] === 1 || mathLines[index] === 1 ? "" : line
   }).join("\n")
-  const markdownTokens = listParser.parse(maskedSource, {})
+  const markdownTokens = listParser.parse(maskedSource, { mathSuffixLines })
   const markdownBlocks: Array<BlockSpan> = markdownTokens.filter((token) =>
     token.level === 0 && token.map && token.type !== "inline" && token.nesting !== -1
   ).map((token) => ({

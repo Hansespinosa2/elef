@@ -215,19 +215,17 @@ export const elefMath = {
         let blockTo = openEnd
         let contentTo = contentFrom
         let codeFence: string | null = null
-        let afterBlank = true
         while (cx.nextLine()) {
           if (line.depth < blockDepth) break
           const content = line.text.slice(line.pos)
           if (line.indent < line.baseIndent + 4) {
-            codeFence = mathCodeFenceAtLine(content, codeFence, afterBlank, () => {
+            codeFence = mathCodeFenceAtLine(content, codeFence, () => {
               const input = activeMarkdownInput
               if (!input) return ""
               const nextLine = Math.min(cx.parsedPos + line.text.length + 1, input.length)
               return input.read(nextLine, input.length)
             })
           }
-          afterBlank = content.length === 0
 
           const delimiterStart = displayMathDelimiterOnLine(content, codeFence !== null)
           if (delimiterStart >= 0) {

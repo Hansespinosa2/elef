@@ -112,6 +112,13 @@ test("document preview keeps closing-line prose with its continuation", () => {
   assert.match(html, /<p>, for <em>all\s+values<\/em> of x\.<\/p>/)
 })
 
+test("document preview maps a horizontal rule after closing-line prose separately", () => {
+  const source = "$$\nx\n$$, prose\n---\nnext"
+  const preview = renderPreview({ source, kind: "document" })
+  assert.match(preview.html, /<hr>/)
+  assert.ok(preview.editor_map.slides[0].blocks.some(block => block.kind === "rule"))
+})
+
 test("display math can still open with its expression on the same line", () => {
   const html = renderMarkdownBlock("$$x\n$$\ntext\n$$\ny\n$$")
   assert.equal((html.match(/class="katex-display"/g) || []).length, 2)
@@ -146,7 +153,7 @@ test("a trailing paragraph keeps indented equations with their expression on the
 
 test("an unmatched display opener leaves the next fenced code block intact", () => {
   for (const separator of ["\n", "\n\n"]) {
-    for (const code of ['const s = "$$";', '$$ value']) {
+    for (const code of ['const s = "$$";', '$$ value', "$$"]) {
       const html = renderMarkdownBlock(`$$${separator}\`\`\`js\n${code}\n\`\`\``)
       assert.doesNotMatch(html, /class="katex-display"/)
       assert.match(html, /<pre><code class="highlight js">/)

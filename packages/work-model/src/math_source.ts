@@ -21,6 +21,7 @@ export function sourceIsEscaped(source: string, index: number): boolean {
 
 // Search within the parser's current Markdown content.
 export function findMathClosingDelimiter(source: string, close: string, from: number): number {
+  if (!close) return -1
   for (let end = source.indexOf(close, from); end >= 0; end = source.indexOf(close, end + close.length)) {
     if (!sourceIsEscaped(source, end) && (close !== "$" || source[end + 1] !== "$" && source[end - 1] !== "$")) {
       return end
@@ -62,22 +63,20 @@ function markdownCodeFenceCloses(line: string, marker: string): boolean {
 export function mathCodeFenceAtLine(
   line: string,
   fence: string | null,
-  followsBlank: boolean,
   remainingSource: () => string
 ): string | null {
   if (fence) return markdownCodeFenceCloses(line, fence) ? null : fence
   const marker = markdownCodeFenceMarker(line)
   if (!marker) return null
-  // Bare tildes within an expression can be TeX spacing. Treat them as
-  // code when a matching fence appears before an explicit math closer.
-  if (followsBlank || marker[0] === "`" || line.slice(marker.length).trim()) return marker
-
-  const boundary = new RegExp(`^[ \\t>]*(~{${marker.length},}[ \\t]*|\\$\\$.*)$`, "m").exec(remainingSource())
-  return boundary?.[1]?.startsWith("~") ? marker : null
+  // Bare tildes within an expression can be TeX spacing. A paired fence
+  // or a fence with an info string identifies Markdown code.
+  if (marker[0] === "`" || line.slice(marker.length).trim()) return marker
+  const closingFence = new RegExp(`^[ \\t>]*~{${marker.length},}[ \\t]*$`, "m")
+  return closingFence.test(remainingSource()) ? marker : null
 }
 
 export function displayMathDelimiterOnLine(line: string, inCodeFence: boolean): number {
-  if (inCodeFence && line.trimEnd() !== "$$") return -1
+  if (inCodeFence) return -1
   return findMathClosingDelimiter(line, "$$", 0)
 }
 
