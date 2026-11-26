@@ -118,8 +118,8 @@ function isBlockMathFenceLine(text: string, pos: number): boolean {
 
 // The closing line already contains a block, so the suffix starts a paragraph
 // directly. Use Lezer's paragraph continuation rules and composite markers.
-function parseTrailingParagraph(cx: LezerBlockContext, line: LezerLine, suffix: string, start: number): void {
-  const leaf: TrailingParagraph = { start, content: suffix, marks: [], parsers: [] }
+function addMathWithTrailingParagraph(cx: LezerBlockContext, line: LezerLine, math: LezerElement, suffix: string): void {
+  const leaf: TrailingParagraph = { start: math.to, content: suffix, marks: [], parsers: [] }
 
   while (cx.nextLine() && line.pos < line.text.length) {
     if (line.indent < line.baseIndent + 4 && cx.parser.endLeafBlock.some(stop => stop(cx, line, leaf))) break
@@ -127,13 +127,18 @@ function parseTrailingParagraph(cx: LezerBlockContext, line: LezerLine, suffix: 
     leaf.marks.push(...line.markers)
   }
 
-  const children = cx.parser.parseInline(leaf.content, start)
-  cx.addLeafElement(leaf, cx.elt("Paragraph", start, start + leaf.content.length, children))
+  const end = leaf.start + leaf.content.length
+  const children = cx.parser.parseInline(leaf.content, leaf.start)
+  const paragraph = cx.elt("Paragraph", leaf.start, end, children)
+  // Lezer reuses block nodes across edits and expects them to end on a line
+  // boundary. Keep the delimiter and its suffix in one reusable block.
+  cx.addLeafElement(leaf, cx.elt("BlockMathWithProse", math.from, end, [math, paragraph]))
 }
 
 export const elefMath = {
   defineNodes: [
     { name: "BlockMath", block: true },
+    { name: "BlockMathWithProse", block: true },
     { name: "InlineMath" },
     { name: "MathMark" },
     { name: "MathContent" }
@@ -165,11 +170,14 @@ export const elefMath = {
               children.push(cx.elt("MathContent", contentFrom, closeFrom))
             }
             children.push(cx.elt("MathMark", closeFrom, closeTo))
-            cx.addElement(cx.elt("BlockMath", blockFrom, closeTo, children))
-
             const suffix = line.text.slice(line.pos + 2)
-            if (suffix.trim()) parseTrailingParagraph(cx, line, suffix, closeTo)
-            else cx.nextLine()
+            if (suffix.trim()) {
+              const math = cx.elt("BlockMath", blockFrom, closeTo, children)
+              addMathWithTrailingParagraph(cx, line, math, suffix)
+            } else {
+              cx.addElement(cx.elt("BlockMath", blockFrom, closeTo + suffix.length, children))
+              cx.nextLine()
+            }
             return true
           }
           contentTo = cx.lineStart + line.text.length

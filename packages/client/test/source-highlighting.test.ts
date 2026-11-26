@@ -89,6 +89,19 @@ test("backticks after a display math closer stay inline", () => {
   assert.ok(nodes.some((node) => node.name === "ATXHeading3" && node.text === "### Heading"));
 });
 
+test("editing a continuation line preserves emphasis after the closing delimiter", () => {
+  // Give the preceding equation enough text for Lezer to reuse its tree.
+  const doc = "$$\n" + "x".repeat(180) + "\n$$*all\nvalues*\n";
+  const state = parsedState(doc);
+  const from = doc.indexOf("values");
+  const edited = state.update({ changes: { from, to: from + "values".length, insert: "others" } }).state;
+  ensureSyntaxTree(edited, edited.doc.length, 1000);
+
+  const nodes = collectNodes(edited);
+  assert.ok(nodes.some((node) => node.name === "Emphasis" && node.text === "*all\nothers*"));
+  assert.deepEqual(nodes, collectNodes(parsedState(edited.doc.toString())));
+});
+
 test("prose currency, escaped dollars, multiline single-dollar, and inline code are not parsed as math", () => {
   const doc = [
     "Costs $5 and $10 or $ 5 today.",
