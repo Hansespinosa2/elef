@@ -1004,7 +1004,20 @@ class DesktopEditorUi {
           const firstLineActive = values()
           editor.setSelectionRange(editor.view.state.doc.line(3).from)
           await twoFrames()
-          outcome = { mode, vimEnabled, firstLineActive, thirdLineActive: values() }
+          const thirdLineActive = values()
+          editor.setLineNumberMode("absolute")
+          await twoFrames()
+          const gutter = editor.view.dom.querySelector(".cm-lineNumbers")
+          let absoluteLabelWrites = 0
+          const observer = new MutationObserver(records => { absoluteLabelWrites += records.length })
+          observer.observe(gutter, { childList: true, subtree: true })
+          try {
+            editor.setSelectionRange(editor.view.state.doc.line(2).from)
+            await twoFrames()
+          } finally {
+            observer.disconnect()
+          }
+          outcome = { mode, vimEnabled, firstLineActive, thirdLineActive, absoluteLabelWrites, absoluteLabels: values() }
         } catch (error) {
           outcome = { error: error.message || String(error) }
         } finally {
@@ -1021,7 +1034,9 @@ class DesktopEditorUi {
       mode: "relative",
       vimEnabled: true,
       firstLineActive: ["0", "1", "2", "3"],
-      thirdLineActive: ["2", "1", "0", "1"]
+      thirdLineActive: ["2", "1", "0", "1"],
+      absoluteLabelWrites: 0,
+      absoluteLabels: ["1", "2", "3", "4"]
     }
     const matchesExpectedValues = result && Object.entries(expected).every(([key, value]) =>
       JSON.stringify(result[key]) === JSON.stringify(value)
