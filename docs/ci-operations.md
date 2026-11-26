@@ -74,7 +74,7 @@ tooling/release/promote-dev-to-main --create   # open the PR (refuses while lane
 tooling/release/promote-dev-to-main --create --allow-red "reason"  # recorded override
 ~~~
 
-Merge the promotion PR by hand after it is fully green. Tag desktop releases only after the promotion, per [Desktop release operations](desktop/release-operations.md#tag-a-release).
+Merge the promotion PR by hand after it is fully green. See [Desktop release operations](desktop/release-operations.md#tag-a-release) for desktop tags.
 
 ## Shepherd loop (dev)
 

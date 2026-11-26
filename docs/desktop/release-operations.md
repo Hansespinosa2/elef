@@ -2,15 +2,15 @@
 
 Reach for when: tagging a desktop release, watching Gate A, publishing the draft, blocking a bad release, or recovering Linux installs.
 
-The v0.x release is tag-driven: a `desktop-v*` tag opens a draft GitHub Release, CI-built evidence gates it, and a human publishes it. There is no coordinator, ledger, or Pages feed; the updater reads the GitHub Releases `latest.json` feed. Every machine-checked claim below names its enforcer.
+The v0.x release is tag-driven: an owner-authorized `desktop-v*` tag opens a draft GitHub Release, and the release workflow publishes it after both platform builds pass. The updater reads the GitHub Releases `latest.json` feed. Every machine-checked claim below names its enforcer.
 
 ## Tag a release
 
-Tag the release commit after the `dev` → `main` promotion as `desktop-vX.Y.Z` and push the tag:
+Tag the fully green `dev` tip as `desktop-vX.Y.Z` and push the tag. Verify that the CI and slow-lane runs cover that exact commit and that the `elef-deploy-dev` ref points to it. The [web promotion to `main`](../ci-operations.md#manual-promotion-user-only) is a separate operation.
 
 ~~~sh
-git tag desktop-v0.1.0
-git push origin desktop-v0.1.0
+git tag desktop-v0.1.0 "$verified_dev_sha"
+git push origin refs/tags/desktop-v0.1.0
 ~~~
 
 The release workflow triggers on `desktop-v*` tags only (enforced by `check_release_ci.mjs`). Pushing the tag starts the `macos` job, which builds the Apple Silicon app plus DMG, signs the updater artifacts, and opens the release as a **draft** with `latest.json` attached. Nothing is offered to users until the draft is published.
