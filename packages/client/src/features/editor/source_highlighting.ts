@@ -25,6 +25,7 @@ interface LezerLine {
 interface LezerBlockContext {
   readonly lineStart: number
   readonly stack: readonly unknown[]
+  readonly parser: { parseInline(text: string, offset: number): LezerElement[] }
   nextLine(): boolean
   elt(type: string, from: number, to: number, children?: readonly LezerElement[]): LezerElement
   addElement(elt: LezerElement): void
@@ -125,27 +126,30 @@ export const elefMath = {
 
         let blockTo = openEnd
         let contentTo = contentFrom
-        let closed = false
-
         while (cx.nextLine()) {
           if (line.depth < blockDepth) break
-          if (isBlockMathFenceLine(line.text, line.pos)) {
+          if (line.text.startsWith("$$", line.pos)) {
             const closeFrom = cx.lineStart + line.pos
             const closeTo = closeFrom + 2
             if (closeFrom > contentFrom) {
               children.push(cx.elt("MathContent", contentFrom, closeFrom))
             }
             children.push(cx.elt("MathMark", closeFrom, closeTo))
-            blockTo = closeTo
-            closed = true
+            cx.addElement(cx.elt("BlockMath", blockFrom, closeTo, children))
+
+            const suffix = line.text.slice(line.pos + 2)
+            if (suffix.trim()) {
+              const prose = cx.parser.parseInline(suffix, closeTo)
+              cx.addElement(cx.elt("Paragraph", closeTo, closeTo + suffix.length, prose))
+            }
             cx.nextLine()
-            break
+            return true
           }
           contentTo = cx.lineStart + line.text.length
           blockTo = contentTo
         }
 
-        if (!closed && contentTo > contentFrom) {
+        if (contentTo > contentFrom) {
           children.push(cx.elt("MathContent", contentFrom, contentTo))
         }
 
