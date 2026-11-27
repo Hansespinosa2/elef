@@ -371,15 +371,7 @@ class DesktopEditorUi {
   }
 
   async openWork(title = "E2E seed") {
-    if (!(await $("#library-view").isDisplayed())) {
-      const libraryLink = $('[data-editor-view-target="libraryLink"]')
-      if (await libraryLink.isDisplayed()) {
-        await libraryLink.click()
-      } else {
-        await $("#back-to-library").click()
-      }
-      await $("#library-view").waitForDisplayed()
-    }
+    await new DesktopLibraryUi().openLibrary()
     await $("#show-work-list").click()
     const card = $(`[aria-label="Edit ${title}"]`)
     await card.waitForDisplayed()
@@ -2620,6 +2612,8 @@ describe("desktop binary workflows and native boundaries", () => {
     assert.equal(await $("#export-menu-button").isDisplayed(), true)
     assert.equal(await $("#start-presentation").isDisplayed(), false)
     await $("#source-mode").click()
+    await $(".visual-editor-form[data-editor-mode='source'] .editor-micro-title").waitForDisplayed()
+    assert.equal(await $(".editor-micro-rail-left a").isExisting(), false)
     await $("#toggle-desktop-library-sidebar").click()
     assert.equal(await $("#toggle-desktop-library-sidebar").getAttribute("aria-pressed"), "true")
     const editorFits = await browser.execute(() => document.querySelector("#work-view").getBoundingClientRect().bottom <= innerHeight + 1)

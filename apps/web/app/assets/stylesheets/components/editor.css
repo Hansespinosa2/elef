@@ -705,16 +705,8 @@ li.editor-reveal-marker { list-style: none; }
   .visual-editor-form[data-editor-mode="source"] .editor-micro-rail-left {
     align-items: center;
     display: flex;
-    gap: 8px;
     min-width: 0;
   }
-  .visual-editor-form[data-editor-mode="source"] .editor-micro-back {
-    color: var(--oradia-muted);
-    text-decoration: none;
-    white-space: nowrap;
-  }
-  .visual-editor-form[data-editor-mode="source"] .editor-micro-back:hover { color: var(--oradia-ink); }
-  .visual-editor-form[data-editor-mode="source"] .editor-micro-sep { color: var(--oradia-slate-700); }
   .visual-editor-form[data-editor-mode="source"] .editor-micro-title {
     color: var(--oradia-ink);
     font-weight: 600;

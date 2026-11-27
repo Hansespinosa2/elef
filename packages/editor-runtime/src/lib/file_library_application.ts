@@ -941,10 +941,6 @@ export function startFileLibraryApplication(platform: DesktopPlatform): void {
   }
 
   let libraryShown = false
-  elements.editorForm.addEventListener("elef:navigate-library", (event) => {
-    event.preventDefault()
-    shellElement<HTMLButtonElement>("#back-to-library").click()
-  })
   elements.editorForm.addEventListener("elef:editor-mode-change", () => {
     document.body.classList.toggle("is-editing-source", (elements.editorForm.dataset.editorMode || "source") === "source")
   })

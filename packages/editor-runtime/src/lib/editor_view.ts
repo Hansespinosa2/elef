@@ -91,8 +91,6 @@ const EDITOR_VIEW = `
     <section class="preview-warnings rounded-xl border border-[#e7c56d] bg-[#fff8df] p-3 text-[#765700]" data-preview-target="warnings" aria-label="Preview warnings" hidden><h3 class="mb-1 text-sm font-bold">Preview warnings</h3><ul class="list-disc pl-5 text-sm"></ul></section>
     <div class="editor-footer">
       <div class="editor-micro-rail-left">
-        <a class="editor-micro-back" href="/" data-editor-view-target="libraryLink" data-dirty-navigation="true">← Library</a>
-        <span class="editor-micro-sep" aria-hidden="true">·</span>
         <span class="editor-micro-title" data-editor-view-target="microTitle"></span>
       </div>
       <div class="editor-actions">
@@ -355,13 +353,6 @@ export function renderEditorView(container: Element | null, config: EditorViewCo
     get("releaseState").dataset.releaseStatus = config.releaseStatus || ""
     get("releaseState").textContent = config.releaseState
   }
-  const libraryLink = get("libraryLink") as HTMLAnchorElement
-  libraryLink.addEventListener("click", (event) => {
-    const navEvent = new CustomEvent("elef:navigate-library", { bubbles: true, cancelable: true })
-    if (!libraryLink.dispatchEvent(navEvent)) {
-      event.preventDefault()
-    }
-  })
   const togglePreviewBtn = get("togglePreviewButton") as HTMLButtonElement
   const togglePreview = () => {
     const activeForm = root.closest("form")

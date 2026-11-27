@@ -41,6 +41,10 @@ class AppToolbarTest < ApplicationSystemTestCase
     capture_toolbar("presentation")
     assert_selector "body.is-editing-source", visible: :all
     assert_operator page.evaluate_script('document.querySelector(".editor-shell").getBoundingClientRect().bottom'), :<=, page.evaluate_script("window.innerHeight + 1")
+    assert_selector ".editor-micro-title", text: "Toolbar presentation"
+    assert_no_selector ".editor-micro-rail-left a", visible: :all
+    find(".app-toolbar .toolbar-library").click
+    assert_current_path root_path
   end
   test "source preview remains scrollable beneath the toolbar" do
     original_size = page.driver.browser.manage.window.size
