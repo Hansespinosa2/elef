@@ -65,6 +65,105 @@ test("block $$ math parses multi-line display equations", () => {
   );
 });
 
+test("display math closes before trailing prose and highlights adjacent equations independently", () => {
+  const doc = "$$\nx_1\n$$, for *all\nvalues* of $x$.\nAnd by induction\n$$\ny_2\n$$done";
+  const state = parsedState(doc, true).update({ effects: livePreviewMode.of(false) }).state;
+  const nodes = collectNodes(state);
+  assert.equal(nodes.filter((node) => node.name === "BlockMath").length, 2);
+  assert.ok(nodes.some((node) => node.name === "Emphasis" && node.text === "*all\nvalues*"));
+
+  const marks: string[] = [];
+  const math: string[] = [];
+  const decorations = buildSourceCodeDecorationsFromState(state, [{ from: 0, to: doc.length }]);
+  decorations.between(0, doc.length, (from, to, value) => {
+    if (value.spec.class === "cm-source-math-mark") marks.push(doc.slice(from, to));
+    if (value.spec.class === "cm-source-math-content") math.push(doc.slice(from, to));
+  });
+  assert.deepEqual(marks, ["$$", "$$", "$", "$", "$$", "$$"]);
+  assert.deepEqual(math, ["\nx_1\n", "x", "\ny_2\n"]);
+});
+
+test("backticks after a display math closer stay inline", () => {
+  const doc = "$$\nx\n$$```\n### Heading\n$$\ny\n$$";
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.equal(nodes.filter((node) => node.name === "BlockMath").length, 2);
+  assert.equal(nodes.filter((node) => node.name === "FencedCode").length, 0);
+  assert.ok(nodes.some((node) => node.name === "ATXHeading3" && node.text === "### Heading"));
+});
+
+test("editing a continuation line preserves emphasis after the closing delimiter", () => {
+  // Give the preceding equation enough text for Lezer to reuse its tree.
+  const doc = "$$\n" + "x".repeat(180) + "\n$$*all\nvalues*\n";
+  const state = parsedState(doc);
+  const from = doc.indexOf("values");
+  const edited = state.update({ changes: { from, to: from + "values".length, insert: "others" } }).state;
+  ensureSyntaxTree(edited, edited.doc.length, 1000);
+
+  const nodes = collectNodes(edited);
+  assert.ok(nodes.some((node) => node.name === "Emphasis" && node.text === "*all\nothers*"));
+  assert.deepEqual(nodes, collectNodes(parsedState(edited.doc.toString())));
+});
+
+test("a display closer with trailing prose preserves a following horizontal rule", () => {
+  const doc = "$$\nx\n$$, prose\n---\nnext";
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.ok(nodes.some((node) => node.name === "MathContent" && node.text === "\nx\n"));
+  assert.ok(nodes.some((node) => node.name === "HorizontalRule" && node.text === "---"));
+  assert.ok(nodes.some((node) => node.name === "Paragraph" && node.text === "next"));
+});
+
+test("continued prose retains setext headings after a display closer", () => {
+  for (const [underline, heading] of [["===", "SetextHeading1"], ["---", "SetextHeading2"]]) {
+    const nodes = collectNodes(parsedState(`$$\nx\n$$, prose\nHeading\n${underline}`));
+    assert.ok(nodes.some((node) => node.name === heading && node.text.includes("Heading")));
+  }
+});
+
+test("one or two dashes after a suffixed closer still make a Setext heading", () => {
+  for (const underline of ["-", "--"]) {
+    const nodes = collectNodes(parsedState(`$$\nx\n$$ prose\n${underline}`));
+    assert.ok(nodes.some((node) => node.name === "SetextHeading2" && node.text.includes("prose")));
+  }
+});
+
+test("dollars in a trailing autolink do not consume the next display opener", () => {
+  const doc = "$$\nx\n$$, see <https://example.com/$$>\n$$\n\ny\n$$";
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.deepEqual(
+    nodes.filter((node) => node.name === "MathContent").map((node) => node.text),
+    ["\nx\n", "\n\ny\n"]
+  );
+});
+
+test("trailing prose stays in its original ordered-list item", () => {
+  const doc = "1. $$\n   x\n   $$, prose\n2. **item**";
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.equal(nodes.filter((node) => node.name === "ListItem").length, 2);
+  assert.ok(nodes.some((node) => node.name === "ListMark" && node.text === "2."));
+});
+
+test("an incomplete inline-code span cannot claim the next display opener", () => {
+  const doc = "$$\nx\n$$, `$$a\n$$\nz`\n$$";
+  const nodes = collectNodes(parsedState(doc));
+
+  assert.deepEqual(
+    nodes.filter((node) => node.name === "MathContent").map((node) => node.text),
+    ["\nx\n", "\nz`\n"]
+  );
+});
+
+test("trailing prose preserves nested lists and lazy blockquote continuation", () => {
+  const list = collectNodes(parsedState("1. $$\n   x\n   $$, prose\n   2. nested"));
+  assert.ok(list.some((node) => node.name === "ListMark" && node.text === "2."));
+
+  const quote = collectNodes(parsedState("> $$\n> x\n> $$, *words\nlazy*"));
+  assert.ok(quote.some((node) => node.name === "Emphasis" && node.text === "*words\nlazy*"));
+});
+
 test("prose currency, escaped dollars, multiline single-dollar, and inline code are not parsed as math", () => {
   const doc = [
     "Costs $5 and $10 or $ 5 today.",

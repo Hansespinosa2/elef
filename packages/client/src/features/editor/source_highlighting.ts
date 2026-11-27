@@ -17,15 +17,17 @@ interface LezerInlineContext {
 }
 
 interface LezerLine {
-  readonly text: string
+  text: string
   readonly pos: number
   readonly depth: number
+  moveBase(to: number): void
 }
 
 interface LezerBlockContext {
   readonly lineStart: number
   readonly stack: readonly unknown[]
   nextLine(): boolean
+  startComposite(type: string, start: number, value: number): void
   elt(type: string, from: number, to: number, children?: readonly LezerElement[]): LezerElement
   addElement(elt: LezerElement): void
 }
@@ -103,8 +105,19 @@ function isBlockMathFenceLine(text: string, pos: number): boolean {
 export const elefMath = {
   defineNodes: [
     { name: "BlockMath", block: true },
+    {
+      name: "BlockMathWithProse",
+      composite(cx: LezerBlockContext, line: LezerLine, closingLineEnd: number): boolean {
+        // Let Lezer recognize setext underlines in continued prose. Dashes
+        // immediately after the closing line still form a horizontal rule.
+        const content = line.text.slice(line.pos)
+        if (/^(?:=+|-{1,2})[ \t]*$/.test(content)) return true
+        return cx.lineStart > closingLineEnd + 1 && /^-+[ \t]*$/.test(content)
+      }
+    },
     { name: "InlineMath" },
     { name: "MathMark" },
+    { name: "MathMarkBeforeProse" },
     { name: "MathContent" }
   ],
   parseBlock: [
@@ -114,7 +127,7 @@ export const elefMath = {
       endLeaf(_cx: LezerBlockContext, line: LezerLine): boolean {
         return isBlockMathFenceLine(line.text, line.pos)
       },
-      parse(cx: LezerBlockContext, line: LezerLine): boolean {
+      parse(cx: LezerBlockContext, line: LezerLine): boolean | null {
         if (!isBlockMathFenceLine(line.text, line.pos)) return false
 
         const blockDepth = cx.stack.length
@@ -125,27 +138,36 @@ export const elefMath = {
 
         let blockTo = openEnd
         let contentTo = contentFrom
-        let closed = false
-
         while (cx.nextLine()) {
           if (line.depth < blockDepth) break
-          if (isBlockMathFenceLine(line.text, line.pos)) {
+          if (line.text.startsWith("$$", line.pos)) {
             const closeFrom = cx.lineStart + line.pos
             const closeTo = closeFrom + 2
             if (closeFrom > contentFrom) {
               children.push(cx.elt("MathContent", contentFrom, closeFrom))
             }
+            if (line.text.slice(line.pos + 2).trim()) {
+              // Let the native Markdown parser start a paragraph here. A
+              // placeholder for the final dollar keeps block syntax in the
+              // suffix inline, while preserving every source offset.
+              const paragraphStart = line.pos + 1
+              cx.startComposite("BlockMathWithProse", blockFrom - cx.lineStart, cx.lineStart + line.text.length)
+              children.push(cx.elt("MathMarkBeforeProse", closeFrom, closeTo - 1))
+              cx.addElement(cx.elt("BlockMath", blockFrom, closeTo - 1, children))
+              line.text = line.text.slice(0, paragraphStart) + "\uFFFC" + line.text.slice(paragraphStart + 1)
+              line.moveBase(paragraphStart)
+              return null
+            }
             children.push(cx.elt("MathMark", closeFrom, closeTo))
-            blockTo = closeTo
-            closed = true
+            cx.addElement(cx.elt("BlockMath", blockFrom, cx.lineStart + line.text.length, children))
             cx.nextLine()
-            break
+            return true
           }
           contentTo = cx.lineStart + line.text.length
           blockTo = contentTo
         }
 
-        if (!closed && contentTo > contentFrom) {
+        if (contentTo > contentFrom) {
           children.push(cx.elt("MathContent", contentFrom, contentTo))
         }
 
@@ -266,8 +288,9 @@ export function buildSourceCodeDecorationsFromState(
         if (node.name === "InlineMath" || node.name === "BlockMath") {
           let child = node.node.firstChild
           while (child) {
-            if (child.name === "MathMark") {
-              addMark(child.from, child.to, sourceMathMarkDecoration, "cm-source-math-mark")
+            if (child.name === "MathMark" || child.name === "MathMarkBeforeProse") {
+              const markEnd = child.name === "MathMarkBeforeProse" ? child.to + 1 : child.to
+              addMark(child.from, markEnd, sourceMathMarkDecoration, "cm-source-math-mark")
             } else if (child.name === "MathContent") {
               addMark(child.from, child.to, sourceMathContentDecoration, "cm-source-math-content")
             }
