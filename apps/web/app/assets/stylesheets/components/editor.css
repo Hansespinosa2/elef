@@ -614,7 +614,8 @@ li.editor-reveal-marker { list-style: none; }
     flex: 1 1 auto;
     height: 100%;
     overflow: auto;
-    padding: 1.5rem 2rem;
+    /* Keep the sticky gutter flush with the horizontal scrollport edge. */
+    padding-block: 1.5rem;
   }
 
   /* Dock Vim / mode controls cleanly inside the 28px bottom micro-rail */
