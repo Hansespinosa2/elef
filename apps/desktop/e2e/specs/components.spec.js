@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test"
+import { build } from "esbuild"
 import { readFile } from "node:fs/promises"
 import { readHostStylesheets as hostStylesheets, renderPreview } from "./shared_helpers.js"
 
@@ -244,6 +245,52 @@ test("the source editor component has matching web and desktop layout styles", a
   expect(measured.web[".editor-layout"].gridTemplateColumns.split(" ")).toHaveLength(3)
   expect(measured.web[".cm-editor"].rectHeight).toBeGreaterThan(300)
   expect(measured.web[".editor-shell"].backgroundColor).toBe("rgb(17, 22, 26)")
+})
+
+test("the source gutter covers the scrollport edge while scrolling long lines", async ({ page }) => {
+  const { outputFiles: [editor] } = await build({
+    stdin: {
+      contents: `
+        import { EditorView, lineNumbers } from "@codemirror/view"
+        new EditorView({
+          parent: document.querySelector(".editor-surface"),
+          doc: "# " + "Long Markdown line ".repeat(120),
+          extensions: [lineNumbers(), EditorView.theme({
+            ".cm-content": { color: "#e9eee9" },
+            ".cm-gutters": { backgroundColor: "#11161a", color: "#e9eee9" }
+          }, { dark: true })]
+        })
+      `,
+      resolveDir: import.meta.dirname
+    },
+    bundle: true,
+    write: false
+  })
+
+  for (const [host, css] of Object.entries(await hostStylesheets())) {
+    await setStaticFixture(page, "../../../web/test/e2e/fixtures/editor-styles.html", css)
+    await page.locator(".editor-surface").evaluate(surface => surface.replaceChildren())
+    await page.addScriptTag({ content: editor.text })
+
+    const scroller = page.locator(".cm-scroller")
+    await scroller.evaluate(element => { element.scrollLeft = 160 })
+    const geometry = await scroller.evaluate(element => {
+      const gutter = element.querySelector(".cm-gutters")
+      const left = element.getBoundingClientRect().left + element.clientLeft
+      const gutterRect = gutter.getBoundingClientRect()
+      const hit = document.elementFromPoint(left + 2, gutterRect.top + 8)
+      return {
+        scrollLeft: element.scrollLeft,
+        gutterInset: gutterRect.left - left,
+        gutterCoversEdge: gutter.contains(hit)
+      }
+    })
+
+    await scroller.screenshot({ path: test.info().outputPath(`source-scroll-${host}.png`) })
+    expect(geometry.scrollLeft, host).toBe(160)
+    expect(geometry.gutterInset, host).toBeCloseTo(0)
+    expect(geometry.gutterCoversEdge, host).toBe(true)
+  }
 })
 
 test("desktop present mode pins every aligned slide to a fixed 16:9 aspect with letterboxing", async ({ page }) => {
